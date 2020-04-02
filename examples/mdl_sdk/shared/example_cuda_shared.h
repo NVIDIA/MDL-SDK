@@ -648,12 +648,11 @@ void Material_gpu_context::copy_canvas_to_cuda_array(
 {
     mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
     mi::Float32 const *data = static_cast<mi::Float32 const *>(tile->get_data());
-    check_cuda_success(cudaMemcpyToArray(
-        device_array,
-        /*wOffset=*/ 0,
-        /*hOffset=*/ 0,
-        data,
-        canvas->get_resolution_x() * canvas->get_resolution_y() * sizeof(float) * 4,
+    check_cuda_success(cudaMemcpy2DToArray(
+        device_array, 0, 0, data,
+        canvas->get_resolution_x() * sizeof(float) * 4,
+        canvas->get_resolution_x() * sizeof(float) * 4,
+        canvas->get_resolution_y(),
         cudaMemcpyHostToDevice));
 }
 
@@ -1184,8 +1183,9 @@ bool Material_gpu_context::prepare_lightprofile(
 
     // 2D texture objects use CUDA arrays
     check_cuda_success(cudaMallocArray(&device_lightprofile_data, &channel_desc, res.x, res.y));
-    check_cuda_success(cudaMemcpyToArray(device_lightprofile_data, 0, 0, data,
-                       res.x * res.y * sizeof(float), cudaMemcpyHostToDevice));
+    check_cuda_success(cudaMemcpy2DToArray(
+        device_lightprofile_data, 0, 0, data,
+        res.x * sizeof(float), res.x * sizeof(float), res.y, cudaMemcpyHostToDevice));
 
     // Create filtered texture object
     cudaResourceDesc res_desc;
@@ -1359,10 +1359,6 @@ public:
     // fully-qualified MDLE material name.
     static std::string get_module_name(const std::string& material_name);
 
-    // Helper function to extract the material name from a fully-qualified material name or a
-    // fully-qualified MDLE material name.
-    static std::string get_material_name(const std::string& material_name);
-
     // Return the list of all material names in the given MDL module.
     std::vector<std::string> get_material_names(const std::string& module_name);
 
@@ -1397,8 +1393,7 @@ public:
         const std::string& material_name,
         mi::neuraylib::Target_function_description* function_descriptions,
         mi::Size description_count,
-        bool class_compilation = false,
-        std::vector<std::string>* out_handles = nullptr);
+        bool class_compilation);
 
     // Generates CUDA PTX target code for the current link unit.
     mi::base::Handle<const mi::neuraylib::ITarget_code> generate_cuda_ptx();
@@ -1549,21 +1544,7 @@ std::string Material_compiler::get_module_name(const std::string& material_name)
         std::replace(module_name.begin(), module_name.end(), '\\', '/');
     }
    
-    // strip away the material name
-    size_t p = module_name.rfind("::");
-    if (p != std::string::npos)
-        module_name = module_name.substr(0, p);
-
-    return module_name;
-}
-
-// Helper function to extract the material name from a fully-qualified material name.
-std::string Material_compiler::get_material_name(const std::string& material_name)
-{
-    size_t p = material_name.rfind("::");
-    if (p == std::string::npos)
-        return material_name;
-    return material_name.substr(p + 2, material_name.size() - p);
+    return ::get_module_name(module_name);
 }
 
 // Return the list of all material names in the given MDL module.
@@ -1711,15 +1692,14 @@ bool Material_compiler::add_material(
     const std::string& material_name,
     mi::neuraylib::Target_function_description* function_descriptions,
     mi::Size description_count,
-    bool class_compilation,
-    std::vector<std::string>* out_handles)
+    bool class_compilation)
 {
     if (description_count == 0)
         return false;
 
     // Load the given module and create a material instance
     mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        create_material_instance(material_name.c_str()));
+        create_material_instance(material_name));
 
     // Compile the material instance in instance compilation mode
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
@@ -1728,14 +1708,6 @@ bool Material_compiler::add_material(
     m_link_unit->add_material(
         compiled_material.get(), function_descriptions, description_count,
         m_context.get());
-
-    // iterate over the material and collect all handles
-    if (out_handles)
-    {
-        Handle_collector collector(m_transaction.get(), compiled_material.get());
-        auto& handles = m_handles = collector.get_handles();
-        out_handles->insert(out_handles->end(), handles.begin(), handles.end());
-    }
 
     // Note: the same argument_block_index is filled into all function descriptions of a
     //       material, if any function uses it

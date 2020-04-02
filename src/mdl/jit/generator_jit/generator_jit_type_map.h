@@ -288,7 +288,7 @@ public:
     ///
     /// \param type         the MDL type to lookup
     /// \param arr_size     if >= 0, the instantiated array size of type
-    llvm::Type *lookup_deriv_type(
+    llvm::StructType *lookup_deriv_type(
         mdl::IType const  *type,
         int               arr_size = -1) const;
 
@@ -297,7 +297,7 @@ public:
     /// two more elements of this type for the x and y derivative, respectively.
     ///
     /// \param type         the MDL type to lookup
-    llvm::Type *lookup_deriv_type(llvm::Type *type) const;
+    llvm::StructType *lookup_deriv_type(llvm::Type *type) const;
 
     // TODO: Maybe this is not a reliable check, as other unidentified struct types might also match
     /// Checks if the given LLVM type is a derivative type.
@@ -703,7 +703,7 @@ private:
     llvm::PointerType *m_type_cstring;
     llvm::IntegerType *m_type_tag;
 
-    llvm::StructType  *m_type_state_environemnt;
+    llvm::StructType  *m_type_state_environment;
     llvm::PointerType *m_type_state_environment_ptr;
 
     llvm::StructType  *m_type_state_core;
@@ -745,7 +745,7 @@ private:
     /// The type map cache: Stores mappings from MDL struct types to LLVM ones.
     mutable Type_struct_map m_type_struct_cache;
 
-    typedef ptr_hash_map<llvm::Type, llvm::Type *>::Type Deriv_type_map;
+    typedef ptr_hash_map<llvm::Type, llvm::StructType *>::Type Deriv_type_map;
 
     /// The derivative type cache: Stores mappings from LLVM types to LLVM derivative types.
     mutable Deriv_type_map m_deriv_type_cache;

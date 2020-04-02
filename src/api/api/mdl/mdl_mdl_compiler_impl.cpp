@@ -66,6 +66,7 @@
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
+#include <render/mdl/backends/backends_target_code.h>
 
 namespace MI {
 
@@ -313,7 +314,8 @@ mi::Sint32 Mdl_compiler_impl::export_lightprofile(
     const NEURAY::Lightprofile_impl* lightprofile_impl
         = static_cast<const NEURAY::Lightprofile_impl*>( lightprofile);
     const LIGHTPROFILE::Lightprofile* db_lightprofile = lightprofile_impl->get_db_element();
-    bool result = LIGHTPROFILE::export_to_file( db_lightprofile, filename);
+    DB::Transaction* db_transaction = lightprofile_impl->get_db_transaction();
+    bool result = LIGHTPROFILE::export_to_file( db_transaction, db_lightprofile, filename);
     return result ? 0 : -4;
 }
 
@@ -367,6 +369,47 @@ mi::neuraylib::IMdl_entity_resolver* Mdl_compiler_impl::get_entity_resolver() co
 
 void Mdl_compiler_impl::set_external_resolver(mi::mdl::IEntity_resolver *resolver) const
 {
+}
+
+static mi::mdl::IValue_texture::Bsdf_data_kind convert_df_data_kind(
+    mi::neuraylib::Df_data_kind kind)
+{
+    switch (kind)
+    {
+    case mi::neuraylib::DFK_NONE:
+        return mi::mdl::IValue_texture::BDK_NONE;
+    case mi::neuraylib::DFK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER;
+    case mi::neuraylib::DFK_BECKMANN_SMITH_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_BECKMANN_SMITH_MULTISCATTER;
+    case mi::neuraylib::DFK_BECKMANN_VC_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_BECKMANN_VC_MULTISCATTER;
+    case  mi::neuraylib::DFK_GGX_SMITH_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_GGX_SMITH_MULTISCATTER;
+    case mi::neuraylib::DFK_GGX_VC_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_GGX_VC_MULTISCATTER;
+    case mi::neuraylib::DFK_SHEEN_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_SHEEN_MULTISCATTER;
+    case mi::neuraylib::DFK_SIMPLE_GLOSSY_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER;
+    case mi::neuraylib::DFK_WARD_GEISLER_MORODER_MULTISCATTER:
+        return mi::mdl::IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER;
+    default:
+        break;
+    }
+    return mi::mdl::IValue_texture::BDK_NONE;
+}
+
+const Float32* Mdl_compiler_impl::get_df_data_texture(
+    mi::neuraylib::Df_data_kind kind,
+    Size &rx,
+    Size &ry,
+    Size &rz) const
+{
+    mi::mdl::IValue_texture::Bsdf_data_kind data_kind = convert_df_data_kind(kind);
+    if (data_kind == mi::mdl::IValue_texture::BDK_NONE)
+        return nullptr;
+    return BACKENDS::Target_code::get_df_data_texture(data_kind, rx, ry, rz);
 }
 
 mi::Sint32 Mdl_compiler_impl::start()

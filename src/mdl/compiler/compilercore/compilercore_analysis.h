@@ -1472,6 +1472,16 @@ private:
         IExpression const  *expr,
         int                idx);
 
+    /// Replace default struct constructors by elemental constructors.
+    ///
+    /// \param callee_def        the definition of the called function
+    /// \param call              the call, might be modified
+    ///
+    /// \return the new callee definition
+    Definition const *reformat_default_struct_constructor(
+        Definition const *callee_def,
+        IExpression_call *call);
+
     /// Reformat and reorder the arguments of a call.
     ///
     /// - make all implicit type conversions explicit

@@ -1208,15 +1208,31 @@ class Imported_module_cache : public IModule_cache
 public:
     /// Constructor.
     ///
-    /// \param mod    the module whose import list should be lookup'ed
+    /// \param mod    the module whose import list should be looked up
     /// \param cache  a higher level module cache or NULL
     Imported_module_cache(Module const &mod, IModule_cache *cache)
     : m_mod(mod), m_cache(cache)
     {
     }
 
+    /// Create an \c IModule_cache_lookup_handle for this \c IModule_cache implementation.
+    /// Has to be freed using \c free_lookup_handle.
+    IModule_cache_lookup_handle* create_lookup_handle() const MDL_FINAL 
+    { 
+        return (m_cache == NULL) ? NULL : m_cache->create_lookup_handle();
+    }
+
+    /// Free a handle created by \c create_lookup_handle.
+    void free_lookup_handle(IModule_cache_lookup_handle* handle) const MDL_FINAL
+    {
+        if (m_cache != NULL)
+            m_cache->free_lookup_handle(handle);
+    }
+
     /// Lookup a module.
-    IModule const *lookup(char const *absname) const MDL_FINAL
+    IModule const *lookup(
+        char const *absname,
+        IModule_cache_lookup_handle *cache_lookup_handle) const MDL_FINAL
     {
         bool direct;
         Module const *imp_mod = m_mod.find_imported_module(absname, direct);
@@ -1234,7 +1250,7 @@ public:
         }
 
         if (m_cache != NULL)
-            return m_cache->lookup(absname);
+            return m_cache->lookup(absname, cache_lookup_handle);
 
         return NULL;
     }
@@ -3286,15 +3302,32 @@ Module const *NT_analysis::load_module_to_import(
 
     size_t n = rel_name->get_component_count() - (ignore_last ? 1 : 0);
     for (size_t i = 0; i < n; ++i) {
+        // add a package separator, if the name doesn't already end with a separator
+        // (due to an absolute alias name)
+        if (i > 0 && !(!import_name.empty() && import_name[import_name.size() - 1] == ':'))
+            import_name += "::";
+
         ISimple_name const *sname = rel_name->get_component(i);
         ISymbol const      *sym   = sname->get_symbol();
 
-         if (Definition const *def = m_def_tab->get_namespace_alias(sym)) {
+        // handle alias names
+        if (Definition const *def = m_def_tab->get_namespace_alias(sym)) {
+            ISymbol const *ns_sym = sym;
             sym = def->get_namespace();
+
+            // is this an alias referring to an absolute path?
+            if (sym->get_name()[0] == ':') {
+                if ((is_absolute || i > 0)) {
+                    error(ABSOLUTE_ALIAS_NOT_AT_BEGINNING,
+                        rel_name->access_position(),
+                        Error_params(*this)
+                            .add(ns_sym));
+                    import_name.clear();
+                }
+                is_absolute = true;
+            }
         }
 
-        if (i > 0)
-            import_name += "::";
         import_name += sym->get_name();
     }
 
@@ -3329,7 +3362,7 @@ Module const *NT_analysis::load_module_to_import(
 
     // copy messages
     copy_resolver_messages_to_module(messages, /*is_resource=*/ false);
-
+    
     if (is_weak_16 &&
         !result.is_valid_interface() &&
         messages.get_error_message_count() == 1)
@@ -3351,35 +3384,6 @@ Module const *NT_analysis::load_module_to_import(
 
     if (!result.is_valid_interface()) {
         // name could not be resolved
-
-        // notify via callback
-        mi::mdl::IModule_loaded_callback* callback = m_module_cache
-            ? m_module_cache->get_module_loading_callback()
-            : nullptr;
-
-        if (callback) {
-            // produce the qualified name for a proper cache lookup
-            string module_name = import_name;
-            if (!is_absolute) {
-                module_name = "";
-                module_name.append(m_module.get_name());
-
-                if(import_name.size() > 3 && import_name[0] == '.' && 
-                    import_name[1] == ':' && import_name[2] == ':') {
-
-                    // strict absolute
-                    module_name.append(import_name.c_str() + 1); // drop the 'absolute'-dot
-                } else {
-                    // weak absolute or starting with '..' (upwards)
-                    module_name.append("::");
-                    module_name.append(import_name);
-                }
-
-                string sep("::", m_builder.get_allocator());
-                module_name = mi::mdl::simplify_path(m_builder.get_allocator(), module_name, sep);
-            }
-            callback->module_loading_failed(module_name.c_str());
-        }
         return NULL;
     }
     abs_name = result->get_absolute_name();
@@ -3417,7 +3421,7 @@ Module const *NT_analysis::load_module_to_import(
         imp_mod = m_compiler->compile_module(*ctx.get(), abs_name, &cache);
     }
     if (imp_mod == NULL) {
-        mi::base::Handle<IModule const> import(cache.lookup(abs_name));
+        mi::base::Handle<IModule const> import(cache.lookup(abs_name, NULL));
         if (import.is_valid_interface()) {
             if (!import->is_analyzed()) {
                 // Found a non-analyzed module, this could only happen
@@ -5412,6 +5416,11 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
             } else if (strcmp(module_name, "::debug") == 0) {
                 // mark every function from the debug module
                 f_def->set_flag(Definition::DEF_USES_DEBUG_CALLS);
+            } else if (strcmp(module_name, "::scene") == 0) {
+                // every function from the scene module uses the state
+                f_def->set_flag(Definition::DEF_USES_STATE);
+                // uses the varying state subset
+                f_def->set_flag(Definition::DEF_USES_VARYING_STATE);
             }
         }
         f_def->set_parameter_derivable_mask(deriv_mask);
@@ -8521,10 +8530,15 @@ Definition const *NT_analysis::find_overload(
             clear_type_bindings();
 
             // All fine, found only ONE possible overload.
-            // Now add argument conversions if needed and reorder the arguments.
-            reformat_arguments(
-                def, call, mod_arg_types.data(), pos_arg_count,
-                name_arg_indexes, arguments.data(), named_arg_count);
+            if (def->get_semantics() == IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR) {
+                // reformat to elemental struct constructor
+                def = reformat_default_struct_constructor(def, call);
+            } else {
+                // Otherwise add argument conversions if needed and reorder the arguments.
+                reformat_arguments(
+                    def, call, mod_arg_types.data(), pos_arg_count,
+                    name_arg_indexes, arguments.data(), named_arg_count);
+            }
             return def;
         }
     }
@@ -9644,6 +9658,63 @@ void NT_analysis::check_argument_range(
             check_expression_range(range, expr, ARGUMENT_OUTSIDE_HARD_RANGE, f_name->get_symbol());
         }
     }
+}
+
+// replace default struct constructors by elemental constructors
+Definition const *NT_analysis::reformat_default_struct_constructor(
+    Definition const *callee_def,
+    IExpression_call *call)
+{
+    IType_function const *f_type = cast<IType_function>(callee_def->get_type());
+    IType_struct const   *s_type = cast<IType_struct>(f_type->get_return_type());
+
+    // first step: find the elementary constructor inside THIS module
+    Definition const *c_def = NULL;
+    for (c_def = m_module.get_first_constructor(s_type);
+        c_def != NULL;
+        c_def = m_module.get_next_constructor(c_def))
+    {
+        if (c_def->get_semantics() == IDefinition::DS_ELEM_CONSTRUCTOR) {
+            // found
+            break;
+        }
+    }
+    MDL_ASSERT(c_def != NULL && "could not find default constructor");
+
+    // lookup the original definition to get default arguments
+    Module const *origin = NULL;
+    Definition const *orig_c_def = m_module.get_original_definition(callee_def, origin);
+
+    f_type = cast<IType_function>(c_def->get_type());
+    size_t param_count = f_type->get_parameter_count();
+
+    // Use origin to rewrite resource URLs
+    Default_initializer_modifier def_modifier(*this, param_count, origin);
+
+    Expression_factory *fact = m_module.get_expression_factory();
+    for (size_t i = 0; i < param_count; ++i) {
+        IExpression const *expr = NULL;
+
+        if (expr = orig_c_def->get_default_param_initializer(i)) {
+            // this struct field has an initializer, clone it
+            m_module.clone_expr(expr, &def_modifier);
+        } else {
+            // this struct field is default initialized
+            IType const   *ptype;
+            ISymbol const *psym;
+
+            f_type->get_parameter(i, ptype, psym);
+
+            IValue const *pval =
+                m_module.create_default_value(m_module.get_value_factory(), ptype);
+            expr = fact->create_literal(pval);
+        }
+        def_modifier.set_parameter_value(i, expr);
+
+        IArgument_positional const *new_arg = fact->create_positional_argument(expr);
+        call->add_argument(new_arg);
+    }
+    return c_def;
 }
 
 // Reformat and reorder the arguments of a call.
@@ -11078,7 +11149,9 @@ bool NT_analysis::pre_visit(IDeclaration_namespace_alias *alias_decl)
 
     IQualified_name const *ns = alias_decl->get_namespace();
 
-    string ns_name(get_allocator());
+    bool is_absolute = ns->is_absolute();
+
+    string ns_name(is_absolute ? "::" : "", m_builder.get_allocator());
 
     for (int i = 0, n = ns->get_component_count(); i < n; ++i) {
         if (i > 0)

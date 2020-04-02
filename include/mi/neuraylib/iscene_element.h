@@ -69,6 +69,7 @@ enum Element_type
     ELEMENT_TYPE_POLYGON_MESH                    = 18, ///< #mi::neuraylib::IPolygon_mesh
     ELEMENT_TYPE_SUBDIVISION_SURFACE             = 23, ///< #mi::neuraylib::ISubdivision_surface
     ELEMENT_TYPE_FREEFORM_SURFACE                = 24, ///< #mi::neuraylib::IFreeform_surface
+    ELEMENT_TYPE_FIBERS                          = 25, ///< #mi::neuraylib::IFibers
 #endif // MI_SKIP_WITH_MDL_SDK_DOXYGEN
     ELEMENT_TYPE_MODULE                          = 29, ///< #mi::neuraylib::IModule
     ELEMENT_TYPE_FUNCTION_DEFINITION             = 30, ///< #mi::neuraylib::IFunction_definition

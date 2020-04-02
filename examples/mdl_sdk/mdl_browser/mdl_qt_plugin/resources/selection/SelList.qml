@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-
 import QtQuick 2.10
 import QtQuick.Controls 2.3
 import QtQuick.Controls.Material 2.3
@@ -37,7 +36,7 @@ import "../search" as Search
 ColumnLayout {
     id: id_control
 
-    property real scrollBarWidth: 7.5
+    property real scrollBarWidth: 10
     width: parent.width
     height: parent.height
 
@@ -60,9 +59,10 @@ ColumnLayout {
 
     ListView {
         id: id_list
-        anchors.fill: parent
-        anchors.leftMargin: sideMargin
-        anchors.rightMargin: sideMargin
+
+        Layout.fillHeight: true
+        Layout.fillWidth: true
+        Layout.leftMargin: sideMargin
 
         currentIndex: -1
     
@@ -96,13 +96,6 @@ ColumnLayout {
         }
 
         ScrollBar.vertical: ScrollBar {
-            parent: id_control
-
-            anchors.top: id_list.top
-            anchors.left: id_list.right
-            anchors.leftMargin: 5
-            anchors.bottom: id_list.bottom
-
             implicitWidth: scrollBarWidth
         }
     }

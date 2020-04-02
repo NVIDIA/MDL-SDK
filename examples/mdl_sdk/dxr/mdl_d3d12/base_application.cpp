@@ -77,6 +77,7 @@ Base_application::Base_application()
     m_update_args.elapsed_time = 0.0;
     m_update_args.total_time = 0.0;
 
+    m_render_args.frame_number = 0;
     m_render_args.back_buffer = nullptr;
     m_render_args.back_buffer_rtv = {0};
 }
@@ -298,7 +299,6 @@ bool Base_application::initialize_internal(Base_options* options)
         log_error("No D3D device found that fits the requirements.");
         return false;
     }
-    
 
     #if defined(_DEBUG)
     {
@@ -339,8 +339,11 @@ bool Base_application::initialize_internal(Base_options* options)
 
     // load the MDL SDK and check for success
     m_mdl_sdk = new Mdl_sdk(this);
-    if(!m_mdl_sdk->is_running()) return false;
-
+    if (!m_mdl_sdk->is_valid())
+    {
+        log_error("MDL SDK not initialized properly.");
+        return false;
+    }
     return true;
 }
 
@@ -383,6 +386,7 @@ void Base_application::render()
     m_window->present_back_buffer();
 
     m_update_args.frame_number++;
+    m_render_args.frame_number++;
 }
 
 } // mdl_d3d12

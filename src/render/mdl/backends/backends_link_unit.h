@@ -78,7 +78,7 @@ public:
     ///                                    #MDL::Execution_context which can be used
     ///                                    to pass compilation options to the MDL compiler. The 
     ///                                    following options are supported for this operation:
-    ///                                    - Float32 "mdl_meters_per_scene_unit" (default 1.0f)
+    ///                                    - Float32 "meters_per_scene_unit" (default 1.0f)
     ///                                    - Float32 "mdl_wavelength_min" (default 380.f)
     ///                                    - Float32 "mdl_wavelength_max" (default 780.f)
     ///                                    During material compilation messages like errors and 

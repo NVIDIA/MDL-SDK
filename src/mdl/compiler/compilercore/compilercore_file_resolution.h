@@ -576,9 +576,6 @@ private:
     /// Current allocator.
     IAllocator *m_alloc;
 
-    /// The kind this file.
-    Kind m_kind;
-
     /// If non-null, this is an container.
     MDL_zip_container *m_container;
 
@@ -586,6 +583,9 @@ private:
         FILE                   *fp;
         MDL_zip_container_file *z_fp;
     } u;
+
+    /// The kind this file.
+    Kind m_kind;
 
     /// If true, this file handle has ownership on the MDL container.
     bool m_owns_container;
@@ -648,6 +648,16 @@ public:
     /// Get the UDIM mode for this set.
     UDIM_mode get_udim_mode() const MDL_FINAL;
 
+    /// Get the resource hash value for the i'th file in the set if any.
+    ///
+    /// \param[in]  i     the index
+    /// \param[out] hash  the hash value if exists
+    ///
+    /// \return true if this entry has a hash, false otherwise
+    bool get_resource_hash(
+        size_t i,
+        unsigned char hash[16]) const MDL_FINAL;
+
     /// Create a resource set from a file mask.
     ///
     /// \param alloc      the allocator
@@ -682,6 +692,7 @@ private:
     /// \param prefix     the (directory or archive name) prefix
     /// \param sep        the separator to be used between prefix and file name
     /// \param udim_mode  the UDIM mode
+    /// \param hash       if non-NULL, the hash value of the resource file
     static void parse_u_v(
         MDL_resource_set *s,
         char const       *name,
@@ -689,7 +700,8 @@ private:
         char const       *url,
         string const     &prefix,
         char             sep,
-        UDIM_mode        udim_mode);
+        UDIM_mode        udim_mode,
+        unsigned char    hash[16]);
 
     /// Create a resource set from a file mask describing files on a container.
     ///
@@ -713,10 +725,12 @@ private:
     /// \param alloc     the allocator
     /// \param url       the absolute MDL url
     /// \param filename  the file name
+    /// \param hash      the resource hash value if any
     MDL_resource_set(
-        IAllocator *alloc,
-        char const *url,
-        char const *filename);
+        IAllocator          *alloc,
+        char const          *url,
+        char const          *filename,
+        unsigned char const hash[16]);
 
     /// Empty constructor from masks.
     ///
@@ -736,18 +750,27 @@ private:
     struct Resource_entry {
         /// Constructor.
         Resource_entry(
-            char const *url,
-            char const *filename,
-            int        u,
-            int        v)
-        : url(url), filename(filename), u(u), v(v)
+            char const          *url,
+            char const          *filename,
+            int                 u,
+            int                 v,
+            unsigned char const hash[16])
+        : url(url), filename(filename), u(u), v(v), has_hash(false)
         {
+            if (hash != NULL) {
+                memcpy(this->hash, hash, sizeof(this->hash));
+                has_hash = true;
+            } else {
+                memset(this->hash, 0, sizeof(this->hash));
+            }
         }
 
+        unsigned char hash[16];
         char const *url;
         char const *filename;
         int        u;
         int        v;
+        bool       has_hash;
     };
 
     typedef Arena_vector<Resource_entry>::Type Entry_vec;

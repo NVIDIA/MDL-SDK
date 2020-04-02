@@ -35,6 +35,7 @@
 
 #include <llvm/IR/Module.h>
 
+#include "generator_jit.h"
 #include "generator_jit_code_printer.h"
 #include "generator_jit_generated_code.h"
 #include "generator_jit_llvm.h"
@@ -484,9 +485,9 @@ IGenerated_code_value_layout::State Generated_code_value_layout::get_nested_stat
 
 // Set the value inside the given block at the given layout state.
 int Generated_code_value_layout::set_value(
-    char *block,
-    mi::mdl::IValue const *value,
-    IGenerated_code_value_callback *value_callback,
+    char                                *block,
+    mi::mdl::IValue const               *value,
+    IGenerated_code_value_callback      *value_callback,
     IGenerated_code_value_layout::State state) const
 {
     if (block == NULL || value == NULL) return -1;
@@ -500,44 +501,43 @@ int Generated_code_value_layout::set_value(
 
     unsigned data_offs = state.m_data_offs + layout->element_offset;
 
-    switch (mi::mdl::IValue::Kind(layout->kind))
-    {
-        case mi::mdl::IValue::VK_BOOL:
-            *reinterpret_cast<bool *>(block + data_offs) =
-                cast<IValue_bool>(value)->get_value();
-            return 0;
+    switch (mi::mdl::IValue::Kind(layout->kind)) {
+    case mi::mdl::IValue::VK_BOOL:
+        *reinterpret_cast<bool *>(block + data_offs) =
+            cast<IValue_bool>(value)->get_value();
+        return 0;
 
-        case mi::mdl::IValue::VK_INT:
-        case mi::mdl::IValue::VK_ENUM:
-            *reinterpret_cast<int *>(block + data_offs) =
-                cast<IValue_int_valued>(value)->get_value();
-            return 0;
+    case mi::mdl::IValue::VK_INT:
+    case mi::mdl::IValue::VK_ENUM:
+        *reinterpret_cast<int *>(block + data_offs) =
+            cast<IValue_int_valued>(value)->get_value();
+        return 0;
 
-        case mi::mdl::IValue::VK_FLOAT:
-            *reinterpret_cast<float *>(block + data_offs) =
-                cast<IValue_float>(value)->get_value();
-            return 0;
+    case mi::mdl::IValue::VK_FLOAT:
+        *reinterpret_cast<float *>(block + data_offs) =
+            cast<IValue_float>(value)->get_value();
+        return 0;
 
-        case mi::mdl::IValue::VK_DOUBLE:
-            *reinterpret_cast<double *>(block + data_offs) =
-                cast<IValue_double>(value)->get_value();
-            return 0;
+    case mi::mdl::IValue::VK_DOUBLE:
+        *reinterpret_cast<double *>(block + data_offs) =
+            cast<IValue_double>(value)->get_value();
+        return 0;
 
-        case mi::mdl::IValue::VK_STRING:
-            if (m_strings_mapped_to_ids) {
-                mi::Uint32 id = value_callback != NULL ?
-                    value_callback->get_string_index(cast<IValue_string>(value)) : 0u;
-                *reinterpret_cast<unsigned *>(block + data_offs) = id;
-            } else {
-                // unmapped string are not supported
-                *reinterpret_cast<char **>(block + data_offs) = NULL;
-            }
-            return 0;
+    case mi::mdl::IValue::VK_STRING:
+        if (m_strings_mapped_to_ids) {
+            mi::Uint32 id = value_callback != NULL ?
+                value_callback->get_string_index(cast<IValue_string>(value)) : 0u;
+            *reinterpret_cast<unsigned *>(block + data_offs) = id;
+        } else {
+            // unmapped string are not supported
+            *reinterpret_cast<char **>(block + data_offs) = NULL;
+        }
+        return 0;
 
-        case mi::mdl::IValue::VK_VECTOR:
-        case mi::mdl::IValue::VK_MATRIX:
-        case mi::mdl::IValue::VK_ARRAY:
-        case mi::mdl::IValue::VK_RGB_COLOR:
+    case mi::mdl::IValue::VK_VECTOR:
+    case mi::mdl::IValue::VK_MATRIX:
+    case mi::mdl::IValue::VK_ARRAY:
+    case mi::mdl::IValue::VK_RGB_COLOR:
         {
             // homogeneous types have same state for all of them
             mi::mdl::IValue_compound const *v = cast<mi::mdl::IValue_compound>(value);
@@ -560,7 +560,7 @@ int Generated_code_value_layout::set_value(
             return 0;
         }
 
-        case mi::mdl::IValue::VK_STRUCT:
+    case mi::mdl::IValue::VK_STRUCT:
         {
             mi::mdl::IValue_compound const *v = cast<mi::mdl::IValue_compound>(value);
             if (v->get_component_count() != layout->num_children) return -4;
@@ -579,21 +579,26 @@ int Generated_code_value_layout::set_value(
             return 0;
         }
 
-        case mi::mdl::IValue::VK_TEXTURE:
-        case mi::mdl::IValue::VK_LIGHT_PROFILE:
-        case mi::mdl::IValue::VK_BSDF_MEASUREMENT:
+    case mi::mdl::IValue::VK_TEXTURE:
         {
-            unsigned index = value_callback->get_resource_index(cast<IValue_resource>(value));
+            IValue_texture const *tex = cast<IValue_texture>(value);
+            unsigned index = value_callback->get_resource_index(tex);
+            *reinterpret_cast<mi::Uint32 *>(block + data_offs) = index;
+            return 0;
+        }
+    case mi::mdl::IValue::VK_LIGHT_PROFILE:
+    case mi::mdl::IValue::VK_BSDF_MEASUREMENT:
+        {
+            IValue_resource const *res = cast<IValue_resource>(value);
+            unsigned index = value_callback->get_resource_index(res);
             *reinterpret_cast<mi::Uint32 *>(block + data_offs) = index;
             return 0;
         }
 
-        case mi::mdl::IValue::VK_BAD:
-        case mi::mdl::IValue::VK_INVALID_REF:
-        {
-            MDL_ASSERT(!"unexpected value type");
-            return -5;
-        }
+    case mi::mdl::IValue::VK_BAD:
+    case mi::mdl::IValue::VK_INVALID_REF:
+        MDL_ASSERT(!"unexpected value type");
+        return -5;
     }
     MDL_ASSERT(!"unsupported value type");
     return -5;
@@ -1106,9 +1111,9 @@ void Generated_code_source::add_mapped_string(char const *s, size_t id)
 // Constructor.
 Generated_code_source::Source_res_manag::Source_res_manag(
     IAllocator              *alloc,
-    Resource_attr_map const *resource_map)
+    Resource_attr_map const *resource_attr_map)
 : m_alloc(alloc)
-, m_resource_map(resource_map)
+, m_resource_attr_map(alloc)
 , m_res_indexes(
     0, Tag_index_map::hasher(), Tag_index_map::key_equal(), alloc)
 , m_string_indexes(
@@ -1116,17 +1121,27 @@ Generated_code_source::Source_res_manag::Source_res_manag(
 , m_curr_res_idx(0)
 , m_curr_string_idx(0)
 {
+    if (resource_attr_map != NULL) {
+        // import
+        m_resource_attr_map.insert(resource_attr_map->begin(), resource_attr_map->end());
+    }
 }
 
 // Register the given resource value and return its 1-based index in the resource table.
 // Index 0 represents an invalid resource reference.
 size_t Generated_code_source::Source_res_manag::get_resource_index(
-    mi::mdl::IValue_resource const *resource)
+    Resource_tag_tuple::Kind   kind,
+    char const                 *url,
+    int                        tag,
+    IType_texture::Shape,
+    IValue_texture::gamma_mode)
 {
-    if (m_resource_map != NULL) {
-        Resource_attr_map::const_iterator it(m_resource_map->find(resource));
-        if (it != m_resource_map->end()) {
-            mi::mdl::Resource_entry const &e = it->second;
+    if (!m_resource_attr_map.empty()) {
+        Resource_tag_tuple key(kind, url, tag);
+
+        Resource_attr_map::const_iterator it(m_resource_attr_map.find(key));
+        if (it != m_resource_attr_map.end()) {
+            mi::mdl::Resource_attr_entry const &e = it->second;
             return e.index;
         }
         // Bad: we have a resource map, but could not find the requested resource.
@@ -1135,13 +1150,22 @@ size_t Generated_code_source::Source_res_manag::get_resource_index(
         return 0;
     }
 
-    switch (resource->get_kind()) {
-    case mi::mdl::IValue_resource::VK_TEXTURE:
-    case mi::mdl::IValue_resource::VK_LIGHT_PROFILE:
-    case mi::mdl::IValue_resource::VK_BSDF_MEASUREMENT:
-        // we support textures, light profiles, and bsdf_measurements
+    switch (kind) {
+    case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+    case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+    case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+    case Resource_tag_tuple::RK_LIGHT_PROFILE:
+    case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
+    case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+    case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+    case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+    case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+    case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+    case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+    case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+    case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        // we support textures, light profiles, bsdf_measurements, and bsdf_data textures
         {
-            unsigned tag = resource->get_tag_value();
             Tag_index_map::const_iterator it = m_res_indexes.find(tag);
             if (it != m_res_indexes.end())
                 return it->second;
@@ -1154,7 +1178,7 @@ size_t Generated_code_source::Source_res_manag::get_resource_index(
     default:
         // those should never occur in functions
         MDL_ASSERT(!"Unexpected resource type");
-        return resource->get_tag_value();
+        return tag;
     }
 }
 
@@ -1175,6 +1199,15 @@ size_t Generated_code_source::Source_res_manag::get_string_index(IValue_string c
     size_t idx = ++m_curr_string_idx;
     m_string_indexes[str] = idx;
     return idx;
+}
+
+// Imports a new resource attribute map.
+void Generated_code_source::Source_res_manag::import_resource_attribute_map(
+    Resource_attr_map const *resource_attr_map)
+{
+    if (resource_attr_map != NULL) {
+        m_resource_attr_map.insert(resource_attr_map->begin(), resource_attr_map->end());
+    }
 }
 
 // --------------------------- Generated_code_lambda_function ----------------------------
@@ -1288,22 +1321,45 @@ void Generated_code_lambda_function::init(
     char *p = m_res_data.m_res_arr =
         reinterpret_cast<char *>(alloc->malloc(m_res_data.m_obj_size * n_res_entries));
     for (size_t i = 0; i < n_res_entries; ++i, p += m_res_data.m_obj_size) {
-        Resource_entry const          &entry = m_res_entries[i];
-        mi::mdl::IType_resource const *type  = entry.get_type();
+        Resource_entry const     &entry = m_res_entries[i];
+        Resource_tag_tuple::Kind kind   = entry.get_kind();
 
-        if (is<IType_texture>(type)) {
-            IType_texture const *tex_type = cast<IType_texture>(type);
+        switch (kind) {
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
             res_handler->tex_init(
                 (void *)p,
-                tex_type->get_shape(),
+                entry.get_shape(),
                 entry.get_tag(),
                 entry.get_gamma_mode(),
                 ctx);
-        } else if (is<IType_light_profile>(type)) {
+            break;
+        case Resource_tag_tuple::RK_LIGHT_PROFILE:
             res_handler->lp_init((void *)p, entry.get_tag(), ctx);
-        } else {
-            MDL_ASSERT(is<IType_bsdf_measurement>(type));
+            break;
+        case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
             res_handler->bm_init((void *)p, entry.get_tag(), ctx);
+            break;
+
+        case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+        case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+            res_handler->tex_init(
+                (void *)p,
+                IType_texture::TS_BSDF_DATA,
+                entry.get_tag(),
+                IValue_texture::gamma_linear,
+                ctx);
+            break;
+
+        default:
+            MDL_ASSERT(!"unexpected resource kind");
         }
     }
 }
@@ -1320,17 +1376,37 @@ void Generated_code_lambda_function::term()
     if (n_res_entries > 0) {
         char *p = m_res_data.m_res_arr;
         for (size_t i = 0; i < n_res_entries; ++i, p += m_res_data.m_obj_size) {
-            Resource_entry const          &entry = m_res_entries[i];
-            mi::mdl::IType_resource const *type  = entry.get_type();
+            Resource_entry const     &entry = m_res_entries[i];
+            Resource_tag_tuple::Kind kind   = entry.get_kind();
 
-            if (is<IType_texture>(type)) {
-                IType_texture const *tex_type = cast<IType_texture>(type);
-                m_res_data.m_resource_handler->tex_term((void *)p, tex_type->get_shape());
-            } else if (is<IType_light_profile>(type)) {
+            switch (kind) {
+            case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+            case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+            case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+                // real texture
+                m_res_data.m_resource_handler->tex_term((void *)p, entry.get_shape());
+                break;
+            case Resource_tag_tuple::RK_LIGHT_PROFILE:
+                // light profile
                 m_res_data.m_resource_handler->lp_term((void *)p);
-            } else {
-                MDL_ASSERT(is<IType_bsdf_measurement>(type));
+                break;
+            case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
+                // bsdf measurement
                 m_res_data.m_resource_handler->bm_term((void *)p);
+                break;
+            case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+            case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+            case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+            case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+            case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+            case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+            case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+            case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+                // bsdf data texture
+                m_res_data.m_resource_handler->tex_term((void *)p, IType_texture::TS_BSDF_DATA);
+                break;
+            default:
+                MDL_ASSERT(!"unexpected value kind");
             }
         }
 
@@ -1680,20 +1756,33 @@ mi::Uint32 Generated_code_lambda_function::get_known_resource_index(mi::Uint32 t
 
 // Register a new non-texture resource tag.
 size_t Generated_code_lambda_function::register_resource_tag(
-    unsigned             tag,
-    IType_resource const *type)
+    unsigned                 tag,
+    Resource_tag_tuple::Kind kind)
 {
-    m_res_entries.push_back(Resource_entry(tag, type));
+    m_res_entries.push_back(Resource_entry(tag, kind));
     return m_res_entries.size();
 }
 
 // Register a new texture resource tag.
 size_t Generated_code_lambda_function::register_texture_tag(
     unsigned                   tag,
-    IType_texture const        *tex_type,
+    IType_texture::Shape       tex_shape,
     IValue_texture::gamma_mode gamma_mode)
 {
-    m_res_entries.push_back(Resource_entry(tag, tex_type, gamma_mode));
+    Resource_tag_tuple::Kind kind = Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT;
+    switch (gamma_mode) {
+    case IValue_texture::gamma_default:
+        kind = Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT;
+        break;
+    case IValue_texture::gamma_linear:
+        kind = Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR;
+        break;
+    case IValue_texture::gamma_srgb:
+        kind = Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT;
+        break;
+    }
+    m_res_entries.push_back(
+        Resource_entry(tag, kind, tex_shape));
     return m_res_entries.size();
 }
 
@@ -1718,43 +1807,56 @@ Generated_code_lambda_function::Lambda_res_manag::Lambda_res_manag(
 {
 }
 
-// Register the given resource value and return its 1-based index in the resource table.
+// Returns the resource index for the given resource usable by the target code resource
+// handler for the corresponding resource type.
 // Index 0 represents an invalid resource reference.
 size_t Generated_code_lambda_function::Lambda_res_manag::get_resource_index(
-    mi::mdl::IValue_resource const *resource)
+    Resource_tag_tuple::Kind   kind,
+    char const                 *url,
+    int                        tag,
+    IType_texture::Shape       shape,
+    IValue_texture::gamma_mode gamma_mode)
 {
     if (m_resource_map != NULL) {
-        Resource_attr_map::const_iterator it(m_resource_map->find(resource));
+        Resource_tag_tuple key(kind, url, tag);
+        Resource_attr_map::const_iterator it(m_resource_map->find(key));
         if (it != m_resource_map->end()) {
-            mi::mdl::Resource_entry const &e = it->second;
+            mi::mdl::Resource_attr_entry const &e = it->second;
             return e.index;
         }
     }
 
-    switch (resource->get_kind()) {
-    case mi::mdl::IValue_resource::VK_TEXTURE:
+    switch (kind) {
+    case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+    case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+    case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+    case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+    case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+    case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+    case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+    case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+    case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+    case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+    case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
         // we support textures, ...
         {
-            IValue_texture const *tex = cast<IValue_texture>(resource);
-            unsigned tag = tex->get_tag_value();
             Tag_index_map::const_iterator it = m_res_indexes.find(tag);
             if (it != m_res_indexes.end())
                 return it->second;
 
-            size_t idx = m_lambda.register_texture_tag(tag, tex->get_type(), tex->get_gamma_mode());
+            size_t idx = m_lambda.register_texture_tag(tag, shape, gamma_mode);
             m_res_indexes[tag] = idx;
             return idx;
         }
-    case mi::mdl::IValue_resource::VK_LIGHT_PROFILE:
-    case mi::mdl::IValue_resource::VK_BSDF_MEASUREMENT:
+    case Resource_tag_tuple::RK_LIGHT_PROFILE:
+    case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
         // ... light profiles, and bsdf_measurements
         {
-            unsigned tag = resource->get_tag_value();
             Tag_index_map::const_iterator it = m_res_indexes.find(tag);
             if (it != m_res_indexes.end())
                 return it->second;
 
-            size_t idx = m_lambda.register_resource_tag(tag, resource->get_type());
+            size_t idx = m_lambda.register_resource_tag(tag, kind);
             m_res_indexes[tag] = idx;
             return idx;
         }
@@ -1762,7 +1864,7 @@ size_t Generated_code_lambda_function::Lambda_res_manag::get_resource_index(
     default:
         // those should never occur in functions
         MDL_ASSERT(!"Unexpected resource type");
-        return resource->get_tag_value();
+        return tag;
     }
 }
 
@@ -1771,9 +1873,10 @@ size_t Generated_code_lambda_function::Lambda_res_manag::get_string_index(
     IValue_string const *s)
 {
     if (m_resource_map != NULL) {
-        Resource_attr_map::const_iterator it(m_resource_map->find(s));
+        Resource_tag_tuple k(kind_from_value(s), s->get_value(), /*tag=*/0);
+        Resource_attr_map::const_iterator it(m_resource_map->find(k));
         if (it != m_resource_map->end()) {
-            mi::mdl::Resource_entry const &e = it->second;
+            mi::mdl::Resource_attr_entry const &e = it->second;
             return e.index;
         }
     }
@@ -1791,12 +1894,17 @@ size_t Generated_code_lambda_function::Lambda_res_manag::get_string_index(
 /// Helper struct for sorting IValue_resources.
 struct Resource_index_pair
 {
-    Resource_index_pair(IValue_resource const *val, size_t index)
-        : val(val), index(index)
+    Resource_index_pair(
+        Resource_tag_tuple const& val,
+        size_t index, IType_texture::Shape shape,
+        IValue_texture::gamma_mode gamma_mode)
+    : val(val), index(index), shape(shape), gamma_mode(gamma_mode)
     {}
 
-    IValue_resource const *val;
+    Resource_tag_tuple val;
     size_t index;
+    IType_texture::Shape shape;
+    IValue_texture::gamma_mode gamma_mode;
 };
 
 /// Helper struct for comparing Resource_index_pair objects.
@@ -1813,20 +1921,60 @@ struct Resource_index_pair_compare
 void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attribute_map(
     Resource_attr_map const *resource_map)
 {
+    if (resource_map->size() == 0)
+        return;
     // Sort by index to avoid indeterministic behavior due to pointer hash map.
     mi::mdl::vector<Resource_index_pair>::Type sorted_resources(m_lambda.get_allocator());
     sorted_resources.reserve(resource_map->size());
     for (Resource_attr_map::const_iterator it = resource_map->begin(), end = resource_map->end();
         it != end; ++it)
     {
-        IValue_resource const *val = mi::mdl::as<IValue_resource>(it->first);
-        if (val == NULL) continue;
-        sorted_resources.push_back(Resource_index_pair(val, it->second.index));
+        Resource_tag_tuple const& val = it->first;
+        Resource_attr_entry const& e = it->second;
+        if (val.m_kind == Resource_tag_tuple::RK_BAD ||
+                val.m_kind == Resource_tag_tuple::RK_INVALID_REF)
+            continue;
+        IType_texture::Shape shape = IType_texture::TS_2D;
+        IValue_texture::gamma_mode gamma_mode = IValue_texture::gamma_default;
+
+        switch (val.m_kind) {
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+            gamma_mode = IValue_texture::gamma_default;
+            shape = e.u.tex.shape;
+            break;
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+            gamma_mode = IValue_texture::gamma_srgb;
+            shape = e.u.tex.shape;
+            break;
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+        case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+            gamma_mode = IValue_texture::gamma_linear;
+            shape = e.u.tex.shape;
+            break;
+        default:
+            MDL_ASSERT(!"unexpected kind");
+            break;
+        }
+
+        sorted_resources.push_back(Resource_index_pair(val, it->second.index, shape, gamma_mode));
     }
     std::sort(sorted_resources.begin(), sorted_resources.end(), Resource_index_pair_compare());
 
     for (size_t i = 0, n = sorted_resources.size(); i < n; ++i) {
-        get_resource_index(sorted_resources[i].val);
+        Resource_tag_tuple const& val = sorted_resources[i].val;
+        get_resource_index(
+            val.m_kind,
+            val.m_url,
+            val.m_tag,
+            sorted_resources[i].shape,
+            sorted_resources[i].gamma_mode);
     }
 }
 

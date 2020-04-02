@@ -69,7 +69,7 @@ namespace mdl_d3d12
         set_debug_name(m_resource.Get(), m_debug_name);
     }
 
-    bool Buffer::set_data(const void* data)
+    bool Buffer::set_data(const void* data, size_t size_in_byte)
     {
         // copy data to upload buffer
         void *mapped_data;
@@ -77,7 +77,7 @@ namespace mdl_d3d12
             "Failed to map upload buffer: " + m_debug_name, SRC))
             return false;
 
-        memcpy(mapped_data, data, m_size_in_byte);
+        memcpy(mapped_data, data, std::min(m_size_in_byte, size_in_byte));
         m_upload_resource->Unmap(0, nullptr);
         return true;
     }

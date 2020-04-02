@@ -388,6 +388,9 @@ public:
     /// \param e_type  the enum type to print
     virtual void print_type_prefix(IType_enum const *e_type);
 
+    /// Returns true if a variable declaration of kind T v(a); can be rewritten as T v = a;
+    virtual bool can_rewite_constructor_init(IExpression const * init);
+
     /// Print a type part.
     void typepart(char const *w);
 

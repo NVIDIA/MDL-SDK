@@ -3259,7 +3259,8 @@ size_t Value_factory::IValue_hash::operator() (IValue const *value) const
             char const *s = resource->get_string_value();
             return
                 h + hash_string(s) + size_t(kind) * 3 + resource->get_gamma_mode() * 17391 +
-                size_t(resource->get_tag_value()) * 9 + size_t(resource->get_tag_version()) * 3;
+                size_t(resource->get_tag_value()) * 9 + size_t(resource->get_tag_version()) * 5 +
+                resource->get_bsdf_data_kind() * 7;
         }
     case IValue::VK_LIGHT_PROFILE:
     case IValue::VK_BSDF_MEASUREMENT:
@@ -3268,7 +3269,7 @@ size_t Value_factory::IValue_hash::operator() (IValue const *value) const
             char const *s = resource->get_string_value();
             return
                 h + hash_string(s) + size_t(kind) * 3 +
-                size_t(resource->get_tag_value()) * 9 + size_t(resource->get_tag_version()) * 3;
+                size_t(resource->get_tag_value()) * 9 + size_t(resource->get_tag_version()) * 5;
         }
     case IValue::VK_VECTOR:
     case IValue::VK_MATRIX:
@@ -3321,6 +3322,8 @@ bool Value_factory::IValue_equal::operator()(IValue const *a, IValue const *b) c
         {
             IValue_texture const *ra = cast<IValue_texture>(a);
             IValue_texture const *rb = cast<IValue_texture>(b);
+            if (ra->get_bsdf_data_kind() != rb->get_bsdf_data_kind())
+                return false;
             if (ra->get_gamma_mode() != rb->get_gamma_mode())
                 return false;
             if (strcmp(ra->get_string_value(), rb->get_string_value()) != 0)

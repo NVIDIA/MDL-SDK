@@ -193,22 +193,47 @@ namespace mdl_d3d12
     // --------------------------------------------------------------------------------------------
 
     bool Descriptor_heap::create_shader_resource_view(
-        Texture* texture, const Descriptor_heap_handle& handle)
+        Texture* texture,
+        Texture_dimension dimension,
+        const Descriptor_heap_handle& handle)
     {
         if (!handle.is_valid()) {
             log_error("Heap Handle invalid while creating view to: " +
-                texture->get_debug_name(), SRC);
+                (texture ? texture->get_debug_name() : "NullView"), SRC);
             return false;
         }
 
-        D3D12_SHADER_RESOURCE_VIEW_DESC desc;
-        if (!texture->get_srv_description(desc))
-            return false;
+        D3D12_SHADER_RESOURCE_VIEW_DESC desc {};
+        if (texture)
+        {
+            if (!texture->get_srv_description(desc, dimension))
+                return false;
+        }
+        else
+        {
+            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            switch (dimension)
+            {
+                case Texture_dimension::Texture_2D:
+                    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                    break;
+                case Texture_dimension::Texture_3D:
+                    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+                    break;
+                default:
+                    log_error("Texture has no valid dimension: NullView", SRC);
+                    return false;
+            }
+        }
 
-        m_entries[handle].resource_name = texture->get_debug_name();
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
+        m_entries[handle].resource_name = texture ? texture->get_debug_name() : "NullView";
         m_entries[handle].resource_type = Entry::Kind::SRV;
         m_app->get_device()->CreateShaderResourceView(
-            texture->get_resource(), &desc, handle.get_cpu_handle());
+            texture ? texture->get_resource() : nullptr,
+            &desc, 
+            handle.get_cpu_handle());
         return true;
     }
 
@@ -227,6 +252,7 @@ namespace mdl_d3d12
         if (!texture->get_uav_description(desc))
             return false;
 
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
         m_entries[handle].resource_name = texture->get_debug_name();
         m_entries[handle].resource_type = Entry::Kind::UAV;
         m_app->get_device()->CreateUnorderedAccessView(
@@ -250,6 +276,7 @@ namespace mdl_d3d12
             return false;
         }
         
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
         m_entries[handle].resource_name = texture->get_debug_name();
         m_entries[handle].resource_type = Entry::Kind::RTV;
         m_app->get_device()->CreateRenderTargetView(
@@ -277,6 +304,7 @@ namespace mdl_d3d12
         if (!buffer->get_shader_resource_view_description_raw(desc))
             return false;
 
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
         m_entries[handle].resource_name = buffer->get_debug_name();
         m_entries[handle].resource_type = Entry::Kind::SRV;
         m_app->get_device()->CreateShaderResourceView(
@@ -298,6 +326,7 @@ namespace mdl_d3d12
         if (!tlas->get_shader_resource_view_description(desc))
             return false;
 
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
         m_entries[handle].resource_name = tlas->get_debug_name();
         m_entries[handle].resource_type = Entry::Kind::SRV;
         m_app->get_device()->CreateShaderResourceView(
@@ -319,6 +348,7 @@ namespace mdl_d3d12
         if (!constants->get_constant_buffer_view_description(desc))
             return false;
 
+        std::lock_guard<std::mutex> lock(m_entries_mutex);
         m_entries[handle].resource_name = constants->get_debug_name();
         m_entries[handle].resource_type = Entry::Kind::CBV;
         m_app->get_device()->CreateConstantBufferView(

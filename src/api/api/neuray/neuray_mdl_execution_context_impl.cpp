@@ -51,12 +51,12 @@ public:
     Message_impl(const MI::MDL::Message& message) : m_message(message) { }
 
     // public interface functions
-    mi::base::Message_severity get_severity() const NEURAY_FINAL
+    mi::base::Message_severity get_severity() const final
     {
         return m_message.m_severity;
     }
     
-    Kind get_kind() const NEURAY_FINAL {
+    Kind get_kind() const final {
 
         switch (m_message.m_kind)
         {
@@ -76,22 +76,22 @@ public:
         return MSG_UNCATEGORIZED;
     }
 
-    const char* get_string() const NEURAY_FINAL
+    const char* get_string() const final
     {
         return m_message.m_message.c_str();
     }
     
-    mi::Sint32 get_code() const NEURAY_FINAL
+    mi::Sint32 get_code() const final
     {
         return m_message.m_code;
     }
 
-    mi::Size get_notes_count() const NEURAY_FINAL
+    mi::Size get_notes_count() const final
     {
         return m_message.m_notes.size();
     }
 
-    const IMessage* get_note(mi::Size index) const NEURAY_FINAL
+    const IMessage* get_note(mi::Size index) const final
     {
         if (index >= m_message.m_notes.size())
             return nullptr;

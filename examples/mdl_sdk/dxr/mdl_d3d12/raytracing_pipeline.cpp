@@ -542,10 +542,10 @@ namespace mdl_d3d12
         Raytracing_acceleration_structure::add_geometry(
             const Raytracing_acceleration_structure::BLAS_handle& blas,
             Buffer* vertex_buffer, 
-            size_t vertex_stride_in_byte, 
-            size_t vertex_offset, 
-            size_t vertex_count, 
-            size_t vertex_position_offset,
+            size_t vertex_buffer_offset_in_byte,
+            size_t vertex_count,
+            size_t vertex_stride_in_byte,
+            size_t vertex_position_byte_offset,
             Index_buffer* index_buffer, 
             size_t index_offset, 
             size_t index_count)
@@ -572,13 +572,12 @@ namespace mdl_d3d12
         desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
         desc.Triangles.Transform3x4 = 0;
         desc.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-        desc.Triangles.VertexCount = 
-            static_cast<UINT>(vertex_buffer->get_size_in_byte() / vertex_stride_in_byte);
+        desc.Triangles.VertexCount = static_cast<UINT>(vertex_count);
         desc.Triangles.VertexBuffer.StrideInBytes = vertex_stride_in_byte;
         desc.Triangles.VertexBuffer.StartAddress =
             vertex_buffer->get_resource()->GetGPUVirtualAddress() + // base address
-            //vertex_offset * vertex_stride_in_byte + // offset to first vertex of the mesh (part)
-            vertex_position_offset; // offset to the position semantic inside the vertex structure
+            vertex_buffer_offset_in_byte + // first vertex of the mesh part
+            vertex_position_byte_offset; 
 
         desc.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
 

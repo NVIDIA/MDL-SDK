@@ -50,10 +50,10 @@ mi::base::IInterface* String_impl::create_api_class(
     return new String_impl();
 }
 
-String_impl::String_impl()
+String_impl::String_impl(const char* const str)
   : m_storage( 0)
 {
-    set_c_str( "");
+    set_c_str( str);
 }
 
 String_impl::~String_impl()

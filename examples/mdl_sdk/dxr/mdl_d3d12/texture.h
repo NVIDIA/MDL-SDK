@@ -50,18 +50,46 @@ namespace mdl_d3d12
         unorder_access = 1 << 3
     };
 
+    enum class Texture_dimension
+    {
+        Undefined,
+        Texture_2D,
+        Texture_3D
+    };
+
     class Texture : public Resource
     {
-    public:
         explicit Texture(
-            Base_application* app, 
-            GPU_access gpu_access, 
-            size_t width, 
-            size_t height, 
-            size_t depth, 
-            DXGI_FORMAT format, 
+            Base_application* app,
+            GPU_access gpu_access,
+            Texture_dimension dimension,
+            size_t width,
+            size_t height,
+            size_t depth,
+            DXGI_FORMAT format,
             const std::string& debug_name);
 
+    public:
+        // Creates a 2D Texture.
+        static Texture* create_texture_2d(
+            Base_application* app,
+            GPU_access gpu_access,
+            size_t width,
+            size_t height,
+            DXGI_FORMAT format,
+            const std::string& debug_name);
+
+        // Creates a 3D Texture.
+        static Texture* create_texture_3d(
+            Base_application* app,
+            GPU_access gpu_access,
+            size_t width,
+            size_t height,
+            size_t depth,
+            DXGI_FORMAT format,
+            const std::string& debug_name);
+
+        // Creates a 2D Texture for a swap chain.
         explicit Texture(
             Base_application* app, 
             IDXGISwapChain1* swap_chain, 
@@ -73,11 +101,15 @@ namespace mdl_d3d12
         std::string get_debug_name() const override { return m_debug_name; }
 
         ID3D12Resource* get_resource() { return m_resource.Get(); }
-        bool get_srv_description(D3D12_SHADER_RESOURCE_VIEW_DESC& out_desc) const;
+        bool get_srv_description(
+            D3D12_SHADER_RESOURCE_VIEW_DESC& out_desc,
+            Texture_dimension dimension) const;
+
         bool get_uav_description(D3D12_UNORDERED_ACCESS_VIEW_DESC& out_desc) const;
 
         size_t get_width() const { return m_width; }
         size_t get_height() const { return m_height; }
+        size_t get_depth() const { return m_depth; }
         DXGI_FORMAT get_format() const { return m_format; }
         size_t get_pixel_stride() const { return m_pixel_stride_in_byte; }
 
@@ -98,6 +130,7 @@ namespace mdl_d3d12
 
         Base_application* m_app;
         std::string m_debug_name;
+        Texture_dimension m_dimension;
 
         GPU_access m_gpu_access;
         size_t m_width;

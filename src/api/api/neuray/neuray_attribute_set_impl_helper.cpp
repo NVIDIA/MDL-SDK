@@ -613,7 +613,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
             return ATTR::Type( ATTR::TYPE_UNDEF, 0, 1);
         // create ATTR::Type
         ATTR::Type structure_type( ATTR::TYPE_STRUCT, name.c_str(), 1);
-        structure_type.set_type_name( type_name.c_str());
+        structure_type.set_type_name( type_name);
         mi::Size n = decl->get_length();
         for( mi::Size i = 0; i < n; ++i) {
             // create ATTR::Type for the i-th member in member_type
@@ -642,7 +642,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
             return ATTR::Type( ATTR::TYPE_UNDEF, 0, 1);
         // create ATTR::Type
         ATTR::Type enum_type( ATTR::TYPE_ENUM, name.c_str(), 1);
-        enum_type.set_type_name( type_name.c_str());
+        enum_type.set_type_name( type_name);
         mi::Size n = decl->get_length();
         Enum_collection* enum_collection = new Enum_collection();
         for( mi::Size i = 0; i < n; ++i)

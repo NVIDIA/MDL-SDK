@@ -36,8 +36,6 @@
 #include <mi/mdl/mdl_generated_executable.h>
 #include <mi/base/handle.h>
 
-#include <base/system/main/neuray_cc_conf.h>
-
 namespace MI {
 namespace MDLRT {
 
@@ -56,7 +54,7 @@ public:
     }
 
     /// Get the number of bytes that must be allocated for a resource object.
-    size_t get_data_size() const NEURAY_OVERRIDE;
+    size_t get_data_size() const override;
 
     /// Initializes a texture data helper object.
     ///
@@ -71,7 +69,7 @@ public:
         mi::mdl::IType_texture::Shape       shape,
         unsigned                            tag,
         mi::mdl::IValue_texture::gamma_mode gamma,
-        void                               *ctx) NEURAY_OVERRIDE;
+        void                               *ctx) override;
 
     /// Terminate a texture data helper object.
     ///
@@ -80,25 +78,25 @@ public:
     /// \param shape  the texture type shape of the object to terminate
     void tex_term(
         void                          *data,
-        mi::mdl::IType_texture::Shape shape) NEURAY_OVERRIDE;
+        mi::mdl::IType_texture::Shape shape) override;
 
     /// Handle tex::width(texture_2d, int2) and tex::height(texture_2d, int2)
     void tex_resolution_2d(
         int           result[2],
         void const    *tex_data,
-        int const     uv_tile[2]) const NEURAY_OVERRIDE;
+        int const     uv_tile[2]) const override;
 
     /// Handle tex::width(texture_*) (not for udim textures)
     int tex_width(
-        void const    *tex_data) const NEURAY_OVERRIDE;
+        void const    *tex_data) const override;
 
     /// Handle tex::height(texture_*) (not for udim textures)
     int tex_height(
-        void const    *tex_data) const NEURAY_OVERRIDE;
+        void const    *tex_data) const override;
 
     /// Handle tex::depth(texture_*)
     int tex_depth(
-        void const    *tex_data) const NEURAY_OVERRIDE;
+        void const    *tex_data) const override;
 
     /// Handle tex::lookup_float(texture_2d, ...)
     float tex_lookup_float_2d(
@@ -108,7 +106,7 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const NEURAY_OVERRIDE;
+        float const   crop_v[2]) const override;
 
     /// Handle tex::lookup_float(texture_2d, ...) with derivatives.
     float tex_lookup_deriv_float_2d(
@@ -118,7 +116,7 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const NEURAY_OVERRIDE;
+        float const        crop_v[2]) const override;
 
     /// Handle tex::lookup_float(texture_3d, ...)
     float tex_lookup_float_3d(
@@ -130,19 +128,19 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const NEURAY_OVERRIDE;
+        float const   crop_w[2]) const override;
 
     /// Handle tex::lookup_float(texture_cube, ...)
     float tex_lookup_float_cube(
         void const    *tex_data,
         void          *thread_data,
-        float const   coord[3]) const NEURAY_OVERRIDE;
+        float const   coord[3]) const override;
 
     /// Handle tex::lookup_float(texture_ptex, ...)
     float tex_lookup_float_ptex(
         void const    *tex_data,
         void          *thread_data,
-        int           channel) const NEURAY_OVERRIDE;
+        int           channel) const override;
 
     /// Handle tex::lookup_float2(texture_2d, ...)
     void tex_lookup_float2_2d(
@@ -153,7 +151,7 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const NEURAY_OVERRIDE;
+        float const   crop_v[2]) const override;
 
     /// Handle tex::lookup_float2(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_float2_2d(
@@ -164,7 +162,7 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const NEURAY_OVERRIDE;
+        float const        crop_v[2]) const override;
 
     /// Handle tex::lookup_float2(texture_3d, ...)
     void tex_lookup_float2_3d(
@@ -177,21 +175,21 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const NEURAY_OVERRIDE;
+        float const   crop_w[2]) const override;
 
     /// Handle tex::lookup_float2(texture_cube, ...)
     void tex_lookup_float2_cube(
         float         result[2],
         void const    *tex_data,
         void          *thread_data,
-        float const   coord[3]) const NEURAY_OVERRIDE;
+        float const   coord[3]) const override;
 
     /// Handle tex::lookup_float2(texture_ptex, ...)
     void tex_lookup_float2_ptex(
         float         result[2],
         void const    *tex_data,
         void          *thread_data,
-        int           channel) const NEURAY_OVERRIDE;
+        int           channel) const override;
 
     /// Handle tex::lookup_float3(texture_2d, ...)
     void tex_lookup_float3_2d(
@@ -202,7 +200,7 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const NEURAY_OVERRIDE;
+        float const   crop_v[2]) const override;
 
     /// Handle tex::lookup_float3(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_float3_2d(
@@ -213,7 +211,7 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const NEURAY_OVERRIDE;
+        float const        crop_v[2]) const override;
 
     /// Handle tex::lookup_float3(texture_3d, ...)
     void tex_lookup_float3_3d(
@@ -226,21 +224,21 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const NEURAY_OVERRIDE;
+        float const   crop_w[2]) const override;
 
     /// Handle tex::lookup_float3(texture_cube, ...)
     void tex_lookup_float3_cube(
         float         result[3],
         void const    *tex_data,
         void          *thread_data,
-        float const   coord[3]) const NEURAY_OVERRIDE;
+        float const   coord[3]) const override;
 
     /// Handle tex::lookup_float3(texture_ptex, ...)
     void tex_lookup_float3_ptex(
         float         result[3],
         void const    *tex_data,
         void          *thread_data,
-        int           channel) const NEURAY_OVERRIDE;
+        int           channel) const override;
 
     /// Handle tex::lookup_float4(texture_2d, ...)
     void tex_lookup_float4_2d(
@@ -251,7 +249,7 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const NEURAY_OVERRIDE;
+        float const   crop_v[2]) const override;
 
     /// Handle tex::lookup_float4(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_float4_2d(
@@ -262,7 +260,7 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const NEURAY_OVERRIDE;
+        float const        crop_v[2]) const override;
 
     /// Handle tex::lookup_float4(texture_3d, ...)
     void tex_lookup_float4_3d(
@@ -275,21 +273,21 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const NEURAY_OVERRIDE;
+        float const   crop_w[2]) const override;
 
     /// Handle tex::lookup_float4(texture_cube, ...)
     void tex_lookup_float4_cube(
         float         result[4],
         void const    *tex_data,
         void          *thread_data,
-        float const   coord[3]) const NEURAY_OVERRIDE;
+        float const   coord[3]) const override;
 
     /// Handle tex::lookup_float4(texture_ptex, ...)
     void tex_lookup_float4_ptex(
         float         result[4],
         void const    *tex_data,
         void          *thread_data,
-        int           channel) const NEURAY_OVERRIDE;
+        int           channel) const override;
 
     /// Handle tex::lookup_color(texture_2d, ...)
     void tex_lookup_color_2d(
@@ -300,7 +298,7 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const NEURAY_OVERRIDE;
+        float const   crop_v[2]) const override;
 
     /// Handle tex::lookup_color(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_color_2d(
@@ -311,7 +309,7 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const NEURAY_OVERRIDE;
+        float const        crop_v[2]) const override;
 
     /// Handle tex::lookup_color(texture_3d, ...)
     void tex_lookup_color_3d(
@@ -324,28 +322,28 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const NEURAY_OVERRIDE;
+        float const   crop_w[2]) const override;
 
     /// Handle tex::lookup_color(texture_cube, ...)
     void tex_lookup_color_cube(
         float         rgb[3],
         void const    *tex_data,
         void          *thread_data,
-        float const   coord[3]) const NEURAY_OVERRIDE;
+        float const   coord[3]) const override;
 
     /// Handle tex::lookup_color(texture_ptex, ...)
     void tex_lookup_color_ptex(
         float         rgb[3],
         void const    *tex_data,
         void          *thread_data,
-        int           channel) const NEURAY_OVERRIDE;
+        int           channel) const override;
 
     /// Handle tex::texel_float(texture_2d, ...)
     float tex_texel_float_2d(
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const NEURAY_OVERRIDE;
+        int const     uv_tile[2]) const override;
 
     /// Handle tex::texel_float2(texture_2d, ...)
     void tex_texel_float2_2d(
@@ -353,7 +351,7 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const NEURAY_OVERRIDE;
+        int const     uv_tile[2]) const override;
 
     /// Handle tex::texel_float3(texture_2d, ...)
     void tex_texel_float3_2d(
@@ -361,7 +359,7 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const NEURAY_OVERRIDE;
+        int const     uv_tile[2]) const override;
 
     /// Handle tex::texel_float4(texture_2d, ...)
     void tex_texel_float4_2d(
@@ -369,7 +367,7 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const NEURAY_OVERRIDE;
+        int const     uv_tile[2]) const override;
 
     /// Handle tex::texel_color(texture_2d, ...)
     void tex_texel_color_2d(
@@ -377,47 +375,47 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const NEURAY_OVERRIDE;
+        int const     uv_tile[2]) const override;
 
     /// Handle tex::texel_float(texture_3d, ...).
     float tex_texel_float_3d(
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const NEURAY_OVERRIDE;
+        int const     coord[3]) const override;
 
     /// Handle tex::texel_float2(texture_3d, ...).
     void tex_texel_float2_3d(
         float         result[2],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const NEURAY_OVERRIDE;
+        int const     coord[3]) const override;
 
     /// Handle tex::texel_float3(texture_3d, ...).
     void tex_texel_float3_3d(
         float         result[3],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const NEURAY_OVERRIDE;
+        int const     coord[3]) const override;
 
     /// Handle tex::texel_float4(texture_3d, ...).
     void tex_texel_float4_3d(
         float         result[4],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const NEURAY_OVERRIDE;
+        int const     coord[3]) const override;
 
     /// Handle tex::texel_color(texture_3d, ...).
     void tex_texel_color_3d(
         float         rgb[3],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const NEURAY_OVERRIDE;
+        int const     coord[3]) const override;
 
     /// Handle tex::texture_isvalid().
     ///
     /// \param tex_data  the read-only shared texture data pointer
     bool tex_isvalid(
-        void const *tex_data) const NEURAY_OVERRIDE;
+        void const *tex_data) const override;
 
     /// Initializes a light profile data helper object from a given light profile tag.
     ///
@@ -432,7 +430,7 @@ public:
     void lp_init(
         void     *data,
         unsigned tag,
-        void     *ctx) NEURAY_OVERRIDE;
+        void     *ctx) override;
 
     /// Terminate a light profile data helper object.
     ///
@@ -440,7 +438,7 @@ public:
     ///
     /// Clean up the helper object that was created in lp_init() here.
     void lp_term(
-        void *data) NEURAY_OVERRIDE;
+        void *data) override;
 
     /// Get the light profile power value.
     ///
@@ -448,7 +446,7 @@ public:
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     float lp_power(
         void const *lp_data,
-        void       *thread_data) const NEURAY_OVERRIDE;
+        void       *thread_data) const override;
 
     /// Get the light profile maximum value.
     ///
@@ -456,32 +454,32 @@ public:
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     float lp_maximum(
         void const *lp_data,
-        void       *thread_data) const NEURAY_OVERRIDE;
+        void       *thread_data) const override;
 
     /// Handle df::light_profile_isvalid().
     ///
     /// \param lp_data  the read-only shared light profile data pointer
     bool lp_isvalid(
-        void const *lp_data) const NEURAY_OVERRIDE;
+        void const *lp_data) const override;
 
     /// Handle // Handle df::lp_light_profile_evaluate(...)
     float lp_evaluate(
         void const    *lp_data,
         void          *thread_data,
-        const float   theta_phi[2]) const NEURAY_OVERRIDE;
+        const float   theta_phi[2]) const override;
 
     /// Handle // Handle df::lp_light_profile_sample(...)
     void lp_sample(
         float         result[3], // theta, phi, pdf
         void const    *lp_data,
         void          *thread_data,
-        const float   xi[3]) const NEURAY_OVERRIDE;
+        const float   xi[3]) const override;
 
     /// Handle // Handle df::lp_light_profile_pdf(...)
     float lp_pdf(
         void const    *lp_data,
         void          *thread_data,
-        const float   theta_phi[2]) const NEURAY_OVERRIDE;
+        const float   theta_phi[2]) const override;
 
     /// Initializes a bsdf measurement data helper object from a given bsdf measurement tag.
     ///
@@ -497,7 +495,7 @@ public:
     void bm_init(
         void     *data,
         unsigned tag,
-        void     *ctx) NEURAY_OVERRIDE;
+        void     *ctx) override;
 
     /// Terminate a bsdf measurement data helper object.
     ///
@@ -505,13 +503,13 @@ public:
     ///
     /// Clean up the helper object that was created in mp_init() here.
     void bm_term(
-        void *data) NEURAY_OVERRIDE;
+        void *data) override;
 
     /// Handle df::bsdf_measurement_isvalid().
     ///
     /// \param bm_data  the read-only shared bsdf measurement data pointer
     bool bm_isvalid(
-        void const *bm_data) const NEURAY_OVERRIDE;
+        void const *bm_data) const override;
 
     /// Handle df::bsdf_measurement_resolution(...).
     ///
@@ -521,7 +519,7 @@ public:
     void bm_resolution(
         unsigned      result[3],
         void const    *bm_data,
-        Mbsdf_part    part) const NEURAY_OVERRIDE;
+        Mbsdf_part    part) const override;
 
     /// Handle df::bsdf_measurement_evaluate(...).
     ///
@@ -537,7 +535,7 @@ public:
         void          *thread_data,
         const float   theta_phi_in[2],
         const float   theta_phi_out[2],
-        Mbsdf_part    part) const NEURAY_OVERRIDE;
+        Mbsdf_part    part) const override;
 
     /// Handle df::bsdf_measurement_sample(...).
     ///
@@ -552,7 +550,7 @@ public:
         void            *thread_data,
         const float     theta_phi_out[2],
         const float     xi[3],
-        Mbsdf_part      part) const NEURAY_OVERRIDE;
+        Mbsdf_part      part) const override;
 
     /// Handle df::bsdf_measurement_pdf(...).
     ///
@@ -567,7 +565,7 @@ public:
         void            *thread_data,
         const float     theta_phi_in[2],
         const float     theta_phi_out[2],
-        Mbsdf_part      part) const NEURAY_OVERRIDE;
+        Mbsdf_part      part) const override;
 
     /// Handle df::bsdf_measurement_albedos(...).
     ///
@@ -579,7 +577,7 @@ public:
         float           result[4],
         void const      *bm_data,
         void            *thread_data,
-        const float     theta_phi[2]) const NEURAY_OVERRIDE;
+        const float     theta_phi[2]) const override;
 
     /// Destructor.
     virtual ~Resource_handler();

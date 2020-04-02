@@ -37,17 +37,47 @@
 
 namespace mdl_d3d12
 {
+
+    // Creates a 2D Texture.
+    Texture* Texture::create_texture_2d(
+        Base_application* app,
+        GPU_access gpu_access,
+        size_t width,
+        size_t height,
+        DXGI_FORMAT format,
+        const std::string& debug_name)
+    {
+        return new Texture(app, gpu_access, Texture_dimension::Texture_2D,
+            width, height, 1, format, debug_name);
+    }
+
+    // Creates a 3D Texture.
+    Texture* Texture::create_texture_3d(
+        Base_application* app,
+        GPU_access gpu_access,
+        size_t width,
+        size_t height,
+        size_t depth,
+        DXGI_FORMAT format,
+        const std::string& debug_name)
+    {
+        return new Texture(app, gpu_access, Texture_dimension::Texture_3D,
+            width, height, depth, format, debug_name);
+    }
+
     Texture::Texture(
-        Base_application* app, 
-        GPU_access gpu_access, 
-        size_t width, 
-        size_t height, 
-        size_t depth, 
-        DXGI_FORMAT format, 
+        Base_application* app,
+        GPU_access gpu_access,
+        Texture_dimension dimension,
+        size_t width,
+        size_t height,
+        size_t depth,
+        DXGI_FORMAT format,
         const std::string& debug_name)
 
         : m_app(app)
         , m_debug_name(debug_name)
+        , m_dimension(dimension)
         , m_gpu_access(gpu_access)
         , m_width(width)
         , m_height(height)
@@ -59,7 +89,7 @@ namespace mdl_d3d12
         , m_resource_download(nullptr)
         , m_latest_scheduled_state(D3D12_RESOURCE_STATE_COMMON)
         , m_opt_swap_chain(nullptr)
-    {       
+    {
         create();
     }
 
@@ -72,6 +102,7 @@ namespace mdl_d3d12
         : m_app(app)
         , m_debug_name(debug_name)
         , m_gpu_access(GPU_access::render_target)
+        , m_dimension(Texture_dimension::Texture_2D)
         , m_width(0)
         , m_height(0)
         , m_depth(1)
@@ -90,13 +121,14 @@ namespace mdl_d3d12
 
         m_width = swap_desc.Width;
         m_height = swap_desc.Height;
-        m_depth = 1;
         m_format = swap_desc.Format;
 
         create();
     }
 
-    bool Texture::get_srv_description(D3D12_SHADER_RESOURCE_VIEW_DESC& out_desc) const
+    bool Texture::get_srv_description(
+        D3D12_SHADER_RESOURCE_VIEW_DESC& out_desc,
+        Texture_dimension dimension) const
     {
         if (!has_flag(m_gpu_access, GPU_access::shader_resource))
         {
@@ -107,9 +139,22 @@ namespace mdl_d3d12
         out_desc = {};
         out_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         out_desc.Format = m_format;
-        out_desc.ViewDimension = m_depth == 1 
-            ? D3D12_SRV_DIMENSION_TEXTURE2D 
-            : D3D12_SRV_DIMENSION_TEXTURE3D;
+
+        if (dimension == Texture_dimension::Undefined)
+            dimension = m_dimension;
+         
+        switch (dimension)
+        {
+            case Texture_dimension::Texture_2D:
+                out_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                break;
+            case Texture_dimension::Texture_3D:
+                out_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+                break;
+            default:
+                log_error("Texture has no valid dimension: " + m_debug_name, SRC);
+                return false;
+        }
         out_desc.Texture2D.MipLevels = 1;
         return true;
     }
@@ -123,7 +168,18 @@ namespace mdl_d3d12
         }
 
         out_desc = {};
-        out_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        switch (m_dimension)
+        {
+            case Texture_dimension::Texture_2D:
+                out_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                break;
+            case Texture_dimension::Texture_3D:
+                out_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+                break;
+            default:
+                log_error("Texture has no valid dimension: " + m_debug_name, SRC);
+                return false;
+        }
         out_desc.Format = m_format;
         return true;
     }
@@ -142,27 +198,31 @@ namespace mdl_d3d12
         {
             // non swap chain textures
             CD3DX12_RESOURCE_DESC resource_desc;
-            if (m_depth == 1)
+            switch (m_dimension)
             {
-                resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
-                    m_format,
-                    static_cast<uint64_t>(m_width),
-                    static_cast<uint32_t>(m_height),
-                    static_cast<uint16_t>(1),
-                    static_cast<uint16_t>(1), // mip levels (only one)
-                    static_cast<uint16_t>(1), // sample count
-                    static_cast<uint32_t>(0), // sample quality
-                    D3D12_RESOURCE_FLAG_NONE);
-            }
-            else
-            {
-                resource_desc = CD3DX12_RESOURCE_DESC::Tex3D(
-                    m_format,
-                    static_cast<uint64_t>(m_width),
-                    static_cast<uint32_t>(m_height),
-                    static_cast<uint16_t>(m_depth),
-                    static_cast<uint16_t>(1), // mip levels (only one)
-                    D3D12_RESOURCE_FLAG_NONE);
+                case Texture_dimension::Texture_2D:
+                    resource_desc = CD3DX12_RESOURCE_DESC::Tex2D(
+                        m_format,
+                        static_cast<uint64_t>(m_width),
+                        static_cast<uint32_t>(m_height),
+                        static_cast<uint16_t>(1),
+                        static_cast<uint16_t>(1), // mip levels (only one)
+                        static_cast<uint16_t>(1), // sample count
+                        static_cast<uint32_t>(0), // sample quality
+                        D3D12_RESOURCE_FLAG_NONE);
+                    break;
+                case Texture_dimension::Texture_3D:
+                    resource_desc = CD3DX12_RESOURCE_DESC::Tex3D(
+                        m_format,
+                        static_cast<uint64_t>(m_width),
+                        static_cast<uint32_t>(m_height),
+                        static_cast<uint16_t>(m_depth),
+                        static_cast<uint16_t>(1), // mip levels (only one)
+                        D3D12_RESOURCE_FLAG_NONE);
+                    break;
+                default:
+                    log_error("Texture has no valid dimension: " + m_debug_name, SRC);
+                    return false;
             }
 
             bool init_with_clear_value = true;
@@ -379,6 +439,12 @@ namespace mdl_d3d12
 
     bool Texture::resize(size_t width, size_t height, size_t depth)
     {
+        if (m_dimension != Texture_dimension::Texture_3D && depth != 1)
+        {
+            log_error("Setting 'depth' of non-3D textures is inavlid: " + m_debug_name, SRC);
+            return false;
+        }
+
         if (m_width == width && m_height == height && m_depth == depth)
             return true;
 
@@ -499,8 +565,8 @@ namespace mdl_d3d12
             D3DCommandList* command_list = command_queue->get_command_list();
 
             // create the d3d texture
-            m_texture = new Texture(
-                m_app, GPU_access::shader_resource, rx, ry, 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 
+            m_texture = Texture::create_texture_2d(
+                m_app, GPU_access::shader_resource, rx, ry, DXGI_FORMAT_R32G32B32A32_FLOAT, 
                 file_path + "_Texture");
 
             // create sampling data
@@ -544,7 +610,7 @@ namespace mdl_d3d12
             // copy data to the GPU
             if (!m_texture->upload(command_list, (const uint8_t*) pixels)) return false;
 
-            m_sampling_buffer->set_data(sampling_data.data());
+            m_sampling_buffer->set_data(sampling_data);
             if (!m_sampling_buffer->upload(command_list)) return false;
 
             command_queue->execute_command_list(command_list);
@@ -556,8 +622,9 @@ namespace mdl_d3d12
         if (!first.is_valid()) return false;
 
         // create a resource views on the heap
-        if (!resource_heap->create_shader_resource_view(m_texture, first))
-            return false;
+        if (!resource_heap->create_shader_resource_view(
+            m_texture, Texture_dimension::Texture_2D, first))
+                return false;
 
         Descriptor_heap_handle second = first.create_offset(1);
         if (!second.is_valid()) return false;

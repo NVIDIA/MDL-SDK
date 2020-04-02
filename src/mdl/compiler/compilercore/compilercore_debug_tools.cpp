@@ -569,9 +569,9 @@ void DebugMallocAllocator::check_memory_leaks()
         for (Header const *h = m_first; h != NULL; h = h->next) {
             if (h->flags & BH_REF_COUNTED) {
                 // reference counted object leaked
-                fprintf(
-                    stderr, "%s ", h->cls_name != NULL ? h->cls_name : "Object");
-                if (strcmp(h->cls_name, "class mi::mdl::Module") == 0) {
+                char const *cls_name = h->cls_name != NULL ? h->cls_name : "Object";
+                fprintf(stderr, "%s ", cls_name);
+                if (strcmp(cls_name, "class mi::mdl::Module") == 0) {
                     Module const *mod = (Module const *)(h + 1);
                     fprintf(stderr, "(%s) ", mod->get_name());
                 }

@@ -228,7 +228,9 @@ bool Camera_controls::update(const mdl_d3d12::Update_args & args)
     // apply changes to the node transformation
     if (camera_changed)
     {
-        auto& trafo = m_target->get_local_transformation();
+        Transform trafo;
+        if(!Transform::try_from_matrix(m_target->get_global_transformation(), trafo))
+           return camera_changed;
 
         if (orbit_mode)
         {
@@ -306,6 +308,13 @@ bool Camera_controls::update(const mdl_d3d12::Update_args & args)
 
             DirectX::XMStoreFloat3(&trafo.translation, pos);
         }
+
+        // recompute the local node transformation
+        DirectX::XMMATRIX local_trafo = trafo.get_matrix();
+        if(m_target->get_parent())
+            local_trafo *= inverse(m_target->get_parent()->get_global_transformation());
+        if (!Transform::try_from_matrix(local_trafo, m_target->get_local_transformation()))
+            return camera_changed;
     }
 
     return camera_changed;

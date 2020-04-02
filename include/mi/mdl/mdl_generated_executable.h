@@ -45,20 +45,22 @@ namespace mdl {
 class IGenerated_code_value_callback
 {
 public:
-    /// Returns the resource index for the given resource value usable by the target code resource
+    /// Returns the resource index for the given resource usable by the target code resource
     /// handler for the corresponding resource type.
     ///
-    /// \param resource  the resource value
+    /// \param res  the resource
     ///
     /// \returns a resource index or 0 if no resource index can be returned
-    virtual unsigned get_resource_index(IValue_resource const *resource) = 0;
+    virtual unsigned get_resource_index(
+        IValue_resource const *res) = 0;
 
     /// Returns a string identifier for the given string value usable by the target code.
     ///
     /// The value 0 is always the "not known string".
     ///
     /// \param s  the string value
-    virtual unsigned get_string_index(IValue_string const *s) = 0;
+    virtual unsigned get_string_index(
+        IValue_string const *s) = 0;
 };
 
 /// Represents the layout of an argument value block with support for nested elements.
@@ -172,6 +174,7 @@ public:
     enum Distribution_kind {
         DK_NONE,
         DK_BSDF,
+        DK_HAIR_BSDF,
         DK_EDF,
         DK_INVALID
     };

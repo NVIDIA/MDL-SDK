@@ -35,8 +35,6 @@
 #include <vector>
 #include <map>
 
-#include <base/system/main/neuray_cc_conf.h>
-
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_compiler.h>
@@ -129,13 +127,13 @@ public:
     // API methods
 
     /// Returns the represented target code in ASCII representation.
-    const char* get_code() const NEURAY_OVERRIDE;
+    const char* get_code() const override;
 
     /// Returns the length of the represented target code.
-    Size get_code_size() const NEURAY_OVERRIDE;
+    Size get_code_size() const override;
 
     /// Returns the number of callable functions in the target code.
-    Size get_callable_function_count() const NEURAY_OVERRIDE;
+    Size get_callable_function_count() const override;
 
     /// Returns the name of a callable function in the target code.
     ///
@@ -146,24 +144,24 @@ public:
     /// \param index      The index of the callable function.
     /// \return           The name of the \p index -th callable function, or \c NULL if \p index
     ///                   is out of bounds.
-    const char* get_callable_function(Size index) const NEURAY_OVERRIDE;
+    const char* get_callable_function(Size index) const override;
 
     /// Returns the number of texture resources used by the target code.
-    Size get_texture_count() const NEURAY_OVERRIDE;
+    Size get_texture_count() const override;
 
     /// Returns the name of a texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
     /// \return           The name of the DB element associated the texture resource of the given
     ///                   index, or \c NULL if \p index is out of range.
-    const char* get_texture(Size index) const NEURAY_OVERRIDE;
+    const char* get_texture(Size index) const override;
 
     /// Returns the mdl url of a texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
     /// \return           The mdl url of the texture resource of the given
     ///                   index, or \c NULL if \p index is out of range.
-    const char* get_texture_url(Size index) const NEURAY_OVERRIDE;
+    const char* get_texture_url(Size index) const override;
 
     /// Returns the owner module name of a relative texture url.
     ///
@@ -171,21 +169,21 @@ public:
     /// \return           The owner module name of the texture resource of the given
     ///                   index, or \c NULL if \p index is out of range or the owner
     ///                   module is not provided.
-    const char* get_texture_owner_module(Size index) const NEURAY_OVERRIDE;
+    const char* get_texture_owner_module(Size index) const override;
 
     /// Returns the gamma mode of a texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
     /// \return           The gamma of the texture resource of the given
     ///                   index, or \c NULL if \p index is out of range.
-    mi::neuraylib::ITarget_code::Gamma_mode get_texture_gamma(Size index) const NEURAY_OVERRIDE;
+    mi::neuraylib::ITarget_code::Gamma_mode get_texture_gamma(Size index) const override;
 
     /// Returns the texture shape of a given texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
     /// \return           The shape of the texture resource of the given
     ///                   index, or \c Texture_shape_invalid if \p index is out of range.
-    Texture_shape get_texture_shape(Size index) const NEURAY_OVERRIDE;
+    Texture_shape get_texture_shape(Size index) const override;
 
     /// Returns the distribution function data this texture refers to.
     ///
@@ -199,59 +197,67 @@ public:
         mi::Size index,
         mi::Size &rx,
         mi::Size &ry,
-        mi::Size &rz) const NEURAY_OVERRIDE;
+        mi::Size &rz) const override;
+
+    /// Returns the distribution function data kind of a given texture resource used by the target
+    /// code.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The distribution function data kind of the texture resource of the given
+    ///                   index, or \c DFK_INVALID if \p index is out of range.
+    mi::neuraylib::Df_data_kind get_texture_df_data_kind(Size index) const override;
 
     /// Returns the number of constant data initializers.
-    Size get_ro_data_segment_count() const NEURAY_OVERRIDE;
+    Size get_ro_data_segment_count() const override;
 
     /// Returns the name of the constant data segment at the given index.
     ///
     /// \param index   The index of the data segment.
     /// \return        The name of the constant data segment or \c NULL if the index is out of
     ///                bounds.
-    const char* get_ro_data_segment_name(Size index) const NEURAY_OVERRIDE;
+    const char* get_ro_data_segment_name(Size index) const override;
 
     /// Returns the size of the constant data segment at the given index.
     ///
     /// \param index   The index of the data segment.
     /// \return        The size of the constant data segment or 0 if the index is out of bounds.
-    Size get_ro_data_segment_size(Size index) const NEURAY_OVERRIDE;
+    Size get_ro_data_segment_size(Size index) const override;
 
     ///
     /// \param index   The index of the data segment.
     /// \return        The data of the constant data segment or \c NULL if the index is out of
     ///                bounds.
-    const char* get_ro_data_segment_data(Size index) const NEURAY_OVERRIDE;
+    const char* get_ro_data_segment_data(Size index) const override;
 
     /// Returns the number of code segments of the target code.
-    Size get_code_segment_count() const NEURAY_OVERRIDE;
+    Size get_code_segment_count() const override;
 
     /// Returns the represented target code segment in ASCII representation.
     ///
     /// \param index   The index of the code segment.
     /// \return        The code segment or \c NULL if the index is out of bounds.
-    const char* get_code_segment(mi::Size index) const NEURAY_OVERRIDE;
+    const char* get_code_segment(mi::Size index) const override;
 
     /// Returns the length of the represented target code segment.
     ///
     /// \param index   The index of the code segment.
     /// \return        The size of the code segment or \c 0 if the index is out of bounds.
-    mi::Size get_code_segment_size(Size index) const NEURAY_OVERRIDE;
+    mi::Size get_code_segment_size(Size index) const override;
 
     /// Returns the description of the target code segment.
     ///
     /// \param index   The index of the code segment.
     /// \return        The code segment description or \c NULL if the index is out of bounds.
-    const char* get_code_segment_description(Size index) const NEURAY_OVERRIDE;
+    const char* get_code_segment_description(Size index) const override;
 
     /// Returns the potential render state usage of the target code.
     ///
     /// If the corresponding property bit is not set, it is guaranteed that the
     /// code does not use the associated render state property.
-    virtual State_usage get_render_state_usage() const NEURAY_OVERRIDE;
+    virtual State_usage get_render_state_usage() const override;
 
     /// Returns the number of target argument blocks / block layouts.
-    virtual Size get_argument_block_count() const NEURAY_OVERRIDE;
+    virtual Size get_argument_block_count() const override;
 
     /// Get a target argument block if available.
     ///
@@ -260,7 +266,7 @@ public:
     /// \returns the captured argument block or \c NULL if no arguments were captured or the
     ///          index was invalid.
     virtual const mi::neuraylib::ITarget_argument_block *get_argument_block(
-        Size index) const NEURAY_OVERRIDE;
+        Size index) const override;
 
     /// Create a new target argument block of the class-compiled material for this target code.
     ///
@@ -275,7 +281,7 @@ public:
     mi::neuraylib::ITarget_argument_block *create_argument_block(
         Size index,
         const mi::neuraylib::ICompiled_material *material,
-        mi::neuraylib::ITarget_resource_callback *resource_callback) const NEURAY_OVERRIDE;
+        mi::neuraylib::ITarget_resource_callback *resource_callback) const override;
 
     /// Get a captured arguments block layout if available.
     ///
@@ -283,29 +289,29 @@ public:
     ///
     /// \returns the layout or \c NULL if no arguments were captured or the index was invalid.
     const mi::neuraylib::ITarget_value_layout *get_argument_block_layout(
-        Size index) const NEURAY_OVERRIDE;
+        Size index) const override;
 
     /// Returns the number of light profile resources used by the target code.
-    Size get_light_profile_count() const NEURAY_OVERRIDE;
+    Size get_light_profile_count() const override;
 
     /// Returns the name of a light profile resource used by the target code.
-    const char* get_light_profile(Size index) const NEURAY_OVERRIDE;
+    const char* get_light_profile(Size index) const override;
 
     /// Returns the number of bsdf measurement resources used by the target code.
-    Size get_bsdf_measurement_count() const NEURAY_OVERRIDE;
+    Size get_bsdf_measurement_count() const override;
 
     /// Returns the name of a bsdf measurement resource used by the target code.
-    const char* get_bsdf_measurement(Size index) const NEURAY_OVERRIDE;
+    const char* get_bsdf_measurement(Size index) const override;
 
     /// Returns the number of string constants used by the target code.
-    Size get_string_constant_count() const NEURAY_OVERRIDE;
+    Size get_string_constant_count() const override;
 
     /// Returns the string constant used by the target code.
     ///
     /// \param index    The index of the string constant.
     /// \return         The string constant that is represented by the given index, or \c NULL
     ///                 if \p index is out of range.
-    const char* get_string_constant(Size index) const NEURAY_OVERRIDE;
+    const char* get_string_constant(Size index) const override;
 
     /// Returns the resource index for use in an \c ITarget_argument_block of resources already
     /// known when this \c ITarget_code object was generated.
@@ -314,7 +320,7 @@ public:
     /// \param resource     The resource value.
     mi::Uint32 get_known_resource_index(
         mi::neuraylib::ITransaction* transaction,
-        mi::neuraylib::IValue_resource const *resource) const NEURAY_OVERRIDE;
+        mi::neuraylib::IValue_resource const *resource) const override;
 
     /// Returns the prototype of a callable function in the target code.
     ///
@@ -324,7 +330,7 @@ public:
     /// \return The prototype or NULL if \p index is out of bounds or \p lang cannot be used
     ///         for this target code.
     const char* get_callable_function_prototype(
-        Size index, Prototype_language lang) const NEURAY_OVERRIDE;
+        Size index, Prototype_language lang) const override;
 
     /// Returns the distribution kind of a callable function in the target code.
     ///
@@ -333,7 +339,7 @@ public:
     /// \return The distribution kind of the callable function 
     ///         or \c DK_INVALID if \p index was invalid.
     Distribution_kind get_callable_function_distribution_kind( 
-        Size index) const NEURAY_OVERRIDE;
+        Size index) const override;
 
 
     /// Returns the function kind of a callable function in the target code.
@@ -342,7 +348,7 @@ public:
     ///
     /// \return The kind of the callable function or \c FK_INVALID if \p index was invalid.
     Function_kind get_callable_function_kind(
-        Size index) const NEURAY_OVERRIDE;
+        Size index) const override;
 
     /// Get the index of the target argument block to use with a callable function.
     /// \note All DF_* functions of one material DF use the same target argument block.
@@ -350,7 +356,7 @@ public:
     /// \param index   The index of the callable function.
     ///
     /// \return The index of the target argument block for this function or ~0 if not used.
-    Size get_callable_function_argument_block_index(Size index) const NEURAY_OVERRIDE;
+    Size get_callable_function_argument_block_index(Size index) const override;
 
     /// Get the number of distribution function handles referenced by a callable function.
     ///
@@ -358,7 +364,7 @@ public:
     ///
     /// \return The number of distribution function handles referenced or \c 0, if the callable
     ///         function is not a distribution function.
-    Size get_callable_function_df_handle_count(Size func_index) const NEURAY_OVERRIDE;
+    Size get_callable_function_df_handle_count(Size func_index) const override;
 
     /// Get the name of a distribution function handle referenced by a callable function.
     ///
@@ -368,7 +374,7 @@ public:
     /// \return The name of the distribution function handle or \c NULL, if the callable
     ///         function is not a distribution function or \p index is invalid.
     const char* get_callable_function_df_handle(Size func_index, Size handle_index)
-        const NEURAY_OVERRIDE;
+        const override;
 
     /// Run this code on the native CPU.
     ///
@@ -390,7 +396,7 @@ public:
         Size index,
         const mi::neuraylib::Shading_state_environment& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        mi::Spectrum_struct* result) const NEURAY_OVERRIDE;
+        mi::Spectrum_struct* result) const override;
 
     /// Run this code on the native CPU with the given captured arguments block.
     ///
@@ -417,7 +423,7 @@ public:
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args,
-        void* result) const NEURAY_OVERRIDE;
+        void* result) const override;
 
     /// Run the BSDF init function for this code on the native CPU.
     ///
@@ -439,7 +445,7 @@ public:
         mi::Size index,
         mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the BSDF sample function for this code on the native CPU.
     ///
@@ -463,7 +469,7 @@ public:
         mi::neuraylib::Bsdf_sample_data *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the BSDF evaluation function for this code on the native CPU.
     ///
@@ -488,7 +494,7 @@ public:
         mi::neuraylib::Bsdf_evaluate_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the BSDF PDF calculation function for this code on the native CPU.
     ///
@@ -513,7 +519,7 @@ public:
         mi::neuraylib::Bsdf_pdf_data *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the BSDF auxiliary calculation function for this code on the native CPU.
     mi::Sint32 execute_bsdf_auxiliary (
@@ -521,7 +527,7 @@ public:
         mi::neuraylib::Bsdf_auxiliary_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
 
     /// Run the EDF init function for this code on the native CPU.
@@ -529,7 +535,7 @@ public:
         mi::Size index,
         mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the EDF sample function for this code on the native CPU.
     mi::Sint32 execute_edf_sample(
@@ -537,7 +543,7 @@ public:
         mi::neuraylib::Edf_sample_data *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the EDF evaluation function for this code on the native CPU.
     mi::Sint32 execute_edf_evaluate(
@@ -545,7 +551,7 @@ public:
         mi::neuraylib::Edf_evaluate_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the EDF PDF calculation function for this code on the native CPU.
     mi::Sint32 execute_edf_pdf(
@@ -553,7 +559,7 @@ public:
         mi::neuraylib::Edf_pdf_data *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     /// Run the EDF auxiliary calculation function for this code on the native CPU.
     mi::Sint32 execute_edf_auxiliary(
@@ -561,7 +567,7 @@ public:
         mi::neuraylib::Edf_auxiliary_data_base *data,
         const mi::neuraylib::Shading_state_material& state,
         mi::neuraylib::Texture_handler_base* tex_handler,
-        const mi::neuraylib::ITarget_argument_block *cap_args) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
     // non-API methods.
 
@@ -661,6 +667,12 @@ public:
     /// Get the string identifier for a given string inside the constant table or 0
     /// if the string is not known.
     mi::Uint32 get_string_index(char const *string) const;
+
+    static const mi::Float32* get_df_data_texture(
+        mi::mdl::IValue_texture::Bsdf_data_kind kind,
+        mi::Size &rx,
+        mi::Size &ry,
+        mi::Size &rz);
 
 private:
     /// Destructor.

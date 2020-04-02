@@ -306,7 +306,8 @@ public:
     {
     }
 
-    bool register_module(const mi::mdl::IModule* module) override
+    bool register_module(
+        const mi::mdl::IModule* module) override
     {
         const char* name_cstr = module->get_name();
 
@@ -355,11 +356,13 @@ public:
 
     }
 
-    void module_loading_failed(char const *module_name) override
+    void module_loading_failed(const mi::mdl::IModule_cache_lookup_handle& handle) override
     {
+        ASSERT(M_SCENE, m_cache->loading_process_started_in_current_context(
+            handle.get_lookup_name()) && "The module loading started on a different context.");
+
         // inform the waiting threads in case of failure
-        if(m_cache->loading_process_started_in_current_context(module_name))
-            m_cache->notify(module_name, -1);
+        m_cache->notify(handle.get_lookup_name(), -1);
     }
 
     /// Called while loading a module to check if the built-in modules are already registered.
@@ -448,8 +451,8 @@ mi::Sint32 Mdl_module::create_module(
         // check if the file exists
         if (!DISK::is_file( normalized_module_name.c_str())) {
             return add_error_message(context, M_SCENE, LOG::Mod_log::C_DISK,
-                MI::STRING::formatted_string("MDLe file \"%s\" does not exist.", 
-                                              normalized_module_name.c_str()).c_str(), -1);
+                MI::STRING::formatted_string("MDLe file \"%s\" does not exist.",
+                                              normalized_module_name.c_str()), -1);
         }
 
     // otherwise we check for valid mdl identifiers
@@ -459,7 +462,7 @@ mi::Sint32 Mdl_module::create_module(
         if (!is_valid_module_name(module_name, mdl.get()))
             return add_error_message(context, M_SCENE, LOG::Mod_log::C_COMPILER,
                 MI::STRING::formatted_string("The name \"%s\" is not a valid module name",
-                                              normalized_module_name.c_str()).c_str(), -1);
+                                              normalized_module_name.c_str()), -1);
     }
 
     // Check whether the module exists already in the DB.
@@ -468,7 +471,7 @@ mi::Sint32 Mdl_module::create_module(
         if( transaction->get_class_id( db_module_tag) != Mdl_module::id)
             return add_error_message(context, M_SCENE, LOG::Mod_log::C_DATABASE,
                 MI::STRING::formatted_string("DB name for module \"%s\" already in use.",
-                                              normalized_module_name.c_str()).c_str(), -3);
+                                              normalized_module_name.c_str()), -3);
         return 1;
     }
 
@@ -543,7 +546,7 @@ mi::Sint32 Mdl_module::create_module(
     if (!is_valid_module_name(module_name, mdl.get()) && strcmp(module_name, "::<neuray>") != 0)
         return add_error_message(context, M_SCENE, LOG::Mod_log::C_COMPILER,
             MI::STRING::formatted_string("The name \"%s\" is not a valid module name",
-                module_name).c_str(), -1);
+                module_name), -1);
 
     // Check whether the module exists already in the DB.
     std::string db_module_name = add_mdl_db_prefix( module_name);
@@ -553,7 +556,7 @@ mi::Sint32 Mdl_module::create_module(
         if (transaction->get_class_id(db_module_tag) != Mdl_module::id)
             return add_error_message(context, M_SCENE, LOG::Mod_log::C_DATABASE,
                 MI::STRING::formatted_string("DB name for module \"%s\" already in use.",
-                    db_module_name.c_str()).c_str(), -3);
+                    db_module_name.c_str()), -3);
         return 1;
     }
 
@@ -890,17 +893,23 @@ static mi::mdl::IGenerated_code_dag* compile_module(
 
     mi::mdl::Options& options = generator_dag->access_options();
 
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+
     // We support local entity usage inside MDL materials in neuray, but ...
     options.set_option(MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS, "false");
     /// ... we need entries for those in the DB, hence generate them
     options.set_option(MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES, "true");
     // We enable unsafe math optimizations in neuray
     options.set_option(MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS, "true");
+
     const std::string internal_space =
         context->get_option<std::string>(MDL_CTX_OPTION_INTERNAL_SPACE);
     options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, internal_space.c_str());
+    
+    // If configured, we expose names of let expressions as temporaries in neuray
+    if (mdlc_module->get_expose_names_of_let_expressions())
+        options.set_option(MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS, "true");
 
-    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
     Module_cache module_cache(transaction, mdlc_module->get_module_wait_queue(), {});
     if (!module->restore_import_entries(&module_cache)) {
         LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE,
@@ -928,12 +937,17 @@ static mi::mdl::IGenerated_code_dag* compile_module(
     mi::base::Handle<mi::mdl::IGenerated_code_dag> code_dag(
         code->get_interface<mi::mdl::IGenerated_code_dag>());
 
-    if(context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES)) {
+    if (context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES)) {
         const char* module_filename = module->get_filename();
         if (module_filename[0] == '\0')
-            module_filename = 0;
-        update_resource_literals(transaction, code_dag.get(), module_filename, module->get_name());
+            module_filename = nullptr;
+        Mdl_call_resolver_ext resolver(transaction, module);
+        Resource_updater updater(
+            transaction, resolver, code_dag.get(), module_filename, module->get_name());
+
+        updater.update_resource_literals();
     }
+
     code_dag->retain();
     return code_dag.get();
 }
@@ -1376,21 +1390,25 @@ void Mdl_module::init_module(DB::Transaction* transaction, bool load_resources)
         annotations, m_name.c_str());
 
     // collect referenced resources
-    if (m_module->get_referenced_resources_count() > 0) {
+    size_t n_ref_resources = m_module->get_referenced_resources_count();
+    if (n_ref_resources > 0) {
         std::map <std::string, mi::Size> resource_url_2_index;
-        for (mi::Size i = 0; i < m_module->get_referenced_resources_count(); ++i)
+        for (size_t i = 0; i < n_ref_resources; ++i)
             resource_url_2_index.insert(std::make_pair(m_module->get_referenced_resource_url(i), i));
 
-        // update resource references
-        std::set<const mi::mdl::IValue_resource*> resources;
-        collect_resource_references(m_code_dag.get(), resources);
+        m_resource_reference_tags.resize(n_ref_resources);
 
-        m_resource_reference_tags.resize(m_module->get_referenced_resources_count());
-        for (const auto r : resources) {
-            const char *key = r->get_string_value();
-            const auto& it = resource_url_2_index.find(key);
-            if (it != resource_url_2_index.end())
-                m_resource_reference_tags[it->second].push_back(DB::Tag(r->get_tag_value()));
+        // update resource references
+        for (size_t i = 0, n = m_code_dag->get_resource_tag_map_entries_count(); i < n; ++i) {
+            mi::mdl::Resource_tag_tuple const *rtt = m_code_dag->get_resource_tag_map_entry(i);
+
+            if (const char *key = rtt->m_url) {
+                const auto& it = resource_url_2_index.find(key);
+                if (it != resource_url_2_index.end()) {
+                    DB::Tag tag(rtt->m_tag);
+                    m_resource_reference_tags[it->second].push_back(tag);
+                }
+            }
         }
     }
 }
@@ -1687,6 +1705,10 @@ bool Mdl_module::is_valid_module_name( const char* name, const mi::mdl::IMDL* md
             unsigned char c = ident[i];
             if (c == '/' || c == '\\' || c < 32 || c == 127 || c == ':')
                 return false;
+
+            // so far we do not technically support these characters
+            if (c == ',' || c == '(' || c == ')' || c == '[' || c == ']')
+                return false;
         }
 
         if( scope)
@@ -1768,51 +1790,6 @@ bool check_user_types(const mi::mdl::IGenerated_code_dag* code_dag)
     return true;
 }
 
-
-class Module_reload_callback : public mi::mdl::IModule_loaded_callback
-{
-public:
-    Module_reload_callback(
-        mi::mdl::IMDL* mdl,
-        MI::MDL::Module_cache* cache)
-        : m_mdl(mdl)
-        , m_cache(cache)
-    {
-    }
-
-    bool register_module(const mi::mdl::IModule* module) override
-    {
-        const char* name_cstr = module->get_name();
-
-        // special handling for built-in modules
-        // they are loaded upfront and single-threaded
-        if (m_mdl->is_builtin_module(name_cstr)) {
-            return true;
-        }
-
-        m_cache->notify(name_cstr, 0);
-        return true;
-    }
-
-    void module_loading_failed(char const *module_name) override
-    {
-        // inform the waiting threads in case of failure
-        if (m_cache->loading_process_started_in_current_context(module_name))
-            m_cache->notify(module_name, -1);
-    }
-
-    /// Called while loading a module to check if the built-in modules are already registered.
-    bool is_builtin_module_registered(char const *absname) const override
-    {
-        // always true in reload-case
-        return true;
-    }
-
-private:
-    mi::mdl::IMDL* m_mdl;
-    MI::MDL::Module_cache* m_cache;
-};
-
 } // end namespace
 
 mi::Sint32 Mdl_module::reload(
@@ -1844,9 +1821,6 @@ mi::Sint32 Mdl_module::reload(
         transaction
         , mdlc_module->get_module_wait_queue(),
         { transaction->name_to_tag(add_mdl_db_prefix(m_name).c_str()) });
-
-    Module_reload_callback reload_cb(mdl.get(), &cache);
-    cache.set_module_loading_callback(&reload_cb);
 
     mi::base::Handle<const mi::mdl::IModule> module(
         mdl->load_module(ctx.get(), m_name.c_str(), recursive ? nullptr : &cache));
@@ -1894,8 +1868,6 @@ mi::Sint32 Mdl_module::reload_from_string(
         , mdlc_module->get_module_wait_queue(),
         { transaction->name_to_tag(add_mdl_db_prefix(m_name).c_str()) });
 
-    Module_reload_callback reload_cb(mdl.get(), &cache);
-    cache.set_module_loading_callback(&reload_cb);
     mi::base::Handle<const mi::mdl::IModule> module(mdl->load_module_from_stream(
         ctx.get(), recursive ? nullptr : &cache, m_name.c_str(), &module_source_stream));
 
@@ -1946,8 +1918,11 @@ mi::Sint32 Mdl_module::reload_module_internal(
                 return -1;
             }
             if (recursive) {
+                if (is_protected_module(import.get()) || import->get_filename() == nullptr)
+                    continue;
+
                 DB::Edit<Mdl_module> im(import_tag, transaction);
-                mi::Sint32 result = im->reload(transaction, true, context);
+                mi::Sint32 result = im->reload_module_internal(transaction, mdl, import.get(), /*recursive=*/true, context);
                 if (result < 0) {
                     add_context_error(
                         context, "The imported module " + db_import_name + " failed to reload.",
@@ -1991,8 +1966,7 @@ mi::Sint32 Mdl_module::reload_module_internal(
         if (function_tag && transaction->get_class_id(function_tag) != ID_MDL_FUNCTION_DEFINITION) {
             std::string msg = "DB name for function definition '" + db_function_name + "' already in use "
                 "and not of type ELEMENT_TYPE_FUNCTION_DEFINTION";
-            add_context_error(
-                context, msg.c_str(), -3);
+            add_context_error(context, msg, -3);
             return -1;
         }
     }
@@ -2007,8 +1981,7 @@ mi::Sint32 Mdl_module::reload_module_internal(
         if (material_tag && transaction->get_class_id(material_tag) != ID_MDL_MATERIAL_DEFINITION) {
             std::string msg = "DB name for material definition '" + db_material_name + "' already in use "
                 "and not of type ELEMENT_TYPE_MATERIAL_DEFINTION";
-            add_context_error(
-                context, msg.c_str(), -3);
+            add_context_error(context, msg, -3);
             return -1;
         }
     }

@@ -40,6 +40,86 @@ namespace mdl {
 
 namespace {
 
+/// A resource modifier that uses the resource table of a code_dag.
+class Restable_resource_modifer : public IResource_modifier
+{
+public:
+    /// Modify a resource.
+    ///
+    /// \param res    the resource value to be modified
+    ///
+    /// \return a new value of the same type or res if no modification is necessary
+    IValue_resource const *modify(
+        IValue_resource const *res,
+        IModule         const *owner,
+        IValue_factory        &vf) MDL_FINAL
+    {
+        int old_tag = res->get_tag_value();
+        if (old_tag == 0) {
+            int res_tag = m_dag.find_resource_tag(res);
+            if (res_tag != old_tag) {
+                res = clone_resource(vf, res, res_tag);
+            }
+        }
+        return m_chain.modify(res, owner, vf);
+    }
+
+    /// Constructor.
+    Restable_resource_modifer(
+        Generated_code_dag const &dag,
+        IResource_modifier       &chain)
+    : m_dag(dag)
+    , m_chain(chain)
+    {
+    }
+
+private:
+    /// Clone a resource but insert a new tag.
+    IValue_resource const *clone_resource(
+        IValue_factory        &vf,
+        IValue_resource const *r,
+        int                   tag)
+    {
+        switch (r->get_kind()) {
+        case IValue::VK_TEXTURE:
+            {
+                IValue_texture const *tex = cast<IValue_texture>(r);
+                if (tex->get_type()->get_shape() == IType_texture::TS_BSDF_DATA) {
+                    return vf.create_bsdf_data_texture(
+                        tex->get_bsdf_data_kind(),
+                        tag,
+                        0);
+                }
+                return vf.create_texture(
+                    tex->get_type(),
+                    tex->get_string_value(),
+                    tex->get_gamma_mode(),
+                    tag,
+                    0);
+            }
+        case IValue::VK_LIGHT_PROFILE:
+            return vf.create_light_profile(
+                cast<IType_light_profile>(r->get_type()),
+                r->get_string_value(),
+                tag,
+                0);
+        case IValue::VK_BSDF_MEASUREMENT:
+            return vf.create_bsdf_measurement(
+                cast<IType_bsdf_measurement>(r->get_type()),
+                r->get_string_value(),
+                tag,
+                0);
+        default:
+            MDL_ASSERT(!"Unsupported resource kind");
+            return r;
+        }
+    }
+
+private:
+    Generated_code_dag const &m_dag;
+    IResource_modifier       &m_chain;
+};
+
 /// Check if the given expression is a "simple" select.
 ///
 /// \param expr  the expression to check
@@ -144,13 +224,13 @@ public:
         IValue_factory *value_factory,
         ICall_evaluator const *call_evaluator,
         DAG_builder::Definition_temporary_map &tmp_value_map)
-        : m_module(module)
-        , m_value_factory(value_factory)
-        , m_call_evaluator(call_evaluator)
-        , m_tmp_value_map(tmp_value_map)
-        , m_error_state(false)
-        , m_iter_var(NULL)
-        , m_iter_value(NULL)
+    : m_module(module)
+    , m_value_factory(value_factory)
+    , m_call_evaluator(call_evaluator)
+    , m_tmp_value_map(tmp_value_map)
+    , m_error_state(false)
+    , m_iter_var(NULL)
+    , m_iter_value(NULL)
     {
     }
 
@@ -1067,6 +1147,7 @@ void DAG_builder::reset()
 {
     m_accesible_parameters.clear();
     m_tmp_value_map.clear();
+    m_node_factory.clear_node_names();
 }
 
 // Make the given function/material parameter accessible.
@@ -1758,7 +1839,8 @@ DAG_node const *DAG_builder::unary_to_dag(
     default:
         {
             DAG_node const *node = exp_to_dag(arg);
-            if (DAG_constant const *c = as<DAG_constant>(node)) {
+            DAG_constant const *c = as<DAG_constant>(node);
+            if (c && m_node_factory.all_args_without_name(&node, 1)) {
                 IValue const *v =
                     DAG_node_factory_impl::apply_unary_op(m_value_factory, op, c->get_value());
                 if (v != NULL)
@@ -1798,7 +1880,7 @@ DAG_node const *DAG_builder::unary_to_dag(
     DAG_node const *pre_node = exp_to_dag(arg);
     DAG_node const *res = NULL;
 
-    if (is<DAG_constant>(pre_node)) {
+    if (is<DAG_constant>(pre_node) && m_node_factory.all_args_without_name(&pre_node, 1)) {
         IValue const *v_l = cast<DAG_constant>(pre_node)->get_value();
 
         IValue const *v =
@@ -2064,8 +2146,8 @@ DAG_node const *DAG_builder::create_struct_insert(
 
     name += ')';
 
-    if (all_args_const) {
-        // we known this is an elemental constructor, fold it
+    if (all_args_const && m_node_factory.all_args_without_name(call_args.data(), n_fields)) {
+        // we know this is an elemental constructor, fold it
         Value_vector values(n_fields, NULL, get_allocator());
         for (int i = 0; i < n_fields; ++i)
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
@@ -2161,8 +2243,8 @@ DAG_node const *DAG_builder::create_vector_insert(
 
     name += ')';
 
-    if (all_args_const) {
-        // we known this is an elemental constructor, fold it
+    if (all_args_const && m_node_factory.all_args_without_name(call_args.data(), n_fields)) {
+        // we know this is an elemental constructor, fold it
         Value_vector values(n_fields, NULL, get_allocator());
         for (int i = 0; i < n_fields; ++i)
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
@@ -2209,7 +2291,8 @@ DAG_node const *DAG_builder::binary_to_dag(
 
             DAG_node const *compound = exp_to_dag(left);
 
-            if (DAG_constant const *c = as<DAG_constant>(compound)) {
+            DAG_constant const *c = as<DAG_constant>(compound);
+            if (c && m_node_factory.all_args_without_name(&compound, 1)) {
                 // extracting a field
                 IValue const *left = c->get_value();
 
@@ -2377,8 +2460,9 @@ DAG_node const *DAG_builder::binary_to_dag(
         res = r;
     else {
         DAG_node const *l = exp_to_dag(left);
+        DAG_node const *args[2] = { l, r };
 
-        if (is<DAG_constant>(l) && is<DAG_constant>(r)) {
+        if (is<DAG_constant>(l) && is<DAG_constant>(r) && m_node_factory.all_args_without_name(args, 2)) {
             IValue const *v_l = cast<DAG_constant>(l)->get_value();
             IValue const *v_r = cast<DAG_constant>(r)->get_value();
 
@@ -2455,7 +2539,7 @@ DAG_node const *DAG_builder::cond_to_dag(
 {
     DAG_node const *sel = exp_to_dag(cond->get_condition());
 
-    if (is<DAG_constant>(sel)) {
+    if (is<DAG_constant>(sel) && m_node_factory.all_args_without_name(&sel, 1)) {
         DAG_constant const *c = cast<DAG_constant>(sel);
         IValue_bool const  *v = cast<IValue_bool>(c->get_value());
 
@@ -2581,6 +2665,7 @@ DAG_node const *DAG_builder::try_inline(
 
 // Try to inline the given call.
 DAG_node const *DAG_builder::try_inline(
+    IGenerated_code_dag const     *owner_dag,
     IDefinition const             *def,
     DAG_call::Call_argument const *args,
     size_t                        n_args)
@@ -2612,6 +2697,13 @@ DAG_node const *DAG_builder::try_inline(
 
     // enter inlining
     Inline_scope inline_scope(*this);
+
+    // update the resource modifier if an owner dag was given
+    Restable_resource_modifer modifier(
+        *impl_cast<Generated_code_dag>(owner_dag), *m_resource_modifier);
+
+    Store<IResource_modifier *> resource_modifier(
+        m_resource_modifier, owner_dag == NULL ? m_resource_modifier : &modifier);
 
     for (size_t i = 0; i < n_args; ++i) {
         IDefinition const *parameter_def = get_parameter_definition(func_decl, i);
@@ -2704,7 +2796,7 @@ DAG_node const *DAG_builder::call_to_dag(
         }
     }
 
-    bool all_args_const = true;
+    bool all_args_const   = true;
 
     VLA<DAG_call::Call_argument> call_args(get_allocator(), n_args);
 
@@ -2718,7 +2810,7 @@ DAG_node const *DAG_builder::call_to_dag(
     }
 
     if (ref->is_array_constructor()) {
-        if (all_args_const) {
+        if (all_args_const && m_node_factory.all_args_without_name(call_args.data(), n_args)) {
             // create an array literal
             VLA<IValue const *> values(get_allocator(), n_args);
             for (int i = 0; i < n_args; ++i)
@@ -2752,7 +2844,8 @@ DAG_node const *DAG_builder::call_to_dag(
     IDefinition const      *call_def = ref->get_definition();
     IDefinition::Semantics call_sema = call_def->get_semantics();
 
-    if (all_args_const && call_sema != IDefinition::DS_UNKNOWN) {
+    if (all_args_const && m_node_factory.all_args_without_name(call_args.data(), n_args)
+        && call_sema != IDefinition::DS_UNKNOWN) {
         // known semantic, try to fold
         Value_vector values(n_args, NULL, get_allocator());
         for (int i = 0; i < n_args; ++i)
@@ -2817,9 +2910,27 @@ DAG_node const *DAG_builder::let_to_dag(
             if (IExpression const *var_exp = vd->get_variable_init(k)) {
                 ISimple_name const *var_name = vd->get_variable_name(k);
                 IDefinition const  *var_def  = var_name->get_definition();
+                ISymbol const      *var_symbol  = var_name->get_symbol();
+                char const         *symbol_name = var_symbol->get_name();
 
-                DAG_node const *node = exp_to_dag(var_exp);
-                m_tmp_value_map[var_def] = node;
+                if (m_node_factory.is_exposing_names_of_let_expressions_enabled()) {
+                    // We need to ensure that CSE does not identify the to-be-created named top-level
+                    // node with a previously created unnamed node (the name is only added *after*
+                    // creation). CSE for the top-level node is detected by comparing the node ID of
+                    // the top-level node with the next node ID of the factory before calling
+                    // exp_to_dag(). If necessary, we create a shallow clone of the top-level node
+                    // with CSE disabled.
+                    size_t next_id = m_node_factory.get_next_id();
+                    DAG_node const *node = exp_to_dag(var_exp);
+                    if (node->get_id() < next_id)
+                        node = m_node_factory.shallow_copy(node);
+
+                    m_tmp_value_map[var_def] = node;
+                    m_node_factory.add_node_name(node, symbol_name);
+                } else {
+                    DAG_node const *node = exp_to_dag(var_exp);
+                    m_tmp_value_map[var_def] = node;
+                }
             }
         }
     }

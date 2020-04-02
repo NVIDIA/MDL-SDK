@@ -51,6 +51,19 @@ namespace MI {
 
 namespace IMAGE {
 
+Mipmap_impl::Mipmap_impl()
+{
+    m_nr_of_levels = 1;
+    m_nr_of_provided_levels = 1;
+    m_levels.resize( m_nr_of_levels);
+    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
+    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile( 0, 0));
+    mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
+    tile->set_pixel( 0, 0, &pink.r);
+    m_last_created_level = 0;
+    m_is_cubemap = false;
+}
+
 Mipmap_impl::Mipmap_impl(
     Pixel_type pixel_type,
     mi::Uint32 width,

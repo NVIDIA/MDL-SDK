@@ -39,6 +39,8 @@
 #include <mdl/compiler/compilercore/compilercore_hash.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 
+#include <mdl/codegenerators/generator_code/generator_code.h>
+
 #include <cstring>
 
 #include "generator_dag_generated_dag.h"
@@ -350,20 +352,25 @@ class Abstract_temporary_inserter : public IDAG_ir_visitor
     typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type Temporary_map;
 
 public:
+    typedef ptr_hash_map<DAG_node const, char const *>::Type Temporary_name_map;
+
     /// Constructor.
     ///
     /// \param alloc               the allocator for temporary memory
     /// \param expression_factory  the expression factory to create temporaries on
     /// \param phen_outs           the phen-out map for the visited expression DAG
+    /// \param temp_name_map       the desired temporary names
     Abstract_temporary_inserter(
-        IAllocator            *alloc,
-        DAG_node_factory_impl &expression_factory,
-        Phen_out_map const    &phen_outs)
+        IAllocator               *alloc,
+        DAG_node_factory_impl    &expression_factory,
+        Phen_out_map const       &phen_outs,
+        Temporary_name_map const &temp_name_map)
     : m_node_factory(expression_factory)
     , m_phen_outs(phen_outs)
     , m_fold_constants(false)
     , m_fold_parameters(true)
     , m_temp_map(0, Temporary_map::hasher(), Temporary_map::key_equal(), alloc)
+    , m_temp_name_map(temp_name_map)
     {
     }
 
@@ -381,13 +388,17 @@ public:
         for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
             DAG_node const *arg = call->get_argument(i);
 
+            auto it_name  = m_temp_name_map.find(arg);
+            bool has_name = it_name != m_temp_name_map.end();
+            char const *name = has_name ? it_name->second : "";
+
             switch (arg->get_kind()) {
             case DAG_node::EK_CONSTANT:
-                if (!m_fold_constants)
+                if (!m_fold_constants && !has_name)
                     continue;
                 break;
             case DAG_node::EK_PARAMETER:
-                if (!m_fold_parameters)
+                if (!m_fold_parameters && !has_name)
                     continue;
                 break;
             default:
@@ -398,9 +409,9 @@ public:
             if (it == m_phen_outs.end()) {
                 MDL_ASSERT(!"unknown expression occured");
             } else {
-                if (it->second > 1) {
-                    // multiple use found, replace
-                    DAG_node const *temp = create_temporary(arg);
+                if ((it->second > 1) || has_name) {
+                    // multiple use or name found, replace
+                    DAG_node const *temp = create_temporary(arg, name);
 
                     call->set_argument(i, temp);
                 }
@@ -415,13 +426,13 @@ public:
     void visit(int index, DAG_node *init) MDL_FINAL {}
 
     // Create a temporary.
-    DAG_node const *create_temporary(DAG_node const *node)
+    DAG_node const *create_temporary(DAG_node const *node, char const *name)
     {
         Temporary_map::iterator it = m_temp_map.find(node);
         if (it != m_temp_map.end()) {
             return it->second;
         }
-        int index = add_temporary(node);
+        int index = add_temporary(node, name);
         DAG_node const *temp = m_node_factory.create_temporary(node, index);
 
         m_temp_map[node] = temp;
@@ -431,7 +442,8 @@ public:
     /// Create and register a new temporary.
     ///
     /// \param node  the initializer for the temporary
-    virtual int add_temporary(DAG_node const *node) = 0;
+    /// \param name  the name for the temporary
+    virtual int add_temporary(DAG_node const *node, char const *name) = 0;
 
 private:
     /// The expression factory to create temporaries on.
@@ -448,6 +460,9 @@ private:
 
     /// Map of created temporaries.
     Temporary_map m_temp_map;
+
+    /// Map of desired temporary names.
+    const Temporary_name_map &m_temp_name_map;
 };
 
 /// Helper class: visit a DAG and collect all parameter
@@ -836,8 +851,10 @@ Generated_code_dag::Generated_code_dag(
 , m_current_function_index(0)
 , m_needs_anno(false)
 , m_mark_generated((options & MARK_GENERATED_ENTITIES) != 0)
+, m_resource_tag_map(alloc)
 {
     m_node_factory.enable_unsafe_math_opt((options & UNSAFE_MATH_OPTIMIZATIONS) != 0);
+    m_node_factory.enable_expose_names_of_let_expressions((options & EXPOSE_NAMES_OF_LET_EXPRESSIONS) != 0);
 
     if (module != NULL) {
         int n = module->get_import_count();
@@ -849,6 +866,16 @@ Generated_code_dag::Generated_code_dag(
             m_module_imports.push_back(string(import->get_name(), alloc));
         }
     }
+}
+
+// Get the material info for a given material index or NULL if the index is out of range.
+Generated_code_dag::Material_info *Generated_code_dag::get_material_info(
+    int material_index)
+{
+    if (material_index < 0 || m_materials.size() <= size_t(material_index)) {
+        return NULL;
+    }
+    return &m_materials[material_index];
 }
 
 // Get the material info for a given material index or NULL if the index is out of range.
@@ -1935,7 +1962,7 @@ public:
     static void enumerate_local_types(
         Generated_code_dag &code_dag,
         Module const       *mod,
-        DAG_builder        dag_builder)
+        DAG_builder        &dag_builder)
     {
         Local_type_enumerator enumerator(code_dag, dag_builder);
 
@@ -1972,7 +1999,7 @@ private:
     /// \param dag_builder  the DAG builder to be used
     Local_type_enumerator(
         Generated_code_dag &code_dag,
-        DAG_builder        dag_builder)
+        DAG_builder        &dag_builder)
     : m_code_dag(code_dag)
     , m_dag_builder(dag_builder)
     {
@@ -1983,7 +2010,7 @@ private:
     Generated_code_dag &m_code_dag;
 
     /// The DAG builder to be used.
-    mutable DAG_builder m_dag_builder;
+    DAG_builder &m_dag_builder;
 };
 
 // Compile the module.
@@ -2439,11 +2466,17 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
         /// \param dag                 the code DAG
         /// \param mat_index           the material index
         /// \param phen_outs           the phen-out map for the visited DAG IR
+        /// \param temp_name_map       the desired temporary names
         Temporary_inserter(
-            Generated_code_dag &dag,
-            int                mat_index,
-            Phen_out_map const &phen_outs)
-        : Abstract_temporary_inserter(dag.get_allocator(), *dag.get_node_factory(), phen_outs)
+            Generated_code_dag       &dag,
+            int                      mat_index,
+            Phen_out_map const       &phen_outs,
+            Temporary_name_map const &temp_name_map)
+        : Abstract_temporary_inserter(
+            dag.get_allocator(),
+            *dag.get_node_factory(),
+            phen_outs,
+            temp_name_map)
         , m_dag(dag)
         , m_mat_index(mat_index)
         {
@@ -2452,9 +2485,9 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
         /// Create and register a new temporary.
         ///
         /// \param node  the initializer for the temporary
-        int add_temporary(DAG_node const *node) MDL_FINAL
+        int add_temporary(DAG_node const *node, char const *name) MDL_FINAL
         {
-            return m_dag.add_material_temporary(m_mat_index, node);
+            return m_dag.add_material_temporary(m_mat_index, node, name);
         }
 
     private:
@@ -2464,7 +2497,9 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
         int m_mat_index;
     };
 
-    // we will modify the identify table, so clear it here
+    // we will modify the identify table, so clear it here, but safe the name map first
+    DAG_node_factory_impl::Definition_temporary_name_map temp_name_map
+        = m_node_factory.get_temp_name_map();
     m_node_factory.identify_clear();
 
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
@@ -2474,7 +2509,7 @@ void Generated_code_dag::build_material_temporaries(int mat_index)
 
     walker.walk_material(this, mat_index, &phen_counter);
 
-    Temporary_inserter inserter(*this, mat_index, phen_outs);
+    Temporary_inserter inserter(*this, mat_index, phen_outs, temp_name_map);
 
     walker.walk_material(this, mat_index, &inserter);
 }
@@ -2492,11 +2527,17 @@ void Generated_code_dag::build_function_temporaries(int func_index)
         /// \param dag                 the code DAG
         /// \param func_index          the function index
         /// \param phen_outs           the phen-out map for the visited DAG IR
+        /// \param temp_name_map       the desired temporary names
         Temporary_inserter(
             Generated_code_dag &dag,
             int                func_index,
-            Phen_out_map const &phen_outs)
-            : Abstract_temporary_inserter(dag.get_allocator(), *dag.get_node_factory(), phen_outs)
+            Phen_out_map const &phen_outs,
+            Temporary_name_map const &temp_name_map)
+            : Abstract_temporary_inserter(
+                dag.get_allocator(),
+                *dag.get_node_factory(),
+                phen_outs,
+                temp_name_map)
             , m_dag(dag)
             , m_func_index(func_index)
         {
@@ -2505,9 +2546,9 @@ void Generated_code_dag::build_function_temporaries(int func_index)
         /// Create and register a new temporary.
         ///
         /// \param node  the initializer for the temporary
-        int add_temporary(DAG_node const *node) MDL_FINAL
+        int add_temporary(DAG_node const *node, char const *name) MDL_FINAL
         {
-            return m_dag.add_function_temporary(m_func_index, node);
+            return m_dag.add_function_temporary(m_func_index, node, name);
         }
 
     private:
@@ -2522,7 +2563,9 @@ void Generated_code_dag::build_function_temporaries(int func_index)
         return;
     }
 
-    // we will modify the identify table, so clear it here
+    // we will modify the identify table, so clear it here, but safe the name map first
+    DAG_node_factory_impl::Definition_temporary_name_map temp_name_map
+        = m_node_factory.get_temp_name_map();
     m_node_factory.identify_clear();
 
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
@@ -2532,7 +2575,7 @@ void Generated_code_dag::build_function_temporaries(int func_index)
 
     walker.walk_function(this, func_index, &phen_counter);
 
-    Temporary_inserter inserter(*this, func_index, phen_outs);
+    Temporary_inserter inserter(*this, func_index, phen_outs, temp_name_map);
 
     walker.walk_function(this, func_index, &inserter);
 }
@@ -2939,6 +2982,20 @@ DAG_node const *Generated_code_dag::get_function_temporary(
     return NULL;
 }
 
+// Get the temporary name at temporary_index used by the function at function_index.
+char const *Generated_code_dag::get_function_temporary_name(
+    int function_index,
+    int temporary_index) const
+{
+    if (Function_info const *func = get_function_info(function_index)) {
+        if ((temporary_index < 0) || (func->get_temporary_count() <= size_t(temporary_index))) {
+            return NULL;
+        }
+        return func->get_temporary_name(temporary_index);
+    }
+    return NULL;
+}
+
 // Get the body of the function at function_index.
 DAG_node const *Generated_code_dag::get_function_body(
     int function_index) const
@@ -3035,6 +3092,20 @@ DAG_node const *Generated_code_dag::get_material_temporary(
     return NULL;
 }
 
+// Get the temporary name at temporary_index used by the material at material_index.
+char const *Generated_code_dag::get_material_temporary_name(
+    int material_index,
+    int temporary_index) const
+{
+    if (Material_info const *mat = get_material_info(material_index)) {
+        if ((temporary_index < 0) || (mat->get_temporary_count() <= size_t(temporary_index))) {
+            return NULL;
+        }
+        return mat->get_temporary_name(temporary_index);
+    }
+    return NULL;
+}
+
 // Get the value of the material at material_index.
 DAG_node const *Generated_code_dag::get_material_value(
     int material_index) const
@@ -3088,6 +3159,8 @@ Generated_code_dag::Material_instance::Material_instance(
 , m_param_names(alloc)
 , m_hash()
 , m_properties(0)
+, m_referenced_scene_data(alloc)
+, m_resource_tag_map(alloc)
 {
     m_node_factory.enable_unsafe_math_opt(unsafe_math_optimizations);
 
@@ -3140,6 +3213,40 @@ DAG_constant const *Generated_code_dag::Material_instance::create_temp_constant(
     DAG_constant const *res = m_node_factory.create_constant(value);
     m_node_factory.enable_cse(old);
     return res;
+}
+
+// Find the tag for a given resource.
+int Generated_code_dag::Material_instance::find_resource_tag(
+    IValue_resource const *res) const
+{
+    int tag = res->get_tag_value();
+    if (tag != 0)
+        return tag;
+
+    Resource_tag_tuple::Kind kind = kind_from_value(res);
+
+    // for now, linear search
+    char const *url = res->get_string_value();
+    for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
+        Resource_tag_tuple const &e = m_resource_tag_map[i];
+
+        if (e.m_kind == kind && strcmp(e.m_url, url) == 0)
+            return e.m_tag;
+    }
+    return 0;
+}
+
+// Adds a tag, version pair for a given resource.
+void Generated_code_dag::Material_instance::add_resource_tag(
+    IValue_resource const *res,
+    int                   tag)
+{
+    size_t l = m_resource_tag_map.size();
+    m_resource_tag_map.resize(l + 1);
+
+    ISymbol const *shared = m_sym_tab.get_shared_symbol(res->get_string_value());
+    m_resource_tag_map[l] = Resource_tag_tuple(
+        kind_from_value(res), shared->get_name(), tag);
 }
 
 // Create a call.
@@ -3333,6 +3440,8 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     if (resource_modifier == NULL)
         resource_modifier = &null_modifier;
 
+    Generated_code_dag const *dag = impl_cast<Generated_code_dag>(code_dag);
+
     // Note: The file resolver might produce error messages when non-existing resources are
     // processed. Catch them but throw them away
     Messages_impl dummy_msgs(get_allocator(), code_dag->get_module_file_name());
@@ -3355,7 +3464,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     Instantiate_helper creator(
         *resolver,
         *resource_modifier,
-        static_cast<Generated_code_dag const *>(code_dag),
+        dag,
         dag_builder,
         m_material_index,
         flags,
@@ -3381,6 +3490,14 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     set_property(IP_USES_TERNARY_OPERATOR,          0 != (props & IP_USES_TERNARY_OPERATOR));
     set_property(IP_USES_TERNARY_OPERATOR_ON_DF,    0 != (props & IP_USES_TERNARY_OPERATOR_ON_DF));
     set_property(IP_CLASS_COMPILED,                 0 != (flags & CLASS_COMPILATION));
+
+    m_referenced_scene_data.insert(
+        m_referenced_scene_data.end(),
+        creator.get_referenced_scene_data().begin(),
+        creator.get_referenced_scene_data().end());
+
+    // make sure, the observable state is deterministic
+    std::sort(m_referenced_scene_data.begin(), m_referenced_scene_data.end());
 
     Error_code res = EC_NONE;
     if ((flags & CLASS_COMPILATION) == 0) {
@@ -3441,7 +3558,7 @@ DAG_node const *Generated_code_dag::Material_instance::get_temporary_value(size_
 // Return the number of parameters of this instance.
 size_t Generated_code_dag::Material_instance::get_parameter_count() const
 {
-    return int(m_default_param_values.size());
+    return m_default_param_values.size();
 }
 
 /// Return the default value of a parameter of this instance.
@@ -3488,6 +3605,22 @@ bool Generated_code_dag::Material_instance::depends_on_object_id() const
 bool Generated_code_dag::Material_instance::depends_on_global_distribution() const
 {
     return (get_properties() & IP_DEPENDS_ON_GLOBAL_DISTRIBUTION) != 0;
+}
+
+// Returns the number of scene data attributes referenced by this instance.
+size_t Generated_code_dag::Material_instance::get_referenced_scene_data_count() const
+{
+    return m_referenced_scene_data.size();
+}
+
+// Return the name of a scene data attribute referenced by this instance.
+char const *Generated_code_dag::Material_instance::get_referenced_scene_data_name(
+    size_t index) const
+{
+    if (m_referenced_scene_data.size() <= index)
+        return NULL;
+
+    return m_referenced_scene_data[index].c_str();
 }
 
 class Instance_cloner {
@@ -3970,13 +4103,18 @@ void Generated_code_dag::Material_instance::build_temporaries()
     public:
         /// Constructor.
         ///
-        /// \param instance   the material instance
-        /// \param phen_outs  the phen-out map for the visited expression DAG
+        /// \param instance      the material instance
+        /// \param phen_outs     the phen-out map for the visited expression DAG
+        /// \param temp_name_map the desired temporary names
         Temporary_inserter(
             Material_instance &instance,
-            Phen_out_map const &phen_outs)
+            Phen_out_map const &phen_outs,
+            Temporary_name_map const &temp_name_map)
         : Abstract_temporary_inserter(
-            instance.get_allocator(), *instance.get_node_factory(), phen_outs)
+            instance.get_allocator(),
+            *instance.get_node_factory(),
+            phen_outs,
+            temp_name_map)
         , m_instance(instance)
         {
         }
@@ -3984,7 +4122,7 @@ void Generated_code_dag::Material_instance::build_temporaries()
         /// Create and register a new temporary.
         ///
         /// \param node  the initializer for the temporary
-        int add_temporary(DAG_node const *node) MDL_FINAL
+        int add_temporary(DAG_node const *node, char const *name) MDL_FINAL
         {
             return m_instance.add_temporary(node);
         }
@@ -3995,6 +4133,7 @@ void Generated_code_dag::Material_instance::build_temporaries()
     };
 
     // we will modify the identify table, so clear it here
+    MDL_ASSERT(m_node_factory.get_temp_name_map().empty());
     m_node_factory.identify_clear();
 
     Phen_out_map phen_outs(0, Phen_out_map::hasher(), Phen_out_map::key_equal(), get_allocator());
@@ -4004,7 +4143,10 @@ void Generated_code_dag::Material_instance::build_temporaries()
 
     walker.walk_instance(this, &phen_counter);
 
-    Temporary_inserter inserter(*this, phen_outs);
+    // empty name map since we do not want to keep names of let expressions for material instances
+    // (the map in the factory should be empty anyway, see assertion above)
+    Abstract_temporary_inserter::Temporary_name_map temporary_names(get_allocator());
+    Temporary_inserter inserter(*this, phen_outs, temporary_names);
 
     walker.walk_instance(this, &inserter);
 }
@@ -4239,6 +4381,41 @@ char const *Generated_code_dag::Material_instance::get_internal_space() const
     return m_node_factory.get_internal_space();
 }
 
+// Set a tag, version pair for a resource constant that might be reachable from this
+// instance.
+void Generated_code_dag::Material_instance::set_resource_tag(
+    IValue_resource const *res,
+    int                   tag)
+{
+    if (res->get_tag_value() != 0) {
+        MDL_ASSERT(res->get_tag_value() == tag && "trying to overwrite a set tag value");
+        return;
+    }
+
+    int old_tag = find_resource_tag(res);
+
+    if (old_tag == 0) {
+        add_resource_tag(res, tag);
+    } else {
+        MDL_ASSERT(old_tag == tag && "trying to overwrite a set tag value");
+    }
+}
+
+// Get the number of resource map entries.
+size_t Generated_code_dag::Material_instance::get_resource_tag_map_entries_count() const
+{
+    return m_resource_tag_map.size();
+}
+
+// Get the i'th resource tag tag map entry or NULL if the index is out of bounds;
+Resource_tag_tuple const *Generated_code_dag::Material_instance::get_resource_tag_map_entry(
+    size_t index) const
+{
+    if (index < m_resource_tag_map.size())
+        return &m_resource_tag_map[index];
+    return NULL;
+}
+
 // Creates a new error message.
 void Generated_code_dag::Material_instance::error(
     int code, Err_location const &loc, char const *msg)
@@ -4294,7 +4471,8 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
 , m_cache(
     0, Dep_analysis_cache::hasher(), Dep_analysis_cache::key_equal(), get_allocator())
 , m_properties(0)
-, m_instanciate_args(flags & CLASS_COMPILATION)
+, m_referenced_scene_data(dag_builder.get_allocator())
+, m_instantiate_args(flags & CLASS_COMPILATION)
 {
     // reset the CSE table, we will build new expressions
     m_node_factory.identify_clear();
@@ -4422,24 +4600,22 @@ public:
     /// \param owner    the owner module of the analyzed function
     /// \param cache    the result cache to be used
     Ast_analysis(
+        IAllocator         *alloc,
         IModule const      *owner,
         Dep_analysis_cache &cache)
-    : m_owner(owner)
+    : m_alloc(alloc)
+    , m_owner(owner)
     , m_cache(cache)
     , m_depends_on_transform(false)
     , m_depends_on_object_id(false)
     , m_edf_global_distribution(false)
+    , m_referenced_scene_data(alloc)
     {
     }
 
     /// Post visit of an call
     void post_visit(IExpression_call *call) MDL_FINAL
     {
-        if (m_depends_on_transform && m_depends_on_object_id && m_edf_global_distribution) {
-            // stop here, we have reached _|_
-            return;
-        }
-
         // assume the AST error free
         IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
 
@@ -4470,6 +4646,36 @@ public:
         case IDefinition::DS_INTRINSIC_STATE_OBJECT_ID:
             m_depends_on_object_id = true;
             break;
+
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+            {
+                if (mi::mdl::IExpression_literal const *lit =
+                        as<mi::mdl::IExpression_literal>(
+                            call->get_argument(0)->get_argument_expr())) {
+                    if (IValue_string const *name_str = as<IValue_string>(lit->get_value())) {
+                        m_referenced_scene_data.insert(string(name_str->get_value(), m_alloc));
+                    }
+                }
+                break;
+            }
         default:
             // all others have a known semantic and can be safely ignored.
             break;
@@ -4485,17 +4691,24 @@ public:
     /// Returns true if the analyzed entity depends on any edf's global_distribution.
     bool depends_on_global_distribution() const { return m_edf_global_distribution; }
 
+    /// Returns the set of scene data names referenced by the analyzed entity.
+    Generated_code_dag::String_set const &referenced_scene_data() const {
+        return m_referenced_scene_data;
+    }
+
 private:
     /// A constructor from parent.
     ///
     /// \param parent  the parent analysis
     /// \param owner   the owner of the entity to analyze
-    Ast_analysis(Ast_analysis &parent, IModule const *owner)
-    : m_owner(owner)
+    Ast_analysis(IAllocator *alloc, Ast_analysis &parent, IModule const *owner)
+    : m_alloc(alloc)
+    , m_owner(owner)
     , m_cache(parent.m_cache)
     , m_depends_on_transform(false)
     , m_depends_on_object_id(false)
     , m_edf_global_distribution(false)
+    , m_referenced_scene_data(alloc)
     {
     }
 
@@ -4523,6 +4736,10 @@ private:
             m_depends_on_transform    |= res.m_depends_on_transform;
             m_depends_on_object_id    |= res.m_depends_on_object_id;
             m_edf_global_distribution |= res.m_edf_global_distribution;
+            m_referenced_scene_data.insert(
+                res.m_referenced_scene_data.begin(),
+                res.m_referenced_scene_data.end());
+
         } else {
             mi::base::Handle<IModule const> owner(m_owner->get_owner_module(def));
             def = m_owner->get_original_definition(def);
@@ -4534,18 +4751,22 @@ private:
                 return;
             }
 
-            Ast_analysis analysis(*this, owner.get());
+            Ast_analysis analysis(m_alloc, *this, owner.get());
             analysis.visit(func);
 
             // cache the result
-            m_cache[def] = Dependence_result(
+            m_cache.emplace(def, Dependence_result(
                 analysis.m_depends_on_transform,
                 analysis.m_depends_on_object_id,
-                analysis.m_edf_global_distribution);
+                analysis.m_edf_global_distribution,
+                analysis.m_referenced_scene_data));
 
             m_depends_on_transform    |= analysis.m_depends_on_transform;
             m_depends_on_object_id    |= analysis.m_depends_on_object_id;
             m_edf_global_distribution |= analysis.m_edf_global_distribution;
+            m_referenced_scene_data.insert(
+                analysis.m_referenced_scene_data.begin(),
+                analysis.m_referenced_scene_data.end());
         }
     }
 
@@ -4664,6 +4885,9 @@ private:
     }
 
 private:
+    /// The allocator.
+    IAllocator                        *m_alloc;
+
     /// The owner module of the analyzed function.
     IModule const                     *m_owner;
 
@@ -4678,6 +4902,9 @@ private:
 
     /// True if this instance depends on global distribution (edf).
     bool m_edf_global_distribution;
+
+    /// Set of scene data names referenced by this instance.
+    Generated_code_dag::String_set m_referenced_scene_data;
 };
 
 }  // anonymous
@@ -4703,6 +4930,35 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
     case IDefinition::DS_INTRINSIC_STATE_OBJECT_ID:
         set_property(IP_DEPENDS_ON_OBJECT_ID, true);
         break;
+
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+        {
+            if (DAG_constant const *c = as<DAG_constant>(call->get_argument(0))) {
+                if (IValue_string const *name_str = as<IValue_string>(c->get_value())) {
+                    m_referenced_scene_data.insert(string(name_str->get_value(), get_allocator()));
+                }
+            }
+            break;
+        }
+
     case IDefinition::DS_UNKNOWN:
         {
             // user defined function
@@ -4736,13 +4992,16 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
         set_property(IP_DEPENDS_ON_TRANSFORM,           res.m_depends_on_transform);
         set_property(IP_DEPENDS_ON_OBJECT_ID,           res.m_depends_on_object_id);
         set_property(IP_DEPENDS_ON_GLOBAL_DISTRIBUTION, res.m_edf_global_distribution);
+        m_referenced_scene_data.insert(
+            res.m_referenced_scene_data.begin(),
+            res.m_referenced_scene_data.end());
     } else {
         IDeclaration const *decl = def->get_declaration();
         if (decl == NULL)
             return;
 
         if (IDeclaration_function const *func = as<IDeclaration_function>(decl)) {
-            Ast_analysis analysis(owner, m_cache);
+            Ast_analysis analysis(get_allocator(), owner, m_cache);
 
             analysis.visit(func);
 
@@ -4750,13 +5009,43 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
             set_property(IP_DEPENDS_ON_OBJECT_ID, analysis.depends_on_object_id());
             set_property(IP_DEPENDS_ON_GLOBAL_DISTRIBUTION,
                 analysis.depends_on_global_distribution());
+            m_referenced_scene_data.insert(
+                analysis.referenced_scene_data().begin(),
+                analysis.referenced_scene_data().end());
 
-            m_cache[def] = Dependence_result(
+            m_cache.emplace(def, Dependence_result(
                 0 != (get_properties() & IP_DEPENDS_ON_TRANSFORM),
                 0 != (get_properties() & IP_DEPENDS_ON_OBJECT_ID),
-                0 != (get_properties() & IP_DEPENDS_ON_GLOBAL_DISTRIBUTION));
+                0 != (get_properties() & IP_DEPENDS_ON_GLOBAL_DISTRIBUTION),
+                analysis.referenced_scene_data()));
         }
     }
+}
+
+// Check if we support instantiate_dag_arguments on this node.
+bool
+Generated_code_dag::Material_instance::Instantiate_helper::supported_arguments(
+    DAG_node const *n)
+{
+    IType const *t = n->get_type();
+
+    if (is<IType_df>(t)) {
+        // do not create *df type parameters, nor promote the parameters of *df returning functions
+        return false;
+    }
+    if (is_material_type_or_sub_type(t)) {
+        if (is<DAG_constant>(n)) {
+            // do NOT create material -types parameters
+            return false;
+        }
+        if (DAG_call const *c = as<DAG_call>(n)) {
+            if (c->get_semantic() == IDefinition::DS_ELEM_CONSTRUCTOR) {
+                // do not partially inline material or subtype constructors,
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 // Instantiate a DAG expression.
@@ -4807,7 +5096,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
                         DAG_node const *cond = call->get_argument(0);
 
                         {
-                            Flag_store store(m_instanciate_args, false);
+                            Flag_store store(m_instantiate_args, false);
                             cond = instantiate_dag(cond);
                         }
 
@@ -4879,7 +5168,11 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
                                 // try to inline it
                                 Module_scope module_scope(m_dag_builder, mod.get());
 
-                                res = m_dag_builder.try_inline(def, args.data(), n_args);
+                                mi::base::Handle<IGenerated_code_dag const> owner_dag(
+                                    m_resolver.get_owner_dag(signature.c_str()));
+
+                                res = m_dag_builder.try_inline(
+                                    owner_dag.get(), def, args.data(), n_args);
 
                                 // must be analyzed when was inlined; do this here by analyzing the
                                 // inlined function
@@ -4923,7 +5216,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
 
             DAG_parameter const *para = cast<DAG_parameter>(node);
             int parameter_index = para->get_index();
-            if (m_instanciate_args) {
+            if (m_instantiate_args) {
                 // inside class compilation: switch to argument compilation mode
                 char const *p_name =
                     m_code_dag.get_material_parameter_name(m_material_index, parameter_index);
@@ -5014,6 +5307,9 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
         return it->second;
 
     DAG_node const *res = NULL;
+
+    if (!supported_arguments(node))
+        return instantiate_dag(node);
 
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
@@ -5108,7 +5404,10 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                             // try to inline it
                             Module_scope module_scope(m_dag_builder, mod.get());
 
-                            res = m_dag_builder.try_inline(def, args.data(), n_args);
+                            mi::base::Handle<IGenerated_code_dag const> owner_dag(
+                                m_resolver.get_owner_dag(signature.c_str()));
+
+                            res = m_dag_builder.try_inline(owner_dag.get(), def, args.data(), n_args);
 
                             // must be analyzed when was inlined; do this here by analyzing the
                             // inlined function
@@ -5174,7 +5473,8 @@ size_t dynamic_memory_consumption(Generated_code_dag::Material_info const &mat)
         dynamic_memory_consumption(mat.m_cloned) +
         dynamic_memory_consumption(mat.m_parameters) +
         dynamic_memory_consumption(mat.m_annotations) +
-        dynamic_memory_consumption(mat.m_temporaries);
+        dynamic_memory_consumption(mat.m_temporaries) +
+        dynamic_memory_consumption(mat.m_temporary_names);
 }
 
 bool has_dynamic_memory_consumption(Generated_code_dag::Function_info const &)
@@ -5190,6 +5490,8 @@ size_t dynamic_memory_consumption(Generated_code_dag::Function_info const &func)
         dynamic_memory_consumption(func.m_cloned) +
         dynamic_memory_consumption(func.m_parameters) +
         dynamic_memory_consumption(func.m_annotations) +
+        dynamic_memory_consumption(func.m_temporaries) +
+        dynamic_memory_consumption(func.m_temporary_names) +
         dynamic_memory_consumption(func.m_return_annos) +
         dynamic_memory_consumption(func.m_refs);
 }
@@ -5247,12 +5549,6 @@ size_t Generated_code_dag::get_memory_size() const
     res += dynamic_memory_consumption(m_internal_space);
 
     return res;
-}
-
-// Set a tag, version pair for a resource constant.
-void Generated_code_dag::set_resource_tag(DAG_constant const *c, int tag, unsigned version)
-{
-    m_node_factory.set_resource_tag(c, tag, version);
 }
 
 // Get the export flags of the function at function_index.
@@ -5447,6 +5743,84 @@ DAG_node const *Generated_code_dag::get_annotation_annotation(
     return NULL;
 }
 
+// Get a tag,for a resource constant that might be reachable from this DAG.
+int Generated_code_dag::get_resource_tag(
+    IValue_resource const *res) const
+{
+    int tag = find_resource_tag(res);
+    if (tag == 0) {
+        tag = res->get_tag_value();
+    }
+    return tag;
+}
+
+// Set a tag, version pair for a resource constant that might be reachable from this DAG.
+void Generated_code_dag::set_resource_tag(
+    IValue_resource const *res,
+    int                   tag)
+{
+    if (res->get_tag_value() != 0) {
+        MDL_ASSERT(res->get_tag_value() == tag && "trying to overwrite a set tag value");
+        return;
+    }
+
+    int old_tag = find_resource_tag(res);
+
+    if (old_tag == 0) {
+        add_resource_tag(res, tag);
+    } else {
+        MDL_ASSERT(old_tag == tag && "trying to overwrite a set tag value");
+    }
+}
+
+// Get the number of resource map entries.
+size_t Generated_code_dag::get_resource_tag_map_entries_count() const
+{
+    return m_resource_tag_map.size();
+}
+
+// Get the i'th resource tag tag map entry or NULL if the index is out of bounds;
+Resource_tag_tuple const *Generated_code_dag::get_resource_tag_map_entry(size_t index) const
+{
+    if (index < m_resource_tag_map.size())
+        return &m_resource_tag_map[index];
+    return NULL;
+}
+
+// Find the tag for a given resource.
+int Generated_code_dag::find_resource_tag(
+    IValue_resource const *res) const
+{
+    int tag = res->get_tag_value();
+    if (tag != 0)
+        return tag;
+
+    Resource_tag_tuple::Kind kind = kind_from_value(res);
+
+    // for now, linear search
+    char const *url = res->get_string_value();
+    for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
+        Resource_tag_tuple const &e = m_resource_tag_map[i];
+
+        if (e.m_kind == kind && strcmp(e.m_url, url) == 0)
+            return e.m_tag;
+    }
+    return 0;
+}
+
+// Adds a tag, version pair for a given resource.
+void Generated_code_dag::add_resource_tag(
+    IValue_resource const *res,
+    int                   tag)
+{
+    size_t l = m_resource_tag_map.size();
+    m_resource_tag_map.resize(l + 1);
+
+    ISymbol const *shared = m_sym_tab.get_shared_symbol(res->get_string_value());
+    m_resource_tag_map[l] = Resource_tag_tuple(
+        kind_from_value(res), shared->get_name(), tag);
+}
+
 // Serialize this code DAG.
 void Generated_code_dag::serialize(
     ISerializer           *serializer,
@@ -5501,6 +5875,18 @@ void Generated_code_dag::serialize(
     // m_accesible_parameters
 
     dag_serializer.write_unsigned(m_options);
+
+    // serialize the resource table
+    size_t n_entries = m_resource_tag_map.size();
+    dag_serializer.write_unsigned(n_entries);
+
+    for (size_t i = 0; i < n_entries; ++i) {
+        Resource_tag_tuple const &e = m_resource_tag_map[i];
+
+        dag_serializer.write_byte(e.m_kind);
+        dag_serializer.write_cstring(e.m_url);
+        dag_serializer.write_db_tag(e.m_tag);
+    }
 
     // mark the end of the DAG
     dag_serializer.write_section_tag(Serializer::ST_DAG_END);
@@ -5646,6 +6032,7 @@ void Generated_code_dag::serialize_functions(DAG_serializer &dag_serializer) con
         dag_serializer.serialize(func.m_annotations);
         dag_serializer.serialize(func.m_return_annos);
         dag_serializer.serialize(func.m_temporaries);
+        dag_serializer.serialize(func.m_temporary_names);
         dag_serializer.serialize(func.m_refs);
 
         dag_serializer.write_unsigned(func.m_properties);
@@ -5691,6 +6078,7 @@ void Generated_code_dag::deserialize_functions(DAG_deserializer &dag_deserialize
         dag_deserializer.deserialize(func.m_annotations);
         dag_deserializer.deserialize(func.m_return_annos);
         dag_deserializer.deserialize(func.m_temporaries);
+        dag_deserializer.deserialize(func.m_temporary_names);
         dag_deserializer.deserialize(func.m_refs);
 
         func.m_properties = dag_deserializer.read_unsigned();
@@ -5722,6 +6110,7 @@ void Generated_code_dag::serialize_materials(DAG_serializer &dag_serializer) con
 
         dag_serializer.serialize(mat.m_annotations);
         dag_serializer.serialize(mat.m_temporaries);
+        dag_serializer.serialize(mat.m_temporary_names);
 
         dag_serializer.write_encoded(mat.m_body);
     }
@@ -5744,6 +6133,7 @@ void Generated_code_dag::deserialize_materials(DAG_deserializer &dag_deserialize
 
         dag_deserializer.deserialize(mat.m_annotations);
         dag_deserializer.deserialize(mat.m_temporaries);
+        dag_deserializer.deserialize(mat.m_temporary_names);
 
         mat.m_body = dag_deserializer.read_encoded<DAG_node const *>();
 
@@ -6118,6 +6508,19 @@ Generated_code_dag const *Generated_code_dag::deserialize(
 
     code->m_options = dag_deserializer.read_unsigned();
 
+    // serialize the resource table
+    size_t n_entries = dag_deserializer.read_unsigned();
+
+    code->m_resource_tag_map.clear();
+    for (size_t i = 0; i < n_entries; ++i) {
+        Resource_tag_tuple::Kind kind = Resource_tag_tuple::Kind(dag_deserializer.read_byte());
+        string url(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
+        unsigned tag     = dag_deserializer.read_db_tag();
+
+        ISymbol const *shared = code->m_sym_tab.get_shared_symbol(url.c_str());
+        code->m_resource_tag_map.push_back(Resource_tag_tuple(kind, shared->get_name(), tag));
+    }
+
     DEC_SCOPE(); DOUT(("DAG END\n\n"));
 
     code->retain();
@@ -6127,20 +6530,22 @@ Generated_code_dag const *Generated_code_dag::deserialize(
 // Add a material temporary.
 int Generated_code_dag::add_material_temporary(
     int            mat_index,
-    DAG_node const *node)
+    DAG_node const *node,
+    char const     *name)
 {
     Material_info &mat = m_materials[mat_index];
-    size_t idx = mat.add_temporary(node);
+    size_t idx = mat.add_temporary(node, name);
     return int(idx);
 }
 
 // Add a function temporary.
 int Generated_code_dag::add_function_temporary(
     int            func_index,
-    DAG_node const *node)
+    DAG_node const *node,
+    char const     *name)
 {
     Function_info &func = m_functions[func_index];
-    size_t idx = func.add_temporary(node);
+    size_t idx = func.add_temporary(node, name);
     return int(idx);
 }
 

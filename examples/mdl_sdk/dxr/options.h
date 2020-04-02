@@ -113,6 +113,9 @@ namespace mdl_d3d12
 
         << "--enable_derivs           Enable automatic derivatives (not used in the ray tracer).\n"
 
+        << "--tex_res <num>           Size of the texture results buffer (in float4). (default: " << 
+                                      defaults.texture_results_cache_size <<")\n"
+
         << "--no_firefly_clamp        Disables firefly clamping used to suppress white pixels\n"
         << "                          because of low probability paths at early iterations.\n"
 
@@ -120,9 +123,15 @@ namespace mdl_d3d12
         << "                                and intensity (flux) (default: none)\n"
             
         << "--mat <qualified_name>    override all materials using a qualified material name.\n"
+
         << "--z_axis_up               flip coordinate axis while loading the scene to (x, -z, y).\n"
+
         << "--upm <value>             units per meter. the inverse is applied while loading the\n"
            "                          the scene. (default: " << defaults.units_per_meter << ")\n"
+
+        << "--lpe <value>             LPE expression used on startup. Currently only 'beauty',\n"
+           "                          'albedo', and 'normal' are valid options.\n"
+           "                          (default: " << defaults.lpe<< ")\n"
         ;
 
         log_info(ss.str());
@@ -207,6 +216,18 @@ namespace mdl_d3d12
                             return false;
                         }
                     }
+                    else if (wcscmp(opt, L"--lpe") == 0 && i < argc - 1)
+                    {
+                        options.lpe = to_utf8(arg_list[++i]);
+                        if(options.lpe != "beauty" &&
+                           options.lpe != "albedo" &&
+                           options.lpe != "normal")
+                        {
+                            log_error("Invalid LPE option: '" + options.lpe + "'.", SRC);
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
+                    }
                     else if (wcscmp(opt, L"--hdr") == 0 && i < argc - 1)
                     {
                         std::string environment = to_utf8(arg_list[++i]);
@@ -233,9 +254,13 @@ namespace mdl_d3d12
                     {
                         options.firefly_clamp = false;
                     }
-                    else if (wcscmp(opt, L"--no_derivs") == 0)
+                    else if (wcscmp(opt, L"--enable_derivs") == 0)
                     {
-                        options.automatic_derivatives = false;
+                        options.automatic_derivatives = true;
+                    }
+                    else if (wcscmp(opt, L"--tex_res") == 0 && i < argc - 1)
+                    {
+                        options.texture_results_cache_size = std::max(_wtoi(arg_list[++i]), 1);
                     }
                     else if (wcscmp(opt, L"-h") == 0 || wcscmp(opt, L"--help") == 0)
                     {

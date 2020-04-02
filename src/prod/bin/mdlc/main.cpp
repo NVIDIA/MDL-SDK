@@ -28,8 +28,73 @@
 
 #include "mdlc.h"
 
+#ifdef MI_PLATFORM_WINDOWS
+
+#include <string>
+#include <vector>
+
+#include <mi/base/miwindows.h>
+
+namespace {
+
+template<typename T>
+class Array_holder {
+public:
+    Array_holder(size_t size) : m_arr(new T[size]) {}
+    ~Array_holder() { delete[] m_arr; }
+    T &operator[](size_t index) { return m_arr[index]; }
+    T *data() { return m_arr; }
+private:
+    T *m_arr;
+};
+}
+
+int wmain(int argc, wchar_t *argv[])
+{
+    std::vector<std::string> utf8_args(argc);
+    Array_holder<char *> argv_utf8(argc);
+
+    for (int i = 0; i < argc; ++i) {
+        wchar_t *warg = argv[i];
+        DWORD size = WideCharToMultiByte(
+            CP_UTF8,
+            0,
+            warg,
+            -1,
+            NULL,
+            0,
+            NULL,
+            NULL);
+        if (size > 0) {
+            std::string res(size, '\0');
+            DWORD result = WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                warg,
+                -1,
+                const_cast<char *>(res.c_str()),
+                size,
+                NULL,
+                NULL);
+            if (result == size) {
+                utf8_args[i] = res;
+                argv_utf8[i] = const_cast<char *>(utf8_args[i].c_str());
+            } else {
+                argv_utf8[i] = const_cast<char *>("");
+            }
+        }
+    }
+    SetConsoleOutputCP(CP_UTF8);
+
+    Mdlc the_app(argv_utf8[0]);
+    return the_app.run(argc, argv_utf8.data());
+}
+
+#else
+
 int main(int argc, char *argv[])
 {
     Mdlc the_app(argv[0]);
-    return the_app.run(argc,argv);
+    return the_app.run(argc, argv);
 }
+#endif

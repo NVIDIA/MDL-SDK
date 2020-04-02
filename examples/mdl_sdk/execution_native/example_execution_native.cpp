@@ -87,13 +87,6 @@ const mi::Float32_3_4 identity(
 );
 
 
-// Helper function to extract the module name from a fully-qualified material name.
-std::string get_module_name(const std::string& material_name)
-{
-    size_t p = material_name.rfind("::");
-    return material_name.substr(0, p);
-}
-
 // Creates an instance of the given material.
 void create_material_instance(
     mi::neuraylib::ITransaction* transaction,

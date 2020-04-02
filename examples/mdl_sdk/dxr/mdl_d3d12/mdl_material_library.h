@@ -49,9 +49,9 @@ namespace mdl_d3d12
     class Base_application;
     class Mdl_material;
     class Mdl_material_description;
-    class Mdl_material_shared;
     class Mdl_sdk;
-    
+    struct Mdl_resource_set;
+    enum class Texture_dimension;
 
     /// keeps all materials that are loaded by the application
     class Mdl_material_library
@@ -69,29 +69,25 @@ namespace mdl_d3d12
         };
 
     public:
-        // Constructor.
+        /// Constructor.
         explicit Mdl_material_library(
             Base_application* app, 
-            Mdl_sdk* sdk, 
-            bool share_target_code);
+            Mdl_sdk* sdk);
         
-        // Destructor.
+        /// Destructor.
         virtual ~Mdl_material_library();
 
-        // creates a new material or reuses an existing one
+        /// creates a new material or reuses an existing one.
         Mdl_material* create(const Mdl_material_description& material_desc);
 
+        /// reload all modules required by a certain material.
         bool reload_material(Mdl_material* material, bool& targets_changed);
 
-
+        /// reload an individual module (already loaded) module.
         bool reload_module(const std::string& module_db_name, bool& targets_changed);
 
         /// Creates or updates the generated HLSL code and the compiled DXIL libraries.
         bool generate_and_compile_targets();
-
-        /// gets the global link unit to be use for all materials that are loaded
-        /// only available if this library was created with `share_target_code` set.
-        Mdl_material_target* get_shared_target_code();
 
         /// iterate over all target codes inside a lock.
         ///
@@ -111,12 +107,12 @@ namespace mdl_d3d12
 
         /// get access to the texture data by the texture database name and create a resource.
         /// if there resource is loaded already, no loading is required
-        Texture* access_texture_resource(
+        Mdl_resource_set* access_texture_resource(
             std::string db_name, 
+            Texture_dimension dimension,
             D3DCommandList* command_list);
 
     private:
-
         /// Triggers the loading of a module that is not yet loaded.
         ///
         /// \param qualified_module_name    Qualified name of the module to load.
@@ -129,14 +125,12 @@ namespace mdl_d3d12
             bool reload,
             mi::neuraylib::IMdl_execution_context* context);
 
-        /// depending 'share_target_code' flag, the shared target is returned or a new created one.
+        /// get an already existing target or a created new one.
         Mdl_material_library::Target_entry* get_target_for_material_creation(
             const std::string& key);
 
         Base_application* m_app;
         Mdl_sdk* m_sdk;
-
-        bool m_share_target_code;
 
         // map that stores targets based on the compiled material hash
         std::map<size_t, Mdl_material_target*> m_targets;
@@ -145,8 +139,8 @@ namespace mdl_d3d12
 
         // all texture resources used by MDL materials
         // TODO: use ref counting when considering dynamic loading and unloading of materials
-        std::map<std::string, Texture*> m_textures;
-        std::mutex m_textures_mtx;
+        std::map<std::string, Mdl_resource_set> m_resources;
+        std::mutex m_resources_mtx;
     };
 }
 

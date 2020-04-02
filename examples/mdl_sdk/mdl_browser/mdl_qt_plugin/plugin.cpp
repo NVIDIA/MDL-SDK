@@ -59,6 +59,11 @@ Mdl_qt_plugin::Mdl_qt_plugin()
 void Mdl_qt_plugin::registerTypes(const char *uri)
 {
     Q_ASSERT(uri == QLatin1String("MdlQtPlugin"));
+
+    qmlRegisterType(QUrl("qrc:/mdlqtplugin/BrowserApp.qml"), uri, 1, 0, "BrowserApp");
+    qmlRegisterType(QUrl("qrc:/mdlqtplugin/BrowserDialog.qml"), uri, 1, 0, "BrowserDialog");
+    qmlRegisterType(QUrl("qrc:/mdlqtplugin/BrowserMain.qml"), uri, 1, 0, "BrowserMain");
+
     qmlRegisterType<View_model>(uri, 1, 0, "ViewModel");
     qmlRegisterType<VM_nav_stack>(uri, 1, 0, "NavStack");
     qmlRegisterType<VM_nav_stack_level_model>(uri, 1, 0, "NavStackLevelModel");

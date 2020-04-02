@@ -455,9 +455,9 @@ static void create_environment(
     mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
     const float *pixels = static_cast<const float *>(tile->get_data());
 
-    check_cuda_success(cudaMemcpyToArray(
+    check_cuda_success(cudaMemcpy2DToArray(
         *env_tex_data, 0, 0, pixels,
-        rx * ry * sizeof(float4), cudaMemcpyHostToDevice));
+        rx * sizeof(float4), rx * sizeof(float4), ry, cudaMemcpyHostToDevice));
 
     // Create a CUDA texture
     cudaResourceDesc res_desc;
@@ -1024,6 +1024,7 @@ static void render_scene(
         // Init OpenGL window
         std::string version_string;
         window = init_opengl(version_string);
+        glfwSetWindowSize(window, int(options.res_x), int(options.res_y));
         glfwSetWindowUserPointer(window, &window_context);
         glfwSetKeyCallback(window, handle_key);
         glfwSetScrollCallback(window, handle_scroll);
@@ -1090,6 +1091,10 @@ static void render_scene(
     kernel_params.lpe_state_table = nullptr;
     kernel_params.lpe_final_mask = nullptr;
 
+    kernel_params.current_material = 0;
+    kernel_params.geometry = material_bundle[kernel_params.current_material].contains_hair_bsdf ?
+        GT_HAIR : GT_SPHERE;
+
     // Setup camera
     float base_dist = length(options.cam_pos);
     double theta, phi;
@@ -1110,7 +1115,7 @@ static void render_scene(
     CUmodule    cuda_module = build_linked_kernel(
         target_codes,
         (get_executable_folder() + "/" + ptx_name).c_str(),
-        "render_sphere_kernel",
+        "render_scene_kernel",
         &cuda_function);
 
     // copy materials of the scene to the device 
@@ -1423,6 +1428,11 @@ static void render_scene(
                     // All materials have been rendered? -> done
                     if (kernel_params.current_material + 1 >= material_bundle.size())
                         break;
+
+                    if (material_bundle[kernel_params.current_material].contains_hair_bsdf == 0)
+                        kernel_params.geometry = GT_SPHERE;
+                    else
+                        kernel_params.geometry = GT_HAIR;
 
                     // Start new image with next material
                     kernel_params.iteration_start = 0;
@@ -1797,6 +1807,11 @@ static void render_scene(
                     kernel_params.current_material = (kernel_params.current_material +
                         ctx->material_index_delta + num_materials) % num_materials;
                     ctx->material_index_delta = 0;
+
+                    if (material_bundle[kernel_params.current_material].contains_hair_bsdf == 0)
+                        kernel_params.geometry = GT_SPHERE;
+                    else
+                        kernel_params.geometry = GT_HAIR;
                 }
                 if (ctx->mouse_button - 1 == GLFW_MOUSE_BUTTON_LEFT) {
                     // Only accept button press when not hovering GUI window
@@ -1933,7 +1948,8 @@ bool starts_with(std::string const &str, std::string const &prefix)
 Df_cuda_material create_cuda_material(
     size_t target_code_index,
     size_t compiled_material_index,
-    std::vector<mi::neuraylib::Target_function_description> const& descs)
+    std::vector<mi::neuraylib::Target_function_description> const& descs,
+    bool use_hair_bsdf)
 {
     Df_cuda_material mat;
 
@@ -1945,23 +1961,32 @@ Df_cuda_material create_cuda_material(
     //       material, if any function uses it
     mat.argument_block_index = static_cast<unsigned int>(descs[0].argument_block_index);
 
-    // identify the BSDF function by target_code_index (i'th link unit)
-    // and the function_index inside this target_code.
-    // same for the EDF and the intensity expression.
-    mat.bsdf.x = static_cast<unsigned int>(target_code_index);
-    mat.bsdf.y = static_cast<unsigned int>(descs[0].function_index);
+    if (!use_hair_bsdf)
+    {
+        // identify the BSDF function by target_code_index (i'th link unit)
+        // and the function_index inside this target_code.
+        // same for the EDF and the intensity expression.
+        mat.bsdf.x = static_cast<unsigned int>(target_code_index);
+        mat.bsdf.y = static_cast<unsigned int>(descs[0].function_index);
 
-    mat.edf.x = static_cast<unsigned int>(target_code_index);
-    mat.edf.y = static_cast<unsigned int>(descs[1].function_index);
+        mat.edf.x = static_cast<unsigned int>(target_code_index);
+        mat.edf.y = static_cast<unsigned int>(descs[1].function_index);
 
-    mat.emission_intensity.x = static_cast<unsigned int>(target_code_index);
-    mat.emission_intensity.y = static_cast<unsigned int>(descs[2].function_index);
+        mat.emission_intensity.x = static_cast<unsigned int>(target_code_index);
+        mat.emission_intensity.y = static_cast<unsigned int>(descs[2].function_index);
 
-    mat.volume_absorption.x = static_cast<unsigned int>(target_code_index);
-    mat.volume_absorption.y = static_cast<unsigned int>(descs[3].function_index);
+        mat.volume_absorption.x = static_cast<unsigned int>(target_code_index);
+        mat.volume_absorption.y = static_cast<unsigned int>(descs[3].function_index);
 
-    mat.thin_walled.x = static_cast<unsigned int>(target_code_index);
-    mat.thin_walled.y = static_cast<unsigned int>(descs[4].function_index);
+        mat.thin_walled.x = static_cast<unsigned int>(target_code_index);
+        mat.thin_walled.y = static_cast<unsigned int>(descs[4].function_index);
+    }
+    else
+    {
+        mat.bsdf.x = static_cast<unsigned int>(target_code_index);
+        mat.bsdf.y = static_cast<unsigned int>(descs[5].function_index);
+        mat.contains_hair_bsdf = 1;
+    }
 
     // init tag maps with zeros (optional)
     memset(mat.bsdf_mtag_to_gtag_map, 0, MAX_DF_HANDLES * sizeof(unsigned int));
@@ -1978,13 +2003,15 @@ void create_cuda_material_handles(
     // allows to map from local per material Tag IDs to global per scene Tag IDs
     // Note, calling 'LPE_state_machine::handle_to_global_tag(...)' registers the string handles
     // present in the MDL in our 'scene' 
-    mat.bsdf_mtag_to_gtag_map_size = target_code->get_callable_function_df_handle_count(mat.bsdf.y);
+    mat.bsdf_mtag_to_gtag_map_size = static_cast<unsigned int>(
+        target_code->get_callable_function_df_handle_count(mat.bsdf.y));
     for (mi::Size i = 0; i < mat.bsdf_mtag_to_gtag_map_size; ++i)
         mat.bsdf_mtag_to_gtag_map[i] = lpe_state_machine.handle_to_global_tag(
             target_code->get_callable_function_df_handle(mat.bsdf.y, i));
 
     // same for all other distribution functions
-    mat.edf_mtag_to_gtag_map_size = target_code->get_callable_function_df_handle_count(mat.edf.y);
+    mat.edf_mtag_to_gtag_map_size = static_cast<unsigned int>(
+        target_code->get_callable_function_df_handle_count(mat.edf.y));
     for (mi::Size i = 0; i < mat.edf_mtag_to_gtag_map_size; ++i)
         mat.edf_mtag_to_gtag_map[i] = lpe_state_machine.handle_to_global_tag(
             target_code->get_callable_function_df_handle(mat.edf.y, i));
@@ -2221,6 +2248,8 @@ int MAIN_UTF8(int argc, char* argv[])
                 mi::neuraylib::Target_function_description("volume.absorption_coefficient"));
             descs.push_back(
                 mi::neuraylib::Target_function_description("thin_walled"));
+            descs.push_back(
+                mi::neuraylib::Target_function_description("hair"));
 
             // Generate code for all materials
             std::vector<std::string> used_material_names;
@@ -2255,9 +2284,13 @@ int MAIN_UTF8(int argc, char* argv[])
                             descs.data(), descs.size(),
                             options.use_class_compilation));
 
+                        mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+                            mc.get_compiled_materials().back());
+
                         // Create application material representation
                         material_bundle.push_back(create_cuda_material(
-                            0, material_bundle.size(), descs));
+                            0, material_bundle.size(), descs, 
+                            contains_hair_bsdf(compiled_material.get())));
                         used_material_names.push_back(material_name);
                     }
                 } else {
@@ -2269,9 +2302,13 @@ int MAIN_UTF8(int argc, char* argv[])
                         descs.data(), descs.size(),
                         options.use_class_compilation));
 
+                    mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+                        mc.get_compiled_materials().back());
+
                     // Create application material representation
                     material_bundle.push_back(create_cuda_material(
-                        0, material_bundle.size(), descs));
+                        0, material_bundle.size(), descs,
+                        contains_hair_bsdf(compiled_material.get())));
                     used_material_names.push_back(material_name);
                 }
             }

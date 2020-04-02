@@ -87,7 +87,7 @@ MDL_zip_container_mdle::MDL_zip_container_mdle(
     IAllocator *alloc,
     char const *path,
     zip_t      *za)
-: MDL_zip_container(alloc, path, za)
+: MDL_zip_container(alloc, path, za, /*supports_resource_hashes=*/true)
 {
 }
 
@@ -602,11 +602,9 @@ bool Encapsulate_tool::create_encapsulated_module(
     }
 
     // close the file, even when errors occurred
-    if (za != NULL) {
-        if (zip_close(za) != 0) {
-            translate_zip_error(mdle_name, za);
-            has_error = true;
-        }
+    if (zip_close(za) != 0) {
+        translate_zip_error(mdle_name, za);
+        has_error = true;
     }
 
     // free zip sources

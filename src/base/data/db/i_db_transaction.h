@@ -612,7 +612,7 @@ class Transaction : private STLEXT::Non_copyable
 	Tag tag) = 0;
 
     /// Finish an edit and do what is necessary to commit and communicate the changes done during
-    /// the edit.
+    /// the edit. Note that this method (potentially asynchronously) unpins \p info.
     ///
     /// \param info			The info for the edited tag.
     /// \param journal_type		Final resulting journal type for all changes on the object.

@@ -36,7 +36,6 @@
 
 namespace mdl_d3d12
 {
-
     Mdl_sdk::Mdl_sdk(Base_application* app)
         : m_app(app)
         , use_class_compilation(app->get_options()->use_class_compilation)
@@ -46,8 +45,8 @@ namespace mdl_d3d12
         , m_image_api(nullptr)
         , m_hlsl_backend(nullptr)
         , m_library(nullptr)
+        , m_valid(false)
     {
-
         // Access the MDL SDK
         m_neuray = load_and_get_ineuray();
         if (!m_neuray.is_valid_interface())
@@ -113,11 +112,12 @@ namespace mdl_d3d12
         m_hlsl_backend = m_mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_HLSL);
 
         if (m_hlsl_backend->set_option(
-            "num_texture_results", std::to_string(get_num_texture_results()).c_str()) != 0)
-            return;
+            "num_texture_results", 
+            std::to_string(app->get_options()->texture_results_cache_size).c_str()) != 0)
+                return;
 
         if (m_hlsl_backend->set_option(
-            "num_texture_spaces", "2") != 0)
+            "num_texture_spaces", "1") != 0)
             return;
 
         if (m_hlsl_backend->set_option("texture_runtime_with_derivs",
@@ -131,10 +131,21 @@ namespace mdl_d3d12
 
         // The HLSL backend supports no pointers, which means we need use fixed size arrays
         if (m_hlsl_backend->set_option("df_handle_slot_mode", "none") != 0)
+        {
+            log_error("Backend option 'df_handle_slot_mode' invalid.", SRC);
+            return;
+        }
+
+        // Enable scene data queries from MDL to the renderer (also known as Prim-vars)
+        // By passing the asterisk (*) all names that appear in MDL, will be forwarded to the 
+        // renderer. A list of supported names is also possible. Scene data with an unsupported
+        // name will be automatically replaces by the corresponding default value.
+        if (m_hlsl_backend->set_option("scene_data_names", "*") != 0)
             return;
 
         m_transaction = new Mdl_transaction(this);
-        m_library = new Mdl_material_library(m_app, this, m_app->get_options()->share_target_code);
+        m_library = new Mdl_material_library(m_app, this);
+        m_valid = true;
     }
 
     Mdl_sdk::~Mdl_sdk()
@@ -200,7 +211,7 @@ namespace mdl_d3d12
             m_mdl_factory->create_execution_context());
 
         context->set_option("experimental", true);
-        context->set_option("fold_ternary_on_df", true);
+        context->set_option("fold_ternary_on_df", false);
         context->set_option("internal_space", "coordinate_world");
 
         context->retain(); // do not free the context right away

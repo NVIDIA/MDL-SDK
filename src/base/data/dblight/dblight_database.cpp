@@ -242,10 +242,13 @@ void Database_impl::garbage_collection_internal()
             m_tags.erase(it_info);
 
             Reverse_named_tag_map::iterator it_name = m_reverse_named_tags.find(tag);
-            m_named_tags.erase(it_name->second);
-            m_reverse_named_tags.erase(it_name);
+            if( it_name != m_reverse_named_tags.end()) {
+                m_named_tags.erase(it_name->second);
+                m_reverse_named_tags.erase(it_name);
+            }
 
-            m_tags_flagged_for_removal.erase(tag); m_reference_counts.erase(tag);
+            m_tags_flagged_for_removal.erase(tag);
+            m_reference_counts.erase(tag);
             m_reference_count_zero.erase(tag);
         }
     }

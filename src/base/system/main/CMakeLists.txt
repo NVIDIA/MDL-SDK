@@ -38,7 +38,6 @@ set(PROJECT_HEADERS
     "module.h"
     "module_registration.h"
     "module_registration_entry.h"
-    "neuray_cc_conf.h"
     "platform.h"
     "types.h"
     )

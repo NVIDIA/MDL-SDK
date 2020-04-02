@@ -89,29 +89,37 @@ private:
             handle_message(note.get());
         }
     }
-    void handle_return_code(const mi::Sint32 & code) const
+    void handle_return_code(const mi::Sint32 & code, bool ctx_empty) const
     {
         if (code == -1)
         {
-            Util::log_error("Invalid parameters");
+            Util::log_error("Comparison failed: Invalid parameters");
         }
         else if (code == -2)
         {
-            Util::log_error("An error occurred during module comparison");
+            if (ctx_empty) {
+                // error code -2 implies additional errors reported through the context
+                Util::log_error("An error occurred during module comparison");
+            } else {
+                Util::log_error("Comparison failed:");
+            }
         }
     }
     void handle_return_code_and_messages(
         const mi::Sint32 & code, const mi::neuraylib::IMdl_execution_context * context) const
     {
-        handle_return_code(code);
+        mi::Size msg_n = context->get_messages_count();
+        mi::Size err_n = context->get_error_messages_count();
 
-        for (mi::Size i = 0; i < context->get_messages_count(); i++)
+        handle_return_code(code, msg_n == 0 && err_n == 0);
+
+        for (mi::Size i = 0; i < msg_n; ++i)
         {
             mi::base::Handle<const mi::neuraylib::IMessage> msg(context->get_message(i));
             check_success(msg != NULL);
             handle_message(msg.get());
         }
-        for (mi::Size i = 0; i < context->get_error_messages_count(); i++)
+        for (mi::Size i = 0; i < err_n; ++i)
         {
             mi::base::Handle<const mi::neuraylib::IMessage> msg(context->get_error_message(i));
             check_success(msg != NULL);
@@ -982,7 +990,7 @@ int Create_mdle::execute()
     else
     {
         // parse module and material name
-        size_t p = m_prototype.find("(");
+        size_t p = m_prototype.find('(');
         std::string tmp = m_prototype.substr(0, p);
         p = tmp.rfind("::");
         if (p == 0 || p == std::string::npos || m_prototype[0] != ':' || m_prototype[1] != ':')

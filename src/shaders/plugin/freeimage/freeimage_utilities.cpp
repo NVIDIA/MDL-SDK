@@ -72,7 +72,7 @@ unsigned DLL_CALLCONV write_handler( void* buffer, unsigned size, unsigned count
 int DLL_CALLCONV seek_handler( fi_handle handle, long offset, int origin)
 {
     if( !handle)
-        return 0;
+        return -1;
 
     mi::neuraylib::IReader_writer_base* reader_writer_base
         = static_cast<mi::neuraylib::IReader_writer_base*>( handle);
@@ -86,13 +86,10 @@ int DLL_CALLCONV seek_handler( fi_handle handle, long offset, int origin)
     else if( origin == SEEK_END) {
         reader_writer_base->seek_end();
         position = reader_writer_base->tell_absolute() + offset;
-    } else {
-        assert( false);
-        position = 0;;
-    }
+    } else
+        return -1;
 
-    reader_writer_base->seek_absolute( position);
-    return static_cast<int>( position);
+    return reader_writer_base->seek_absolute( position) ? 0 : -1;
 }
 
 long DLL_CALLCONV tell_handler( fi_handle handle)

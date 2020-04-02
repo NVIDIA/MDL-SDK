@@ -121,7 +121,7 @@ const char* Resource_callback::get_resource_name(
         return handle_bsdf_measurement( tag, supports_strict_relative_path, buffer_callback);
     default:
         ASSERT( M_NEURAY_API, false);
-        return 0;
+        return nullptr;
     }
 }
 
@@ -156,18 +156,18 @@ const char* Resource_callback::handle_texture(
     SERIAL::Class_id class_id = m_transaction->get_class_id( texture_tag);
     if( class_id != TEXTURE::Texture::id) {
         add_error_resource_type( 6010, "texture", texture_tag);
-        return 0;
+        return nullptr;
     }
 
     DB::Access<TEXTURE::Texture> texture( texture_tag, m_transaction);
     DB::Tag image_tag( texture->get_image());
     if( !image_tag)
-        return 0;
+        return nullptr;
 
     class_id = m_transaction->get_class_id( image_tag);
     if( class_id != DBIMAGE::Image::id) {
         add_error_resource_type( 6010, "image", image_tag);
-        return 0;
+        return nullptr;
     }
 
     DB::Access<DBIMAGE::Image> image( image_tag, m_transaction);
@@ -214,7 +214,7 @@ const char* Resource_callback::handle_texture(
         if( m_module_uri.empty())
         {
             add_error_string_based(6011, "file-based", "image", image_tag);
-            return 0;
+            return nullptr;
         }
 
         // Otherwise copy the file(s)
@@ -225,7 +225,7 @@ const char* Resource_callback::handle_texture(
             new_filename = export_canvases(image.get_ptr(), uvtile_marker.c_str(), buffer_callback);
             if (new_filename.empty()) {
                 add_error_export_failed(6013, "file-based-to-buffer", "image", image_tag);
-                return 0;
+                return nullptr;
             }
         }
         else
@@ -244,7 +244,7 @@ const char* Resource_callback::handle_texture(
                         image->get_filename(i).c_str(), uvtile_filenames[i].c_str());
                     if (!result) {
                         add_error_export_failed(6013, "file-based", "image", image_tag);
-                        return 0;
+                        return nullptr;
                     }
                 }
 
@@ -260,7 +260,7 @@ const char* Resource_callback::handle_texture(
                 bool result = DISK::file_copy(filename.c_str(), new_filename.c_str());
                 if (!result) {
                     add_error_export_failed(6013, "file-based", "image", image_tag);
-                    return 0;
+                    return nullptr;
                 }
             }
         }
@@ -301,7 +301,7 @@ const char* Resource_callback::handle_texture(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6015, "container-based", "image", image_tag);
-            return 0;
+            return nullptr;
         }
 
         // Export canvas(es) with a generated filename and return that filename.
@@ -309,7 +309,7 @@ const char* Resource_callback::handle_texture(
             image.get_ptr(), uvtile_marker.c_str(), buffer_callback);
         if (new_filename.empty()) {
             add_error_string_based(6016, "container-based", "image", image_tag);
-            return 0;
+            return nullptr;
         }
 
 
@@ -322,14 +322,14 @@ const char* Resource_callback::handle_texture(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6012, "memory-based", "image", image_tag);
-            return 0;
+            return nullptr;
         }
 
         // Export canvas(es) with a generated filename and return that filename.
         std::string new_filename = export_canvases(image.get_ptr(), "<UVTILE0>", buffer_callback);
         if (new_filename.empty()) {
             add_error_string_based(6014, "memory-based", "image", image_tag);
-            return 0;
+            return nullptr;
         }
 
         m_file_paths[texture_tag] = make_relative( new_filename, supports_strict_relative_path);
@@ -345,7 +345,7 @@ const char* Resource_callback::handle_light_profile(
     SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
     if( class_id != LIGHTPROFILE::Lightprofile::id) {
         add_error_resource_type( 6010, "light profile", tag);
-        return 0;
+        return nullptr;
     }
 
     DB::Access<LIGHTPROFILE::Lightprofile> lp( tag, m_transaction);
@@ -369,7 +369,7 @@ const char* Resource_callback::handle_light_profile(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6011, "file-based", "light profile", tag);
-            return 0;
+            return nullptr;
         }
 
         // Otherwise copy the file.
@@ -379,7 +379,7 @@ const char* Resource_callback::handle_light_profile(
             new_filename = export_light_profile(lp.get_ptr(), buffer_callback);
             if (new_filename.empty()) {
                 add_error_export_failed(6013, "file-based-to-buffer", "light profile", tag);
-                return 0;
+                return nullptr;
             }
         }
         else 
@@ -392,7 +392,7 @@ const char* Resource_callback::handle_light_profile(
 
             if (!result) {
                 add_error_export_failed(6013, "file-based", "light profile", tag);
-                return 0;
+                return nullptr;
             }
         }
 
@@ -420,14 +420,14 @@ const char* Resource_callback::handle_light_profile(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6015, "container-based", "light profile", tag);
-            return 0;
+            return nullptr;
         }
 
         // Export light profile with a generated filename and return that filename.
         const std::string new_filename = export_light_profile(lp.get_ptr(), buffer_callback);
         if (new_filename.empty()) {
             add_error_export_failed( 6016, "container-based", "light profile", tag);
-            return 0;
+            return nullptr;
         }
 
         m_file_paths[tag] = make_relative( new_filename, supports_strict_relative_path);
@@ -439,14 +439,14 @@ const char* Resource_callback::handle_light_profile(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6012, "memory-based", "light profile", tag);
-            return 0;
+            return nullptr;
         }
 
         // Export light profile with a generated filename and return that filename.
         const std::string new_filename = export_light_profile(lp.get_ptr(), buffer_callback);
         if (new_filename.empty()) {
             add_error_export_failed(6014, "memory-based", "light profile", tag);
-            return 0;
+            return nullptr;
         }
 
         m_file_paths[tag] = make_relative( new_filename, supports_strict_relative_path);
@@ -462,7 +462,7 @@ const char* Resource_callback::handle_bsdf_measurement(
     SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
     if( class_id != BSDFM::Bsdf_measurement::id) {
         add_error_resource_type( 6010, "BSDF measurement", tag);
-        return 0;
+        return nullptr;
     }
 
     DB::Access<BSDFM::Bsdf_measurement> bsdfm( tag, m_transaction);
@@ -486,7 +486,7 @@ const char* Resource_callback::handle_bsdf_measurement(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6011, "file-based", "BSDF measurement", tag);
-            return 0;
+            return nullptr;
         }
 
         // Otherwise copy the file.
@@ -497,7 +497,7 @@ const char* Resource_callback::handle_bsdf_measurement(
             if (new_filename.empty())
             {
                 add_error_export_failed(6013, "file-based-to-buffer", "BSDF measurement", tag);
-                return 0;
+                return nullptr;
             }
         }
         else
@@ -511,7 +511,7 @@ const char* Resource_callback::handle_bsdf_measurement(
 
             if( !result) {
                 add_error_export_failed( 6013, "file-based", "BSDF measurement", tag);
-                return 0;
+                return nullptr;
             }
         }
 
@@ -539,7 +539,7 @@ const char* Resource_callback::handle_bsdf_measurement(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6011, "container-based", "BSDF measurement", tag);
-            return 0;
+            return nullptr;
         }
 
         // Export BSDF measurement with a generated filename and return that filename.
@@ -547,7 +547,7 @@ const char* Resource_callback::handle_bsdf_measurement(
         if (new_filename.empty())
         {
             add_error_export_failed(6013, "memory-based", "BSDF measurement", tag);
-            return 0;
+            return nullptr;
         }
 
         m_file_paths[tag] = make_relative( new_filename, supports_strict_relative_path);
@@ -559,21 +559,23 @@ const char* Resource_callback::handle_bsdf_measurement(
         // Fail if we need to export the resource, but no module URI is given (string-based export).
         if( m_module_uri.empty()) {
             add_error_string_based( 6012, "memory-based", "BSDF measurement", tag);
-            return 0;
+            return nullptr;
         }
 
         // Export BSDF measurement with a generated filename and return that filename.
+        DB::Access<BSDFM::Bsdf_measurement_impl> bsdfm_measurement_impl(
+            bsdfm->get_impl_tag(), m_transaction);
         mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> reflection(
-            bsdfm->get_reflection<mi::neuraylib::IBsdf_isotropic_data>());
+            bsdfm_measurement_impl->get_reflection<mi::neuraylib::IBsdf_isotropic_data>());
         mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> transmission(
-            bsdfm->get_transmission<mi::neuraylib::IBsdf_isotropic_data>());
+            bsdfm_measurement_impl->get_transmission<mi::neuraylib::IBsdf_isotropic_data>());
         const std::string new_filename = get_new_resource_filename( ".mbsdf", /*old_filename*/ 0);
         bool result = BSDFM::export_to_file(
             reflection.get(), transmission.get(), new_filename.c_str());
 
         if( !result) {
             add_error_export_failed( 6014, "memory-based", "BSDF measurement", tag);
-            return 0;
+            return nullptr;
         }
 
         m_file_paths[tag] = make_relative( new_filename, supports_strict_relative_path);
@@ -592,17 +594,17 @@ std::string Resource_callback::export_canvases(
 
     if (image->is_uvtile())
     {
-        mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap(0));
+        mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap(m_transaction, 0));
         mi::base::Handle<const mi::neuraylib::ICanvas> canvas(mipmap->get_level(0));
         const char* extension = get_extension(canvas->get_type());
 
         std::vector<std::string> uvtile_filenames;
         generate_uvtile_filenames(image, uvtile_marker, extension, uvtile_filenames);
         ASSERT(M_NEURAY_API, uvtile_filenames.size() == image->get_uvtile_length());
-
+        
         for (mi::Uint32 i = 0; i < image->get_uvtile_length(); ++i)
         {
-            mipmap = image->get_mipmap(i);
+            mipmap = image->get_mipmap(m_transaction, i);
             canvas = mipmap->get_level(0);
 
             bool result = false;
@@ -634,9 +636,9 @@ std::string Resource_callback::export_canvases(
     }
     else
     {
-        mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap());
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(mipmap->get_level(0));
-        const char* extension = get_extension(canvas->get_type());
+        mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap( m_transaction));
+        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(mipmap->get_level( 0));
+        const char* extension = get_extension( canvas->get_type());
         new_filename = get_new_resource_filename(
             extension, old_filename.empty() ? NULL : old_filename.c_str());
 
@@ -680,7 +682,7 @@ std::string Resource_callback::export_light_profile(
     if (buffer_callback) {
         // allow custom output streams
         mi::base::Handle<mi::neuraylib::IBuffer> buffer(
-            MI::LIGHTPROFILE::create_buffer_from_lightprofile(profile));
+            LIGHTPROFILE::create_buffer_from_lightprofile(m_transaction, profile));
 
         if (buffer) {
             new_filename = (*buffer_callback)(buffer.get(), new_filename.c_str());
@@ -689,7 +691,7 @@ std::string Resource_callback::export_light_profile(
 
     } else {
         // write to file by default
-        result = MI::LIGHTPROFILE::export_to_file(profile, new_filename.c_str());
+        result = LIGHTPROFILE::export_to_file(m_transaction, profile, new_filename.c_str());
     }
 
     return result ? new_filename : "";
@@ -705,16 +707,18 @@ std::string Resource_callback::export_bsdf_measurement(
     std::string new_filename = get_new_resource_filename(
         ".mbsdf", old_filename.empty() ? NULL : old_filename.c_str());
 
+    DB::Access<BSDFM::Bsdf_measurement_impl> measurement_impl(
+        measurement->get_impl_tag(), m_transaction);
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> refl(
-        measurement->get_reflection<mi::neuraylib::IBsdf_isotropic_data>());
+        measurement_impl->get_reflection<mi::neuraylib::IBsdf_isotropic_data>());
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> trans(
-        measurement->get_transmission<mi::neuraylib::IBsdf_isotropic_data>());
+        measurement_impl->get_transmission<mi::neuraylib::IBsdf_isotropic_data>());
 
     bool result = false;
     if (buffer_callback) {
         // allow custom output streams
         mi::base::Handle<mi::neuraylib::IBuffer> buffer(
-            MI::BSDFM::create_buffer_from_bsdf_measurement(refl.get(), trans.get()));
+            BSDFM::create_buffer_from_bsdf_measurement(refl.get(), trans.get()));
 
         if (buffer) {
             new_filename = (*buffer_callback)(buffer.get(), new_filename.c_str());
@@ -723,7 +727,7 @@ std::string Resource_callback::export_bsdf_measurement(
 
     } else {
         // write to file by default
-        result = MI::BSDFM::export_to_file(refl.get(), trans.get(), new_filename.c_str());
+        result = BSDFM::export_to_file(refl.get(), trans.get(), new_filename.c_str());
     }
 
     return result ? new_filename : "";
@@ -780,7 +784,7 @@ std::string Resource_callback::get_new_resource_filename(
 
     if( old_filename) {
         std::string old_root, old_ext;
-        MI::HAL::Ospath::splitext(strip_directories(old_filename), old_root, old_ext);
+        HAL::Ospath::splitext(strip_directories(old_filename), old_root, old_ext);
         s = m_path_prefix + "_" + old_root + extension;
         if( !DISK::is_file( s.c_str()))
             return s;

@@ -87,6 +87,7 @@ public:
     void write(const DB::Tag& value);
     void write(const char* value);
     void write(const std::string& value);
+    void write(const mi::base::Uuid& value);
     void write(const mi::math::Color& value);
     void write(const CONT::Bitvector& value);
     void write(const CONT::Dictionary& value);
@@ -181,6 +182,7 @@ public:
     void read(DB::Tag* value_pointer);
     void read(char** value_pointer);
     void read(std::string* value_pointer);
+    void read(mi::base::Uuid* value_pointer);
     void read(mi::math::Color* value_pointer);
     void read(CONT::Bitvector* value_type);
     void read(CONT::Dictionary* value_pointer);

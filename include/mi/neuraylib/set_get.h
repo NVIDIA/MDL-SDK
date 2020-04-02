@@ -111,6 +111,14 @@ inline mi::Sint32 set_value( mi::IData* data, const char* value)
     return -1;
 }
 
+/// This specialization handles #mi::IString and #mi::IRef.
+///
+/// It expects a \c const std::string& argument. See #mi::set_value() for details.
+inline mi::Sint32 set_value( mi::IData* data, const std::string& value)
+{
+    return set_value(data,value.c_str());
+}
+
 /// This specialization handles #mi::IUuid.
 ///
 /// It expects an #mi::base::Uuid argument. See #mi::set_value() for details.

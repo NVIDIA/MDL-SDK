@@ -207,6 +207,14 @@ void Serializer_impl::write(const std::string& value)
     write(value.c_str(), value.size());
 }
 
+void Serializer_impl::write(const mi::base::Uuid& value)
+{
+    write(value.m_id1);
+    write(value.m_id2);
+    write(value.m_id3);
+    write(value.m_id4);
+}
+
 void Serializer_impl::write(const mi::math::Color& value)
 {
     write(value.r);
@@ -390,6 +398,14 @@ void Deserializer_impl::read(std::string* value_pointer)
     value_pointer->resize(size);
     if (size > 0)
         read(&((*value_pointer)[0]), size);
+}
+
+void Deserializer_impl::read(mi::base::Uuid* value_pointer)
+{
+    read(&value_pointer->m_id1);
+    read(&value_pointer->m_id2);
+    read(&value_pointer->m_id3);
+    read(&value_pointer->m_id4);
 }
 
 void Deserializer_impl::read(mi::math::Color* value_pointer)

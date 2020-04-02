@@ -70,6 +70,7 @@ namespace DB { class Transaction; }
 namespace NEURAY {
 
 class Recording_transaction;
+class Transaction_impl;
 
 class Impexp_utilities : public boost::noncopyable
 {
@@ -95,9 +96,7 @@ public:
     /// \param rootgroup          The rootgroup to set in the import result.
     /// \param camera_inst        The camera_inst to set in the import result.
     /// \param options            The options to set in the import result.
-    /// \param list_elements      If \c true, the list of imported tags is retrieved from
-    ///                           \p transaction (which must wrap a #Recording_transaction) and
-    ///                           converted to names.
+    /// \param elements           The elements to set in the import result.
     /// \return                   The created instance of #mi::neuraylib::IImport_result.
     static mi::neuraylib::IImport_result* create_import_result(
         mi::neuraylib::ITransaction* transaction,
@@ -185,7 +184,8 @@ public:
         mi::neuraylib::IImport_result* import_result);
 
     /// Returns the elements names recorded by the recording transaction.
-    static std::vector<std::string> get_recorded_elements( Recording_transaction* transaction);
+    static std::vector<std::string> get_recorded_elements(
+        const Transaction_impl* transaction, Recording_transaction* recording_transaction);
 
     /// Return the file name extension of given URI
     ///

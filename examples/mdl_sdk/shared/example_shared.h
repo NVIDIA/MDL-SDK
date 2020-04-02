@@ -35,7 +35,9 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <vector>
+
 #include <mi/mdl_sdk.h>
 
 #ifdef MI_PLATFORM_WINDOWS
@@ -576,53 +578,6 @@ inline std::vector<std::string> get_mdl_user_space_search_paths()
     return result;
 }
 
-// construct the database name of the main material of an MDLE given an full MDLE file path.
-// This is especially useful for materials, as their database name contains no arguments
-// For functions, consider 'mdle_to_db_name_with_signature' which also requires an transaction
-inline std::string mdle_to_db_name(const std::string& mdle_path)
-{
-    // the database name begins with 'mdle::'
-    std::string main_db_name = "mdle::";
-
-    // and the full path of the mdle file with a leading '/'
-    #if defined(MI_PLATFORM_WINDOWS)
-        main_db_name.append("/");
-    #endif
-    main_db_name.append(mdle_path);
-    
-    // there is only one material/function to load, which is 'main'
-    main_db_name.append("::main");
-
-    // the database name uses forward slashes
-    std::replace(main_db_name.begin(), main_db_name.end(), '\\', '/');
-    return main_db_name;
-}
-
-// construct the database name of the main function of an MDLE given an full MDLE file path.
-// This requires the module to be load in order to get the complete function signature.
-inline std::string mdle_to_db_name_with_signature(
-    mi::neuraylib::ITransaction* transaction,
-    const std::string& mdle_path)
-{
-    std::string db_name = mdle_to_db_name(mdle_path);
-    std::string db_module = db_name.substr(0, db_name.length() - 6);
-
-    // get the (loaded) module
-    mi::base::Handle<const mi::neuraylib::IModule> m(
-        transaction->access<mi::neuraylib::IModule>(db_module.c_str()));
-    if (!m) 
-        return "";
-
-    // there should only be one main method
-    mi::base::Handle<const mi::IArray> overloads(m->get_function_overloads(db_name.c_str()));
-    if (overloads->get_length() != 1) 
-        return "";
-    
-    mi::base::Handle<const mi::IString> value(overloads->get_element<const mi::IString>(0));
-    db_name = value->get_c_str();
-    return db_name;
-}
-
 #ifdef MI_PLATFORM_WINDOWS
 
 #define MAIN_UTF8 main_utf8
@@ -650,5 +605,53 @@ int wmain(int argc, wchar_t* argv[]) { \
 #define COMMANDLINE_TO_UTF8
 
 #endif
+
+// checks if a compiled material contains none-invalid hair BSDF
+inline bool contains_hair_bsdf(const mi::neuraylib::ICompiled_material* compiled_material)
+{
+    mi::base::Handle<const mi::neuraylib::IExpression_direct_call> body(
+        compiled_material->get_body());
+
+    mi::base::Handle<const mi::neuraylib::IExpression_list> body_args(body->get_arguments());
+    for (mi::Size i = 0, n = body_args->get_size(); i < n; ++i)
+    {
+        const char* name = body_args->get_name(i);
+        if (strcmp(name, "hair") == 0)
+        {
+            mi::base::Handle<const mi::neuraylib::IExpression> hair_exp(
+                body_args->get_expression(i));
+
+            if (hair_exp->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+                return true;
+
+            mi::base::Handle<const mi::neuraylib::IExpression_constant> hair_exp_const(
+                hair_exp->get_interface<const mi::neuraylib::IExpression_constant>());
+
+            mi::base::Handle<const mi::neuraylib::IValue> hair_exp_const_value(
+                hair_exp_const->get_value());
+
+            return hair_exp_const_value->get_kind() != mi::neuraylib::IValue::VK_INVALID_DF;
+        }
+    }
+    return true;
+}
+
+// Extracts and returns the module name from a qualified material name
+inline std::string get_module_name(const std::string& material_name)
+{
+    std::size_t p = material_name.rfind("::");
+    if (p == std::string::npos)
+        return material_name;
+    return material_name.substr(0, p);
+}
+
+// helper function to extract the material name from a fully-qualified material name
+inline std::string get_material_name(const std::string& material_name)
+{
+    std::size_t p = material_name.rfind("::");
+    if(p == std::string::npos)
+        return material_name;
+    return material_name.substr(p+2, material_name.size() - p);
+}
 
 #endif // MI_EXAMPLE_SHARED_H

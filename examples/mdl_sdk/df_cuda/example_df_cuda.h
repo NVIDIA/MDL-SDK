@@ -79,6 +79,7 @@ struct Df_cuda_material
         , emission_intensity(make_invalid())
         , volume_absorption(make_invalid())
         , thin_walled(make_invalid())
+        , contains_hair_bsdf(0)
     {
     }
 
@@ -110,6 +111,14 @@ struct Df_cuda_material
     // maps 'material tags' to 'global tags' for the emission distribution function
     unsigned int edf_mtag_to_gtag_map[MAX_DF_HANDLES];
     unsigned int edf_mtag_to_gtag_map_size;
+
+    unsigned int contains_hair_bsdf;
+};
+
+enum Geometry_type
+{
+    GT_SPHERE = 0,  // Intersect a sphere with unit radius located at the (0,0,0)
+    GT_HAIR = 1,    // Intersect an infinite cylinder at (0,0,0) oriented in y-direction
 };
 
 struct Kernel_params {
@@ -137,6 +146,9 @@ struct Kernel_params {
     float3 cam_right;
     float3 cam_up;
     float  cam_focal;
+
+    // geometry
+    unsigned int geometry;
 
     // environment
     uint2                env_size;

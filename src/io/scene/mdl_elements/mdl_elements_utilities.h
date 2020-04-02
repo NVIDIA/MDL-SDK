@@ -36,6 +36,7 @@
 #include <list>
 #include <mutex>
 #include <atomic>
+#include <map>
 #include <condition_variable>
 #include <base/data/db/i_db_tag.h>
 #include <mi/base/interface_implement.h>
@@ -49,11 +50,12 @@
 #include "i_mdl_elements_module.h"
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_value.h"
+#include "i_mdl_elements_resource_map.h"
 
 namespace mi {
     namespace neuraylib { class IReader; }
     namespace base      { struct Uuid; }
-    namespace mdl       { class IMDL; }
+    namespace mdl       { class IMDL; class IMDL_resource_reader; class IMDL_resource_set; }
 }
 
 namespace MI {
@@ -63,6 +65,7 @@ namespace MI {
 namespace MDL {
 
 class Mdl_compiled_material;
+class Mdl_call_resolver;
 class Mdl_module_wait_queue;
 class Name_mangler;
 
@@ -201,7 +204,6 @@ IValue* mdl_value_to_int_value(
 class Mdl_dag_converter
 {
 public:
-
     /// Constructor.
     ///
     /// \param ef                     The expression factory to use.
@@ -243,7 +245,19 @@ public:
         const Mdl_annotation_block& mdl_annotations,
         const char* qualified_name) const;
 
+    /// Fill the resource tag map from an material instance.
+    ///
+    /// \param[in]  instance     The instance.
+    /// \param[out] res_tag_map  An additional resource tag map that is filled.
+    void fill_resource_tag_map(
+        mi::mdl::IGenerated_code_dag::IMaterial_instance const *instance,
+        Resource_tag_map                                       &res_tag_map);
+
 private:
+
+    /// Find the tag for a given resource.
+    DB::Tag find_resource_tag(
+        IValue_resource const *res) const;
 
     /// Converts mi::mdl::DAG_call to MI::MDL::IExpression.
     /// (creates IExpression_direct_call)
@@ -269,10 +283,11 @@ private:
         const char* qualified_name) const;
 
 private:
-    
     mi::base::Handle<IExpression_factory> m_ef;
     mi::base::Handle<IValue_factory> m_vf;
     mi::base::Handle<IType_factory> m_tf;
+
+    Resource_tag_map m_resource_tag_map;
 
     DB::Transaction* m_transaction;
     bool m_immutable_callees;
@@ -437,8 +452,11 @@ bool is_valid_function_definition(
     Mdl_ident definition_id,
     const std::string& definition_db_name);
 
-/// Extracts the module db name from a fully qualified definition db name.
+/// Extracts the module DB name from a definition DB name.
 std::string get_module_db_name(const std::string& definition_db_name);
+
+/// Extracts the module DB name from a (fully qualified) annotation MDL name.
+std::string get_module_db_name_from_annotation_mdl_name( const std::string& annotation_mdl_name);
 
 // **********  Traversal of types, values, and expressions *****************************************
 
@@ -547,25 +565,89 @@ mi::mdl::IType_name* type_to_type_name(
 mi::mdl::IExpression_reference* type_to_reference(
     mi::mdl::IModule* module, const mi::mdl::IType* type);
 
-/// Associates all resource literals inside a code DAG with their DB tags.
-///
-/// \param transaction            The DB transaction to use (to retrieve resource tags).
-/// \param code_dag               The code DAG to update.
-/// \param module_filename        The file name of the module.
-/// \param module_name            The fully-qualified MDL module name.
-void update_resource_literals(
-    DB::Transaction* transaction,
-    mi::mdl::IGenerated_code_dag* code_dag,
-    const char* module_filename,
-    const char* module_name);
+/// Helper class to associate all resource literals inside a code DAG with their DB tags.
+/// Handles also bodies of called functions.
+class Resource_updater {
+public:
+    /// Constructor.
+    /// \param transaction            The DB transaction to use (to retrieve resource tags).
+    /// \param resolver               The call name resolver.
+    /// \param code_dag               The code DAG to update.
+    /// \param module_filename        The file name of the module.
+    /// \param module_name            The fully-qualified MDL module name.
+    Resource_updater(
+        DB::Transaction* transaction,
+        mi::mdl::ICall_name_resolver &resolver,
+        mi::mdl::IGenerated_code_dag* code_dag,
+        const char* module_filename,
+        const char* module_name);
 
-/// Collects all resource references in all material bodies.
-///
-/// \param code_dag               The code DAG of the module.
-/// \param[out] references        The collected references are added to this container.
-void collect_resource_references(
-    const mi::mdl::IGenerated_code_dag* code_dag,
-    std::set<const mi::mdl::IValue_resource*>& references);
+    /// Associates all resource literals inside a code DAG with their DB tags.
+    void update_resource_literals();
+
+    /// Update one resource in the current context.
+    void update_resource(mi::mdl::IValue_resource const *resource);
+
+private:
+    /// Associates all resource literals inside a subtree of a code DAG with its DB tags.
+    ///
+    /// \param node             The subtree of \p code_dag to traverse.
+    void update_resource_literals(
+        const mi::mdl::DAG_node* node);
+
+private:
+    DB::Transaction              *m_transaction;
+    mi::mdl::ICall_name_resolver &m_resolver;
+    mi::mdl::IGenerated_code_dag *m_code_dag;
+    char const                   *m_module_filename;
+    char const                   *m_module_name;
+
+    typedef std::map<mi::mdl::IValue_resource const *, DB::Tag> Resource_tag_cache;
+
+    Resource_tag_cache m_resorce_tag_cache;
+};
+
+/// Helper class to associate all resource literals inside a material instance with their DB tags.
+/// Handles also bodies of called functions.
+class Resource_updater_instance {
+public:
+    /// Constructor.
+    /// \param transaction            The DB transaction to use (to retrieve resource tags).
+    /// \param resolver               The call name resolver.
+    /// \param instance               The material instance to update.
+    /// \param module_filename        The file name of the module.
+    /// \param module_name            The fully-qualified MDL module name.
+    Resource_updater_instance(
+        DB::Transaction                                  *transaction,
+        mi::mdl::ICall_name_resolver                     &resolver,
+        mi::mdl::IGenerated_code_dag::IMaterial_instance *instance,
+        char const                                       *module_filename,
+        char const                                       *module_name);
+
+    /// Associates all resource literals inside a code DAG with their DB tags.
+    void update_resource_literals();
+
+    /// Update one resource in the current context.
+    void update_resource(mi::mdl::IValue_resource const *resource);
+
+private:
+    /// Associates all resource literals inside a subtree of a code DAG with its DB tags.
+    ///
+    /// \param node             The subtree of \p code_dag to traverse.
+    void update_resource_literals(
+        const mi::mdl::DAG_node* node);
+
+private:
+    DB::Transaction                                  *m_transaction;
+    mi::mdl::ICall_name_resolver                     &m_resolver;
+    mi::mdl::IGenerated_code_dag::IMaterial_instance *m_instance;
+    char const                                       *m_module_filename;
+    char const                                       *m_module_name;
+
+    typedef std::map<mi::mdl::IValue_resource const *, DB::Tag> Resource_tag_cache;
+
+    Resource_tag_cache m_resorce_tag_cache;
+};
 
 /// Collects all call references in a material body.
 ///
@@ -659,7 +741,28 @@ private:
 };
 
 
-// ********** Module_cache *************************************************************************
+// ********** Module_cache_lookup_handle **********************************************************
+
+
+class Module_cache_lookup_handle : public mi::mdl::IModule_cache_lookup_handle
+{
+public:
+    explicit Module_cache_lookup_handle();
+    virtual ~Module_cache_lookup_handle() = default;
+
+    void set_lookup_name(const char* name);
+    const char* get_lookup_name() const override;
+
+    bool is_processing() const override;
+    void set_is_processing(bool value);
+
+private:
+    std::string m_lookup_name;
+    bool m_is_processing;
+};
+
+
+// ********** Module_cache ************************************************************************
 
 /// Adapts the DB (or rather a transaction) to the IModule_cache interface.
 class Module_cache : public mi::mdl::IModule_cache
@@ -705,16 +808,31 @@ public:
 
     virtual ~Module_cache();
 
+    /// Create an \c IModule_cache_lookup_handle for this \c IModule_cache implementation.
+    mi::mdl::IModule_cache_lookup_handle* create_lookup_handle() const override;
+
+    /// Free a handle created by \c create_lookup_handle.
+    void free_lookup_handle(mi::mdl::IModule_cache_lookup_handle* handle) const override;
+
     /// If the DB contains the MDL module \p module_name, return it, otherwise \c NULL.
     /// In case of access from multiple threads, only the first thread that wants to load
     /// module will return \c NULL immediately, further threads will block until notify was called
     /// by the loading thread. In case loading failed on a different thread, \c lookup will also 
     /// return \c NULL after returning from waiting. The caller can check weather the current
     /// thread is supposed to load the module by calling \c processed_on_this_thread.
-    const mi::mdl::IModule* lookup(const char* module_name) const override;
+    ///
+    /// \param module_name  The name of the module to lookup.
+    /// \param handle       a handle created by \c create_lookup_handle which is used throughout the
+    ///                     loading process of a model or NULL in case the goal is to just check if
+    ///                     a module is loaded.
+    const mi::mdl::IModule* lookup(
+        const char* module_name, 
+        mi::mdl::IModule_cache_lookup_handle *handle) const override;
 
     /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
     const mi::mdl::IModule* lookup_db(const char* module_name) const;
+    /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
+    const mi::mdl::IModule* lookup_db(DB::Tag &tag) const;
 
     /// Check if this module is loading was started in the current context. I.e., on the thread 
     /// that created this module cache instance.
@@ -763,19 +881,50 @@ private:
 
 // ********** Call_evaluator ***********************************************************************
 
+/// Helper mixin that adds access to the tag of a resource value using an owner.
+template<typename T, typename I>
+class Call_evaluator_base : public I
+{
+public:
+    /// Constructor.
+    ///
+    /// \param owner  the owner of a resource
+    Call_evaluator_base(T const *owner)
+    : m_owner(owner)
+    {}
+
+    /// Get the resource tag for a given resource owned by the owner.
+    DB::Tag get_resource_tag(mi::mdl::IValue_resource const *r) const {
+        return DB::Tag(this->m_owner->get_resource_tag(r));
+    }
+
+private:
+    T const *m_owner;
+};
+
 /// Evaluates calls during material compilation.
 ///
 /// Used to fold resource-related calls into constants.
-class Call_evaluator : public mi::mdl::ICall_evaluator
+template<typename T>
+class Call_evaluator : public Call_evaluator_base<T, mi::mdl::ICall_evaluator>
 {
+    typedef Call_evaluator_base<T, mi::mdl::ICall_evaluator> Base;
 public:
+    /// Constructor.
+    ///
+    /// \param owner                    the owner of a resource
+    /// \param transaction              the current transaction
+    /// \param has_resource_attributes  true, if resource attributes can be folded
     Call_evaluator(
+        T const *owner,
         DB::Transaction* transaction,
         bool has_resource_attributes)
-    : m_transaction(transaction)
+    : Base(owner)
+    , m_transaction(transaction)
     , m_has_resource_attributes(has_resource_attributes)
     {}
 
+    /// Destructor.
     virtual ~Call_evaluator() {}
 
     /// Check whether evaluate_intrinsic_function() should be called for an unhandled
@@ -783,37 +932,42 @@ public:
     ///
     /// \param semantic  the semantic to check for
     bool is_evaluate_intrinsic_function_enabled(
-        mi::mdl::IDefinition::Semantics semantic) const;
+        mi::mdl::IDefinition::Semantics semantic) const final;
 
     /// Called by IExpression_call::fold() to evaluate unhandled intrinsic functions.
     ///
-    /// \param semantic     the semantic of the function to call
-    /// \param arguments    the arguments for the call
-    /// \param n_arguments  the number of arguments
+    /// \param value_factory  the value factory used to create the result value
+    /// \param semantic       the semantic of the function to call
+    /// \param arguments      the arguments for the call
+    /// \param n_arguments    the number of arguments
     ///
     /// \return IValue_bad if this function could not be evaluated, its value otherwise
     const mi::mdl::IValue* evaluate_intrinsic_function(
         mi::mdl::IValue_factory* value_factory,
         mi::mdl::IDefinition::Semantics semantic,
         const mi::mdl::IValue* const arguments[],
-        size_t n_arguments) const;
+        size_t n_arguments) const final;
 
 private:
     /// Folds df::light_profile_power() to a constant, or returns IValue_bad in case of errors.
     const mi::mdl::IValue* fold_df_light_profile_power(
-        mi::mdl::IValue_factory* value_factory, const mi::mdl::IValue* argument) const;
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
 
     /// Folds df::light_profile_maximum() to a constant, or returns IValue_bad in case of errors.
     const mi::mdl::IValue* fold_df_light_profile_maximum(
-        mi::mdl::IValue_factory* value_factory, const mi::mdl::IValue* argument) const;
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
 
     /// Folds df::light_profile_isinvalid() to a constant, or returns IValue_bad in case of errors.
     const mi::mdl::IValue* fold_df_light_profile_isvalid(
-        mi::mdl::IValue_factory* value_factory, const mi::mdl::IValue* argument) const;
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
 
     /// Folds df::bsdf_measurement_isvalid() to a constant, or returns IValue_bad in case of errors.
     const mi::mdl::IValue* fold_df_bsdf_measurement_isvalid(
-        mi::mdl::IValue_factory* value_factory, const mi::mdl::IValue* argument) const;
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
 
     /// Folds tex::width() to a constant, or returns IValue_bad in case of errors.
     /// uvtile_arg may be NULL for non-uvtile texture calls.
@@ -831,12 +985,15 @@ private:
 
     /// Folds tex::depth() to a constant, or returns IValue_bad in case of errors.
     const mi::mdl::IValue* fold_tex_depth(
-        mi::mdl::IValue_factory* value_factory, const mi::mdl::IValue* argument) const;
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
 
     /// Folds tex::texture_invalid() to a constant, or returns IValue_bad in case of errors.
     const mi::mdl::IValue* fold_tex_texture_isvalid(
-        mi::mdl::IValue_factory* value_factory, const mi::mdl::IValue* argument) const;
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
 
+private:
     DB::Transaction* m_transaction;
     bool m_has_resource_attributes;
 };
@@ -886,20 +1043,18 @@ mi::base::Handle<const IExpression> find_path(
     const std::string& path,
     const mi::base::Handle<const IExpression_list>& args);
 
-/// Write an UUID to the given serializer.
-///
-/// \param serializer  the serializer to be used
-/// \param uuid        the UUID to be written
-void write(SERIAL::Serializer* serializer, const mi::base::Uuid& uuid);
-
-/// Read an UUID from the given deserializer.
-///
-/// \param deserializer  the deserializer to be used
-/// \param uuid          the UUID to be read
-void read(SERIAL::Deserializer* deserializer, mi::base::Uuid& uuid);
+/// Converts a hash from the MDL API representation to the base API representation.
+mi::base::Uuid convert_hash( const mi::mdl::DAG_hash& hash);
 
 /// Converts a hash from the MDL API representation to the base API representation.
-mi::base::Uuid convert_hash( mi::mdl::DAG_hash const &hash);
+mi::base::Uuid convert_hash( const unsigned char hash[16]);
+
+/// Returns the hash value of the resource reader (or {0,0,0,0} if not available).
+mi::base::Uuid get_hash( mi::mdl::IMDL_resource_reader* reader);
+
+/// Returns the combined hash value of all resource readers in the set (or {0,0,0,0} if not
+/// available).
+mi::base::Uuid get_hash(mi::mdl::IMDL_resource_set const *set);
 
 /// Generates a unique ID.
 Uint64 generate_unique_id();

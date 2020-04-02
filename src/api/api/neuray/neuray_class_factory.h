@@ -193,6 +193,12 @@ public:
         const mi::base::Uuid& uuid,
         mi::neuraylib::IUser_class_factory* factory);
 
+    /// Checks whether a DB class has been registered.
+    ///
+    /// \param class_id             The class ID to  check.
+    /// \return                     \c true if the class ID is registered.
+    bool is_class_registered( SERIAL::Class_id class_id) const;
+
     /// Checks whether a user-defined class has been registered.
     ///
     /// \param serializable         The serializable to check.
@@ -201,8 +207,8 @@ public:
 
     /// Checks whether a user-defined class has been registered.
     ///
-    /// \param uuid                 The class ID check.
-    /// \return                     \c true if the class ID is registered.
+    /// \param uuid                 The UUID to check.
+    /// \return                     \c true if the UUID is registered.
     bool is_class_registered( const mi::base::Uuid& uuid) const;
 
     /// Registers a structure declaration with the \neurayApiName.

@@ -56,9 +56,9 @@ namespace mdl_d3d12
             output_format = DXGI_FORMAT_R32G32B32A32_FLOAT;
 
         // create texture buffer
-        m_back_buffer = new Texture(
+        m_back_buffer = Texture::create_texture_2d(
             m_app, GPU_access::render_target,
-            m_width, m_height, 1, output_format,
+            m_width, m_height, output_format,
             "BackBuffer");
 
         // create render target view

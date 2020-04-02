@@ -58,6 +58,12 @@ namespace mdl_d3d12
                 app->get_options()->scene_directory + "/" + m_description.name;
 
             m_material_name = "main";
+
+            // name only for display
+            std::string name = m_qualified_module_name.substr(
+                m_qualified_module_name.find_last_of('/') + 1);
+            name = name.substr(0, name.length() - 4);
+            m_name_in_scene = "[mdle] " + name;
         }
         else
         {
@@ -68,6 +74,9 @@ namespace mdl_d3d12
             {
                 m_qualified_module_name = m_description.name.substr(0, sep_pos);
                 m_material_name = m_description.name.substr(sep_pos + 2);
+
+                // name only for display
+                m_name_in_scene = "[mdl] " + m_material_name;
             }
             // handle none mdl materials
             else
@@ -97,9 +106,11 @@ namespace mdl_d3d12
                         m_material_name = "gltf_material";
                         break;
                 }
+
+                // name only for display
+                m_name_in_scene = "[gltf_support] " + description.name;
             }
         }
-
         // TODO check if that all worked out
         // if not, use a default pink error material
     }

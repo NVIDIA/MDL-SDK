@@ -52,6 +52,9 @@ namespace mdl_d3d12
     class Mdl_material_target;
     class Mdl_sdk;
     enum class Mdl_resource_kind;
+    struct Mdl_resource_assignment;
+    struct Mdl_resource_info;
+    enum class Texture_dimension;
 
     class Mdl_material : public IMaterial
     {
@@ -104,10 +107,6 @@ namespace mdl_d3d12
         bool on_target_generated(D3DCommandList* command_list);
 
         /// get a descriptor table that describes the resource layout in the materials heap region.
-        /// Note, static table can be used only when shared target is used.
-        static const Descriptor_table& get_static_descriptor_table();
-
-        /// get a descriptor table that describes the resource layout in the materials heap region.
         /// Note, non-static table has to be used when a target is created for each material.
         const Descriptor_table get_descriptor_table();
 
@@ -117,6 +116,9 @@ namespace mdl_d3d12
         /// get the id of the target code that contains this material. 
         /// can be used with the material library for instance.
         size_t get_target_code_id() const override;
+
+        /// get the scene data names mapped to IDs that will be requested in the shader.
+        const std::unordered_map<std::string, uint32_t>& get_scene_data_name_map() const override;
 
         /// get the target code that contains this material. 
         Mdl_material_target* get_target_code() const { return m_target; }
@@ -136,10 +138,14 @@ namespace mdl_d3d12
         /// after material parameters have been changed, they have to copied to the GPU.
         void update_material_parameters();
 
-        // Called by the target to register per material resources.
+        /// Called by the target to register per material resources.
         size_t register_resource(
             Mdl_resource_kind kind, 
+            Texture_dimension dimension,
             const std::string& resource_name);
+
+        /// get the resources used by this material
+        const std::vector<Mdl_resource_assignment>& get_resources(Mdl_resource_kind kind) const;
 
     private:
         Base_application* m_app;
@@ -167,6 +173,9 @@ namespace mdl_d3d12
         /// contains the actual shader code for material.
         Mdl_material_target* m_target;
 
+        /// scene data names and their ID in the generated target code used by this material.
+        std::unordered_map<std::string, uint32_t> m_scene_data_name_map;
+
         /// constant buffer for function indices, material id and flags.
         Constant_buffer<Constants> m_constants;
 
@@ -182,8 +191,12 @@ namespace mdl_d3d12
         /// all material resources have views on the descriptor heap (all in one continuous block)
         Descriptor_heap_handle m_first_resource_heap_handle;    // first descriptor on the heap
 
-        std::map<Mdl_resource_kind, std::vector<std::string>> m_resource_names;
+        /// Mapping from runtime resource IDs to actual resource views in the shader
+        Structured_buffer<Mdl_resource_info>* m_resource_infos;
 
+        /// references to the resources used by the material
+        /// resources are owned by the material library to avoid duplications
+        std::map<Mdl_resource_kind, std::vector<Mdl_resource_assignment>> m_resources;
     };
 }
 

@@ -529,35 +529,44 @@ public:
         /// Constructor.
         ///
         /// \param alloc         The allocator.
-        /// \param resource_map  If non-NULL, use this map to resolve resources
+        /// \param resource_attr_map  If non-NULL, import this map to resolve resources
         Source_res_manag(
             IAllocator              *alloc,
-            Resource_attr_map const *resource_map);
+            Resource_attr_map const *resource_attr_map);
 
-        /// Register the given resource value and return its 1-based index in the resource table.
-        /// Index 0 represents an invalid resource reference.
+        /// Returns the resource index for the given resource usable by the target code resource
+        /// handler for the corresponding resource type.
         ///
-        /// \param resource  the MDL resource to register
-        size_t get_resource_index(IValue_resource const *resource) MDL_FINAL;
+        /// \param kind        the resource kind
+        /// \param url         the resource url (might be NULL)
+        /// \param tag         the resource tag (if assigned)
+        /// \param shape       if the resource is a texture: its shape
+        /// \param gamma_mode  if the resource is a texture: its gamma mode
+        ///
+        /// \returns a resource index or 0 if no resource index can be returned
+        size_t get_resource_index(
+            Resource_tag_tuple::Kind   kind,
+            char const                 *url,
+            int                        tag,
+            IType_texture::Shape       shape,
+            IValue_texture::gamma_mode gamma_mode) MDL_FINAL;
 
         /// Register a string constant and return its 1 based index in the string table.
         ///
         /// \param string  the MDL string value to register
         size_t get_string_index(IValue_string const *string) MDL_FINAL;
 
-        /// Sets a new resource attribute map.
+        /// Imports a new resource attribute map.
         ///
-        /// \param resource_map  if non-NULL, the new map to be used
-        void set_resource_attribute_map(Resource_attr_map const *resource_map) {
-            m_resource_map = resource_map;
-        }
+        /// \param resource_attr_map  if non-NULL, the map to be imported
+        void import_resource_attribute_map(Resource_attr_map const *resource_attr_map);
 
     private:
         /// The current allocator.
         IAllocator              *m_alloc;
 
-        /// The resource-attribute-map if given.
-        Resource_attr_map const *m_resource_map;
+        /// The accumulated resource-attribute-map.
+        Resource_attr_map       m_resource_attr_map;
 
         /// Lookup-table for resource indexes.
         Tag_index_map           m_res_indexes;
@@ -717,40 +726,57 @@ class Generated_code_lambda_function :
     class Resource_entry {
     public:
         /// Constructor.
-        Resource_entry(mi::Uint32 tag, IType_resource const *type)
-        : m_tag(tag)
-        , m_type(type)
-        , m_gamma_mode(IValue_texture::gamma_default)
-        {
-        }
-
-        /// Constructor for texture entries.
         Resource_entry(
-            mi::Uint32                 tag,
-            IType_texture const        *tex_type,
-            IValue_texture::gamma_mode gamma_mode)
+            mi::Uint32                  tag,
+            Resource_tag_tuple::Kind    kind,
+            IType_texture::Shape        shape = IType_texture::TS_2D)
         : m_tag(tag)
-        , m_type(tex_type)
-        , m_gamma_mode(gamma_mode)
+        , m_kind(kind)
+        , m_tex_shape(shape)
         {
         }
 
         /// Get the tag of this resource entry.
         mi::Uint32 get_tag() const { return m_tag; }
 
-        /// Get the type of this resource entry.
-        IType_resource const *get_type() const { return m_type; }
+        /// Get the value kind of this resource entry.
+        Resource_tag_tuple::Kind get_kind() const { return m_kind; }
+
+        /// Get the shape of this texture entry.
+        IType_texture::Shape get_shape() const { return m_tex_shape; }
 
         /// Get the gamma mode of this texture entry.
-        IValue_texture::gamma_mode get_gamma_mode() const { return m_gamma_mode; }
+        IValue_texture::gamma_mode get_gamma_mode() const {
+            switch (m_kind) {
+            case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+                return IValue_texture::gamma_default;
+            case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+                return IValue_texture::gamma_linear;
+            case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+                return IValue_texture::gamma_srgb;
+            case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+            case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+            case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+            case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+            case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+            case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+            case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+            case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+                // always linear for BSDF data
+                return IValue_texture::gamma_linear;
+            default:
+                // not a real texture
+                return IValue_texture::gamma_default;
+            }
+        }
 
     private:
         /// The tag.
         mi::Uint32                 m_tag;
-        /// The resource type of the tag.
-        IType_resource const       *m_type;
-        /// If the type is a texture type, the MDL gamma mode of this texture.
-        IValue_texture::gamma_mode m_gamma_mode;
+        /// The resource kind of the tag.
+        Resource_tag_tuple::Kind   m_kind;
+        /// If the kind is a texture kind, the shape of this texture.
+        IType_texture::Shape       m_tex_shape;
     };
 
 public:
@@ -771,11 +797,22 @@ public:
             Generated_code_lambda_function &lambda,
             Resource_attr_map const       *resource_map);
 
-        /// Register the given resource value and return its 1-based index in the resource table.
-        /// Index 0 represents an invalid resource reference.
+        /// Returns the resource index for the given resource usable by the target code resource
+        /// handler for the corresponding resource type.
         ///
-        /// \param resource  the MDL resource to register
-        size_t get_resource_index(IValue_resource const *resource) MDL_FINAL;
+        /// \param kind        the resource kind
+        /// \param url         the resource url (might be NULL)
+        /// \param tag         the resource tag (if assigned)
+        /// \param shape       if the resource is a texture: its shape
+        /// \param gamma_mode  if the resource is a texture: its gamma mode
+        ///
+        /// \returns a resource index or 0 if no resource index can be returned
+        size_t get_resource_index(
+            Resource_tag_tuple::Kind   kind,
+            char const                 *url,
+            int                        tag,
+            IType_texture::Shape       shape,
+            IValue_texture::gamma_mode gamma_mode) MDL_FINAL;
 
         /// Register a string constant and return its 1 based index in the string table.
         ///
@@ -1168,19 +1205,19 @@ private:
     /// Register a new non-texture resource tag.
     ///
     /// \param tag   the tag
-    /// \param type  the type of this resource
+    /// \param kind  the resource kind of this resource
     size_t register_resource_tag(
-        unsigned tag,
-        IType_resource const *type);
+        unsigned                 tag,
+        Resource_tag_tuple::Kind kind);
 
     /// Register a new texture resource tag.
     ///
     /// \param tag         the texture tag
-    /// \param gamma_mode  the MDl gamma mode
-    /// \param tex_type    the type of this texture
+    /// \param tex_shape   the shape of this texture
+    /// \param gamma_mode  the MDL gamma mode
     size_t register_texture_tag(
         unsigned                   tag,
-        IType_texture const        *tex_type,
+        IType_texture::Shape       tex_shape,
         IValue_texture::gamma_mode gamma_mode);
 
     /// Register a new string.

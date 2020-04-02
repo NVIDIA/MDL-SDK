@@ -265,11 +265,13 @@ public:
 
     /// Try to inline the given call.
     ///
+    /// \param owner_dag    The owner code DAG of the definition to inline.
     /// \param def          The definition of the function to inline.
     /// \param call         The DAG call expression to convert.
     /// \returns            The DAG expression if the function call could be inlined,
     ///                     NULL otherwise.
     DAG_node const *try_inline(
+        IGenerated_code_dag const     *owner_dag,
         IDefinition const             *def,
         DAG_call::Call_argument const *args,
         size_t                        n_args);
@@ -464,6 +466,12 @@ private:
     IValue_resource const *process_resource_urls(
         IValue_resource const *res,
         Position const        &pos);
+
+    // no copy constructor
+    DAG_builder(DAG_builder const &) MDL_DELETED_FUNCTION;
+
+    // no assignment operator
+    DAG_builder const &operator=(DAG_builder const &) MDL_DELETED_FUNCTION;
 
 private:
     /// The type of vectors of values.

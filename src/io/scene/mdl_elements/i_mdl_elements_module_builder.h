@@ -31,7 +31,8 @@
 
 #include <mi/mdl/mdl.h>
 #include <mi/base/handle.h>
-#include <mdl/compiler/compilercore/compilercore_allocator.h>
+#include <vector>
+#include <memory>
 
 namespace mi
 {
@@ -104,8 +105,6 @@ public:
         bool allow_compatible_types,
         bool inline_mdle,
         MI::MDL::Execution_context* context);
-
-    virtual ~Mdl_module_builder();
 
     /// Adds a prototype-based material or function to the target module.
     ///
@@ -234,15 +233,14 @@ public:
     ///
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 The built module in case of success.
-    ///                         If NULL, see the context for errors.
-    const mi::mdl::IModule* build(
-        MI::MDL::Execution_context* context);
+    ///                         If \c NULL, see the context for errors.
+    const mi::mdl::IModule* build(MI::MDL::Execution_context* context);
 
     /// helper functions
-    mi::mdl::IAnnotation_factory& get_annotation_factory() { return *m_annotation_factory; }
-    mi::mdl::IExpression_factory& get_expression_factory() { return *m_expression_factory; }
-    mi::mdl::IName_factory& get_name_factory() { return *m_name_factory; }
-    mi::mdl::IValue_factory& get_value_factory() { return *m_value_factory; }
+    mi::mdl::IAnnotation_factory& get_annotation_factory() { return *m_af; }
+    mi::mdl::IExpression_factory& get_expression_factory() { return *m_ef; }
+    mi::mdl::IName_factory& get_name_factory() { return *m_nf; }
+    mi::mdl::IValue_factory& get_value_factory() { return *m_vf; }
 
 private:
 
@@ -255,7 +253,7 @@ private:
         New_parameter(
             const mi::mdl::ISymbol* sym,
             const mi::base::Handle<const MI::MDL::IExpression>& init,
-            const mi::base::Handle<const MI::MDL::IAnnotation_block> annos,
+            const mi::base::Handle<const MI::MDL::IAnnotation_block>& annos,
             bool is_uniform);
 
         /// Get the symbol.
@@ -344,22 +342,21 @@ private:
     // The underlying MDL module.
     mi::base::Handle<mi::mdl::IModule> m_module;
 
-    Symbol_importer* m_symbol_importer;
-    Name_mangler *m_name_mangler;
+    std::unique_ptr<Symbol_importer> m_symbol_importer;
+    std::unique_ptr<Name_mangler> m_name_mangler;
 
     // functions, materials and variants that are about to be added to the material (in build())
-    mi::mdl::vector<mi::mdl::IDeclaration_function*>::Type m_added_functions;
-    mi::mdl::vector<mi::mdl::IAnnotation_block*>::Type m_added_function_annotations;
-    mi::mdl::vector<const mi::mdl::ISymbol*>::Type m_added_function_symbols;
+    std::vector<mi::mdl::IDeclaration_function*> m_added_functions;
+    std::vector<mi::mdl::IAnnotation_block*> m_added_function_annotations;
 
     // factories
-    mi::mdl::IAnnotation_factory* m_annotation_factory;
-    mi::mdl::IDeclaration_factory* m_declaration_factory;
-    mi::mdl::IExpression_factory* m_expression_factory;
-    mi::mdl::IName_factory* m_name_factory;
-    mi::mdl::IStatement_factory* m_statement_factory;
-    mi::mdl::IType_factory* m_type_factory;
-    mi::mdl::IValue_factory* m_value_factory;
+    mi::mdl::IAnnotation_factory*  m_af;
+    mi::mdl::IDeclaration_factory* m_df;
+    mi::mdl::IExpression_factory*  m_ef;
+    mi::mdl::IName_factory*        m_nf;
+    mi::mdl::IStatement_factory*   m_sf;
+    mi::mdl::IType_factory*        m_tf;
+    mi::mdl::IValue_factory*       m_vf;
 
     bool m_allow_compatible_types;
     bool m_inline_mdle;

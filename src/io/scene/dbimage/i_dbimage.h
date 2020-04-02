@@ -43,102 +43,164 @@ namespace MI {
 namespace IMAGE { class IMipmap; }
 namespace SERIAL { class Serializer; class Deserializer; }
 
-
 namespace DBIMAGE {
 
-enum Uvtile_mode
-{
-    MODE_OFF,
-    MODE_UDIM,
-    MODE_U0_V0,
-    MODE_U1_V1
-};
-
-/// An interface containing an ordered set of texture atlas names, uvs and associated readers
-class Image_set : public
-    mi::base::Interface_implement<mi::base::IInterface>
+/// An image set is used as high-level representation to construct instances of the Image class.
+///
+/// It can represent a single uv-tile as well as an ordered set of such uv-tiles resulting from an
+/// udim marker in an MDL file path.
+///
+/// \note To avoid confusion with tiles of a canvas we use the term uv-tile consistently, even if
+///       the image set does not result from udim/uvtile markers.
+class Image_set : public mi::base::Interface_implement<mi::base::IInterface>
 {
 public:
-
-    /// Get the number of resolved images.
+    /// Returns the number of items in the image set. Never zero.
     virtual mi::Size get_length() const = 0;
 
-    /// If the ordered set represents a texture atlas mapping, returns it, otherwise NULL.
-    ///
-    /// \param[in]  i  the index
-    /// \param[out] u  the u coordinate
-    /// \param[out] v  the v coordinate
-    ///
-    /// \returns true if a mapping is available, false otherwise
-    virtual bool get_uv_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const = 0;
+    /// Returns \c true if the image set results from a udim/uvtile marker in the MDL file path.
+    /// Otherwise, returns \c false and #get_length() == 1.
+    virtual bool is_uvtile() const = 0;
 
-    /// Get the container filename of this image set.
+    /// Returns \c true if the image set is contained in an MDL archive or an MDLE.
+    virtual bool is_mdl_container() const  = 0;
+
+    /// Returns the (u,v) coordinates for an element of the image set.
+    ///
+    /// \param      i  The uv-tile ID.
+    /// \param[out] u  The u coordinate corresponding to \p i.
+    /// \param[out] v  The v coordinate corresponding to \p i.
+    /// \return        \c true if \p i is valid, \c false if \p i is out of bounds.
+    virtual void get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const = 0;
+
+    /// Returns the original filename.
+    ///
+    /// Returns an empty string if the set is not file-based.
+    virtual const char* get_original_filename() const = 0;
+
+    /// Returns the container filename of the image set.
+    ///
     /// Returns an empty string if the set is not container-based.
-    virtual char const * get_container_filename() const;
+    virtual const char* get_container_filename() const = 0;
 
-    /// Get the original filename of this image set.
-    /// Returns an empty string if the set does not have one.
-    virtual char const * get_original_filename() const;
-
-    /// Get the absolute mdl file path of this image set.
-    /// Returns an empty string if this image is not an mdl resource.
-    virtual char const* get_mdl_file_path() const;
-
-    /// Get the i'th MDL url of the image set.
+    /// Returns the absolute MDL file path of the image set.
     ///
-    /// \param i  the index
-    ///
-    /// \returns the i'th MDL url of the set or NULL if the index is out of range.
-    virtual char const *get_mdl_url(mi::Size i) const;
+    /// Returns an empty string if this image set is not an MDL resource.
+    virtual const char* get_mdl_file_path() const = 0;
 
-    /// Get the i'th file name of the ordered set.
+    /// Returns the i'th resolved file name.
     ///
-    /// \param i  the index
-    ///
-    /// \returns the i'th file name of the set or NULL if the index is out of range
-    ///          returns an empty string if the image set is mdl container or memory-based
-    virtual char const *get_resolved_filename(mi::Size i) const;
+    /// Returns an empty string if this uv-tile is not file-based.
+    virtual const char* get_resolved_filename( mi::Size i) const = 0;
 
-    /// Get the i'th mdl container member name of the ordered set.
+    /// Returns the i'th container member name.
     ///
-    /// \param i  the index
+    /// Returns an empty string if this uv-tile is not container-based.
+    virtual const char* get_container_membername( mi::Size i) const = 0;
+
+    /// Returns a reader for the i'th uv-tile.
     ///
-    /// \returns the i'th file name of the set or NULL if the index is out of range.
+    /// Returns \c NULL if not supported.
+    virtual mi::neuraylib::IReader* open_reader( mi::Size i) const = 0;
 
-    virtual char const *get_container_membername(mi::Size i) const;
-
-    /// Opens a reader for the i'th entry.
+    /// Returns a reader for the i'th uv-tile.
     ///
-    /// \param i  the index
+    /// Returns \c NULL if not supported.
+    virtual mi::neuraylib::ICanvas* get_canvas( mi::Size i) const = 0;
+
+    /// Returns the image format, or \c NULL if not available.
+    virtual const char* get_image_format() const = 0;
+
+    /// Creates a mipmap for the i'th uv-tile.
     ///
-    /// \returns a reader for the i'th entry of the set or NULL if the index is out of range.
-    virtual mi::neuraylib::IReader *open_reader(mi::Size i) const;
-
-    /// Returns a canvas for the i'th entry.
-    ///
-    /// \param i  the index
-    ///
-    /// \returns a canvas for the i'th entry of the set or NULL if the index is out of range.
-    virtual mi::neuraylib::ICanvas* get_canvas(mi::Size i) const;
-
-    /// Returns true if the image set represents a texture atlas mapping
-    virtual bool is_uvtile() const;
-
-    /// Returns true if the image set is contained in an mdl archive or an mdle.
-    virtual bool is_mdl_container() const;
-
-    /// Returns the image format of the reader based image set
-    virtual const char* get_image_format() const;
-
-    /// Creates a mipmap from the description 
-    ///
-    /// \param i  the index
-    /// \returns a mipmap for the i'th entry of the set or NULL if the index is out of range.
-    MI::IMAGE::IMipmap* create_mipmap(mi::Size i) const;
+    /// Never returns \c NULL.
+    IMAGE::IMipmap* create_mipmap( mi::Size i) const;
 };
+
+/// Represents the pixel data of an uv-tile plus the corresponding coordinates.
+///
+/// Part of the low-level representation of images. Used by Image and Image_impl. Passed as argument
+/// to non-trivial constructor of Image_impl.
+struct Uvtile
+{
+    /// The mipmap referenced by this uv-tile.
+    ///
+    /// The handle is always invalid when this struct is part the Image class. The handle is always
+    /// valid when this struct is part of the Image_impl class.
+    mi::base::Handle<IMAGE::IMipmap> m_mipmap;
+
+    /// The u coordinate of the uv-tile.
+    mi::Sint32 m_u = 0;
+
+    /// The v coordinate of the uv-tile.
+    mi::Sint32 m_v = 0;
+};
+
+/// Represents the filenames related to an uv-tile.
+///
+/// Part of the low-level representation of images. Only used by Image. Not used by Image_impl.
+struct Uvfilenames
+{
+    /// The file that contains the data of this uv-tile.
+    ///
+    /// Non-empty exactly for file-based uv-tiles.
+    ///
+    /// This is the filename as it has been resolved in set_mipmap() or deserialize().
+    std::string m_resolved_filename;
+
+    /// The container member that contains the data of this DB element.
+    ///
+    /// Non-empty exactly for container-based uv-tiles.
+    std::string m_container_membername;
+
+    /// The resolved container file name (including the container name) for this image.
+    ///
+    /// Non-empty exactly for container-based uv-tiles.
+    std::string m_resolved_container_membername;
+};
+
+/// Allows to look up the uv-tile ID for a given position (u,v).
+///
+/// Part of the low-level representation of images. Used by Image and Image_impl. Passed as argument
+/// to non-trivial constructor of Image_impl.
+struct Uv_to_id
+{
+    mi::Sint32 m_count_u;               ///< Number of uv-tiles in dimension u
+    mi::Sint32 m_count_v;               ///< Number of uv-tiles in dimension v
+    mi::Sint32 m_min_u;                 ///< Smallest uv-tile position in dimension u.
+    mi::Sint32 m_min_v;                 ///< Smallest uv-tile position in dimension v.
+    std::vector<mi::Uint32> m_ids;      ///< Array of m_count_u * m_count_v IDs.
+
+    /// Default constructor.
+    ///
+    /// Creates an empty array with no uv-tiles.
+    Uv_to_id() : m_count_u( 0), m_count_v( 0), m_min_u( 0), m_min_v( 0) { }
+
+    /// Constructor.
+    ///
+    /// Creates max_u-min_u+1 times max_v-min_v+1 uv-tiles. If this is exactly one uv-tile, its ID
+    /// is set to 0. Otherwise, all indices are initially set to ~0u and need to be set properly
+    /// via #set() below.
+    Uv_to_id( mi::Sint32 min_u, mi::Sint32 max_u, mi::Sint32 min_v, mi::Sint32 max_v);
+
+    /// Sets the ID for the uv-tile at position (u,v)
+    ///
+    /// Indented to be used with the non-trivial constructor above. Does not allow to change an
+    /// already set ID.
+    ///
+    /// Returns \c true in case of success, \c false if \p u or \p v are out of bounds, or if the
+    /// ID has already been set.
+    bool set( mi::Sint32 u, mi::Sint32 v, mi::Uint32 id);
+
+    /// Returns the ID for uv-tile at position (u,v)
+    mi::Uint32 get( mi::Sint32 u, mi::Sint32 v) const;
+};
+
+class Image_impl;
 
 /// The class ID for the #Image class.
 static const SERIAL::Class_id ID_IMAGE = 0x5f496d67; // '_Img'
+
 class Image : public SCENE::Scene_element<Image, ID_IMAGE>
 {
 public:
@@ -164,6 +226,8 @@ public:
     ///
     /// \param original_filename     The filename of the mipmap. The resource search paths are
     ///                              used to locate the file.
+    /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
+    ///                              hash is not known.
     /// \return
     ///                              -  0: Success.
     ///                              - -2: Failure to resolve the given filename, e.g., the file
@@ -171,83 +235,121 @@ public:
     ///                              - -3: Failure to open the file.
     ///                              - -4: No image plugin found to handle the file.
     ///                              - -5: The image plugin failed to import the file.
-    Sint32 reset_file( const std::string& original_filename);
+    Sint32 reset_file(
+        DB::Transaction* transaction,
+        const std::string& original_filename,
+        const mi::base::Uuid& impl_hash);
 
     /// Imports a mipmap from a reader.
     ///
     /// \param reader                The reader for the mipmap.
     /// \param image_format          The image format.
+    /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
+    ///                              hash is not known.
     /// \return
     ///                              -  0: Success.
     ///                              - -3: Invalid reader, or the reader does not support absolute
     ///                                    access.
     ///                              - -4: No image plugin found to handle the data.
     ///                              - -5: The image plugin failed to import the data.
-    Sint32 reset_reader( mi::neuraylib::IReader* reader, const char* image_format);
+    Sint32 reset_reader(
+        DB::Transaction* transaction,
+        mi::neuraylib::IReader* reader,
+        const char* image_format,
+        const mi::base::Uuid& impl_hash);
 
-    /// Imports mipmaps according to an image description. 
-    /// The image description can either describe  a single image file name and reader 
-    /// or a set of texture-atlas image names, associated uvs and readers
+    /// Imports mipmaps according to an image set.
     ///
-    /// \param image_set_dec         The image description to use. 
-    ///                              filename resolution rules.
+    /// The image set can either describe a single image file name and reader,
+    /// or a set of texture-atlas image names, associated uvs and readers.
+    ///
+    /// \param image_set             The image set to use.
+    /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
+    ///                              hash is not known.
     /// \return
     ///                              -  0: Success.
-    ///                              - -1: The image set is NULL or empty
+    ///                              - -1: The image set is \c NULL or empty.
     ///                              - -2: The image plugin failed to import the data.
-    Sint32 reset(
-        const Image_set* image_set);
+    Sint32 reset_image_set(
+        DB::Transaction* transaction,
+        const Image_set* image_set,
+        const mi::base::Uuid& impl_hash);
 
     /// Sets a memory-based mipmap.
     ///
     /// Actually, the mipmap might not be memory-based, but it will be treated as if it was a
     /// memory-based mipmap in particular, for serialization purposes).
     ///
-    /// A \c NULL pointer can be passed to restore the state after default construction (a dummy
-    /// mipmap with a 1x1 canvas with a pink pixel).
-    void set_mipmap( IMAGE::IMipmap* mipmap);
+    /// A \c NULL pointer can be passed to restore the state after default construction.
+    ///
+    /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
+    ///                              hash is not known.
+    void set_mipmap(
+        DB::Transaction* transaction,
+        IMAGE::IMipmap* mipmap,
+        const mi::base::Uuid& impl_hash);
 
-    /// Returns the mipmap referenced by this DB element (mutable).
+    /// Returns the mipmap referenced by the given uv-tile.
     ///
-    /// Never returns \c NULL.
-    ///
-    /// \note The copy constructor actually does not copy the image, but creates a reference to a
-    ///       dummy mipmap with a 1x1 canvas with a pink pixel (same as after default construction).
-    ///       See #mi::neuraylib::IImage for the rationale.
-    IMAGE::IMipmap* get_mipmap();
+    /// \param uvtile_id  The uv-tile ID of the mimap.
+    /// \return           Returns the requested mipmap, or \c NULL if \p uvtile_id is out of bounds.
+    ///                   In contrast to other resources, the method does \em not return \c NULL if
+    ///                   #is_valid() returns \c false, but a dummy mipmap.
+    const IMAGE::IMipmap* get_mipmap( DB::Transaction* transaction, mi::Uint32 uvtile_id = 0) const;
 
-    /// Returns the mipmap referenced by the uv-tile at the given index of the DB element (const).
+    /// Returns the resolved filename of the given uv-tile.
     ///
-    /// \param uvtile_id   The uv-tile id of the canvas.
-    /// Returns \c NULL if a tile for the provided uvtile_id does not exist.
-    const IMAGE::IMipmap* get_mipmap( mi::Uint32 uvtile_id = 0) const;
-
-    /// Returns the resolved filename of the uv-tile at the given index of the referenced image.
-    ///
-    /// \param uvtile_id   The uv-tile id of the canvas.
-    /// \return   The resolved filename of the referenced uv-tile, or the empty string if the 
+    /// \param uvtile_id   The uv-tile ID of the canvas.
+    /// \return   The resolved filename of the referenced uv-tile, or the empty string if the
     ///           uv-tile is not file-based (including failure to resolve the filename).
     const std::string& get_filename( mi::Uint32 uvtile_id = 0) const;
 
     /// Returns the original filename of the referenced mipmap.
     ///
-    /// \return   The original filename as passed to set_mipmap(const std::string&), or the empty
-    ///           string if the mipmap is not file-based.
+    /// \return   The original filename as passed to #reset_file(), or the empty  string if the
+    ///           mipmap is not file-based.
     const std::string& get_original_filename() const;
 
     /// Returns the absolute MDL file path of the referenced mipmap.
     ///
     /// \return   The absolute MDL file path, or the empty string if not available.
-    const std::string& get_mdl_file_path( ) const;
+    const std::string& get_mdl_file_path() const;
 
     /// Indicates whether the referenced mipmap represents a cubemap.
-    bool get_is_cubemap() const;
+    bool get_is_cubemap() const { return m_cached_is_cubemap; }
 
     /// Indicates whether this image references a valid mipmap.
     ///
-    /// After default construction and after set_mipmap() is called with a \c NULL pointer or an
-    /// invalid filename this image references a dummy mipmap with a 1x1 canvas with a pink pixel.
-    bool is_valid() const;
+    /// After default construction and after set_mipmap() is called with a \c NULL pointer this
+    /// image references a dummy mipmap with a 1x1 canvas with a pink pixel.
+    bool is_valid() const { return m_cached_is_valid; }
+
+    /// Returns \c true if the image set results from a uvtil/udim marker.
+    bool is_uvtile() const { return m_cached_is_uvtile; }
+
+    /// Returns the ranges of u and v coordinates (or all values zero if #is_uvtile() returns
+    /// \c false).
+    void get_uvtile_uv_ranges(
+        mi::Sint32& min_u, mi::Sint32& min_v, mi::Sint32& max_u, mi::Sint32& max_v) const;
+
+    /// Returns the number of uv-tiles of this image.
+    mi::Size get_uvtile_length() const;
+
+    /// Returns the u and v coordinates for a given uv-tile.
+    ///
+    /// \param uvtile_id   The uv-tile ID.
+    /// \param[out] u      The u coordinate corresponding to \p uvtile_id.
+    /// \param[out] v      The v coordinate corresponding to \p uvtile_id.
+    /// \return            0 on success, -1 if \p uvtile_id is out of range.
+    mi::Sint32 get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const;
+
+    // Returns the uv-tile ID for the uv-tile at given coordinates.
+    ///
+    /// \param u           The u coordinate of the uv-tile.
+    /// \param v           The v coordinate of the uv-tile.
+    /// \return            The corresponding uv-tile ID or -1 of there is no uv-tile with the given
+    ///                    coordinates.
+    mi::Uint32 get_uvtile_id( Sint32 u, Sint32 v) const;
 
     // methods of SERIAL::Serializable
 
@@ -263,7 +365,7 @@ public:
 
     DB::Journal_type get_journal_flags() const;
 
-    Uint bundle( DB::Tag* results, Uint size) const;
+    Uint bundle( DB::Tag* results, Uint size) const { return 0; }
 
     // methods of SCENE::Scene_element_base
 
@@ -272,184 +374,67 @@ public:
     // internal methods
 
     /// Indicates whether this mipmap is file-based.
-    bool is_file_based() const { return !m_uvtiles[0].m_resolved_filename.empty(); }
+    bool is_file_based() const
+    { return !m_uvfilenames.empty() && !m_uvfilenames[0].m_resolved_filename.empty(); }
 
     /// Indicates whether this mipmap is container-based.
     bool is_container_based() const { return !m_resolved_container_filename.empty(); }
 
     /// Indicates whether this mipmap is memory-based.
-    bool is_memory_based() const
-    { 
-        return !is_file_based() && !is_container_based();
-    }
+    bool is_memory_based() const { return !is_file_based() && !is_container_based(); }
 
     /// Returns the container file name for container-based mipmaps, and \c NULL otherwise.
-    const std::string& get_container_filename() const
-    {
-        return m_resolved_container_filename;
-    }
+    const std::string& get_container_filename() const { return m_resolved_container_filename; }
 
     /// Returns the container member name for container-based mipmaps, and \c NULL otherwise.
     const std::string& get_container_membername( mi::Uint32 uvtile_id = 0) const ;
 
     /// Returns the resolved file name for container-based mipmaps (including the container name),
     /// and \c NULL otherwise.
-    const std::string& get_resolved_container_membername(mi::Uint32 uvtile_id = 0) const;
+    const std::string& get_resolved_container_membername( mi::Uint32 uvtile_id = 0) const;
 
-    /// Returns the number of uvtiles of this image
-    mi::Size get_uvtile_length() const;
-
-    /// Returns the u and v tile indices of the uv-tile at the given index.
+    /// Retuns the tag of the implementation class.
     ///
-    /// \param uvtile_id   The uv-tile id of the canvas.
-    /// \param u           The u-component of the uv-tile
-    /// \param v           The v-component of the uv-tile
-    /// \return            0 on success, -1 if uvtile_id is out of range.
-    mi::Sint32 get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const;
+    /// Might be an invalid tag after default construction.
+    DB::Tag get_impl_tag() const { return m_impl_tag; }
 
-    // Returns the uvtile-id corresponding to the tile at u,v.
-    ///
-    /// \param u           The u-component of the uv-tile
-    /// \param v           The v-component of the uv-tile
-    /// \return The uvtile-id or -1 of there is no tile with the given coordinates.
-    mi::Uint32 get_uvtile_id( Sint32 u, Sint32 v) const;
+    /// Indicates whether a hash for the implementation class is available.
+    bool is_impl_hash_valid() const { return m_impl_hash != mi::base::Uuid{0,0,0,0}; }
 
-    /// Returns true if the image set represents a texture atlas mapping
-    bool is_uvtile() const;
+    /// Returns the hash of the implementation class (or default-constructed hash if invalid).
+    const mi::base::Uuid& get_impl_hash() const { return m_impl_hash; }
 
     /// Access to low level tile mapping, used by material converter
-    const unsigned int *get_tile_mapping(
-        mi::Uint32 &num_u,
-        mi::Uint32 &num_v,
-        mi::Sint32 &offset_u, mi::Sint32 &offset_v) const
-    {
-        if (m_uv_to_index.m_uv.empty()) {
-            num_u = num_v = offset_u = offset_v = 0;
-            return NULL;
-        }
-        num_u = m_uv_to_index.m_nu;
-        num_v = m_uv_to_index.m_nv;
-        offset_u = m_uv_to_index.m_offset_u;
-        offset_v = m_uv_to_index.m_offset_v;
-        return &m_uv_to_index.m_uv[0];
-    }
-        
+    const unsigned int* get_tile_mapping(
+        mi::Uint32& num_u,
+        mi::Uint32& num_v,
+        mi::Sint32& offset_u,
+        mi::Sint32& offset_v) const;
+
 private:
-    struct Uvtile
-    {
-        /// The file that contains the data of this uv tile
-        ///
-        /// Non-empty exactly for file-based images.
-        ///
-        /// This is the filename as it has been resolved in set_mipmap() or deserialize().
-        std::string m_resolved_filename;
-
-        /// The absolute MDL file path of a specific tile
-        std::string m_mdl_file_path;
-
-        /// The container member that contains the data of this DB element.
-        ///
-        /// Non-empty exactly for container-based images.
-        std::string m_container_membername;
-
-        /// The resolved container file name (including the container name) for this image.
-        ///
-        /// Non-empty exactly for container-based images.
-        std::string m_resolved_container_membername;
-
-        /// The mipmap referenced by this tile
-        mi::base::Handle<IMAGE::IMipmap> m_mipmap;
-
-        mi::Sint32 m_u;
-        mi::Sint32 m_v;
-
-        Uvtile();
-    };
-
-    /// UV to index lookup table
-    struct Uv_to_index
-    {
-        /// UV index table
-        std::vector<mi::Uint32> m_uv;
-
-        /// table dimension in u
-        mi::Uint32 m_nu;
-
-        /// table dimension in v
-        mi::Uint32 m_nv;
-
-        /// offsets for negative indices
-        mi::Sint32 m_offset_u, m_offset_v;
-
-        Uv_to_index() : m_nu(0), m_nv(0), m_offset_u(0), m_offset_v(0)
-        {}
-
-        /// Resets the table to one entry with index 1
-        void reset() 
-        {
-            m_nu = 1;
-            m_nv = 1;
-            m_offset_u = 0;
-            m_offset_v = 0;
-            m_uv.resize(1, 1);
-        }
-
-        /// Resets table to u_max-u_min+1 x v_max-v_min+1 entries with index -1 and
-        /// calculates the corresponding offsets
-        void reset(mi::Sint32 u_min, mi::Sint32 u_max, mi::Sint32 v_min, mi::Sint32 v_max);
-
-        /// Gets the index at u,v
-        /// 
-        /// \param u        tile position in u
-        /// \param v        tile position in v
-        /// 
-        /// \return         tile index
-        mi::Uint32 get(mi::Sint32 u, mi::Sint32 v) const;
-
-        /// Sets the index at u,v
-        /// 
-        /// \param u        tile position in u
-        /// \param v        tile position in v
-        /// \param index    tile index
-        /// \return         true if the index at position (u,v) has not already been set
-        ///                 false otherwise
-        bool set(mi::Sint32 u, mi::Sint32 v, mi::Uint32 index);
-    };
-
     /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
     /// But the assignment operator is not implemented, although usually, they are implemented both
     /// or none. Let's make the assignment operator private for now.
     Image& operator=( const Image&);
 
-    /// Sets a dummy mipmap with a 1x1 canvas with a pink pixel.
+    /// Searches for files matching the given path or udim/uv-tile pattern
     ///
-    /// Does not affect the stored filenames.
-    void set_default_pink_dummy_mipmap();
-
-    /// Searches for files matching the given path or udim/uv-tile pattern 
-    /// 
     /// \param path path to resolve
-    /// \return Image_set containing the resolved filenames for or NULL in case of error
-    Image_set* resolve_filename(const std::string& path) const;
+    /// \return Image_set containing the resolved filenames for or \c NULL in case of error
+    static Image_set* resolve_filename( const std::string& path);
 
+    /// Set an image from uv-tiles.
+    ///
+    /// Implements the common functionality for all \c reset_*() and \c set_*() methods above.
+    void reset_shared(
+        DB::Transaction* transaction,
+        bool is_uvtile,
+        const std::vector<Uvtile>& uvtiles,
+        const Uv_to_id& uv_to_id,
+        const mi::base::Uuid& impl_hash);
 
-    /// Parses the uv indizes from the given uvtile/udim string
-    /// 
-    ///\pram mode       uvtile/udim mode
-    ///\param str       string containing the indices, e.g. 1001 in udim mode
-    ///\param u         resulting u index
-    ///\param v         resulting v index
-    static void parse_u_v(
-        const Uvtile_mode mode,
-        const char *str,
-        mi::Sint32& u,
-        mi::Sint32& v);
-
-    /// The uvtile array referenced by this DB element.
-    std::vector<Uvtile> m_uvtiles;
-
-    /// UV to uv-tile index mapping
-    Uv_to_index m_uv_to_index;
+    /// Set up all cached values based on the values in \p impl.
+    void setup_cached_values( const Image_impl* impl);
 
     /// The file (or MDL file path) that contains the data of this DB element.
     ///
@@ -468,7 +453,164 @@ private:
     /// Non-empty exactly for container-based light images.
     std::string m_resolved_container_filename;
 
+    /// Per-uv-tile filenames.
+    ///
+    /// Same size as m_cached_uvtiles. Positive size exactly for valid instances.
+    std::vector<Uvfilenames> m_uvfilenames;
+
+    /// The implementation class that holds the bulk data and non-filename related properties.
+    DB::Tag m_impl_tag;
+
+    /// Hash of the data in the implementation class.
+    mi::base::Uuid m_impl_hash;
+
+    // Non-filename related properties from the implementation class (cached here for efficiency).
+    //@{
+
+    bool                m_cached_is_valid;
+    bool                m_cached_is_uvtile;
+    bool                m_cached_is_cubemap;
+
+    /// Cached uv-tiles.
+    ///
+    /// Same size as m_uvfilenames. Positive size exactly for valid instances. m_mipmap members are
+    /// never valid (not cached).
+    std::vector<Uvtile> m_cached_uvtiles;
+
+    Uv_to_id         m_cached_uv_to_id;
+
+    //@}
+};
+
+/// The class ID for the #Image class.
+static const SERIAL::Class_id ID_IMAGE_IMPL = 0x5f496d69; // '_Imi'
+
+class Image_impl : public SCENE::Scene_element<Image_impl, ID_IMAGE_IMPL>
+{
+public:
+    /// Default constructor.
+    ///
+    /// Should only be used for derserialization.
+    Image_impl();
+
+    /// Constructor.
+    ///
+    /// \p uvtiles must not be empty. The \c m_mipmap handles in \p uvtiles must be valid.
+    Image_impl( bool is_uvtile, const std::vector<Uvtile>& uvtiles, const Uv_to_id& uv_to_id);
+
+    /// Copy constructor.
+    ///
+    /// \note The copy constructor actually does not copy the image, but creates a
+    ///       default-constructed instance. See #mi::neuraylib::IImage for the rationale.
+    Image_impl( const Image_impl& other);
+
+    /// Destructor.
+    ///
+    /// Explicit trivial destructor because the implicitly generated one requires the full
+    /// definition of IMAGE::IMipmap.
+    ~Image_impl();
+
+    /// Returns the mipmap referenced by the given uv-tile.
+    ///
+    /// \param uvtile_id   The uv-tile ID of the mipmap.
+    ///
+    /// Returns \c NULL if a uv-tile for the provided \p uvtile_id does not exist.
+    const IMAGE::IMipmap* get_mipmap( mi::Uint32 uvtile_id = 0) const;
+
+    /// \return           Returns the requested mipmap, or \c NULL if \p uvtile_id is out of bounds.
+    bool get_is_cubemap() const { return m_is_cubemap; }
+
+    /// Indicates whether this image references a valid mipmap.
+    ///
+    /// The image does not references a valid mipmap after default or copy construction (or if
+    /// deserialized from such a state). In all other situations it references a valid mipmap.
+    bool is_valid() const { return m_is_valid; }
+
+    // methods of SERIAL::Serializable
+
+    const SERIAL::Serializable* serialize( SERIAL::Serializer* serializer) const;
+
+    SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
+
+    void dump() const;
+
+    // methods of DB::Element_base
+
+    size_t get_size() const;
+
+    DB::Journal_type get_journal_flags() const;
+
+    Uint bundle( DB::Tag* results, Uint size) const { return 0; }
+
+    // methods of SCENE::Scene_element_base
+
+    void get_scene_element_references( DB::Tag_set* result) const { }
+
+    // internal methods
+
+    /// Returns \c true if the image set results from a uvtil/udim marker.
+    bool is_uvtile() const { return m_is_uvtile; }
+
+    /// Returns the ranges of u and v coordinates (or all values zero if #is_uvtile() returns
+    /// \c false).
+    void get_uvtile_uv_ranges(
+        mi::Sint32& min_u, mi::Sint32& min_v, mi::Sint32& max_u, mi::Sint32& max_v) const;
+
+    /// Returns the number of uv-tiles of this image.
+    mi::Size get_uvtile_length() const;
+
+    /// Returns the u and v coordinates for a given uv-tile.
+    ///
+    /// \param uvtile_id   The uv-tile ID.
+    /// \param[out] u      The u coordinate corresponding to \p uvtile_id.
+    /// \param[out] v      The v coordinate corresponding to \p uvtile_id.
+    /// \return            0 on success, -1 if \p uvtile_id is out of range.
+    mi::Sint32 get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const;
+
+    // Returns the uv-tile ID for the uv-tile at given coordinates.
+    ///
+    /// \param u           The u coordinate of the uv-tile.
+    /// \param v           The v coordinate of the uv-tile.
+    /// \return            The corresponding uv-tile ID or -1 of there is no uv-tile with the given
+    ///                    coordinates.
+    mi::Uint32 get_uvtile_id( Sint32 u, Sint32 v) const;
+
+    /// Returns the uv-tiles.
+    const std::vector<Uvtile>& get_uvtiles() const { return m_uvtiles; }
+
+    /// Returns the (u,v) to ID mapping.
+    const Uv_to_id& get_uv_to_id() const { return m_uv_to_id; }
+
+    /// Access to low level tile mapping, used by material converter
+    const unsigned int* get_tile_mapping(
+        mi::Uint32& num_u,
+        mi::Uint32& num_v,
+        mi::Sint32& offset_u,
+        mi::Sint32& offset_v) const;
+
+private:
+    /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
+    /// But the assignment operator is not implemented, although usually, they are implemented both
+    /// or none. Let's make the assignment operator private for now.
+    Image_impl& operator=( const Image_impl&);
+
+    // All members below are essentially const, but cannot be declared as such due to deserialize().
+
+    /// Indicates whether the image is valid (not default- or copy-constructed, nor deserialized
+    /// from such a state).
+    bool m_is_valid;
+
+    /// Indicates whether the image represents a texture atlas mapping.
     bool m_is_uvtile;
+
+    /// Indicates whether the image represents a cubemap.
+    bool m_is_cubemap;
+
+    /// The uv-tiles.
+    std::vector<Uvtile> m_uvtiles;
+
+    /// The (u,v) to ID mapping for the vector above.
+    Uv_to_id m_uv_to_id;
 };
 
 } // namespace DBIMAGE

@@ -95,8 +95,12 @@ public:
         std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases,
         bool is_cubemap) const;
 
-    void create_mipmaps(std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
-        const mi::neuraylib::ICanvas* base_canvas, mi::Float32 gamma) const;
+    void create_mipmaps(
+        std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
+        const mi::neuraylib::ICanvas* base_canvas,
+        mi::Float32 gamma) const;
+
+    IMipmap* create_dummy_mipmap();
 
     mi::neuraylib::ICanvas* create_canvas(
         Pixel_type pixel_type,

@@ -342,9 +342,17 @@ class Resource_collection : public mi::mdl::ILambda_resource_enumerator,
 {
 public:
     /// Constructor.
-    Resource_collection(mi::mdl::IMDL *mdl, mi::mdl::ICode_generator_jit *jit_be)
+    ///
+    /// \param mdl            the MDL compiler
+    /// \param jit_be         the JIT backend
+    /// \param call_resolver  the call name resolver
+    Resource_collection(
+        mi::mdl::IMDL                *mdl,
+        mi::mdl::ICode_generator_jit *jit_be,
+        mi::mdl::ICall_name_resolver &call_resolver)
     : m_jit_be(jit_be, mi::base::DUP_INTERFACE)
     , m_entity_resolver(mdl->create_entity_resolver(nullptr))
+    , m_call_resolver(call_resolver)
     , m_cur_lambda()
     , m_textures()
     , m_texture_map()
@@ -408,7 +416,7 @@ public:
         mi::base::Handle<mi::mdl::ILambda_function> old_lambda = m_cur_lambda;
         m_cur_lambda = mi::base::make_handle_dup(lambda);
 
-        lambda->enumerate_resources(*this, lambda->get_body());
+        lambda->enumerate_resources(m_call_resolver, *this, lambda->get_body());
 
         m_cur_lambda = old_lambda;
     }
@@ -422,11 +430,11 @@ public:
         // all resources will be registered in the main lambda
         m_cur_lambda = mi::base::make_handle_dup(main_df.get());
 
-        main_df->enumerate_resources(*this, main_df->get_body());
+        main_df->enumerate_resources(m_call_resolver, *this, main_df->get_body());
 
         for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i) {
             mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(dist_func->get_expr_lambda(i));
-            expr_lambda->enumerate_resources(*this, expr_lambda->get_body());
+            expr_lambda->enumerate_resources(m_call_resolver, *this, expr_lambda->get_body());
         }
 
         m_cur_lambda = old_lambda;
@@ -514,7 +522,12 @@ private:
         if (m_cur_lambda) {
             if (tex->is_valid()) {
                 m_cur_lambda->map_tex_resource(
-                    t,
+                    tex_val->get_kind(),
+                    tex_val->get_string_value(),
+                    tex_val->get_gamma_mode(),
+                    tex_val->get_bsdf_data_kind(),
+                    tex_val->get_type()->get_shape(),
+                    tex_val->get_tag_value(),
                     index,
                     /*valid=*/ true,
                     tex->get_width(),
@@ -522,7 +535,18 @@ private:
                     tex->get_depth());
             } else {
                 // invalid texture are always mapped to zero
-                m_cur_lambda->map_tex_resource(t, 0, /*valid=*/ false, 0, 0, 0);
+                m_cur_lambda->map_tex_resource(
+                    tex_val->get_kind(),
+                    tex_val->get_string_value(),
+                    tex_val->get_gamma_mode(),
+                    tex_val->get_bsdf_data_kind(),
+                    tex_val->get_type()->get_shape(),
+                    tex_val->get_tag_value(),
+                    0,
+                    /*valid=*/ false,
+                    0,
+                    0,
+                    0);
             }
         }
 
@@ -538,6 +562,9 @@ private:
 
     /// The MDL entity resolver for accessing resources.
     mi::base::Handle<mi::mdl::IEntity_resolver> m_entity_resolver;
+
+    /// The MDL call name resolver.
+    mi::mdl::ICall_name_resolver &m_call_resolver;
 
     /// The current lambda for which resources should be registered.
     mi::base::Handle<mi::mdl::ILambda_function> m_cur_lambda;
@@ -1106,15 +1133,19 @@ bool Material_gpu_context::prepare_texture(
     std::vector<Texture> &textures)
 {
     Texture_data const *tex = code_ptx->get_texture(texture_index);
-    if (!tex->is_valid())
+    if (!tex->is_valid()) {
+        fprintf(stderr, "Error: Requested texture is invalid\n");
         return false;
+    }
 
     unsigned width = tex->get_width(), height = tex->get_height();
 
-    if (unsigned char const *bsdf_data = tex->get_bsdf_data()) {
-        // currently only 3D BSDF data supported
-        if (tex->get_shape() != mi::mdl::IType_texture::TS_BSDF_DATA)
+    if (tex->get_shape() == mi::mdl::IType_texture::TS_BSDF_DATA) {
+        unsigned char const *bsdf_data = tex->get_bsdf_data();
+        if (bsdf_data == nullptr) {
+            fprintf(stderr, "Error: bsdf data missing for requested texture\n");
             return false;
+        }
 
         unsigned depth = tex->get_depth();
 
@@ -1237,8 +1268,9 @@ bool Material_gpu_context::prepare_texture(
 
             cudaArray_t device_cur_level_array;
             cudaGetMipmappedArrayLevel(&device_cur_level_array, device_tex_miparray, level);
-            check_cuda_success(cudaMemcpyToArray(device_cur_level_array, 0, 0, cur_data,
-                cur_width * cur_height * sizeof(float4), cudaMemcpyHostToDevice));
+            check_cuda_success(cudaMemcpy2DToArray(device_cur_level_array, 0, 0, cur_data,
+                cur_width * sizeof(float4), cur_width * sizeof(float4), cur_height,
+                cudaMemcpyHostToDevice));
 
             if (level >= 2)
                 free(prev_data);
@@ -1257,8 +1289,9 @@ bool Material_gpu_context::prepare_texture(
         check_cuda_success(cudaMallocArray(&device_tex_data, &channel_desc, width, height));
 
         BYTE const *data = FreeImage_GetBits(dib);
-        check_cuda_success(cudaMemcpyToArray(device_tex_data, 0, 0, data,
-            width * height * sizeof(float) * 4, cudaMemcpyHostToDevice));
+        check_cuda_success(cudaMemcpy2DToArray(device_tex_data, 0, 0, data,
+            width * sizeof(float4), width * sizeof(float4), height,
+            cudaMemcpyHostToDevice));
 
         res_desc.resType = cudaResourceTypeArray;
         res_desc.res.array.array = device_tex_data;
@@ -1447,15 +1480,15 @@ public:
     /// \param enable_derivatives   If true, the generated code will expect the renderer to provide
     ///                             a state and a texture runtime with derivatives
     Material_ptx_compiler(
-        mi::mdl::IMDL       *mdl_compiler,
-        unsigned             num_texture_results,
-        bool                 enable_derivatives,
-        const std::string    df_handle_mode)
+        mi::mdl::IMDL     *mdl_compiler,
+        unsigned          num_texture_results,
+        bool              enable_derivatives,
+        const std::string df_handle_mode)
     : Material_compiler(mdl_compiler)
     , m_jit_be(mi::base::make_handle(mdl_compiler->load_code_generator("jit"))
         .get_interface<mi::mdl::ICode_generator_jit>())
     , m_link_unit()
-    , m_res_col(mdl_compiler, m_jit_be.get())
+    , m_res_col(mdl_compiler, m_jit_be.get(), m_module_manager)
     , m_enable_derivatives(enable_derivatives)
     , m_gen_base_name_suffix_counter(0)
     {

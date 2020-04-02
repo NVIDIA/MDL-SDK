@@ -238,6 +238,10 @@ BSDF_INLINE void elemental_bsdf_auxiliary(
         math::average(inherited_weight) * g.n.shading_normal);
 }
 
+/////////////////////////////////////////////////////////////////////
+// Hair BSDFs
+/////////////////////////////////////////////////////////////////////
+#include "libbsdf_hair.h"
 
 /////////////////////////////////////////////////////////////////////
 // bsdf()
@@ -2473,18 +2477,19 @@ BSDF_INLINE bool measured_compute_polar(
     float3& out_incoming,
     float2& out_incoming_polar,
     float2& out_outgoing_polar,
-    bool out_backside_eval)
+    bool& out_backside_eval)
 {
     // local (tangent) space
     float3 x_axis, z_axis;
     float3 y_axis = n.shading_normal;
+
+    // BTDF or BRDF eval?
+    out_backside_eval = math::dot(data->k2, n.geometry_normal) < 0.0f;
+
     if (!get_bumped_basis(x_axis, z_axis, state->texture_tangent_u(0), y_axis)) {
         absorb(data);
         return false;
     }
-
-    // BTDF or BRDF eval?
-    out_backside_eval = math::dot(data->k2, n.geometry_normal) < 0.0f;
 
     // nothing to evaluate for given directions?
     if ((out_backside_eval && (mode == scatter_reflect)) ||

@@ -248,20 +248,21 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material(
     mi::Size description_count,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    MDL::Execution_context* wrapped_context = unwrap_and_clear(context);
+    MDL::Execution_context* context_impl = unwrap_and_clear(context);
 
     // reuse link unit based implementation
     BACKENDS::Link_unit link_unit(m_backend, unwrap(transaction));
 
     if (link_unit.add_material(
-        unwrap(material),
-        function_descriptions,
-        static_cast<size_t>(description_count),
-        wrapped_context)) {
-
-        return m_backend.translate_link_unit(&link_unit, wrapped_context);
+            unwrap(material),
+            function_descriptions,
+            static_cast<size_t>(description_count),
+            context_impl) != 0)
+    {
+        return NULL;
     }
-    return NULL;
+
+    return m_backend.translate_link_unit(&link_unit, context_impl);
 }
 
 mi::Uint8 const *Mdl_llvm_backend::get_device_library(Size &size) const

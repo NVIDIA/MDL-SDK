@@ -169,6 +169,14 @@ public:
     /// Indicates whether this material depends on global distribution (edf).
     virtual bool depends_on_global_distribution() const = 0;
 
+    /// Returns the number of scene data attributes referenced by this instance.
+    virtual Size get_referenced_scene_data_count() const = 0;
+
+    /// Return the name of a scene data attribute referenced by this instance.
+    ///
+    /// \param index  the index of the scene data attribute
+    virtual char const *get_referenced_scene_data_name(Size index) const = 0;
+
     //@}
     /// \name Additional methods related to class compilation
     //@{

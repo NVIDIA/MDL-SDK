@@ -44,6 +44,7 @@ namespace mdl_d3d12
     class Mdl_material;
     class Mdl_material_target;
     enum class Mdl_resource_kind;
+    struct Mdl_resource_assignment;
 
     /// Part of the per material constant buffer layout
     /// Contains the function indicies required for evaluating mdl functions in the shader.
@@ -54,6 +55,7 @@ namespace mdl_d3d12
         int32_t emission_function_index;
         int32_t emission_intensity_function_index;
         int32_t thin_walled_function_index;
+        int32_t hair_function_index;
     };
 
     /// Information about a target that is required by a material.
@@ -160,19 +162,25 @@ namespace mdl_d3d12
             return m_resource_descriptor_table;
         }
 
-        /// in case the material is reused with a different set of parameters, there have to
-        /// be texture slots for all possible textures in the generated code
-        size_t get_material_resource_count(Mdl_resource_kind kind) const;
+        // get the per target resources
+        const std::vector<Mdl_resource_assignment>& get_resources(Mdl_resource_kind kind) const
+        {
+            return m_target_resources.find(kind)->second; // always present
+        }
 
         /// Assign a material or reassign a changed material to this target. 
         /// Afterwards, the target code has to be regenerated and recompiled.
         void register_material(Mdl_material* material);
 
+        /// in case the material is reused with a different set of parameters, there have to
+        /// be texture slots for all possible textures in the generated code
+        /// called by the material when creating the descriptor table
+        size_t get_material_resource_count(Mdl_resource_kind kind) const;
+
         bool visit_materials(std::function<bool(Mdl_material*)> action);
 
     private:
-        std::vector<std::string>& get_resource_names(Mdl_resource_kind kind) { 
-            return m_resource_names[kind]; }
+
 
         Base_application* m_app;
         Mdl_sdk* m_sdk;
@@ -190,13 +198,16 @@ namespace mdl_d3d12
 
         Buffer* m_read_only_data_segment;
 
-        std::map<Mdl_resource_kind, std::vector<std::string>> m_resource_names;
+        /// resources present in the target code already
+        /// mainly the ones in the body but also the ones in the parameter list of the instance
+        /// that is used during compilation of the instance to a compiled material
+        std::map<Mdl_resource_kind, std::vector<Mdl_resource_assignment>> m_target_resources;
 
-        // when resources are managed by the material we need to account for different numbers
-        // of resources for different instances that use the same code with a different parameter
-        // set (e.g. one material might have a diffuse map only where another has an additional
-        // normal map). Since the descriptor tables of materials that use the same code have to be
-        // equal, descriptors for all possible resources have to be available.
+        /// when resources are managed by the material we need to account for different numbers
+        /// of resources for different instances that use the same code with a different parameter
+        /// set (e.g. one material might have a diffuse map only where another has an additional
+        /// normal map). Since the descriptor tables of materials that use the same code have to be
+        /// equal, descriptors for all possible resources have to be available.
         std::map<Mdl_resource_kind, size_t> m_material_resource_count;
 
         // all materials that use this target code (owned by the scene)

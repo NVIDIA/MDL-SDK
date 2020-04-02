@@ -93,6 +93,39 @@ public:
     /// Note that support for a given image format requires an image plugin capable of handling
     /// that format.
     ///
+    /// The filename can include one of the following three uv-tileset markers in the filename:
+    /// \c &lt;UDIM&gt;, \c &lt;UVTILE0&gt;, or \c &lt;UVTILE1&gt;. The image refers then to a
+    /// whole uv-tileset, a set of images used together as a single large two-dimensional image.
+    /// The different markers indicate the different filename conventions that encode where each
+    /// image file is placed in the uv texture space.
+    ///
+    /// <table>
+    /// <tr>
+    ///   <th>Marker</th>
+    ///   <th>Pattern</th>
+    ///   <th>(0,0) index</th>
+    ///   <th>Convention to format a (u, v)-index</th>
+    /// </tr>
+    /// <tr>
+    ///   <td>&lt;UDIM&gt;</td>
+    ///   <td>DDDD</td>
+    ///   <td>1001</td>
+    ///   <td>UDIM, expands to the four digit number 1000+(u+1+v∗10)</td>
+    /// </tr>
+    /// <tr>
+    ///   <td>&lt;UVTILE0&gt;</td>
+    ///   <td>"_u"I"_v"I</td>
+    ///   <td>_u0_v0</td>
+    ///   <td>0-based uv-tileset, expands to "_u"u"_v"v</td>
+    /// </tr>
+    /// <tr>
+    ///   <td>&lt;UVTILE1&gt;</td>
+    ///   <td>"_u"I"_v"I</td>
+    ///   <td>_u1_v1</td>
+    ///   <td>1-based uv-tileset, expands to "_u"(u+1)"_v"(v+1)</td>
+    /// </tr>
+    /// </table>
+    ///
     /// \return
     ///                       -  0: Success.
     ///                       - -1: Invalid parameters (\c NULL pointer).
@@ -120,8 +153,15 @@ public:
 
     /// Sets the image to the uv-tile data provided by an array of readers.
     ///
-    /// \param reader         The array of readers that provide the data for the image. 
-    ///                       The reader needs to support absolute access.
+    /// \param reader         A static or dynamic array of structures of type \c Uvtile_reader. Such
+    ///                       a structure has the following members:
+    ///                       - #mi::Sint32 \b u \n
+    ///                         The u-component of this uv-tile.
+    ///                       - #mi::Sint32 \b v \n
+    ///                         The v-component of this uv-tile.
+    ///                       - #mi::neuraylib::IReader* \b reader \n
+    ///                         The reader that provides the data for this uv-tile. The reader needs
+    ///                         to support absolute access.
     /// \param image_format   The image format of the data, e.g., \c "jpg". Note that support for a
     ///                       given image format requires an image plugin capable of handling that
     ///                       format.
@@ -172,25 +212,41 @@ public:
     ///                 \c false otherwise.
     virtual bool set_from_canvas( ICanvas* canvas, bool shared = false) = 0;
 
-    /// Sets the pixels of the uv-tiles of this image based on the passed canvas (without sharing).
+    /// Sets the pixels of the uv-tiles of this image based on the passed canvases (without
+    /// sharing).
     ///
-    /// \param uvtiles  The uv-tile pixel data to be used by this image. Note that the pixel data 
-    ///                 is copied, not shared. If sharing is intended use
-    ///                 #mi::neuraylib::IImage::set_from_canvas(mi::IArray*,bool)
-    ///                 instead.
+    /// \param uvtiles  A static or dynamic array of structures of type \c Uvtile. Such a structure
+    ///                 has the following members:
+    ///                 - #mi::Sint32 \b u \n
+    ///                   The u-component of this uv-tile.
+    ///                 - #mi::Sint32 \b v \n
+    ///                   The v-component of this uv-tile.
+    ///                 - #mi::neuraylib::ICanvas* \b canvas \n
+    ///                   The pixel data to be used for this image. Note that the pixel data is
+    ///                   copied, not shared. If sharing is intended use
+    ///                   #mi::neuraylib::IImage::set_from_canvas(mi::IArray*,bool) instead.
     /// \return         \c true if the pixel data of this image has been set correctly, and
     ///                 \c false otherwise.
     virtual bool set_from_canvas( const IArray* uvtiles) = 0;
 
-    /// Sets the pixels of the uv-tiles of this image based on the passed canvas 
-    /// (possibly sharing the pixel data).
+    /// Sets the pixels of the uv-tiles of this image based on the passed canvases (possibly sharing
+    /// the pixel data).
     ///
-    /// \param uvtiles  The uv-tile pixel data to be used by this image.
+    /// \param uvtiles  A static or dynamic array of structures of type \c Uvtile. Such a structure
+    ///                 has the following members:
+    ///                 - #mi::Sint32 \b u \n
+    ///                   The u-component of this uv-tile.
+    ///                 - #mi::Sint32 \b v \n
+    ///                   The v-component of this uv-tile.
+    ///                 - #mi::neuraylib::ICanvas* \b canvas \n
+    ///                   The pixel data to be used for this image. Note that the pixel data is
+    ///                   copied, not shared. If sharing is intended use
+    ///                   #mi::neuraylib::IImage::set_from_canvas(mi::IArray*,bool) instead.
     /// \param shared   If \c false (the default), the pixel data is copied from \c canvas and the
     ///                 method does the same as
     ///                 #mi::neuraylib::IImage::set_from_canvas(const mi::neuraylib::ICanvas*).
-    ///                 If set to \c true, the image uses the canvas directly (doing reference
-    ///                 counting on the canvas pointer). You must not modify the canvas content
+    ///                 If set to \c true, the image uses the canvases directly (doing reference
+    ///                 counting on the canvas pointers). You must not modify the canvas contents
     ///                 after this call.
     /// \return         \c true if the pixel data of this image has been set correctly, and
     ///                 \c false otherwise.
@@ -259,8 +315,13 @@ public:
     /// \return The uvtile-id or -1 of there is no tile with the given coordinates.
     virtual Uint32 get_uvtile_id( Sint32 u, Sint32 v) const = 0;
 
-    // Returns true if this image represents a uvtile/udim image sequence.
+    /// Returns \c true if this image represents a uvtile/udim image sequence.
     virtual bool is_uvtile() const = 0;
+
+    /// Returns the ranges of u and v coordinates (or all values zero if #is_uvtile() returns
+    /// \c false).
+    virtual void get_uvtile_uv_ranges(
+        Sint32& min_u, Sint32& min_v, Sint32& max_u, Sint32& max_v) const = 0;
 };
 
 /*@}*/ // end group mi_neuray_misc

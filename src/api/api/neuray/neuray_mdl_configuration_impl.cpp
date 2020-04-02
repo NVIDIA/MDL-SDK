@@ -35,6 +35,7 @@
 #include "pch.h"
 
 #include "neuray_mdl_configuration_impl.h"
+
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 
 
@@ -42,9 +43,9 @@ namespace MI {
 
 namespace NEURAY {
 
-Mdl_configuration_impl::Mdl_configuration_impl(mi::neuraylib::INeuray* neuray)
-  : m_neuray(neuray)
-  , m_mdlc_module(false)
+Mdl_configuration_impl::Mdl_configuration_impl( mi::neuraylib::INeuray* neuray)
+  : m_neuray( neuray)
+  , m_mdlc_module( false)
 {
 }
 
@@ -52,21 +53,36 @@ Mdl_configuration_impl::~Mdl_configuration_impl()
 {
 }
 
-mi::Sint32 Mdl_configuration_impl::set_implicit_cast_enabled(bool value)
+mi::Sint32 Mdl_configuration_impl::set_implicit_cast_enabled( bool value)
 {
     const mi::neuraylib::INeuray::Status status = m_neuray->get_status();
-    if (status != mi::neuraylib::INeuray::PRE_STARTING &&
-        status != mi::neuraylib::INeuray::SHUTDOWN)
+    if(    (status != mi::neuraylib::INeuray::PRE_STARTING)
+        && (status != mi::neuraylib::INeuray::SHUTDOWN))
         return -1;
 
-    m_mdlc_module->set_implicit_cast_enabled(value);
+    m_mdlc_module->set_implicit_cast_enabled( value);
     return 0;
 }
 
 bool Mdl_configuration_impl::get_implicit_cast_enabled() const
 {
     return m_mdlc_module->get_implicit_cast_enabled();
-    return false;
+}
+
+mi::Sint32 Mdl_configuration_impl::set_expose_names_of_let_expressions( bool value)
+{
+   const mi::neuraylib::INeuray::Status status = m_neuray->get_status();
+    if(    (status != mi::neuraylib::INeuray::PRE_STARTING)
+        && (status != mi::neuraylib::INeuray::SHUTDOWN))
+        return -1;
+
+    m_mdlc_module->set_expose_names_of_let_expressions(value);
+    return 0;
+}
+
+bool Mdl_configuration_impl::get_expose_names_of_let_expressions() const
+{
+    return m_mdlc_module->get_expose_names_of_let_expressions();
 }
 
 mi::Sint32 Mdl_configuration_impl::start()

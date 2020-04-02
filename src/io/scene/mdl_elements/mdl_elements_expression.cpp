@@ -319,12 +319,7 @@ const IExpression_list* Annotation::get_arguments() const
 
 const IAnnotation_definition* Annotation::get_definition(DB::Transaction* transaction) const
 {
-    auto p1 = m_name.rfind("(");
-    ASSERT(M_SCENE, p1 != std::string::npos);
-    auto p0 = m_name.rfind("::", p1);
-    ASSERT(M_SCENE, p0 != std::string::npos);
-    std::string module_db_name = add_mdl_db_prefix(m_name.substr(0, p0));
-
+    std::string module_db_name = get_module_db_name_from_annotation_mdl_name(m_name);
     DB::Tag module_tag = transaction->name_to_tag(module_db_name.c_str());
     ASSERT(M_SCENE, module_tag.is_valid());
 

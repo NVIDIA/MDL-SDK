@@ -75,9 +75,11 @@ class Access_base
     Access_base();
 
     /// Copy constructor
+    /// Edits become accesses upon copying
     Access_base( const Access_base& access);
 
     /// Assignment operator
+    /// Edits become accesses upon copying
     Access_base& operator=( const Access_base& access);
 
     /// Destructor
@@ -103,7 +105,7 @@ class Access_base
 
     /// Check if the pointer is set to a valid tag or to 0.
     /// \return				True if it is set to a valid tag, 0 otherwise.
-    bool is_valid() const { return m_info != NULL; }
+    bool is_valid() const { return m_info != nullptr; }
 
     /// Return whether pointer is set to a valid tag.
     /// \return				True if it is set to a valid tag, 0 otherwise.
@@ -115,10 +117,17 @@ class Access_base
     /// identifies the actual version of the tag obtained from a certain transaction. This
     /// means, that it may be used to identify this version. The database guarantees, that any
     /// legal change to the data (done through an edit) will also change this id.
+    /// NOTE: The value obtained is valid host locally, only.
     /// \return			The tag version
     Tag_version get_tag_version() const;
 
     /// Set this access to point to a new tag, possibly within a new transaction.
+    ///
+    /// Will set the class to point to a new element. Note that the execution
+    /// context stays the same as before. This will unpin an old element
+    /// if necessary.
+    /// If the argument is 0, then only the old element will be unpinned (if it
+    /// was pointing somewhere) because 0 is no valid tag.
     ///
     /// \param tag			The new tag
     /// \param transaction		The new transaction
@@ -140,6 +149,12 @@ private:
 
 public:
     /// Set this to edit a new tag, possibly within a new transaction.
+    ///
+    /// Will set the class to point to a new element. Note that the execution
+    /// context stays the same as before. This will unpin an old element
+    /// if necessary.
+    /// If the argument is 0, then only the old element will be unpinned (if it
+    /// was pointing somewhere) because 0 is no valid tag.
     ///
     /// \param tag			The new tag
     /// \param transaction		The new transaction

@@ -54,6 +54,9 @@
 #include <base/data/db/i_db_transaction.h>
 #include <base/lib/log/i_log_logger.h>
 
+#include <io/scene/dbimage/i_dbimage.h>
+#include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
+#include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
@@ -661,6 +664,16 @@ void Transaction_impl::list_elements_internal(
     mi::IDynamic_array* result,
     std::set<DB::Tag>& tags_seen) const
 {
+    // Skip DB elements that have not been registered with the API's class factory.
+    SERIAL::Class_id class_id = m_class_factory->get_class_id( this, tag);
+    if( !m_class_factory->is_class_registered( class_id))
+        return;
+
+    // Implementation classes of resources should have been skipped. They are an internal
+    // implementation detail and not visible in the API.
+    ASSERT( M_NEURAY_API, class_id != DBIMAGE::ID_IMAGE_IMPL);
+    ASSERT( M_NEURAY_API, class_id != LIGHTPROFILE::ID_LIGHTPROFILE_IMPL);
+    ASSERT( M_NEURAY_API, class_id != BSDFM::ID_BSDF_MEASUREMENT_IMPL);
 
     // get references of tag
     DB::Access<DB::Element_base> element( tag, m_db_transaction);
@@ -676,7 +689,6 @@ void Transaction_impl::list_elements_internal(
 
     // skip tag if it has the wrong class ID
     if( class_ids) {
-        SERIAL::Class_id class_id = m_class_factory->get_class_id( this, tag);
         if( class_ids->find( class_id) == class_ids->end())
             return;
     }

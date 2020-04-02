@@ -64,6 +64,24 @@ class ITransaction;
 
 struct Target_function_description;
 
+
+/// Possible kinds of distribution function data.
+enum Df_data_kind {
+    DFK_NONE,
+    DFK_INVALID,
+    DFK_SIMPLE_GLOSSY_MULTISCATTER,
+    DFK_BACKSCATTERING_GLOSSY_MULTISCATTER,
+    DFK_BECKMANN_SMITH_MULTISCATTER,
+    DFK_BECKMANN_VC_MULTISCATTER,
+    DFK_GGX_SMITH_MULTISCATTER,
+    DFK_GGX_VC_MULTISCATTER,
+    DFK_WARD_GEISLER_MORODER_MULTISCATTER,
+    DFK_SHEEN_MULTISCATTER,
+    DFK_FORCE_32_BIT = 0xffffffffU
+};
+
+mi_static_assert(sizeof(Df_data_kind) == sizeof(Uint32));
+
 /** \defgroup mi_neuray_mdl_compiler MDL compiler
     \ingroup mi_neuray
 
@@ -533,6 +551,20 @@ public:
     virtual IMdl_entity_resolver* get_entity_resolver() const = 0;
 
     virtual void set_external_resolver(mdl::IEntity_resolver *resolver) const = 0;
+
+    /// Returns the distribution function data of the texture identified by \p kind.
+    ///
+    /// \param kind       The kind of the distribution function data texture.
+    /// \param [out] rx   The resolution of the texture in x.
+    /// \param [out] ry   The resolution of the texture in y.
+    /// \param [out] rz   The resolution of the texture in z.
+    /// \return           A pointer to the texture data or \c NULL, if \p kind does not
+    ///                   correspond to a distribution function data texture.
+    virtual const Float32* get_df_data_texture(
+        Df_data_kind kind,
+        Size &rx,
+        Size &ry,
+        Size &rz) const = 0;
 };
 
 mi_static_assert( sizeof( IMdl_compiler::Mdl_backend_kind)== sizeof( Uint32));
@@ -610,8 +642,6 @@ public:
     /// - \c "sm_version": Specifies the SM target version. Possible values:
     ///   \c "20", \c "30", \c "35", \c "37", \c "50", \c "52", \c "60", \c "61", \c "62" and
     ///   \c "70". Default: \c "20".
-    ///   Note that currently the PTX backend will create code for target version \c "35" for all
-    ///   values higher than that.
     /// - \c "enable_ro_segment": Enables/disables the creation of the read-only data segment
     ///   calls. Possible values:
     ///   \c "on", \c "off". Default: \c "off".
@@ -696,6 +726,7 @@ public:
     ///                                      supported wavelength. Default: 380.0f.
     ///                                    - Float32 "wavelength_max": The largest supported
     ///                                      wavelength. Default: 780.0f.
+    ///                                    .
     ///                                    During material translation, messages like errors and
     ///                                    warnings will be passed to the context for
     ///                                    later evaluation by the caller. Can be \c NULL.
@@ -774,6 +805,7 @@ public:
     ///                       - bool "include_geometry_normal". If true, the \c
     ///                       "geometry.normal" field will be applied to the MDL state prior
     ///                       to evaluation of the given DF (default: true).
+    ///                       .
     ///                       During material translation, messages like errors and
     ///                       warnings will be passed to the context for
     ///                       later evaluation by the caller. Can be \c NULL.
@@ -816,6 +848,7 @@ public:
     ///                                 - bool "include_geometry_normal". If true, the \c
     ///                                   "geometry.normal" field will be applied to the MDL
     ///                                   state prior to evaluation of the given DF (default true).
+    ///                                 .
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for
     ///                                 later evaluation by the caller. Can be \c NULL.
@@ -1069,6 +1102,7 @@ public:
     {
         DK_NONE,
         DK_BSDF,
+        DK_HAIR_BSDF,
         DK_EDF,
         DK_INVALID
     };
@@ -1648,6 +1682,14 @@ public:
     ///         function is not a distribution function or \p index is invalid.
     virtual const char* get_callable_function_df_handle( Size func_index, Size handle_index)
         const = 0;
+
+    /// Returns the distribution function data kind of a given texture resource used by the target
+    /// code.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The distribution function data kind of the texture resource of the given
+    ///                   index, or \c DFK_INVALID if \p index is out of range.
+    virtual Df_data_kind get_texture_df_data_kind(Size index) const = 0;
 };
 
 /// Represents a link-unit of an MDL backend.
@@ -1670,6 +1712,7 @@ public:
     ///                                      supported wavelength. Default: 380.0f.
     ///                                    - Float32 "wavelength_max": The largest supported
     ///                                      wavelength. Default: 780.0f.
+    ///                                    .
     ///                                   During material compilation messages like errors and
     ///                                   warnings will be passed to the context for
     ///                                   later evaluation by the caller. Can be \c NULL.
@@ -1737,6 +1780,7 @@ public:
     ///                         - bool "include_geometry_normal". If true, the \c
     ///                           "geometry.normal" field will be applied to the MDL
     ///                           state prior to evaluation of the given DF (default true).
+    ///                         .
     ///                         During material compilation messages like errors and
     ///                         warnings will be passed to the context for
     ///                         later evaluation by the caller. Can be \c NULL.
@@ -1780,6 +1824,7 @@ public:
     ///                                 - bool "include_geometry_normal". If true, the \c
     ///                                   "geometry.normal" field will be applied to the MDL
     ///                                   state prior to evaluation of the given DF (default true).
+    ///                                 .
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for
     ///                                 later evaluation by the caller. Can be \c NULL.

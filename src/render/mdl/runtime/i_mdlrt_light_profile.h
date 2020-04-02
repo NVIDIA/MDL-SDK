@@ -65,7 +65,8 @@ public:
     mi::Float32 pdf(const mi::Float32_2& theta_phi) const;
 
 protected:
-    DB::Access<LIGHTPROFILE::Lightprofile>  m_light_profile;   // the underlying light profile
+    DB::Access<LIGHTPROFILE::Lightprofile>       m_light_profile;        // the underlying light profile
+    DB::Access<LIGHTPROFILE::Lightprofile_impl>  m_light_profile_impl;   // the underlying light profile
 
     size_t  m_res_t, m_res_p;               // angular resolution of the grid
     float   m_start_t, m_start_p;           // start of the grid

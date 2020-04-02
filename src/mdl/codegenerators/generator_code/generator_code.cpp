@@ -32,6 +32,10 @@
 
 #include <mi/mdl/mdl_values.h>
 #include <mi/mdl/mdl_symbols.h>
+#include <mi/mdl/mdl_generated_code.h>
+
+#include "mdl/compiler/compilercore/compilercore_assert.h"
+#include "mdl/compiler/compilercore/compilercore_tools.h"
 
 namespace mi {
 namespace mdl {
@@ -82,6 +86,96 @@ bool equal_coordinate_space(
         }
     }
     return false;
+}
+
+// Convert a IValue_texture::Bsdf_data_kind to a Resource_tag_tuple kind.
+Resource_tag_tuple::Kind kind_from_bsdf_data_kind(
+    IValue_texture::Bsdf_data_kind kind,
+    IValue_texture::gamma_mode     gamma)
+{
+    switch (kind) {
+    case IValue_texture::BDK_NONE:
+        switch (gamma) {
+        case IValue_texture::gamma_default:
+            return Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT;
+        case IValue_texture::gamma_linear:
+            return Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR;
+        case IValue_texture::gamma_srgb:
+            return Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB;
+        }
+        MDL_ASSERT(!"unsupported gamma mode");
+        return Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT;
+    case IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER:
+        return Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER;
+    case IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        return Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER;
+    case IValue_texture::BDK_BECKMANN_SMITH_MULTISCATTER:
+        return Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER;
+    case IValue_texture::BDK_GGX_SMITH_MULTISCATTER:
+        return Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER;
+    case IValue_texture::BDK_BECKMANN_VC_MULTISCATTER:
+        return Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER;
+    case IValue_texture::BDK_GGX_VC_MULTISCATTER:
+        return Resource_tag_tuple::RK_GGX_VC_MULTISCATTER;
+    case IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER:
+        return Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER;
+    case IValue_texture::BDK_SHEEN_MULTISCATTER:
+        return Resource_tag_tuple::RK_SHEEN_MULTISCATTER;
+    }
+    MDL_ASSERT(!"Unsupported bsdf_data kind");
+    return Resource_tag_tuple::RK_BAD;
+}
+
+// Convert a Resource_tag_tuple to a IValue_texture::Bsdf_data_kind.
+IValue_texture::Bsdf_data_kind bsdf_data_kind_from_kind(
+    Resource_tag_tuple::Kind kind)
+{
+    switch (kind) {
+    case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        return IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER;
+    case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        return IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER;
+    case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        return IValue_texture::BDK_BECKMANN_SMITH_MULTISCATTER;
+    case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        return IValue_texture::BDK_GGX_SMITH_MULTISCATTER;
+    case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        return IValue_texture::BDK_BECKMANN_VC_MULTISCATTER;
+    case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        return IValue_texture::BDK_GGX_VC_MULTISCATTER;
+    case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+        return IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER;
+    case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        return IValue_texture::BDK_SHEEN_MULTISCATTER;
+    default:
+        return IValue_texture::BDK_NONE;
+    }
+}
+
+// Convert a value to a kind;
+Resource_tag_tuple::Kind kind_from_value(IValue const *val) {
+    switch (val->get_kind()) {
+    case IValue::VK_INVALID_REF:
+        return Resource_tag_tuple::RK_INVALID_REF;
+    case IValue::VK_TEXTURE:
+        {
+            IValue_texture const *tex = cast<IValue_texture>(val);
+            return kind_from_bsdf_data_kind(
+                tex->get_bsdf_data_kind(),
+                tex->get_gamma_mode());
+        }
+        break;
+    case IValue::VK_BSDF_MEASUREMENT:
+        return Resource_tag_tuple::RK_BSDF_MEASUREMENT;
+    case IValue::VK_LIGHT_PROFILE:
+        return Resource_tag_tuple::RK_LIGHT_PROFILE;
+    case IValue::VK_STRING:
+        return Resource_tag_tuple::RK_STRING;
+    default:
+        break;
+    }
+    MDL_ASSERT(!"Unsupported resource kind");
+    return Resource_tag_tuple::RK_BAD;
 }
 
 } // mdl

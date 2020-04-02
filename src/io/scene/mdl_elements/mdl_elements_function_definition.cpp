@@ -436,6 +436,29 @@ const IExpression* Mdl_function_definition::get_temporary(
     return converter.mdl_dag_node_to_int_expr( temporary, nullptr);
 }
 
+const char* Mdl_function_definition::get_temporary_name(
+    DB::Transaction* transaction, mi::Size index) const
+{
+    DB::Tag module_tag = transaction->name_to_tag( m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, /*context=*/nullptr))
+        return 0;
+    if( module->has_function_definition( m_db_name.c_str(), m_function_ident) != 0)
+        return 0;
+
+    mi::Size function_index = module->get_function_defintion_index( m_db_name, m_function_ident);
+    ASSERT( M_SCENE, (int)function_index != -1);
+
+    mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
+    if( index >= (mi::Size)code_dag->get_function_temporary_count( function_index))
+        return nullptr;
+
+    const char* name = code_dag->get_function_temporary_name( function_index, index);
+    return *name ? name : nullptr;
+}
+
 const char* Mdl_function_definition::get_thumbnail() const
 {
     return m_thumbnail.empty() ? nullptr : m_thumbnail.c_str();
@@ -451,18 +474,27 @@ Mdl_function_call* Mdl_function_definition::create_function_call(
         return nullptr;
     }
 
-    if (m_mdl_semantic == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR)
+    switch (m_semantic) {
+
+    case mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR:
         return create_array_constructor_call_internal(
             transaction, arguments, /*immutable=*/ false, errors);
-
-    if (m_semantic == mi::neuraylib::IFunction_definition::DS_CAST)
+    case mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH:
+        return create_array_length_operator_call_internal(
+            transaction, arguments, /*immutable=*/ false, errors);
+    case mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX:
+        return create_index_operator_call_internal(
+            transaction, arguments, /*immutable=*/ false, errors);
+    case mi::neuraylib::IFunction_definition::DS_CAST:
         return create_cast_call_internal(
             transaction, arguments, /*immutable=*/ false, errors);
-
-    if (m_semantic == mi::neuraylib::IFunction_definition::DS_TERNARY)
+    case mi::neuraylib::IFunction_definition::DS_TERNARY:
         return create_ternary_operator_call_internal(
             transaction, arguments, /*immutable=*/ false, errors);
-
+    default:
+        break;
+    }
+  
     return create_function_call_internal(
         transaction, arguments, /*allow_ek_parameter=*/ false, /*immutable=*/ false, errors);
 }
@@ -1321,7 +1353,7 @@ SERIAL::Serializable* Mdl_function_definition::deserialize( SERIAL::Deserializer
     m_enable_if_conditions = m_ef->deserialize_list( deserializer);
 
     deserializer->read( &m_enable_if_users);
-    read( deserializer, m_function_hash);
+    read( deserializer, &m_function_hash);
 
     if( !m_thumbnail.empty()) {
         m_thumbnail = HAL::Ospath::convert_to_platform_specific_path( m_thumbnail);

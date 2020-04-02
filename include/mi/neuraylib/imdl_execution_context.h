@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 /// \file
-/// \brief      API component that gives access to the MDL compatibility API.
+/// \brief      Interfaces, that give access to the MDL execution context and the IMessage class.
 
 #ifndef MI_NEURAYLIB_IMDL_EXECUTION_CONTEXT_H
 #define MI_NEURAYLIB_IMDL_EXECUTION_CONTEXT_H

@@ -381,6 +381,29 @@ const IExpression* Mdl_material_definition::get_temporary(
     return converter.mdl_dag_node_to_int_expr( temporary, nullptr);
 }
 
+const char* Mdl_material_definition::get_temporary_name(
+    DB::Transaction* transaction, mi::Size index) const
+{
+    DB::Tag module_tag = transaction->name_to_tag( m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, /*context=*/nullptr))
+        return nullptr;
+    if( module->has_material_definition( m_db_name.c_str(), m_material_ident) != 0)
+        return nullptr;
+
+    mi::Size material_index = module->get_material_defintion_index( m_db_name, m_material_ident);
+    ASSERT( M_SCENE, (int)material_index != -1);
+
+    mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
+    if( index >= (mi::Size)code_dag->get_material_temporary_count( material_index))
+        return nullptr;
+
+    const char* name = code_dag->get_material_temporary_name( material_index, index);
+    return *name ? name : nullptr;
+}
+
 const char* Mdl_material_definition::get_thumbnail() const
 {
     return m_thumbnail.empty() ? nullptr : m_thumbnail.c_str();

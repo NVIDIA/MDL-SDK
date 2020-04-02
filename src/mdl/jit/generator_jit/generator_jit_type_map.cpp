@@ -146,7 +146,7 @@ Type_mapper::Type_mapper(
 , m_type_tag(llvm::IntegerType::get(context, sizeof(Tag) * CHAR_BIT))
 
 // State types constructed later
-, m_type_state_environemnt(NULL)
+, m_type_state_environment(NULL)
 , m_type_state_environment_ptr(NULL)
 , m_type_state_core(NULL)
 , m_type_state_core_ptr(NULL)
@@ -292,36 +292,20 @@ Type_mapper::Type_mapper(
     m_type_color = m_type_float3;
 
     if (use_derivatives()) {
-        llvm::Type *deriv_arr_float2_types[3] = {
-            m_type_arr_float_2, m_type_arr_float_2, m_type_arr_float_2 };
-        m_type_deriv_arr_float_2 = llvm::StructType::get(
-            context, deriv_arr_float2_types, /*isPacked=*/ false);
-        m_deriv_type_set.insert(m_type_deriv_arr_float_2);
+        m_type_deriv_arr_float_2 = lookup_deriv_type(m_type_arr_float_2);
+        m_type_deriv_float2 = lookup_deriv_type(m_type_float2);
 
-        llvm::Type *deriv_float2_types[3] = {
-            m_type_float2, m_type_float2, m_type_float2 };
-        m_type_deriv_float2 = llvm::StructType::get(context, deriv_float2_types, /*isPacked=*/ false);
-        m_deriv_type_set.insert(m_type_deriv_float2);
-
-        llvm::Type *deriv_arr_float3_types[3] = {
-            m_type_arr_float_3, m_type_arr_float_3, m_type_arr_float_3 };
-        m_type_deriv_arr_float_3 = llvm::StructType::get(
-            context, deriv_arr_float3_types, /*isPacked=*/ false);
-        m_deriv_type_set.insert(m_type_deriv_arr_float_3);
-
-        llvm::Type *deriv_float3_types[3] = {
-            m_type_float3, m_type_float3, m_type_float3 };
-        m_type_deriv_float3 = llvm::StructType::get(context, deriv_float3_types, /*isPacked=*/ false);
-        m_deriv_type_set.insert(m_type_deriv_float3);
+        m_type_deriv_arr_float_3 = lookup_deriv_type(m_type_arr_float_3);
+        m_type_deriv_float3 = lookup_deriv_type(m_type_float3);
     }
 
     bool vec_in_structs = !target_supports_pointers();
 
     // built state types
-    m_type_state_environemnt     = construct_state_environment_type(
+    m_type_state_environment     = construct_state_environment_type(
         context,
         vec_in_structs ? m_type_float3 : m_type_arr_float_3);
-    m_type_state_environment_ptr = get_ptr(m_type_state_environemnt);
+    m_type_state_environment_ptr = get_ptr(m_type_state_environment);
     m_type_state_core            = construct_state_core_type(
         context,
         m_type_int,
@@ -620,7 +604,7 @@ llvm::Type *Type_mapper::lookup_type(
 }
 
 // Get an LLVM type for an MDL type with derivatives.
-llvm::Type *Type_mapper::lookup_deriv_type(
+llvm::StructType *Type_mapper::lookup_deriv_type(
     mdl::IType const *type,
     int arr_size) const
 {
@@ -633,26 +617,17 @@ llvm::Type *Type_mapper::lookup_deriv_type(
     }
 
     llvm::Type *llvm_type = lookup_type(m_context, type, arr_size);
-
-    Deriv_type_map::const_iterator it(m_deriv_type_cache.find(llvm_type));
-    if (it != m_deriv_type_cache.end()) return it->second;
-
-    llvm::Type *member_types[3] = { llvm_type, llvm_type, llvm_type };
-    llvm::Type *res = llvm::StructType::get(m_context, member_types, /*isPacked=*/ false);
-    m_deriv_type_cache[llvm_type] = res;
-    m_deriv_type_set.insert(res);
-
-    return res;
+    return lookup_deriv_type(llvm_type);
 }
 
 // Get an LLVM type with derivatives for an LLVM type.
-llvm::Type *Type_mapper::lookup_deriv_type(llvm::Type *type) const
+llvm::StructType *Type_mapper::lookup_deriv_type(llvm::Type *type) const
 {
     Deriv_type_map::const_iterator it(m_deriv_type_cache.find(type));
     if (it != m_deriv_type_cache.end()) return it->second;
 
     llvm::Type *member_types[3] = { type, type, type };
-    llvm::Type *res = llvm::StructType::get(m_context, member_types, /*isPacked=*/ false);
+    llvm::StructType *res = llvm::StructType::get(m_context, member_types, /*isPacked=*/ false);
     m_deriv_type_cache[type] = res;
     m_deriv_type_set.insert(res);
 

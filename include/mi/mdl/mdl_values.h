@@ -565,6 +565,7 @@ public:
     /// For BSDF data textures, the string value is an empty string.
     enum Bsdf_data_kind {
         BDK_NONE,
+
         BDK_SIMPLE_GLOSSY_MULTISCATTER,
         BDK_BACKSCATTERING_GLOSSY_MULTISCATTER,
         BDK_BECKMANN_SMITH_MULTISCATTER,
@@ -573,6 +574,8 @@ public:
         BDK_GGX_VC_MULTISCATTER,
         BDK_WARD_GEISLER_MORODER_MULTISCATTER,
         BDK_SHEEN_MULTISCATTER,
+
+        BDK_LAST_KIND = BDK_SHEEN_MULTISCATTER
     };
 
     /// The kind of this subclass.

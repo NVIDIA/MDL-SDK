@@ -215,6 +215,7 @@ public:
     virtual void write(const DB::Tag& value) = 0;
     virtual void write(const char* value) = 0;
     virtual void write(const std::string& value) = 0;
+    virtual void write(const mi::base::Uuid& value) = 0;
     virtual void write(const mi::math::Color& value) = 0;
     virtual void write(const CONT::Bitvector& value) = 0;
     virtual void write(const CONT::Dictionary& value) = 0;
@@ -343,6 +344,7 @@ public:
     virtual void read(DB::Tag* value_pointer) = 0;
     virtual void read(char** value_pointer) = 0; ///< Use release() to free the memory.
     virtual void read(std::string* value_pointer) = 0;
+    virtual void read( mi::base::Uuid* value_pointer) = 0;
     virtual void read(mi::math::Color* value_pointer) = 0;
     virtual void read(CONT::Bitvector* value_type) = 0;
     virtual void read(CONT::Dictionary* value_pointer) = 0;
@@ -412,6 +414,7 @@ void write(Serializer* serial, const DB::Tag_version& value);
 template <typename T, Size R, Size C> void write(Serializer* serial,const mi::math::Matrix<T,R,C>&);
 void write(Serializer* serial, const char* value);
 void write(Serializer* serial, const std::string& value);
+void write(Serializer* serial, const mi::base::Uuid& value);
 void write(Serializer* serial, const mi::math::Color& value);
 template <typename T, Size DIM> void write(Serializer* serial,const mi::math::Vector<T,DIM>& value);
 void write(Serializer* serial, const CONT::Bitvector& value);
@@ -439,6 +442,7 @@ void read(Deserializer* deser, DB::Tag_version* value_pointer);
 template <typename T, Size R, Size C> void read(Deserializer* deser, mi::math::Matrix<T,R,C>*);
 void read(Deserializer* deser, char** value_pointer);
 void read(Deserializer* deser, std::string* value_pointer);
+void read(Deserializer* deser, const mi::base::Uuid* value_pointer);
 void read(Deserializer* deser, mi::math::Color* value_pointer);
 template <typename T, Size DIM> void read(Deserializer* deser, mi::math::Vector<T,DIM>* value_type);
 void read(Deserializer* deser, CONT::Bitvector* value_type);

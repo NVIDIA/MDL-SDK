@@ -804,7 +804,8 @@ public:
         LLVM_code_generator &code_gen,
         mi::mdl::IAllocator *alloc) const = 0;
 
-    /// Assume the first argument is a boolean branch condition and translate it.
+    /// Translate this call as a boolean condition.
+    /// If this is a ternary operator call, translate the first argument.
     ///
     /// \param code_gen  the LLVM code generator
     /// \param ctx       the current function context
@@ -1107,6 +1108,18 @@ public:
     ///
     /// \param t  an MDL type to check
     bool can_be_stored_in_ro_segment(IType const *t);
+
+    typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
+
+    /// Set a resource to tag map.
+    void set_resource_tag_map(Resource_tag_map const *resource_tag_map) {
+        m_resource_tag_map = resource_tag_map;
+    }
+
+    /// Find a tag for a given resource if available in the resource tag map.
+    ///
+    /// \param res  the resource
+    int find_resource_tag(IValue_resource const *res) const;
 
     /// Compile all functions of a module.
     ///
@@ -2883,6 +2896,10 @@ private:
     /// Creates the string table finally.
     void create_string_table();
 
+    /// Replace all calls to state::get_bsdf_data_texture_id() by the registered texture IDs.
+    /// Must happen in finalize_module() when all texture IDs of a link unit are known.
+    void replace_bsdf_data_calls();
+
 
     /// Get libdevice as LLVM bitcode.
     ///
@@ -3071,6 +3088,9 @@ private:
 
     /// The current string (constant) table.
     String_table m_string_table;
+
+    /// The map from bsdf texture kinds to texture ids.
+    size_t m_bsdf_data_texture_ids[IValue_texture::BDK_LAST_KIND];
 
     /// The jitted code singleton.
     mi::base::Handle<Jitted_code> m_jitted_code;
@@ -3312,6 +3332,36 @@ private:
     /// A helper function to get an bool from the read-only data segment.
     llvm::Function *m_hlsl_func_rodata_as_bool;
 
+    /// The HLSL renderer runtime function for scene::data_lookup_int.
+    llvm::Function *m_hlsl_func_scene_data_lookup_int;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_int2.
+    llvm::Function *m_hlsl_func_scene_data_lookup_int2;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_int3.
+    llvm::Function *m_hlsl_func_scene_data_lookup_int3;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_int4.
+    llvm::Function *m_hlsl_func_scene_data_lookup_int4;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_float.
+    llvm::Function *m_hlsl_func_scene_data_lookup_float;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_float2.
+    llvm::Function *m_hlsl_func_scene_data_lookup_float2;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_float3.
+    llvm::Function *m_hlsl_func_scene_data_lookup_float3;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_float4.
+    llvm::Function *m_hlsl_func_scene_data_lookup_float4;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_color.
+    llvm::Function *m_hlsl_func_scene_data_lookup_color;
+
+    /// If set, a resource map for mapping resources to tags.
+    Resource_tag_map const *m_resource_tag_map;
+
     /// Optimization level.
     unsigned m_opt_level;
 
@@ -3405,6 +3455,11 @@ private:
 
     /// Current state of generating a distribution function.
     Distribution_function_state m_dist_func_state;
+
+    typedef mi::mdl::ptr_hash_map<DAG_node const, llvm::Function *>::Type Instantiated_dfs;
+
+    /// Map of DAG nodes instantiated to LLVM functions per distribution function state.
+    mi::mdl::vector<Instantiated_dfs>::Type m_instantiated_dfs;
 
     /// List of all libbsdf template functions which should be removed before optimizing.
     mi::mdl::vector<llvm::Function *>::Type m_libbsdf_template_funcs;

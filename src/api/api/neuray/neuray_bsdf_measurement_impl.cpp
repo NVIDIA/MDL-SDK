@@ -77,7 +77,7 @@ mi::Sint32 Bsdf_measurement_impl::reset_file( const char* filename)
     if( !filename)
         return -1;
 
-    mi::Sint32 result = get_db_element()->reset_file( filename);
+    mi::Sint32 result = get_db_element()->reset_file( get_db_transaction(), filename);
     if( result == 0)
         add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return result;
@@ -88,7 +88,7 @@ mi::Sint32 Bsdf_measurement_impl::reset_reader( mi::neuraylib::IReader* reader)
     if( !reader)
         return -1;
 
-    mi::Sint32 result = get_db_element()->reset_reader( reader);
+    mi::Sint32 result = get_db_element()->reset_reader( get_db_transaction(), reader);
     if( result == 0)
         add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return result;
@@ -117,14 +117,14 @@ mi::Sint32 Bsdf_measurement_impl::set_reflection(
             return -2;
     }
 
-    get_db_element()->set_reflection( bsdf_data);
+    get_db_element()->set_reflection( get_db_transaction(), bsdf_data);
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return 0;
 }
 
 const mi::base::IInterface* Bsdf_measurement_impl::get_reflection() const
 {
-    return get_db_element()->get_reflection();
+    return get_db_element()->get_reflection( get_db_transaction());
 }
 
 mi::Sint32 Bsdf_measurement_impl::set_transmission(
@@ -138,14 +138,14 @@ mi::Sint32 Bsdf_measurement_impl::set_transmission(
             return -2;
     }
 
-    get_db_element()->set_transmission( bsdf_data);
+    get_db_element()->set_transmission( get_db_transaction(), bsdf_data);
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return 0;
 }
 
 const mi::base::IInterface* Bsdf_measurement_impl::get_transmission() const
 {
-    return get_db_element()->get_transmission();
+    return get_db_element()->get_transmission( get_db_transaction());
 }
 
 } // namespace NEURAY

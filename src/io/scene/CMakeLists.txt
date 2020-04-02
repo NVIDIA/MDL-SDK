@@ -42,6 +42,7 @@ set(PROJECT_HEADERS
     "mdl_elements/i_mdl_elements_material_instance.h"
     "mdl_elements/i_mdl_elements_module.h"
     "mdl_elements/i_mdl_elements_module_builder.h"
+    "mdl_elements/i_mdl_elements_resource_map.h"
     "mdl_elements/i_mdl_elements_type.h"
     "mdl_elements/i_mdl_elements_utilities.h"
     "mdl_elements/i_mdl_elements_value.h"

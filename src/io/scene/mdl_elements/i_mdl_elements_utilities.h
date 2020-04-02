@@ -50,6 +50,7 @@
 
 namespace mi { namespace neuraylib { class IReader; } }
 namespace mi { namespace mdl {
+    class IGenerated_code_dag;
     class IMDL_resource_reader;
     class IModule;
     class IModule_cache;
@@ -432,7 +433,7 @@ IMAGE::IMdl_container_callback* create_mdl_container_callback();
 /// Retrieve the attributes of a texture resource.
 ///
 /// \param transaction      The DB transaction to use.
-/// \param texture          A texture resource.
+/// \param tex_tag          A texture tag.
 /// \param[out] valid       The result of texture_isvalid().
 /// \param[out] is_uvtile   True, if this is an uvtile texture.
 /// \param[out] width       The width of \p texture.
@@ -442,7 +443,7 @@ IMAGE::IMdl_container_callback* create_mdl_container_callback();
 /// \return \c true in case of success, \c false if texture is not a valid texture resource
 bool get_texture_attributes(
     DB::Transaction* transaction,
-    const mi::mdl::IValue* texture,
+    DB::Tag tex_tag,
     bool& valid,
     bool& is_uvtile,
     int& width,
@@ -452,7 +453,7 @@ bool get_texture_attributes(
 /// Retrieve the resolution of given uvtile of a uvtile texture resource.
 ///
 /// \param transaction      The DB transaction to use.
-/// \param texture          A texture resource.
+/// \param tex_tag          A texture tag.
 /// \param[int] uv_tile     The uvtile coordinates.
 /// \param[out] width       The width of \p texture.
 /// \param[out] height      The height of \p texture.
@@ -460,7 +461,7 @@ bool get_texture_attributes(
 /// \return \c true in case of success, \c false if texture is not a valid uvtile texture resource
 bool get_texture_uvtile_resolution(
     DB::Transaction* transaction,
-    const mi::mdl::IValue* texture,
+    DB::Tag tex_tag,
     mi::Sint32_2 const &uv_tile,
     int &width,
     int &height);
@@ -468,7 +469,7 @@ bool get_texture_uvtile_resolution(
 /// Retrieve the attributes of a light profile resource.
 ///
 /// \param transaction       The DB transaction to use.
-/// \param light_profile     A light profile resource.
+/// \param lp_tage           A light profile tag.
 /// \param[out] valid        The result of light_profile_isvalid().
 /// \param[out] power        The result of light_profile_power().
 /// \param[out] maximum      The result of light_profile_maximum().
@@ -477,7 +478,7 @@ bool get_texture_uvtile_resolution(
 ///         resource
 bool get_light_profile_attributes(
     DB::Transaction* transaction,
-    const mi::mdl::IValue* light_profile,
+    DB::Tag lp_tag,
     bool& valid,
     float& power,
     float& maximum);
@@ -485,14 +486,14 @@ bool get_light_profile_attributes(
 /// Retrieve the attributes of a BSDF measurement resource.
 ///
 /// \param transaction       The DB transaction to use.
-/// \param bsdf_measurement  A BSDF measurement resource.
+/// \param bm_tag            A BSDF measurement tag.
 /// \param[out] valid        The result of bsdf_measurement_isvalid().
 ///
 /// \return \c true in case of success, \c false if light_profile is not a valid BSDF measurement
 ///         resource
 bool get_bsdf_measurement_attributes(
     DB::Transaction* transaction,
-    const mi::mdl::IValue* bsdf_measurement,
+    DB::Tag bm_tag,
     bool& valid);
 
 
@@ -654,13 +655,51 @@ public:
     ///
     /// \param name   The MDL name of a function definition.
     /// \return       The owning module, or \c NULL in case of failures.
-    const mi::mdl::IModule* get_owner_module(char const* name) const;
+    const mi::mdl::IModule* get_owner_module(char const* name) const override;
+
+    /// Find the owner code DAG of a given entity name.
+    /// If the entity name does not contain a colon, you should return the builtins DAG,
+    /// which you can identify by calling its oner module's IModule::is_builtins().
+    ///
+    /// \param entity_name    the entity name
+    ///
+    /// \returns the owning module of this entity if found, NULL otherwise
+    mi::mdl::IGenerated_code_dag const *get_owner_dag(char const *entity_name) const override;
+
+private:
+    DB::Tag get_module_tag(char const *entity_name) const;
 
 private:
     DB::Transaction* m_transaction;
 
     typedef std::set<const mi::mdl::IModule*> Module_set;
     mutable Module_set m_resolved_modules;
+};
+
+/// Extended version of Mdl_call_resolver: looks first in a passed Module (which might not
+/// be in the data base yet).
+class Mdl_call_resolver_ext : public Mdl_call_resolver
+{
+    typedef Mdl_call_resolver Base;
+
+public:
+    /// Constructor.
+    ///
+    /// \param transaction  the transaction to use for name lookup
+    Mdl_call_resolver_ext(
+        DB::Transaction* transaction,
+        mi::mdl::IModule const *module);
+
+    /// Finds the owning module of a function definition.
+    ///
+    /// \param name   The MDL name of a function definition.
+    /// \return       The owning module, or \c NULL in case of failures.
+    const mi::mdl::IModule* get_owner_module(char const* name) const override;
+
+private:
+    mi::mdl::IModule const *m_module;
+
+    std::string m_module_name;
 };
 
 // **********  Mdl_module_wait_queue  **************************************************************

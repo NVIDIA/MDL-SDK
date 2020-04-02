@@ -147,14 +147,17 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - bool \b shadow_recv \n
 ///   The object can have shadows cast onto it.
 /// - #mi::Sint32 \b label \n
-///   An object ID that is useful in conjunction with the canvas name \c object_id.
-///   See #mi::neuraylib::IRender_target_base::get_canvas_name() for details.
+///   An object ID that is useful in conjunction with render target canvases of type
+///   #mi::neuraylib::TYPE_OBJECT_ID.
+///   See #mi::neuraylib::IRender_target_base for details.
 /// - #mi::Sint32 \b material_id \n
-///   A material ID that is useful in conjunction with the canvas name \c material_id.
-///   See #mi::neuraylib::IRender_target_base::get_canvas_name() for details.
+///   A material ID that is useful in conjunction with render target canvases of type
+///   #mi::neuraylib::TYPE_MATERIAL_ID.
+///   See #mi::neuraylib::IRender_target_base for details.
 /// - const char* \b handle \n
 ///   An object or light ID that is useful in conjunction with Light Path Expressions.
-///   See #mi::neuraylib::IRender_target_base::get_canvas_name() for details.
+///   See Section [:ipmlink reference Light path expressions] of the Iray Programmer's Manual
+///   for details.
 /// - bool \b shadow_terminator_offset \n
 ///   Controls the automatic shadow terminator handling.
 ///   See the [:ipmlink physically_plausible_scene_setup Tessellating curved surfaces] section for details.

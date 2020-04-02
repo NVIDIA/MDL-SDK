@@ -446,6 +446,17 @@ COMPILER mdl
         return x->kind == _IDENT;
     }
 
+    // Check if we see '::' and '..'.
+    bool is_scope_dotdot()
+    {
+        scanner->ResetPeek();
+        Token *x = la;
+        if (x->kind != _SCOPE)
+            return false;
+        x = scanner->Peek();
+        return x->kind == _DOTDOT;
+    }
+
     // Create a simple name from a token.
     ISimple_name const *to_simple(Token const *t)
     {
@@ -799,7 +810,7 @@ COMPILER mdl
         int start_line = sl ? sl : t_pos.get_start_line();
         int start_column = sc ? sc : t_pos.get_start_column();
         int end_line = t_pos.get_end_line();
-        int end_column = t_pos.get_end_line();
+        int end_column = t_pos.get_end_column();
         if (annotations) {
             Position const &a_pos = annotations->access_position();
             end_line = a_pos.get_end_line();
@@ -913,9 +924,9 @@ COMPILER mdl
                         unsigned code = 0;
                         unsigned range = 0x10FFFF;
 
-                        if (code == L'x')
+                        if (wc == L'x')
                             range = 0xFF;
-                        else if (code == L'u')
+                        else if (wc == L'u')
                             range = 0xFFFF;
                         bool exit = false;
                         bool overrun = false;
@@ -1396,30 +1407,32 @@ qualified_utf8_name<IQualified_name *&value>
                                             value = m_name_factory->create_qualified_name();
                                             ISimple_name const *simp_name = NULL;
                                         .)
+    (
+        "::"                            (. value->set_absolute(); .)
         [
-            '.'                         (. value->add_component(to_simple(t)); .)
-            "::"
-            |
-            ".."                        (. value->add_component(to_simple(t)); .)
-            "::"
+            utf8_name<simp_name>        (. value->add_component(simp_name); .)
             {
-                ".."                    (. value->add_component(to_simple(t)); .)
                 "::"
+                utf8_name<simp_name>    (. value->add_component(simp_name); .)
             }
-            |
-            "::"                        (. value->set_absolute(); .)
         ]
-        utf8_name<simp_name>
-                                        (.
-                                            value->add_component(simp_name);
-                                        .)
+    |
+        (
+            '.'                         (. value->add_component(to_simple(t)); .)
+        |
+            ".."                        (. value->add_component(to_simple(t)); .)
+            { IF(is_scope_dotdot())
+                "::"
+                ".."                    (. value->add_component(to_simple(t)); .)
+            }
+        |
+            utf8_name<simp_name>        (. value->add_component(simp_name); .)
+        )
         {
             "::"
-            utf8_name<simp_name>
-                                        (.
-                                            value->add_component(simp_name);
-                                        .)
+            utf8_name<simp_name>        (. value->add_component(simp_name); .)
         }
+    )
     .
 
 

@@ -183,6 +183,11 @@ public:
     /// Get write access to the messages of the generated code.
     Messages_impl &access_messages();
 
+    typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
+
+    /// Get the resource tag map of this unit.
+    Resource_tag_map const *get_resource_tag_map() const { return &m_resource_tag_map; }
+
 private:
     /// Constructor.
     ///
@@ -233,12 +238,39 @@ private:
     ///
     /// \param lambda  the current lambda function to be compiled
     void update_resource_attribute_map(
-        Lambda_function const *root_lambda);
+        Lambda_function const *lambda);
+
+    /// Update the resource to tag map for the current lambda function to be compiled.
+    ///
+    /// \param lambda  the current lambda function to be compiled
+    void update_resource_tag_map(
+        Lambda_function const *lambda);
+
+    /// Find the assigned tag for a resource in the resource map.
+    ///
+    /// \param kind     the kind of the resource
+    /// \param url      the url of the resource
+    int find_resource_tag(
+        Resource_tag_tuple::Kind kind,
+        char const               *url) const;
+
+    /// Add a new entry in the resource to tag map.
+    ///
+    /// \param kind     the kind of the resource
+    /// \param url      the url of the resource
+    /// \param tag      the assigned tag
+    void add_resource_tag_mapping(
+        Resource_tag_tuple::Kind kind,
+        char const               *url,
+        int                      tag);
 
     /// Get the LLVM context to use with this link unit.
     llvm::LLVMContext *get_llvm_context();
 
 private:
+    /// Memory arena for storing strings.
+    Memory_arena m_arena;
+
     /// The kind of targeted code.
     Target_kind m_target_kind;
 
@@ -267,6 +299,9 @@ private:
     /// The added distribution functions.
     /// Must be held to avoid invalid entries in the context data map of m_code_gen.
     vector<mi::base::Handle<IDistribution_function const> >::Type m_dist_funcs;
+
+    /// The resource to tag map for this link unit, mapping resource values to tags.
+    Resource_tag_map m_resource_tag_map;
 };
 
 ///

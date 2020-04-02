@@ -138,7 +138,11 @@ void cs_refl_to_spectrum(
                                 // (sRGB-only, result lacks smoothness)
     bool ignore_scale = false); // don't do scaling such that the result is <= 1
 
-
+// re-construct a emission spectrum from a color emission
+void cs_emission_to_spectrum(
+    float values[SPECTRAL_XYZ_RES],
+    const float color[3],
+    Color_space_id cs);
 
 
 } // namespace spectral

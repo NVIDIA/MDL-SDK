@@ -273,11 +273,41 @@ public:
     /// \param v  the texture resource or an invalid ref
     void texture(IValue const *v) MDL_FINAL
     {
-        bool valid = false;
-        int width = 0, height = 0, depth = 0;
-        if (IValue_resource const *r = as<IValue_resource>(v))
-            m_attr->get_texture_attributes(r, valid, width, height, depth);
-        m_lambda.map_tex_resource(v, m_tex_idx++, valid, width, height, depth);
+        if (IValue_texture const *tex = as<IValue_texture>(v)) {
+            bool valid = false;
+            int width = 0, height = 0, depth = 0;
+            int tag_value = tex->get_tag_value();
+            IType_texture::Shape shape = tex->get_type()->get_shape();
+
+            // FIXME: map the tag value using lambda's resource tag table
+            m_attr->get_texture_attributes(tex, valid, width, height, depth);
+
+            m_lambda.map_tex_resource(
+                tex->get_kind(),
+                tex->get_string_value(),
+                tex->get_gamma_mode(),
+                tex->get_bsdf_data_kind(),
+                shape,
+                tag_value,
+                m_tex_idx++,
+                valid,
+                width,
+                height,
+                depth);
+        } else {
+            m_lambda.map_tex_resource(
+                v->get_kind(),
+                NULL,
+                IValue_texture::gamma_default,
+                IValue_texture::BDK_NONE,
+                IType_texture::TS_2D,
+                0,
+                m_tex_idx++,
+                /*valid=*/false,
+                0,
+                0,
+                0);
+        }
     }
 
     /// Called for a light profile resource.
@@ -285,11 +315,32 @@ public:
     /// \param v  the light profile resource or an invalid ref
     void light_profile(IValue const *v) MDL_FINAL
     {
-        bool valid = false;
-        float power = 0.0f, maximum = 0.0f;
-        if (IValue_resource const *r = as<IValue_resource>(v))
+        if (IValue_resource const *r = as<IValue_resource>(v)) {
+            bool valid = false;
+            float power = 0.0f, maximum = 0.0f;
+            int tag_value  = r->get_tag_value();
+
+            // FIXME: map the tag value using lambda's resource tag table
             m_attr->get_light_profile_attributes(r, valid, power, maximum);
-        m_lambda.map_lp_resource(v, m_lp_idx++, valid, power, maximum);
+
+            m_lambda.map_lp_resource(
+                r->get_kind(),
+                r->get_string_value(),
+                tag_value,
+                m_lp_idx++,
+                valid,
+                power,
+                maximum);
+        } else {
+            m_lambda.map_lp_resource(
+                v->get_kind(),
+                NULL,
+                0,
+                m_lp_idx++,
+                /*valid=*/false,
+                0.0f,
+                0.0f);
+        }
     }
 
     /// Called for a bsdf measurement resource.
@@ -297,10 +348,22 @@ public:
     /// \param v  the bsdf measurement resource or an invalid_ref
     void bsdf_measurement(IValue const *v) MDL_FINAL
     {
-        bool valid = false;
-        if (IValue_resource const *r = as<IValue_resource>(v))
+        if (IValue_resource const *r = as<IValue_resource>(v)) {
+            bool valid = false;
+            int tag_value = r->get_tag_value();
+
+            // FIXME: map the tag value using lambda's resource tag table
             m_attr->get_bsdf_measurement_attributes(r, valid);
-        m_lambda.map_bm_resource(v, m_bm_idx++, valid);
+
+            m_lambda.map_bm_resource(
+                r->get_kind(),
+                r->get_string_value(),
+                tag_value,
+                m_bm_idx++,
+                valid);
+        } else {
+            m_lambda.map_bm_resource(v->get_kind(), NULL, 0, m_bm_idx++, /*valid=*/false);
+        }
     }
 
 private:
@@ -356,7 +419,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
     // FIXME: ugly, but ok for now: request all resource meta data through the attr interface
     // a better solution would be to do this outside this compile call
     Const_function_enumerator enumerator(attr, *const_cast<Lambda_function *>(lambda));
-    const_cast<Lambda_function *>(lambda)->enumerate_resources(enumerator, body);
+    lambda->enumerate_resources(*resolver, enumerator, body);
 
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -1424,6 +1487,9 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
 
+    // pass the resource to tag map to the code generator
+    unit->set_resource_tag_map(unit.get_resource_tag_map());
+
     // now finalize the module
     llvm::Module *module = unit->finalize_module();
     mi::base::Handle<IGenerated_code_executable> code_obj(unit.get_code_object());
@@ -1542,6 +1608,7 @@ Link_unit_jit::Link_unit_jit(
     unsigned           state_mapping,
     bool               enable_debug)
 : Base(alloc)
+, m_arena(alloc)
 , m_target_kind(target_kind)
 , m_source_only_llvm_context()
 , m_code(create_code_object(jitted_code))
@@ -1568,6 +1635,7 @@ Link_unit_jit::Link_unit_jit(
 , m_arg_block_layouts(alloc)
 , m_lambdas(alloc)
 , m_dist_funcs(alloc)
+, m_resource_tag_map(alloc)
 {
     // For native code, we don't need mangling and read-only data segments
     if (m_target_kind != TK_NATIVE) {
@@ -1680,10 +1748,55 @@ void Link_unit_jit::update_resource_attribute_map(
             Generated_code_source::Source_res_manag *res_manag =
                 static_cast<Generated_code_source::Source_res_manag *>(m_res_manag);
 
-            res_manag->set_resource_attribute_map(&lambda->get_resource_attribute_map());
+            res_manag->import_resource_attribute_map(&lambda->get_resource_attribute_map());
         }
         break;
     }
+
+    // also ensure that the tags are handled right
+    update_resource_tag_map(lambda);
+}
+
+// Update the resource map for the current lambda function to be compiled.
+void Link_unit_jit::update_resource_tag_map(
+    Lambda_function const *lambda)
+{
+    for (size_t i = 0, n = lambda->get_resource_entries_count(); i < n; ++i) {
+        Resource_tag_tuple const *e = lambda->get_resource_entry(i);
+
+        int old_tag = find_resource_tag(e->m_kind, e->m_url);
+        if (old_tag == 0) {
+            add_resource_tag_mapping(e->m_kind, e->m_url, e->m_tag);
+        } else {
+            MDL_ASSERT(old_tag == e->m_tag && "Tag mismatch in resource table");
+        }
+    }
+}
+
+// Find the assigned tag for a resource in the resource map.
+int Link_unit_jit::find_resource_tag(
+    Resource_tag_tuple::Kind kind,
+    char const               *url) const
+{
+    // linear search
+    for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
+        Resource_tag_tuple const &e = m_resource_tag_map[i];
+
+        if (e.m_kind== kind && strcmp(e.m_url, url) == 0)
+            return e.m_tag;
+    }
+    return 0;
+}
+
+// Add a new entry in the resource map.
+void Link_unit_jit::add_resource_tag_mapping(
+    Resource_tag_tuple::Kind kind,
+    char const               *url,
+    int                      tag)
+{
+    url = url != NULL ? Arena_strdup(m_arena, url) : NULL;
+
+    m_resource_tag_map.push_back(Resource_tag_tuple(kind, url, tag));
 }
 
 // Access messages.

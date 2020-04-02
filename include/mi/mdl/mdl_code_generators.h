@@ -185,6 +185,15 @@ public:
     ///
     /// \returns the owning module of this entity if found, NULL otherwise
     virtual IModule const *get_owner_module(char const *entity_name) const = 0;
+
+    /// Find the owner code DAG of a given entity name.
+    /// If the entity name does not contain a colon, you should return the builtins DAG,
+    /// which you can identify by calling its oner module's IModule::is_builtins().
+    ///
+    /// \param entity_name    the entity name
+    ///
+    /// \returns the owning module of this entity if found, NULL otherwise
+    virtual IGenerated_code_dag const *get_owner_dag(char const *entity_name) const = 0;
 };
 
 /// A resource modifier interface.
@@ -405,38 +414,54 @@ public:
 
     /// Enumerate all used texture resources of this lambda function.
     ///
+    /// \param resolver    a call name resolver
     /// \param enumerator  the enumerator interface
     /// \param root        if non-NULL, the root expression to enumerate, else enumerate
     ///                    all roots of a switch function
     virtual void enumerate_resources(
+        ICall_name_resolver const   &resolver,
         ILambda_resource_enumerator &enumerator,
-        DAG_node const              *root = NULL) = 0;
+        DAG_node const              *root = NULL) const = 0;
 
     /// Register a texture resource mapping.
     ///
-    /// \param res     the texture resource value (or an invalid ref)
-    /// \param idx     the mapped index value representing the resource in a lookup table
-    /// \param valid   true if this is a valid resource, false otherwise
-    /// \param width   the width of the texture
-    /// \param height  the height of the texture
-    /// \param depth   the depth of the texture
+    /// \param res_kind        the kind of the resource (texture or invalid reference)
+    /// \param res_url         the URL of the texture resource if any
+    /// \param gamma           the gamma mode of this resource
+    /// \param bsdf_data_kind  the kind of BSDF data in case of BSDF data textures
+    /// \param shape           the shape of this resource
+    /// \param res_tag         the tag of the texture resource
+    /// \param idx             the mapped index value representing the resource in a lookup table
+    /// \param valid           true if this is a valid resource, false otherwise
+    /// \param width           the width of the texture
+    /// \param height          the height of the texture
+    /// \param depth           the depth of the texture
     virtual void map_tex_resource(
-        IValue const *res,
-        size_t       idx,
-        bool         valid,
-        int          width,
-        int          height,
-        int          depth) = 0;
+        IValue::Kind                   res_kind,
+        char const                     *res_url,
+        IValue_texture::gamma_mode     gamma,
+        IValue_texture::Bsdf_data_kind bsdf_data_kind,
+        IType_texture::Shape           shape,
+        int                            res_tag,
+        size_t                         idx,
+        bool                           valid,
+        int                            width,
+        int                            height,
+        int                            depth) = 0;
 
     /// Register a light profile resource mapping.
     ///
-    /// \param res      the light profile resource value (or an invalid ref)
-    /// \param idx      the mapped index value representing the resource in a lookup table
-    /// \param valid    true if this is a valid resource, false otherwise
-    /// \param power    the power of this light profile
-    /// \param maximum  the maximum of this light profile
+    /// \param res_kind  the kind of the resource (texture or invalid reference)
+    /// \param res_url   the URL of the texture resource if any
+    /// \param res_tag   the tag of the texture resource
+    /// \param idx       the mapped index value representing the resource in a lookup table
+    /// \param valid     true if this is a valid resource, false otherwise
+    /// \param power     the power of this light profile
+    /// \param maximum   the maximum of this light profile
     virtual void map_lp_resource(
-        IValue const *res,
+        IValue::Kind res_kind,
+        char const   *res_url,
+        int          res_tag,
         size_t       idx,
         bool         valid,
         float        power,
@@ -444,11 +469,15 @@ public:
 
     /// Register a bsdf measurement resource mapping.
     ///
-    /// \param res      the bsdf measurement resource value (or an invalid ref)
-    /// \param idx      the mapped index value representing the resource in a lookup table
-    /// \param valid    true if this is a valid resource, false otherwise
+    /// \param res_kind  the kind of the resource (texture or invalid reference)
+    /// \param res_url   the URL of the texture resource if any
+    /// \param res_tag   the tag of the texture resource
+    /// \param idx       the mapped index value representing the resource in a lookup table
+    /// \param valid     true if this is a valid resource, false otherwise
     virtual void map_bm_resource(
-        IValue const *res,
+        IValue::Kind res_kind,
+        char const   *res_url,
+        int          res_tag,
         size_t       idx,
         bool         valid) = 0;
 
@@ -470,7 +499,7 @@ public:
     /// \param[in]  call_evaluator  a call evaluator for handling some intrinsic functions
     virtual void optimize(
         ICall_name_resolver const *name_resolver,
-        ICall_evaluator *call_evaluator) = 0;
+        ICall_evaluator           *call_evaluator) = 0;
 
     /// Returns true if a switch function was "modified", by adding a new
     /// root expression.
@@ -562,6 +591,22 @@ public:
 
     /// Sets whether the resource attribute table contains valid attributes.
     virtual void set_has_resource_attributes(bool avail) = 0;
+
+    /// Set a tag, version pair for a resource value that might be reachable from this
+    /// function.
+    ///
+    /// \param res_kind        the resource kind
+    /// \param res_url         the resource url
+    /// \param tag             the tag value
+    virtual void set_resource_tag(
+        Resource_tag_tuple::Kind const res_kind,
+        char const                     *res_url,
+        int                            tag) = 0;
+
+    /// Remap a resource value according to the resource map.
+    ///
+    /// \param r  the resource
+    virtual int get_resource_tag(IValue_resource const *r) const = 0;
 };
 
 /// An interface used to manage the DF and non-DF parts of an MDL material surface.
@@ -682,6 +727,17 @@ public:
     ///
     /// \return the name of the handle, or \c NULL, if the \p index was out of range.
     virtual const char* get_df_handle(size_t index) const = 0;
+
+    /// Set a tag, version pair for a resource value that might be reachable from this
+    /// function.
+    ///
+    /// \param res_kind        the resource kind
+    /// \param res_url         the resource url
+    /// \param tag             the tag value
+    virtual void set_resource_tag(
+        Resource_tag_tuple::Kind const res_kind,
+        char const                     *res_url,
+        int                            tag) = 0;
 };
 
 /// A Link unit used by code generators.
@@ -817,8 +873,11 @@ public:
     /// The name of the option to forbid local functions inside material bodies.
     #define MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS "no_local_func_calls"
 
-    /// The name of the option that enabled unsafe math optimizations.
+    /// The name of the option that enables unsafe math optimizations.
     #define MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS "unsafe_math_optimizations"
+
+    /// The name of the option that exposes names of let expressions as named temporaries.
+    #define MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS "expose_names_of_let_expressions"
 
     /// Compile a module.
     /// \param      module  The module to compile.

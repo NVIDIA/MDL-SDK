@@ -331,12 +331,13 @@ DB::Tag mdl_texture_to_tag(
     const char* module_name)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
-    const char* file_path = value->get_string_value();
 
     // Check whether the tag value is set before checking whether the string value is not set.
     // Resources in compiled materials typically do not have the string value set.
     if( tag_uint32)
         return DB::Tag( tag_uint32);
+
+    const char* file_path = value->get_string_value();
 
     // Fail if neither tag nor string value is set.
     if( !file_path || !file_path[0])
@@ -382,9 +383,9 @@ DB::Tag mdl_texture_to_tag(
 
     DB::Tag tag;
     Mdl_image_set image_set( res_set.get(), file_path, get_container_filename( first_filename));
+    mi::base::Uuid hash = get_hash( res_set.get());
 
-    tag = TEXTURE::load_mdl_texture(
-        transaction, &image_set, shared, gamma);
+    tag = TEXTURE::load_mdl_texture( transaction, &image_set, hash, shared, gamma);
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
         "... and mapped to texture \"%s\" (tag %u).",
@@ -439,6 +440,7 @@ DB::Tag mdl_light_profile_to_tag(
 
     DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
+    mi::base::Uuid hash = get_hash( reader.get());
 
     if( is_container_member( resolved_filename)) {
 
@@ -449,12 +451,12 @@ DB::Tag mdl_light_profile_to_tag(
         File_reader_impl wrapped_reader( reader.get());
         tag = LIGHTPROFILE::load_mdl_lightprofile(
             transaction, &wrapped_reader,
-            container_filename, member_filename, absolute_mdl_file_path, shared);
+            container_filename, member_filename, absolute_mdl_file_path, hash, shared);
 
     } else {
 
         tag = LIGHTPROFILE::load_mdl_lightprofile(
-            transaction, resolved_filename, absolute_mdl_file_path, shared);
+            transaction, resolved_filename, absolute_mdl_file_path, hash, shared);
 
     }
 
@@ -510,6 +512,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
 
     DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
+    mi::base::Uuid hash = get_hash( reader.get());
 
     if( is_container_member( resolved_filename)) {
 
@@ -520,12 +523,12 @@ DB::Tag mdl_bsdf_measurement_to_tag(
         File_reader_impl wrapped_reader( reader.get());
         tag = BSDFM::load_mdl_bsdf_measurement(
             transaction, &wrapped_reader,
-            container_filename, member_filename, absolute_mdl_file_path, shared);
+            container_filename, member_filename, absolute_mdl_file_path, hash, shared);
 
     } else {
 
         tag = BSDFM::load_mdl_bsdf_measurement(
-            transaction, resolved_filename, absolute_mdl_file_path, shared);
+            transaction, resolved_filename, absolute_mdl_file_path, hash, shared);
 
     }
 
@@ -742,13 +745,14 @@ mi::neuraylib::IReader* Mdl_container_callback::get_reader(
 }
 
 Mdl_image_set::Mdl_image_set(
-    mi::mdl::IMDL_resource_set* set, const std::string& file_name, const std::string& container_name)
-    : m_resource_set( set, mi::base::DUP_INTERFACE)
-    , m_container_name(container_name)
-    , m_is_container( !container_name.empty())
+    mi::mdl::IMDL_resource_set* set, const std::string& filename, const std::string& container_filename)
+  : m_resource_set( set, mi::base::DUP_INTERFACE),
+    m_container_filename( container_filename),
+    m_is_container( !container_filename.empty())
 {
     ASSERT( M_SCENE, set->get_mdl_url(0));
 
+    // TODO
     if ( set->get_count() > 1)  // uvtile/udim sequence
     {
         // construct absolute mdl file path which still contains the uvtile/udim marker
@@ -756,13 +760,13 @@ Mdl_image_set::Mdl_image_set(
         const std::string mdl_url = set->get_mdl_url( 0);
        
         std::string marker_string;
-        std::size_t p = file_name.find_last_of("/");
+        std::size_t p = filename.find_last_of('/');
         if (p == std::string::npos)
-            marker_string = "/" + file_name;
+            marker_string = '/' + filename;
         else
-            marker_string = file_name.substr(p);
+            marker_string = filename.substr(p);
 
-        p = mdl_url.find_last_of("/"); 
+        p = mdl_url.find_last_of('/'); 
         ASSERT(M_SCENE, p != std::string::npos); // there needs to be at least one slash
         m_mdl_file_path = mdl_url.substr(0, p) + marker_string;
 
@@ -773,59 +777,9 @@ Mdl_image_set::Mdl_image_set(
 
 mi::Size Mdl_image_set::get_length() const
 {
-    return m_resource_set->get_count();
-}
-
-char const* Mdl_image_set::get_mdl_file_path() const
-{
-    return m_mdl_file_path.empty() ? NULL : m_mdl_file_path.c_str();
-}
-
-char const * Mdl_image_set::get_container_filename() const
-{
-    return m_container_name.empty() ? NULL : m_container_name.c_str();
-}
-
-char const * Mdl_image_set::get_mdl_url(mi::Size i) const
-{
-    return m_resource_set->get_mdl_url( i);
-}
-
-char const * Mdl_image_set::get_resolved_filename(mi::Size i) const
-{
-    return m_is_container ? NULL : m_resource_set->get_filename( i);
-}
-
-char const * Mdl_image_set::get_container_membername(mi::Size i) const
-{
-    if(m_is_container)
-    {
-        char const* p = strstr( m_resource_set->get_filename( i), ".mdr:");
-        size_t offset = 5;
-
-        if( p == NULL) {
-            p = strstr( m_resource_set->get_filename(i), ".mdle:");
-            offset = 6;
-        }
-
-        if( p)
-            return p + offset;
-    }
-    return NULL;
-}
-
-bool Mdl_image_set::get_uv_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
-{
-    return m_resource_set->get_udim_mapping( i, u, v);
-}
-
-mi::neuraylib::IReader* Mdl_image_set::open_reader( mi::Size i) const
-{
-    mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
-        m_resource_set->open_reader( i));
-    if( reader)
-        return new File_reader_impl(reader.get());
-    return NULL;
+     mi::Size result = m_resource_set->get_count();
+     ASSERT( M_SCENE, result > 0);
+     return result;
 }
 
 bool Mdl_image_set::is_uvtile() const
@@ -839,6 +793,68 @@ bool Mdl_image_set::is_mdl_container() const
     return m_is_container;
 }
 
+void Mdl_image_set::get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
+{
+    m_resource_set->get_udim_mapping( i, u, v);
+}
+
+const char* Mdl_image_set::get_original_filename() const
+{
+    return "";
+}
+
+const char* Mdl_image_set::get_container_filename() const
+{
+    return m_container_filename.c_str();
+}
+
+const char* Mdl_image_set::get_mdl_file_path() const
+{
+    return m_mdl_file_path.c_str();
+}
+
+const char* Mdl_image_set::get_resolved_filename( mi::Size i) const
+{
+    return m_is_container ? "" : m_resource_set->get_filename( i);
+}
+
+const char* Mdl_image_set::get_container_membername( mi::Size i) const
+{
+    if( !m_is_container)
+        return "";
+
+    const char* filename = m_resource_set->get_filename( i);
+
+    const char* p = strstr( filename, ".mdr:");
+    if( p)
+        return p + 5;
+
+    p = strstr( filename, ".mdle:");
+    if( p)
+        return p + 6;
+
+    ASSERT( M_SCENE, false);
+    return "";
+}
+
+mi::neuraylib::IReader* Mdl_image_set::open_reader( mi::Size i) const
+{
+    mi::base::Handle<mi::mdl::IMDL_resource_reader> reader( m_resource_set->open_reader( i));
+    if( !reader)
+        return nullptr;
+    return new File_reader_impl( reader.get());
+}
+
+mi::neuraylib::ICanvas* Mdl_image_set::get_canvas( mi::Size i) const
+{
+    return nullptr;
+}
+
+const char* Mdl_image_set::get_image_format() const
+{
+    return "";
+}
+
 std::string lookup_thumbnail(
     const std::string& module_filename,
     const std::string& mdl_name,
@@ -846,7 +862,7 @@ std::string lookup_thumbnail(
     mi::mdl::IArchive_tool* archive_tool)
 {
     std::string stripped_mdl_name, def_name, module_name;
-    mi::Size p = mdl_name.find( "(");
+    mi::Size p = mdl_name.find( '(');
     if( p == std::string::npos) 
         stripped_mdl_name = mdl_name;
     else // strip function signature
@@ -903,7 +919,7 @@ std::string lookup_thumbnail(
     if( p_mdr != std::string::npos)
     {
         container_path = module_filename.substr( 0, p_mdr + 4);
-        file_base = module_filename.substr( p_mdr + 5, p_mdl - p_mdr - 5) + "." + def_name + ".";
+        file_base = module_filename.substr( p_mdr + 5, p_mdl - p_mdr - 5) + '.' + def_name + '.';
 
         // check for supported file types
         for( int i = 0; ext[i] != NULL; ++i) {
@@ -911,12 +927,12 @@ std::string lookup_thumbnail(
             mi::base::Handle<mi::mdl::IInput_stream> file(
                 archive_tool->get_file_content(container_path.c_str(), file_name.c_str()));
             if( file)
-                return container_path + ":" + file_name;
+                return container_path + ':' + file_name;
         }
     }
     else
     {
-        file_base = module_filename.substr( 0, p_mdl) + "." + def_name + ".";
+        file_base = module_filename.substr( 0, p_mdl) + '.' + def_name + '.';
 
         // check for supported file types
         for( int i = 0; ext[i] != NULL; ++i) {

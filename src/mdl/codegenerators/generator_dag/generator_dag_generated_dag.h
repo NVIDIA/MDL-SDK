@@ -91,13 +91,14 @@ public:
     /// Extra compilation options for creating DAGs from ASTs.
     enum Compile_option {
         /// If set, forbid calls to local functions inside material bodies.
-        FORBID_LOCAL_FUNC_CALLS       = 0x0001,
+        FORBID_LOCAL_FUNC_CALLS         = 0x0001,
         /// If set, include definitions for local entities called from material bodies.
-        INCLUDE_LOCAL_ENTITIES        = 0x0002,
+        INCLUDE_LOCAL_ENTITIES          = 0x0002,
         /// If set, mark DAG backend generated entities.
-        MARK_GENERATED_ENTITIES       = 0x0004,
+        MARK_GENERATED_ENTITIES         = 0x0004,
         /// If set, allow unsafe math optimizations.
-        UNSAFE_MATH_OPTIMIZATIONS     = 0x0008,
+        UNSAFE_MATH_OPTIMIZATIONS       = 0x0008,
+        EXPOSE_NAMES_OF_LET_EXPRESSIONS = 0x0020,
     };
 
     /// Bit set of compile options.
@@ -219,6 +220,7 @@ public:
         , m_parameters(alloc)
         , m_annotations(alloc)
         , m_temporaries(alloc)
+        , m_temporary_names(alloc)
         , m_body(NULL)
         {
         }
@@ -233,8 +235,9 @@ public:
         void add_annotation(DAG_node const *anno) { m_annotations.push_back(anno); }
 
         /// Add a temporary.
-        size_t add_temporary(DAG_node const *temp) {
+        size_t add_temporary(DAG_node const *temp, char const *name) {
             m_temporaries.push_back(temp);
+            m_temporary_names.emplace_back(name, m_temporary_names.get_allocator());
             return m_temporaries.size() - 1;
         }
 
@@ -274,17 +277,21 @@ public:
         /// Get the temporary at index.
         DAG_node const *get_temporary(size_t idx) const { return m_temporaries[idx]; }
 
+        /// Get the temporary name at index.
+        char const *get_temporary_name(size_t idx) const { return m_temporary_names[idx].c_str(); }
+
         /// Get the material body.
         DAG_node const *get_body() const { return m_body; }
 
     private:
-        string         m_name;          ///< The name of the material.
-        string         m_original_name; ///< If this is an alias name, the original name, else "".
-        string         m_cloned;        ///< The name of the cloned material or "".
-        Param_vector   m_parameters;    ///< The material parameters.
-        Dag_vector     m_annotations;   ///< The material annotations.
-        Dag_vector     m_temporaries;   ///< The material temporaries.
-        DAG_node const *m_body;         ///< The IR body of the material.
+        string         m_name;            ///< The name of the material.
+        string         m_original_name;   ///< If this is an alias name, the original name, else "".
+        string         m_cloned;          ///< The name of the cloned material or "".
+        Param_vector   m_parameters;      ///< The material parameters.
+        Dag_vector     m_annotations;     ///< The material annotations.
+        Dag_vector     m_temporaries;     ///< The material temporaries.
+        String_vector  m_temporary_names; ///< The material temporary names.
+        DAG_node const *m_body;           ///< The IR body of the material.
     };
 
     typedef vector<Material_info>::Type Material_vector;
@@ -323,6 +330,7 @@ public:
         , m_annotations(alloc)
         , m_return_annos(alloc)
         , m_temporaries(alloc)
+        , m_temporary_names(alloc)
         , m_body(NULL)
         , m_refs(alloc)
         , m_hash()
@@ -344,8 +352,9 @@ public:
         void add_return_annotation(DAG_node const *anno) { m_return_annos.push_back(anno); }
 
         /// Add a temporary.
-        size_t add_temporary(DAG_node const *temp) {
+        size_t add_temporary(DAG_node const *temp, char const *name) {
             m_temporaries.push_back(temp);
+            m_temporary_names.emplace_back(name, m_temporary_names.get_allocator());
             return m_temporaries.size() - 1;
         }
 
@@ -401,6 +410,9 @@ public:
         /// Get the temporary at index.
         DAG_node const *get_temporary(size_t idx) const { return m_temporaries[idx]; }
 
+        /// Get the temporary name at index.
+        char const *get_temporary_name(size_t idx) const { return m_temporary_names[idx].c_str(); }
+
         /// Get the material body.
         DAG_node const *get_body() const { return m_body; }
 
@@ -417,20 +429,21 @@ public:
         DAG_hash const *get_hash() const { return m_has_hash ? &m_hash : NULL; }
 
     private:
-        Definition::Semantics m_semantics;     ///< The function semantics.
-        IType const           *m_return_type;  ///< The function return type.
-        string                m_name;          ///< The name of the function.
-        string                m_original_name; ///< If this is an alias, the original name, else "".
-        string                m_cloned;        ///< The name of the cloned function or "".
-        Param_vector          m_parameters;    ///< The material parameters.
-        Dag_vector            m_annotations;   ///< The annotations of the function.
-        Dag_vector            m_return_annos;  ///< The return annotations of the function.
-        Dag_vector            m_temporaries;   ///< The function temporaries.
-        DAG_node const        *m_body;         ///< The IR body of the function.
-        String_vector         m_refs;          ///< The references of a function.
-        DAG_hash              m_hash;          ///< The function hash value.
-        unsigned              m_properties;    ///< The property flags of this function.
-        bool                  m_has_hash;      ///< True, if a hash value is available.
+        Definition::Semantics m_semantics;       ///< The function semantics.
+        IType const           *m_return_type;    ///< The function return type.
+        string                m_name;            ///< The name of the function.
+        string                m_original_name;   ///< If this is an alias, the original name, else "".
+        string                m_cloned;          ///< The name of the cloned function or "".
+        Param_vector          m_parameters;      ///< The material parameters.
+        Dag_vector            m_annotations;     ///< The annotations of the function.
+        Dag_vector            m_return_annos;    ///< The return annotations of the function.
+        Dag_vector            m_temporaries;     ///< The function temporaries.
+        String_vector         m_temporary_names; ///< The function temporary names.
+        DAG_node const        *m_body;           ///< The IR body of the function.
+        String_vector         m_refs;            ///< The references of a function.
+        DAG_hash              m_hash;            ///< The function hash value.
+        unsigned              m_properties;      ///< The property flags of this function.
+        bool                  m_has_hash;        ///< True, if a hash value is available.
     };
 
     typedef vector<Function_info>::Type Function_vector;
@@ -682,6 +695,8 @@ public:
     /// The type of vectors of names.
     typedef vector<string>::Type Name_vector;
 
+    typedef hash_set<string, string_hash<string> >::Type String_set;
+
     /// A material instance
     class Material_instance MDL_FINAL : public Allocator_interface_implement<IMaterial_instance>
     {
@@ -694,22 +709,16 @@ public:
     public:
         /// The result of the dependence analysis.
         struct Dependence_result {
-            /// Default constructor.
-            Dependence_result()
-            : m_depends_on_transform(false)
-            , m_depends_on_object_id(false)
-            , m_edf_global_distribution(false)
-            {
-            }
-
             /// Constructor.
             Dependence_result(
-                bool depends_on_transform,
-                bool depends_on_object_id,
-                bool edf_global_distribution)
+                bool        depends_on_transform,
+                bool        depends_on_object_id,
+                bool        edf_global_distribution,
+                String_set  referenced_scene_data)
             : m_depends_on_transform(depends_on_transform)
             , m_depends_on_object_id(depends_on_object_id)
             , m_edf_global_distribution(edf_global_distribution)
+            , m_referenced_scene_data(referenced_scene_data)
             {
             }
 
@@ -721,6 +730,9 @@ public:
 
             /// True, if this instance depends on global distribution (edf).
             bool m_edf_global_distribution;
+
+            /// Set of scene data names referenced by this instance.
+            String_set m_referenced_scene_data;
         };
 
         typedef ptr_hash_map<IDefinition const, Dependence_result>::Type Dep_analysis_cache;
@@ -838,6 +850,14 @@ public:
         /// Returns true if this instance depends on the global distribution (edf).
         bool depends_on_global_distribution() const MDL_FINAL;
 
+        /// Returns the number of scene data attributes referenced by this instance.
+        size_t get_referenced_scene_data_count() const MDL_FINAL;
+
+        /// Return the name of a scene data attribute referenced by this instance.
+        ///
+        /// \param index  the index of the scene data attribute
+        char const *get_referenced_scene_data_name(size_t index) const MDL_FINAL;
+
         /// Returns the opacity of this instance.
         Opacity get_opacity() const MDL_FINAL;
 
@@ -858,6 +878,23 @@ public:
 
         /// Get the internal space.
         char const *get_internal_space() const MDL_FINAL;
+
+        /// Set a tag, version pair for a resource constant that might be reachable from this
+        /// instance.
+        ///
+        /// \param res             a resource
+        /// \param tag             the tag value
+        void set_resource_tag(
+            IValue_resource const *res,
+            int                   tag) MDL_FINAL;
+
+        /// Get the number of resource tag map entries.
+        size_t get_resource_tag_map_entries_count() const MDL_FINAL;
+
+        /// Get the i'th resource tag map entry or NULL if the index is out of bounds;
+        ///
+        /// \param index  the index of the resource map entry.
+        Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const MDL_FINAL;
 
         // ------------------- non-interface methods -------------------
 
@@ -884,6 +921,22 @@ public:
 
         /// Get the value factory of this instance.
         Value_factory const &get_value_factory() const { return m_value_factory; }
+
+        /// Find the tag for a given resource.
+        ///
+        /// \param res  the resource
+        ///
+        /// \return the associated tag or zero if no tag was associated
+        int find_resource_tag(IValue_resource const *res) const;
+
+        /// Adds a tag, version pair for a given resource.
+        ///
+        /// \param res  the resource
+        ///
+        /// \return the associated tag or zero if no tag was associated
+        void add_resource_tag(
+            IValue_resource const *res,
+            int                   tag);
 
         /// Possible options for the cloning.
         enum Clone_flag {
@@ -1083,6 +1136,9 @@ public:
             /// Get the instance properties.
             Properties get_properties() const { return m_properties; }
 
+            /// Get the set of scene data names referenced by this instance.
+            String_set const &get_referenced_scene_data() const { return m_referenced_scene_data; }
+
         private:
             /// Get the allocator.
             IAllocator *get_allocator() const { return m_arena.get_allocator(); }
@@ -1095,6 +1151,9 @@ public:
 
             /// Leave a parameter.
             void leave_param() {/*empty for now*/}
+
+            /// Check if we support instantiate_dag_arguments on this node.
+            bool supported_arguments(DAG_node const *n);
 
             /// Instantiate a DAG IR node.
             ///
@@ -1216,8 +1275,11 @@ public:
             /// Properties of the generated instance.
             Properties m_properties;
 
-            /// If true, instanciate arguments.
-            bool m_instanciate_args;
+            /// Set of scene data names referenced by this instance.
+            String_set m_referenced_scene_data;
+
+            /// If true, instantiate arguments.
+            bool m_instantiate_args;
         };
 
         /// A builder, used for generating printer.
@@ -1267,6 +1329,14 @@ public:
 
         /// Instance properties;
         Properties m_properties;
+
+        /// The scene data names referenced by this instance.
+        String_vector m_referenced_scene_data;
+
+        typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
+
+        /// The resource tag map, mapping accessible resources to tags.
+        Resource_tag_map m_resource_tag_map;
     };
 
 private:
@@ -1577,6 +1647,15 @@ public:
         int function_index,
         int temporary_index) const MDL_FINAL;
 
+    /// Get the temporary name at temporary_index used by the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \param temporary_index     The index of the temporary variable.
+    /// \returns                   The name of the temporary variable.
+    char const *get_function_temporary_name(
+        int function_index,
+        int temporary_index) const MDL_FINAL;
+
     /// Get the body of the function at function_index.
     ///
     /// \param function_index      The index of the function.
@@ -1638,6 +1717,14 @@ public:
     /// \param temporary_index  The index of the temporary variable.
     /// \returns                The value of the temporary variable.
     DAG_node const *get_material_temporary(
+        int material_index,
+        int temporary_index) const MDL_FINAL;
+
+    /// Get the temporary name at temporary_index used by the material at material_index.
+    /// \param material_index   The index of the material.
+    /// \param temporary_index  The index of the temporary variable.
+    /// \returns                The name of the temporary variable.
+    char const *get_material_temporary_name(
         int material_index,
         int temporary_index) const MDL_FINAL;
 
@@ -1801,13 +1888,6 @@ public:
     /// Returns the amount of used memory by this code DAG.
     size_t get_memory_size() const MDL_FINAL;
 
-    /// Set a tag, version pair for a resource constant.
-    ///
-    /// \param c        a resource constant
-    /// \param tag      the tag value
-    /// \param version  the tag version
-    void set_resource_tag(DAG_constant const *c, int tag, unsigned version) MDL_FINAL;
-
     /// Get the property flag of the function at function_index.
     /// \param      function_index  The index of the function.
     /// \param      fp              The property.
@@ -1944,10 +2024,47 @@ public:
         int anno_decl_index,
         int annotation_index) const MDL_FINAL;
 
+    /// Get a tag,for a resource constant that might be reachable from this DAG.
+    ///
+    /// \param res             a resource
+    int get_resource_tag(
+        IValue_resource const *res) const MDL_FINAL;
+
+    /// Set a tag, version pair for a resource constant that might be reachable from this DAG.
+    ///
+    /// \param res             a resource
+    /// \param tag             the tag value
+    void set_resource_tag(
+        IValue_resource const *res,
+        int                   tag) MDL_FINAL;
+
+    /// Get the number of resource map entries.
+    size_t get_resource_tag_map_entries_count() const MDL_FINAL;
+
+    /// Get the i'th resource tag tag map entry or NULL if the index is out of bounds;
+    Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const MDL_FINAL;
+
     // --------------------------- non interface methods ---------------------------
 
     /// Get the value factory of this code.
     Value_factory *get_value_factory() { return &m_value_factory; }
+
+    /// Find the tag for a given resource.
+    ///
+    /// \param res  the resource
+    ///
+    /// \return the associated tag or zero if no tag was associated
+    int find_resource_tag(
+        IValue_resource const *res) const;
+
+    /// Adds a tag, version pair for a given resource.
+    ///
+    /// \param res  the resource
+    ///
+    /// \return the associated tag or zero if no tag was associated
+    void add_resource_tag(
+        IValue_resource const *res,
+        int                   tag);
 
     /// Serialize this code DAG.
     ///
@@ -1991,6 +2108,12 @@ public:
     DAG_node_factory_impl const *get_node_factory() const { return &m_node_factory; }
 
 private:
+    /// Get the material info for a given material index or NULL if the index is out of range.
+    ///
+    /// \param material_index  the material index
+    Material_info *get_material_info(
+        int material_index);
+
     /// Get the material info for a given material index or NULL if the index is out of range.
     ///
     /// \param material_index  the material index
@@ -2272,7 +2395,7 @@ private:
     /// Build temporaries for a material by traversing the DAG and creating them
     /// for nodes with phen-out > 1.
     ///
-    /// \param mat_index   the index of the processed material
+    /// \param mat_index     the index of the processed material
     void build_material_temporaries(int mat_index);
 
     /// Build temporaries for a function by traversing the DAG and creating them
@@ -2285,23 +2408,27 @@ private:
     ///
     /// \param mat_index    The index of the material.
     /// \param node         The IR node defining the temporary.
+    /// \param name         The name of the temporary.
     ///
     /// \returns            The index of the temporary.
     ///
     int add_material_temporary(
         int            mat_index,
-        DAG_node const *node);
+        DAG_node const *node,
+        char const     *name);
 
     /// Add a function temporary.
     ///
     /// \param func_index   The index of the function.
     /// \param node         The IR node defining the temporary.
+    /// \param name         The name of the temporary.
     ///
     /// \returns            The index of the temporary.
     ///
     int add_function_temporary(
         int            func_index,
-        DAG_node const *node);
+        DAG_node const *node,
+        char const     *name);
 
     /// Create a default enum.
     ///
@@ -2579,6 +2706,11 @@ private:
 
     /// If true, DAG backend generated entities must be marked.
     bool m_mark_generated;
+
+    typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
+
+    /// The resource tag map, mapping accessible resources to tags.
+    Resource_tag_map m_resource_tag_map;
 };
 
 }  // mdl

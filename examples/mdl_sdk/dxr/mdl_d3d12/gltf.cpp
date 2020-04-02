@@ -48,24 +48,6 @@ namespace
         return *reinterpret_cast<const T*>(p_data);
     }
 
-    template<typename T>
-    const uint8_t* get_vertex_data(
-        const fx::gltf::Document& doc, 
-        const fx::gltf::Primitive& primitive, 
-        const std::string& semantic, 
-        size_t& out_stride)
-    {
-        const auto& att = primitive.attributes.find(semantic);
-        if (att == primitive.attributes.end())
-            return nullptr;
-
-        const auto& acc = doc.accessors[att->second];
-        const auto& bv = doc.bufferViews[acc.bufferView];
-        const auto& buf = doc.buffers[bv.buffer];
-        out_stride = bv.byteStride == 0 ? sizeof(T) : bv.byteStride;
-        return buf.data.data() + bv.byteOffset + acc.byteOffset;
-    }
-
     const uint8_t* get_index_data(
         const fx::gltf::Document& doc, 
         const fx::gltf::Primitive& primitive, 
@@ -143,17 +125,6 @@ namespace
                 target = from_matrix; // use identity
         }
 
-        //if (options.handle_z_axis_up)
-        //{
-        //    target.translation = 
-        //        { target.translation.x, -target.translation.z, target.translation.y} ;
-        //    target.rotation = 
-        //        { target.rotation.m128_f32[0], -target.rotation.m128_f32[2], 
-        //          target.rotation.m128_f32[1], target.rotation.m128_f32[3]};
-        //    target.scale = 
-        //        { target.scale.x, -target.scale.z, target.scale.y };
-        //}
-
         float scale = 1.0f / options.units_per_meter;
         target.translation = { 
             target.translation.x * scale, 
@@ -162,20 +133,66 @@ namespace
         };
     }
 
-
-    DirectX::XMFLOAT3 normalize(const DirectX::XMFLOAT3& v)
+    size_t get_vertex_stride(IScene_loader::Primitive& part)
     {
-        float inv_length = 1.0f / std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-        return {v.x * inv_length, v.y * inv_length, v.z * inv_length};
+        return part.vertex_element_layout.size() == 0 ? 0 :
+            part.vertex_element_layout.back().byte_offset +
+            part.vertex_element_layout.back().element_size;
     }
 
-    DirectX::XMFLOAT3 cross(const DirectX::XMFLOAT3& v1, const DirectX::XMFLOAT3& v2)
+    void add_vertex_element(
+        IScene_loader::Primitive& part,
+        const std::string& semantic,
+        mdl_d3d12::Scene_data::Value_kind kind)
     {
-        DirectX::XMFLOAT3 res;
-        res.x = (v1.y * v2.z) - (v1.z * v2.y);
-        res.y = (v1.z * v2.x) - (v1.x * v2.z);
-        res.z = (v1.x * v2.y) - (v1.y * v2.x);
-        return res;
+
+        IScene_loader::Vertex_element element;
+        element.byte_offset = get_vertex_stride(part);
+
+        switch (kind)
+        {
+            case mdl_d3d12::Scene_data::Value_kind::Float:
+                element.element_size = 1 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Linear;
+                break;
+            case mdl_d3d12::Scene_data::Value_kind::Vector2:
+                element.element_size = 2 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Linear;
+                break;
+            case mdl_d3d12::Scene_data::Value_kind::Vector3:
+            case mdl_d3d12::Scene_data::Value_kind::Color:
+                element.element_size = 3 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Linear;
+                break;
+            case mdl_d3d12::Scene_data::Value_kind::Vector4:
+                element.element_size = 4 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Linear;
+                break;
+            case mdl_d3d12::Scene_data::Value_kind::Int:
+                element.element_size = 1 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Nearest;
+                break;
+            case mdl_d3d12::Scene_data::Value_kind::Int2:
+                element.element_size = 2 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Nearest;
+                break;
+            case mdl_d3d12::Scene_data::Value_kind::Int3:
+                element.element_size = 3 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Nearest;
+                break;
+            case mdl_d3d12::Scene_data::Value_kind::Int4:
+                element.element_size = 4 * 4;
+                element.interpolation_mode = Scene_data::Interpolation_mode::Nearest;
+                break;
+            default:
+                log_error("Vertex element kind not handled.", SRC);
+                return;
+        }
+
+        element.semantic = semantic;
+        element.kind = kind;
+        element.layout_index = part.vertex_element_layout.size();
+        part.vertex_element_layout.push_back(element);
     }
 
     void guess_tangent(const DirectX::XMFLOAT3& normal, DirectX::XMFLOAT3& out_tangent)
@@ -188,18 +205,15 @@ namespace
         out_tangent = normalize(out_tangent);
     }
 
-    void compute_tangent_frame(
-        Vertex* vertices, 
-        size_t vertex_offset, 
-        size_t vertex_count, 
-        uint32_t* indices, 
+    void compute_normals(
+        IScene_loader::Primitive part,
+        uint8_t* vertex_buffer_part,
+        uint32_t* indices,
         size_t index_count)
     {
-        // TODO fix this, its not working correctly
-
-        DirectX::XMVECTOR zero = {0.0f, 0.0f, 0.0f, 0.0f};
-        std::vector<DirectX::XMVECTOR> tan0(vertex_count, zero);
-        std::vector<DirectX::XMVECTOR> tan1(vertex_count, zero);
+        size_t vertex_stride = get_vertex_stride(part);
+        DirectX::XMFLOAT3 zero = {0.0f, 0.0f, 0.0f};
+        std::vector<DirectX::XMFLOAT3> normals(part.vertex_count, zero);
 
         for (size_t i = 0; i < index_count; i += 3)
         {
@@ -207,70 +221,189 @@ namespace
             uint32_t bi = indices[i + 1];
             uint32_t ci = indices[i + 2];
 
-            Vertex& a = vertices[ai];
-            Vertex& b = vertices[bi];
-            Vertex& c = vertices[ci];
+            auto pos_a = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                vertex_buffer_part + ai * vertex_stride);
 
-            ai -= static_cast<uint32_t>(vertex_offset);
-            bi -= static_cast<uint32_t>(vertex_offset);
-            ci -= static_cast<uint32_t>(vertex_offset);
+            auto pos_b = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                vertex_buffer_part + bi * vertex_stride);
 
-            float x1 = b.position.x - a.position.x;
-            float x2 = c.position.x - a.position.x;
-            float y1 = b.position.y - a.position.y;
-            float y2 = c.position.y - a.position.y;
-            float z1 = b.position.z - a.position.z;
-            float z2 = c.position.z - a.position.z;
+            auto pos_c = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                vertex_buffer_part + ci * vertex_stride);
 
-            float s1 = b.texcoord0.x - a.texcoord0.x;
-            float s2 = c.texcoord0.x - a.texcoord0.x;
-            float t1 = b.texcoord0.y - a.texcoord0.y;
-            float t2 = c.texcoord0.y - a.texcoord0.y;
+            DirectX::XMFLOAT3 ab = pos_b - pos_a;
+            DirectX::XMFLOAT3 ac = pos_c - pos_a;
+            DirectX::XMFLOAT3 bc = pos_c - pos_b;
+            DirectX::XMFLOAT3 weighted_face_normal = cross(ab, ac);
 
-            if ((s1 * s1 + t1 * t1) < 0.000001f && (s2 * s2 + t2 * t2) < 0.000001f)
-                continue;
+            // area weight
+            /*
+            float area_weight = length(weighted_face_normal);
+            weighted_face_normal *= 1.0f / area_weight;
+            normals[ai] += weighted_face_normal;
+            normals[bi] += weighted_face_normal;
+            normals[ci] += weighted_face_normal;
+            */
 
-            float r = 1.0F / (s1 * t2 - s2 * t1);
-            DirectX::XMVECTOR sdir = 
-                {(t2 * x1 - t1 * x2) * r, (t2 * y1 - t1 * y2) * r, (t2 * z1 - t1 * z2) * r, 0.0f };
-            DirectX::XMVECTOR tdir = 
-                {(s1 * x2 - s2 * x1) * r, (s1 * y2 - s2 * y1) * r, (s1 * z2 - s2 * z1) * r, 0.0f };
+            // angle weight
+            
+            ab *= 1.0f / length(ab);
+            ac *= 1.0f / length(ac);
+            bc *= 1.0f / length(bc);
+            weighted_face_normal *= 0.5f / length(weighted_face_normal);
 
-            tan0[ai] = DirectX::XMVectorAdd(tan0[ai], sdir);
-            tan0[bi] = DirectX::XMVectorAdd(tan0[bi], sdir);
-            tan0[ci] = DirectX::XMVectorAdd(tan0[ci], sdir);
-
-            tan1[ai] = DirectX::XMVectorAdd(tan1[ai], tdir);
-            tan1[bi] = DirectX::XMVectorAdd(tan1[bi], tdir);
-            tan1[ci] = DirectX::XMVectorAdd(tan1[ci], tdir);
+            float angle_weight_a = acos(dot(ab, ac));
+            float angle_weight_b = acos(dot(-ab, bc));
+            float angle_weight_c = acos(dot(-ac, -bc));
+            normals[ai] += (weighted_face_normal * angle_weight_a);
+            normals[bi] += (weighted_face_normal * angle_weight_b);
+            normals[ci] += (weighted_face_normal * angle_weight_c);
         }
 
-        for (long a = 0; a < vertex_count; a++)
+        assert(part.vertex_element_layout[1].semantic == "NORMAL");
+        size_t normal_offset = part.vertex_element_layout[1].byte_offset;
+        for (size_t i = 0; i < part.vertex_count; ++i)
         {
-            Vertex& v = vertices[vertex_offset + a];
+            auto& v_n = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                vertex_buffer_part + i * vertex_stride + normal_offset);
 
-            const DirectX::XMVECTOR n = DirectX::XMLoadFloat3(&v.normal);
-            const DirectX::XMVECTOR& t1 = tan0[a];
-            const DirectX::XMVECTOR& t2 = tan1[a];
-
-            if (DirectX::XMVector3LengthSq(t1).m128_f32[0] < 0.01f)
-            {
-                DirectX::XMFLOAT3 t;
-                guess_tangent(v.normal, t);
-                t = normalize(t);
-                v.tangent0.x = t.x;
-                v.tangent0.y = t.y;
-                v.tangent0.z = t.z;
-                v.tangent0.w = 1.0f;
+            // data is present and probably okay
+            if (length2(v_n) > 0.9f)
                 continue;
+
+            v_n = length2(normals[i]) > 0.001f ? normalize(normals[i]) : zero;
+        }
+    }
+
+
+    void compute_tangent_frame(
+        IScene_loader::Primitive part,
+        uint8_t* vertex_buffer_part,
+        uint32_t* indices, 
+        size_t index_count)
+    {
+        // TODO fix this, its not working correctly
+
+        size_t vertex_stride = get_vertex_stride(part);
+
+        DirectX::XMFLOAT3 zero = {0.0f, 0.0f, 0.0f};
+        std::vector<DirectX::XMFLOAT3> tan0(part.vertex_count, zero);
+        std::vector<DirectX::XMFLOAT3> tan1(part.vertex_count, zero);
+
+        
+        int texcoord_layout_index = -1;
+        for (size_t s = 0, sn = part.vertex_element_layout.size(); s < sn; ++s)
+            if (part.vertex_element_layout[s].semantic == "TEXCOORD_0")
+            {
+                texcoord_layout_index = s;
+                break;
             }
 
-            DirectX::XMVECTOR tangent = DirectX::XMVectorSubtract(
-                t1, DirectX::XMVectorMultiply(n, DirectX::XMVector3Dot(n, t1)));
-            tangent = DirectX::XMVector3Normalize(tangent);
-            DirectX::XMStoreFloat4(&v.tangent0, tangent);
-            v.tangent0.w = (DirectX::XMVector3Dot(
-                DirectX::XMVector3Cross(n, t1), t2).m128_f32[0] < 0.0F) ? -1.0F : 1.0F;
+        if (texcoord_layout_index >= 0)
+        {
+            size_t tex_coord_offset = part.vertex_element_layout[texcoord_layout_index].byte_offset;
+            for (size_t i = 0; i < index_count; i += 3)
+            {
+                uint32_t ai = indices[i + 0];
+                uint32_t bi = indices[i + 1];
+                uint32_t ci = indices[i + 2];
+
+                auto pos_a = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                    vertex_buffer_part + ai * vertex_stride);
+
+                auto pos_b = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                    vertex_buffer_part + bi * vertex_stride);
+
+                auto pos_c = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                    vertex_buffer_part + ci * vertex_stride);
+
+                auto texcoord_a = *reinterpret_cast<DirectX::XMFLOAT2*>(
+                    vertex_buffer_part + ai * vertex_stride + tex_coord_offset);
+
+                auto texcoord_b = *reinterpret_cast<DirectX::XMFLOAT2*>(
+                    vertex_buffer_part + bi * vertex_stride + tex_coord_offset);
+
+                auto texcoord_c = *reinterpret_cast<DirectX::XMFLOAT2*>(
+                    vertex_buffer_part + ci * vertex_stride + tex_coord_offset);
+
+                float x1 = pos_b.x - pos_a.x;
+                float x2 = pos_c.x - pos_a.x;
+                float y1 = pos_b.y - pos_a.y;
+                float y2 = pos_c.y - pos_a.y;
+                float z1 = pos_b.z - pos_a.z;
+                float z2 = pos_c.z - pos_a.z;
+
+                float s1 = texcoord_b.x - texcoord_a.x;
+                float s2 = texcoord_c.x - texcoord_a.x;
+                float t1 = (1.0f - texcoord_b.y) - (1.0f - texcoord_a.y);
+                float t2 = (1.0f - texcoord_c.y) - (1.0f - texcoord_a.y);
+
+                if ((s1 * s1 + t1 * t1) < 0.000001f && (s2 * s2 + t2 * t2) < 0.000001f)
+                    continue;
+
+                if ((s1 * t2 - s2 * t1) < 0.000001f)
+                    continue;
+
+                float r = 1.0f / (s1 * t2 - s2 * t1);
+                DirectX::XMFLOAT3 sdir =
+                {(t2 * x1 - t1 * x2) * r, (t2 * y1 - t1 * y2) * r, (t2 * z1 - t1 * z2) * r};
+                DirectX::XMFLOAT3 tdir =
+                {(s1 * x2 - s2 * x1) * r, (s1 * y2 - s2 * y1) * r, (s1 * z2 - s2 * z1) * r};
+
+                tan0[ai] += sdir;
+                tan0[bi] += sdir;
+                tan0[ci] += sdir;
+
+                tan1[ai] += tdir;
+                tan1[bi] += tdir;
+                tan1[ci] += tdir;
+            }
+        }
+
+        assert(part.vertex_element_layout[1].semantic == "NORMAL");
+        assert(part.vertex_element_layout[2].semantic == "TANGENT");
+        size_t normal_offset = part.vertex_element_layout[1].byte_offset;
+        size_t tangent_offset = part.vertex_element_layout[2].byte_offset;
+
+
+        for (long a = 0; a < part.vertex_count; a++)
+        {
+            auto& v_t3 = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                vertex_buffer_part + a * vertex_stride + tangent_offset);
+            auto& v_t4 = *reinterpret_cast<DirectX::XMFLOAT4*>(
+                vertex_buffer_part + a * vertex_stride + tangent_offset);
+
+            // data is present and probably okay
+            if (length2(v_t3) > 0.9f && abs(v_t4.w) > 0.9f)
+                continue;
+
+            auto& v_n = *reinterpret_cast<DirectX::XMFLOAT3*>(
+                vertex_buffer_part + a * vertex_stride + normal_offset);
+
+            const DirectX::XMFLOAT3& t1 = tan0[a];
+            const DirectX::XMFLOAT3& t2 = tan1[a];
+            DirectX::XMFLOAT3 t;
+            float sign = 1.0f;
+
+            if (texcoord_layout_index < 0 || length2(t1) < 0.001f || length2(t2) < 0.001f)
+            {
+                // arbitrary tangent that is orthogonal to the normal
+                guess_tangent(v_n, t);
+            }
+            else
+            {
+                // Gram-Schmidt
+                t = t1 - (v_n * dot(v_n, t1));
+                if (length2(t) > 0.0001f)
+                {
+                    // get sign
+                    sign = (dot(cross(v_n, t1), t2) < 0.0f) ? -1.0f : 1.0f;
+                    t = normalize(t);
+                }
+                else
+                    guess_tangent(v_n, t);
+            }
+            v_t3 = t;
+            v_t4.w = sign;
         }
     }
 
@@ -284,21 +417,126 @@ namespace
         return doc.images[src_index].uri;
     }
 
-    void process_vertex(Vertex& v, const IScene_loader::Scene_options& options)
+    // non-standardized extra fields on scene nodes allow per mesh-instance scene data
+    std::vector<Scene_data::Value> read_scene_data(const nlohmann::json& json)
     {
-        if (options.handle_z_axis_up)
-        {
-            v.position = {v.position.x, -v.position.z, v.position.y};
-            v.normal = {v.normal.x, -v.normal.z, v.normal.y};
-            v.tangent0 = {v.tangent0.x, -v.tangent0.z, v.tangent0.y, v.tangent0.w};
-        }
+        std::vector<Scene_data::Value> result;
+        if (json.empty() || !json.contains("extras"))
+            return result;
 
-        float scale = 1.0f / options.units_per_meter;
-        v.position = {
-            v.position.x * scale,
-            v.position.y * scale,
-            v.position.z * scale
-        };
+        auto extras = json["extras"];
+        if (!extras.is_object() || !extras.contains("sceneData"))
+            return result;
+
+        auto scene_data = extras["sceneData"];
+        if (!scene_data.is_array())
+            return result;
+       
+        for (auto it = scene_data.begin(); it != scene_data.end(); ++it)
+        {
+            if (it.value().is_object() &&
+                it.value().contains("name") &&
+                it.value().contains("value"))
+            {
+                auto name_obj = it.value()["name"];
+                if (name_obj.type() != nlohmann::json::value_t::string)
+                    continue;
+
+                Scene_data::Value value;
+                value.name = name_obj.get<std::string>();
+
+                auto value_obj = it.value()["value"];
+                auto value_type = value_obj.type();
+
+                switch (value_obj.type())
+                {
+                case nlohmann::json::value_t::boolean:
+                    value.data_int[0] = value_obj.get<bool>() ? 1 : 0;
+                    value.kind = Scene_data::Value_kind::Int;
+                    break;
+
+                case nlohmann::json::value_t::number_float:
+                    value.data_float[0] = value_obj.get<float>();
+                    value.kind = Scene_data::Value_kind::Float;
+                    break;
+
+                case nlohmann::json::value_t::number_integer:
+                    value.data_int[0] = value_obj.get<int32_t>();
+                    value.kind = Scene_data::Value_kind::Int;
+                    break;
+
+                case nlohmann::json::value_t::number_unsigned:
+                    value.data_int[0] = static_cast<int32_t>(value_obj.get<uint32_t>());
+                    value.kind = Scene_data::Value_kind::Int;
+                    break;
+
+                case nlohmann::json::value_t::array:
+                    size_t array_size = value_obj.size();
+                    if (array_size < 1 || array_size > 4)
+                        continue;
+
+                    auto element_type = value_obj.begin().value().type();
+                    if (element_type != nlohmann::json::value_t::number_float &&
+                        element_type != nlohmann::json::value_t::number_integer &&
+                        element_type != nlohmann::json::value_t::number_unsigned)
+                        continue;
+
+                    switch (element_type)
+                    {
+                    case nlohmann::json::value_t::number_float:
+                    {
+                        int i = 0;
+                        for (auto e = value_obj.begin(); e != value_obj.end(); ++e, ++i)
+                            value.data_float[i] = e.value().get<float>();
+
+                        switch (array_size)
+                        {
+                        case 1: value.kind = Scene_data::Value_kind::Float; break;
+                        case 2: value.kind = Scene_data::Value_kind::Vector2; break;
+                        case 3: value.kind = Scene_data::Value_kind::Vector3; break;
+                        case 4: value.kind = Scene_data::Value_kind::Vector4; break;
+                        }
+                        break;
+                    }
+
+                    case nlohmann::json::value_t::number_integer:
+                    {
+                        int i = 0;
+                        for (auto e = value_obj.begin(); e != value_obj.end(); ++e, ++i)
+                            value.data_int[i] = e.value().get<int32_t>();
+
+                        switch (array_size)
+                        {
+                        case 1: value.kind = Scene_data::Value_kind::Int; break;
+                        case 2: value.kind = Scene_data::Value_kind::Int2; break;
+                        case 3: value.kind = Scene_data::Value_kind::Int3; break;
+                        case 4: value.kind = Scene_data::Value_kind::Int4; break;
+                        }
+                        break;
+                    }
+
+                    case nlohmann::json::value_t::number_unsigned:
+                    {
+                        int i = 0;
+                        for (auto e = value_obj.begin(); e != value_obj.end(); ++e, ++i)
+                            value.data_int[i] = static_cast<int32_t>(value_obj.get<uint32_t>());
+
+                        switch (array_size)
+                        {
+                        case 1: value.kind = Scene_data::Value_kind::Int; break;
+                        case 2: value.kind = Scene_data::Value_kind::Int2; break;
+                        case 3: value.kind = Scene_data::Value_kind::Int3; break;
+                        case 4: value.kind = Scene_data::Value_kind::Int4; break;
+                        }
+                        break;
+                    }
+                    }
+                    break;
+                }
+                result.push_back(value);
+            }
+        }
+        return result;
     }
 
 } // anonymous
@@ -313,7 +551,6 @@ namespace
         fx::gltf::ReadQuotas quotas;
         quotas.MaxFileSize *= 32;
         quotas.MaxBufferByteLength *= 32;
-
 
         fx::gltf::Document doc;
         try
@@ -338,74 +575,149 @@ namespace
                 if (p.mode != fx::gltf::Primitive::Mode::Triangles)
                     continue;
 
+                struct input_data
+                {
+                    const uint8_t* base_element;
+                    size_t element_offset;
+                };
+
                 Primitive part;
                 part.material = p.material;
-                part.vertex_offset = mesh.vertices.size();
+                part.vertex_buffer_byte_offset = mesh.vertex_data.size();
                 part.vertex_count = get_vertex_count(doc, p);
                 part.index_offset = mesh.indices.size();
 
-                size_t index_count, stride_index;
-                auto p_first_index = get_index_data(doc, p, index_count, stride_index);
+                // construct the vertex layout for this primitive
+                // ----------------------------------------
+                
+                // always have position, normal and tangent first as these are mandatory for
+                // the renderer
+                add_vertex_element(part, "POSITION", Scene_data::Value_kind::Vector3);
+                add_vertex_element(part, "NORMAL", Scene_data::Value_kind::Vector3);
+                add_vertex_element(part, "TANGENT", Scene_data::Value_kind::Vector4);
+                std::vector<input_data> input(3, input_data{nullptr, 0});
 
-                size_t stride_pos = 0;
-                const uint8_t* p_first_pos = 
-                    get_vertex_data<DirectX::XMFLOAT3>(doc, p, "POSITION", stride_pos);
-
-                size_t stride_normal = 0;
-                const uint8_t* p_first_normal = 
-                    get_vertex_data<DirectX::XMFLOAT3>(doc, p, "NORMAL", stride_normal);
-
-                size_t stride_texcoord = 0;
-                const uint8_t* p_first_texcoord = 
-                    get_vertex_data<DirectX::XMFLOAT2>(doc, p, "TEXCOORD_0", stride_texcoord);
-
-                size_t stride_tangent = 0;
-                const uint8_t* p_first_tangent =
-                    get_vertex_data<DirectX::XMFLOAT2>(doc, p, "TANGENT", stride_tangent);
-
-                bool warned_because_of_tangents = false;
-                for (size_t i = 0; i < part.vertex_count; ++i)
+                // iterate over the available other semantics
+                for (const auto& att : p.attributes)
                 {
-                    Vertex v;
-                    v.position = read<DirectX::XMFLOAT3>(p_first_pos + i * stride_pos);
+                    const fx::gltf::Accessor& acc = doc.accessors[att.second];
+                    const fx::gltf::BufferView& bv = doc.bufferViews[acc.bufferView];
+                    const fx::gltf::Buffer& b = doc.buffers[bv.buffer];
 
-                    v.normal = p_first_normal 
-                        ? normalize(read<DirectX::XMFLOAT3>(p_first_normal + i * stride_normal)) 
-                        : DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-                    v.texcoord0 = p_first_texcoord 
-                        ? read<DirectX::XMFLOAT2>(p_first_texcoord + i * stride_texcoord) 
-                        : DirectX::XMFLOAT2(0.0f, 0.0f);
-                    v.texcoord0.y = 1.0f - v.texcoord0.y;
-
-                    v.tangent0 = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
-                    if (p_first_tangent)
+                    size_t layout_index;
+                    if      (att.first == "POSITION")   layout_index = 0;
+                    else if (att.first == "NORMAL")     layout_index = 1;
+                    else if (att.first == "TANGENT")    layout_index = 2;
+                    else
                     {
-                        v.tangent0 = read<DirectX::XMFLOAT4>(p_first_tangent + i * stride_tangent);
-                        float l = v.tangent0.x * v.tangent0.x + 
-                                  v.tangent0.y * v.tangent0.y +
-                                  v.tangent0.z * v.tangent0.z;
+                        switch (acc.type)
+                        {
+                            case fx::gltf::Accessor::Type::Scalar:
+                                add_vertex_element(part, att.first, Scene_data::Value_kind::Float);
+                                break;
+                            case fx::gltf::Accessor::Type::Vec2:
+                                add_vertex_element(part, att.first, Scene_data::Value_kind::Vector2);
+                                break;
+                            case fx::gltf::Accessor::Type::Vec3:
+                                add_vertex_element(part, att.first, Scene_data::Value_kind::Vector3);
+                                break;
+                            case fx::gltf::Accessor::Type::Vec4:
+                                add_vertex_element(part, att.first, Scene_data::Value_kind::Vector4);
+                                break;
+                            case fx::gltf::Accessor::Type::Mat2:
+                            case fx::gltf::Accessor::Type::Mat3:
+                            case fx::gltf::Accessor::Type::Mat4:
+                            case fx::gltf::Accessor::Type::None:
+                            default:
+                                log_error("GLTF accessor type not handled.", SRC);
+                                continue;
+                        }
 
-                        if (l < 0.01 || fabsf(v.tangent0.w) < 0.5f) 
-                        {
-                            if (!warned_because_of_tangents) {
-                                log_warning("inconsistent tangents found in mesh: " + m.name, SRC);
-                                warned_because_of_tangents = true;
-                            }
-                        }
-                        else
-                        {
-                            auto tangent = normalize({v.tangent0.x, v.tangent0.y, v.tangent0.z});
-                            v.tangent0.x = tangent.x;
-                            v.tangent0.y = tangent.y;
-                            v.tangent0.z = tangent.z;
-                        }
+                        layout_index = input.size();
+                        input.push_back(input_data{nullptr, 0});
                     }
 
-                    process_vertex(v, options);
+                    // input data alignment
+                    input[layout_index].base_element = 
+                        b.data.data() + bv.byteOffset + acc.byteOffset;
 
-                    mesh.vertices.push_back(std::move(v));
+                    input[layout_index].element_offset = (bv.byteStride == 0)
+                        ? part.vertex_element_layout[layout_index].element_size
+                        : bv.byteStride;
                 }
+
+                // allocate a buffer for this part, vertex count * vertex size
+                size_t vertex_stride = get_vertex_stride(part);
+                std::vector<uint8_t> vertex_buffer_part(part.vertex_count * vertex_stride, 0);
+
+                // iterate over the semantics
+                bool found_normals = false;
+                bool fix_normals = false;
+                bool found_tangents = false;
+                bool fix_tangents = false;
+                for (size_t s = 0, sn = part.vertex_element_layout.size(); s < sn; ++s)
+                {
+                    bool is_position = part.vertex_element_layout[s].semantic == "POSITION";
+                    bool is_normal = part.vertex_element_layout[s].semantic == "NORMAL";
+                    bool is_tangent = part.vertex_element_layout[s].semantic == "TANGENT";
+
+                    // skip if the value is missing, can happen for e.g. for tangents
+                    if (input[s].base_element == nullptr)
+                        continue;
+
+                    // iterate over the vertices
+                    for (size_t i = 0, in = part.vertex_count; i < in; ++i)
+                    {
+                        uint8_t* dest_ptr = vertex_buffer_part.data() +
+                            part.vertex_element_layout[s].byte_offset + 
+                            vertex_stride * i;
+
+                        memcpy(
+                            dest_ptr,
+                            input[s].base_element + input[s].element_offset * i, 
+                            part.vertex_element_layout[s].element_size);
+
+                        // special handling of mandatory data
+                        if ((is_position || is_normal || is_tangent) && options.handle_z_axis_up)
+                        {
+                            auto vec = reinterpret_cast<DirectX::XMFLOAT3*>(dest_ptr);
+                            *vec = {vec->x, -vec->z, vec->y};
+                        }
+                        if (is_position && options.units_per_meter != 1.0f)
+                        {
+                            float scale = 1.0f / options.units_per_meter;
+                            auto vec = reinterpret_cast<DirectX::XMFLOAT3*>(dest_ptr);
+                            vec->x *= scale;
+                            vec->y *= scale;
+                            vec->z *= scale;
+                        }
+                        if (is_normal)
+                        {
+                            found_normals = true;
+                            auto vec = reinterpret_cast<DirectX::XMFLOAT3*>(dest_ptr);
+                            if (length2(*vec) > 0.01)
+                                *vec = normalize(*vec);
+                            else
+                                fix_normals = true;
+                        }
+                        if (is_tangent)
+                        {
+                            found_tangents = true;
+                            auto vec4 = reinterpret_cast<DirectX::XMFLOAT4*>(dest_ptr);
+                            auto vec3 = reinterpret_cast<DirectX::XMFLOAT3*>(dest_ptr);
+                            if (length2(*vec3) > 0.01 && fabsf(vec4->w) > 0.5f)
+                                *vec3 = normalize(*vec3);
+                            else
+                                fix_tangents = true;
+                            
+                        }
+                    }
+                }
+
+                
+                // get or generate index data
+                size_t index_count, stride_index;
+                auto p_first_index = get_index_data(doc, p, index_count, stride_index);
 
                 if (p_first_index)
                 {
@@ -414,21 +726,21 @@ namespace
                     {
                         for (size_t i = 0; i < part.index_count; ++i)
                             mesh.indices.push_back(
-                                static_cast<uint32_t>(part.vertex_offset +
+                                static_cast<uint32_t>(
                                     read<uint32_t>(p_first_index + i * stride_index)));
                     }
                     else if (stride_index == sizeof(uint16_t))
                     {
                         for (size_t i = 0; i < part.index_count; ++i)
                             mesh.indices.push_back(
-                                static_cast<uint32_t>(part.vertex_offset +
+                                static_cast<uint32_t>(
                                     read<uint16_t>(p_first_index + i * stride_index)));
                     }
                     else if (stride_index == sizeof(uint8_t))
                     {
                         for (size_t i = 0; i < part.index_count; ++i)
                             mesh.indices.push_back(
-                                static_cast<uint32_t>(part.vertex_offset +
+                                static_cast<uint32_t>(
                                     read<uint8_t>(p_first_index + i * stride_index)));
                     }
                     else
@@ -441,15 +753,30 @@ namespace
                 {
                     part.index_count = part.vertex_count;
                     for (size_t i = 0; i < part.index_count; ++i)
-                        mesh.indices.push_back(static_cast<uint32_t>(part.vertex_offset + i));
+                        mesh.indices.push_back(static_cast<uint32_t>(i));
                 }
 
-                if (!p_first_tangent)
+                // generate normals if not present (very simple)
+                if (!found_normals || fix_normals)
                 {
-                    compute_tangent_frame(
-                        mesh.vertices.data(), part.vertex_offset, part.vertex_count,
+                    compute_normals(
+                        part, vertex_buffer_part.data(),
                         mesh.indices.data() + part.index_offset, part.index_count);
                 }
+
+                // generate tangents if not present (simple)
+                if (!found_tangents || fix_tangents)
+                {
+                    compute_tangent_frame(
+                        part, vertex_buffer_part.data(),
+                        mesh.indices.data() + part.index_offset, part.index_count);
+                }
+
+                // copy vertex buffer to mesh
+                mesh.vertex_data.insert(
+                    mesh.vertex_data.end(),
+                    vertex_buffer_part.begin(),
+                    vertex_buffer_part.end());
 
                 mesh.primitives.push_back(std::move(part));
             }
@@ -579,9 +906,12 @@ namespace
                 {
                     node.kind = Node::Kind::Camera;
                     node.index = src_child.camera;
-                    if(m_scene.cameras[node.index].name.empty())
+                    if (m_scene.cameras[node.index].name.empty())
                         m_scene.cameras[node.index].name = node.name + "_Camera";
                 }
+
+                // read (non-standardized) scene data from the extra fields
+                node.scene_data = read_scene_data(src_child.extensionsAndExtras);
 
                 // go down recursively
                 for (const auto& c : src_child.children)

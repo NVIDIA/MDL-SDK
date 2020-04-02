@@ -42,6 +42,7 @@
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_positions.h>
 
+#include "generator_jit.h"
 #include "generator_jit_context.h"
 #include "generator_jit_llvm.h"
 #include "generator_jit_type_map.h"
@@ -2168,11 +2169,26 @@ llvm::BasicBlock *Function_context::get_unreachable_bb()
 // Register a resource value and return its index.
 size_t Function_context::get_resource_index(mi::mdl::IValue_resource const *resource)
 {
-    if (m_res_manager != NULL)
-        return m_res_manager->get_resource_index(resource);
+    int tag_value = resource->get_tag_value();
+    if (tag_value == 0) {
+        tag_value = m_code_gen.find_resource_tag(resource);
+    }
+
+    if (m_res_manager != NULL) {
+        IType_texture::Shape shape            = IType_texture::TS_2D;
+        IValue_texture::gamma_mode gamma_mode = IValue_texture::gamma_default;
+
+        if (IValue_texture const *tex = as<IValue_texture>(resource)) {
+            shape      = tex->get_type()->get_shape();
+            gamma_mode = tex->get_gamma_mode();
+        }
+
+        return m_res_manager->get_resource_index(
+            kind_from_value(resource), resource->get_string_value(), tag_value, shape, gamma_mode);
+    }
 
     // no resource manager, leave it "as is"
-    return resource->get_tag_value();
+    return tag_value;
 }
 
 // Get the array base address of an deferred-sized array.

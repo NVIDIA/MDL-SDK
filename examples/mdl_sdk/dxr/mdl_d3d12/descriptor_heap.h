@@ -40,6 +40,7 @@ namespace mdl_d3d12
     class Base_application;
     class Raytracing_acceleration_structure;
     class Texture;
+    enum class Texture_dimension;
 
     class Descriptor_heap
     {
@@ -88,7 +89,9 @@ namespace mdl_d3d12
 
         /// Create an Shader Resource View (SRV) at a given position on the heap.
         bool create_shader_resource_view(
-            Texture* texture, const Descriptor_heap_handle& handle);
+            Texture* texture, 
+            Texture_dimension dimension,
+            const Descriptor_heap_handle& handle);
 
         /// Create an Shader Resource View (SRV) at a given position on the heap.
         bool create_shader_resource_view(
@@ -109,6 +112,7 @@ namespace mdl_d3d12
             if (!buffer->get_shader_resource_view_description(desc))
                 return false;
 
+            std::lock_guard<std::mutex> lock(m_entries_mutex);
             m_entries[handle].resource_name = buffer->get_debug_name();
             m_entries[handle].resource_type = Entry::Kind::SRV;
             m_app->get_device()->CreateShaderResourceView(

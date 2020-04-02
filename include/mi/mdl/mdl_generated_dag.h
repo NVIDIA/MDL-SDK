@@ -33,6 +33,7 @@
 #include <cstring>
 #include <mi/mdl/mdl_iowned.h>
 #include <mi/mdl/mdl_generated_code.h>
+#include <mi/mdl/mdl_values.h>
 
 namespace mi {
 namespace mdl {
@@ -41,6 +42,7 @@ class ICall_name_resolver;
 class IResource_modifier;
 class IValue;
 class IValue_float;
+class IValue_resource;
 class IValue_factory;
 class Messages;
 class IType_factory;
@@ -673,6 +675,14 @@ public:
         /// might depend on the MDL edf with global distribution.
         virtual bool depends_on_global_distribution() const = 0;
 
+        /// Returns the number of scene data attributes referenced by this instance.
+        virtual size_t get_referenced_scene_data_count() const = 0;
+
+        /// Return the name of a scene data attribute referenced by this instance.
+        ///
+        /// \param index  the index of the scene data attribute
+        virtual char const *get_referenced_scene_data_name(size_t index) const = 0;
+
         /// Returns the opacity of this instance.
         virtual Opacity get_opacity() const = 0;
 
@@ -693,6 +703,23 @@ public:
 
         /// Get the internal space.
         virtual char const *get_internal_space() const = 0;
+
+        /// Set a tag, version pair for a resource constant that might be reachable from this
+        /// instance.
+        ///
+        /// \param res             a resource
+        /// \param tag             the tag value
+        virtual void set_resource_tag(
+            IValue_resource const *res,
+            int                   tag) = 0;
+
+        /// Get the number of resource tag map entries.
+        virtual size_t get_resource_tag_map_entries_count() const = 0;
+
+        /// Get the i'th resource tag map entry or NULL if the index is out of bounds;
+        ///
+        /// \param index  the index of the resource map entry.
+        virtual Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const = 0;
     };
 
     // -------------------------- methods --------------------------
@@ -980,6 +1007,15 @@ public:
         int function_index,
         int temporary_index) const = 0;
 
+    /// Get the temporary name at temporary_index used by the function at function_index.
+    ///
+    /// \param function_index      The index of the function.
+    /// \param temporary_index     The index of the temporary variable.
+    /// \returns                   The name of the temporary variable.
+    virtual char const *get_function_temporary_name(
+        int function_index,
+        int temporary_index) const = 0;
+
     /// Get the body of the function at function_index.
     ///
     /// \param function_index      The index of the function.
@@ -1080,6 +1116,15 @@ public:
     /// \param temporary_index     The index of the temporary variable.
     /// \returns                   The value of the temporary variable.
     virtual DAG_node const *get_material_temporary(
+        int material_index,
+        int temporary_index) const = 0;
+
+    /// Get the temporary name at temporary_index used by the material at material_index.
+    ///
+    /// \param material_index      The index of the material.
+    /// \param temporary_index     The index of the temporary variable.
+    /// \returns                   The name of the temporary variable.
+    virtual char const *get_material_temporary_name(
         int material_index,
         int temporary_index) const = 0;
 
@@ -1247,16 +1292,6 @@ public:
     /// Returns the amount of used memory by this code DAG.
     virtual size_t get_memory_size() const = 0;
 
-    /// Set a tag, version pair for a resource constant.
-    ///
-    /// \param c        a resource constant
-    /// \param tag      the tag value
-    /// \param version  the tag version
-    virtual void set_resource_tag(
-        DAG_constant const *c,
-        int                tag,
-        unsigned           version) = 0;
-
     /// Get the number of annotations of the module.
     ///
     /// \returns                    The number of annotations.
@@ -1365,6 +1400,28 @@ public:
     virtual DAG_node const *get_annotation_annotation(
         int anno_decl_index,
         int annotation_index) const = 0;
+
+    /// Get a tag,for a resource constant that might be reachable from this DAG.
+    ///
+    /// \param res             a resource
+    virtual int get_resource_tag(
+        IValue_resource const *res) const = 0;
+
+    /// Set a tag, version pair for a resource constant that might be reachable from this DAG.
+    ///
+    /// \param res             a resource
+    /// \param tag             the tag value
+    virtual void set_resource_tag(
+        IValue_resource const *res,
+        int                   tag) = 0;
+
+    /// Get the number of resource tag map entries.
+    virtual size_t get_resource_tag_map_entries_count() const = 0;
+
+    /// Get the i'th resource tag map entry or NULL if the index is out of bounds;
+    ///
+    /// \param index  the index of the resource map entry.
+    virtual Resource_tag_tuple const *get_resource_tag_map_entry(size_t index) const = 0;
 };
 
 /// Check if a DAG node is of a certain type.

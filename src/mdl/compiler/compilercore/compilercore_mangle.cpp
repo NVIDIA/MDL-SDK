@@ -144,7 +144,7 @@ private:
     static char encode_digit(unsigned d) {
         //  0..25 map to ASCII a..z
         // 26..35 map to ASCII A..J
-        return d + 'A' + (('a' - 'A') * (d < 26));
+        return d + ('A' - 26) + (('a' - 'A' + 26) * (d < 26));
     }
 
     /// returns the numeric value of a basic code point (for use in representing integers)

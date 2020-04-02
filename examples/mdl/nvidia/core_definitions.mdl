@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright 2020 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -135,7 +135,7 @@ export annotation type_of_material(material_type type);
 export annotation ui_position(int position);
 export annotation typical_object_size(float size);
 
-const string COPYRIGHT = "Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.";
+const string COPYRIGHT = "Copyright 2020 NVIDIA Corporation. All rights reserved.";
 
 
 export texture_return blend_colors(

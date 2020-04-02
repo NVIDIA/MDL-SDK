@@ -81,7 +81,7 @@ mi::Sint32 Lightprofile_impl::reset_file(
         return -1;
 
     mi::Sint32 result = get_db_element()->reset_file(
-        filename, resolution_phi, resolution_theta, degree, flags);
+        get_db_transaction(), filename, resolution_phi, resolution_theta, degree, flags);
     if( result == 0) {
         add_journal_flag( SCENE::JOURNAL_CHANGE_FIELD);
         add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
@@ -100,7 +100,7 @@ mi::Sint32 Lightprofile_impl::reset_reader(
         return -1;
 
     mi::Sint32 result = get_db_element()->reset_reader(
-        reader, resolution_phi, resolution_theta, degree, flags);
+        get_db_transaction(), reader, resolution_phi, resolution_theta, degree, flags);
     if( result == 0) {
         add_journal_flag( SCENE::JOURNAL_CHANGE_FIELD);
         add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
@@ -152,12 +152,12 @@ mi::Float32 Lightprofile_impl::get_theta( mi::Uint32 index) const
 
 mi::Float32 Lightprofile_impl::get_data( mi::Uint32 index_phi, mi::Uint32 index_theta) const
 {
-    return get_db_element()->get_data( index_phi, index_theta);
+    return get_db_element()->get_data( get_db_transaction(), index_phi, index_theta);
 }
 
 const mi::Float32* Lightprofile_impl::get_data() const
 {
-    return get_db_element()->get_data();
+    return get_db_element()->get_data( get_db_transaction());
 }
 
 mi::Float64 Lightprofile_impl::get_candela_multiplier() const
@@ -167,7 +167,7 @@ mi::Float64 Lightprofile_impl::get_candela_multiplier() const
 
 mi::Float32 Lightprofile_impl::sample( mi::Float32 phi, mi::Float32 theta, bool candela) const
 {
-    return get_db_element()->sample( phi, theta, candela);
+    return get_db_element()->sample( get_db_transaction(), phi, theta, candela);
 }
 
 } // namespace NEURAY

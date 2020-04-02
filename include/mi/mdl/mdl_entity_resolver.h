@@ -185,6 +185,16 @@ public:
 
     /// Get the UDIM mode for this set.
     virtual UDIM_mode get_udim_mode() const = 0;
+
+    /// Get the resource hash value for the i'th file in the set if any.
+    ///
+    /// \param[in]  i     the index
+    /// \param[out] hash  the hash value if exists
+    ///
+    /// \return true if this entry has a hash, false otherwise
+    virtual bool get_resource_hash(
+        size_t i,
+        unsigned char hash[16]) const = 0;
 };
 
 /// An interface for resolving MDL entities.

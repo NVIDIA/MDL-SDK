@@ -631,7 +631,8 @@ public:
         return -1;
     }
 
-    /// Assume the first argument is a boolean branch condition and translate it.
+    /// Translate this call as a boolean condition.
+    /// If this is a ternary operator call, translate the first argument.
     ///
     /// \param code_gen  the LLVM code generator
     /// \param ctx       the current function context
@@ -643,9 +644,15 @@ public:
         llvm::BasicBlock    *true_bb,
         llvm::BasicBlock    *false_bb) const MDL_FINAL
     {
+        mi::mdl::IExpression const *cond;
+        if (get_semantics() == operator_to_semantic(IExpression::OK_TERNARY))
+            cond = m_call->get_argument(0)->get_argument_expr();
+        else
+            cond = m_call;
+
         code_gen.translate_boolean_branch(
             ctx,
-            m_call->get_argument(0)->get_argument_expr(),
+            cond,
             true_bb,
             false_bb);
     }
@@ -703,7 +710,10 @@ public:
         LLVM_code_generator &) const MDL_FINAL
     {
         char const *signature = m_call->get_name();
-        if (signature[0] == '#') ++signature;  // skip prefix for derivative variants
+        if (signature[0] == '#') {
+            // skip prefix for derivative variants
+            ++signature;
+        }
         mi::base::Handle<mi::mdl::IModule const> mod(m_resolver->get_owner_module(signature));
         if (! mod.is_valid_interface())
             return NULL;
@@ -746,7 +756,10 @@ public:
         bool                                     return_derivs) const MDL_FINAL
     {
         char const *signature = m_call->get_name();
-        if (signature[0] == '#') ++signature;  // skip prefix for derivative variants
+        if (signature[0] == '#') {
+            // skip prefix for derivative variants
+            ++signature;
+        }
         mi::base::Handle<mi::mdl::IModule const> mod(m_resolver->get_owner_module(signature));
         if (! mod.is_valid_interface())
             return NULL;
@@ -872,7 +885,8 @@ public:
         return -1;
     }
 
-    /// Assume the first argument is a boolean branch condition and translate it.
+    /// Translate this call as a boolean condition.
+    /// If this is a ternary operator call, translate the first argument.
     ///
     /// \param code_gen  the LLVM code generator
     /// \param ctx       the current function context
@@ -884,10 +898,16 @@ public:
         llvm::BasicBlock    *true_bb,
         llvm::BasicBlock    *false_bb) const MDL_FINAL
     {
+        DAG_node const *cond;
+        if (get_semantics() == operator_to_semantic(IExpression::OK_TERNARY))
+            cond = m_call->get_argument(int(0));
+        else
+            cond = m_call;
+
         code_gen.translate_boolean_branch(
             ctx,
             m_resolver,
-            m_call->get_argument(int(0)),
+            cond,
             true_bb,
             false_bb);
     }
@@ -1052,6 +1072,16 @@ LLVM_code_generator::LLVM_code_generator(
 , m_hlsl_func_rodata_as_float(NULL)
 , m_hlsl_func_rodata_as_double(NULL)
 , m_hlsl_func_rodata_as_bool(NULL)
+, m_hlsl_func_scene_data_lookup_int(NULL)
+, m_hlsl_func_scene_data_lookup_int2(NULL)
+, m_hlsl_func_scene_data_lookup_int3(NULL)
+, m_hlsl_func_scene_data_lookup_int4(NULL)
+, m_hlsl_func_scene_data_lookup_float(NULL)
+, m_hlsl_func_scene_data_lookup_float2(NULL)
+, m_hlsl_func_scene_data_lookup_float3(NULL)
+, m_hlsl_func_scene_data_lookup_float4(NULL)
+, m_hlsl_func_scene_data_lookup_color(NULL)
+, m_resource_tag_map(NULL)
 , m_opt_level(unsigned(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL)))
 , m_jit_dbg_mode(JDBG_NONE)
 , m_num_texture_spaces(num_texture_spaces)
@@ -1087,6 +1117,10 @@ LLVM_code_generator::LLVM_code_generator(
     options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE)))
 , m_dist_func(NULL)
 , m_dist_func_state(DFSTATE_NONE)
+, m_instantiated_dfs(
+    Distribution_function_state::DFSTATE_END_STATE,
+    Instantiated_dfs(get_allocator()),
+    get_allocator())
 , m_libbsdf_template_funcs(get_allocator())
 , m_enable_auxiliary(options.get_bool_option(MDL_JIT_OPTION_ENABLE_AUXILIARY))
 , m_module_lambda_funcs(get_allocator())
@@ -1139,7 +1173,8 @@ LLVM_code_generator::LLVM_code_generator(
 , m_next_func_name_id(0)
 {
     // clear the lookup tables
-    memset(m_lut_info,             0, sizeof(m_lut_info));
+    memset(m_lut_info,              0, sizeof(m_lut_info));
+    memset(m_bsdf_data_texture_ids, 0, sizeof(m_bsdf_data_texture_ids));
 
     // clear caches
     memset(m_tex_lookup_functions, 0, sizeof(m_tex_lookup_functions));
@@ -1574,7 +1609,9 @@ llvm::Type *LLVM_code_generator::lookup_type(
         }
     }
 #endif
-    if (type->get_kind() == mdl::IType::TK_BSDF && m_dist_func_state != DFSTATE_NONE) {
+    mdl::IType::Kind df_kind = type->get_kind();
+    if ((df_kind == mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF)
+            && m_dist_func_state != DFSTATE_NONE) {
         switch (m_dist_func_state) {
         case DFSTATE_INIT:
             return m_type_mapper.get_void_type();
@@ -1675,6 +1712,7 @@ bool LLVM_code_generator::is_deriv_var(mi::mdl::IDefinition const *def) const
 bool LLVM_code_generator::need_reference_return(mi::mdl::IType const *type) const
 {
     if ((type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_BSDF ||
+            type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_HAIR_BSDF ||
             type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_EDF) &&
         m_dist_func_state != DFSTATE_NONE)
     {
@@ -1693,6 +1731,7 @@ bool LLVM_code_generator::need_reference_return(mi::mdl::IType const *type) cons
 bool LLVM_code_generator::is_passed_by_reference(mi::mdl::IType const *type) const
 {
     if ((type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_BSDF ||
+            type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_HAIR_BSDF ||
             type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_EDF) &&
         m_dist_func_state != DFSTATE_NONE)
     {
@@ -1735,8 +1774,37 @@ llvm::Function *LLVM_code_generator::get_optix_cp_from_id()
 void LLVM_code_generator::create_resource_tables(Lambda_function const &lambda)
 {
     // no resource attributes available -> no attributes to fill in
-    if (!lambda.has_resource_attributes())
+    if (!lambda.has_resource_attributes()) {
+        // we still need to collect the BSDF data texture IDs
+        Resource_attr_map const &map = lambda.get_resource_attribute_map();
+        for (Resource_attr_map::const_iterator it(map.begin()), end(map.end()); it != end; ++it) {
+            Resource_tag_tuple const  &k = it->first;
+            Resource_attr_entry const &e = it->second;
+
+            switch (k.m_kind) {
+            case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+            case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+            case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+            case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+            case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+            case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+            case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+            case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+            {
+                IValue_texture::Bsdf_data_kind bsdf_data_kind =
+                    bsdf_data_kind_from_kind(k.m_kind);
+                if (bsdf_data_kind != IValue_texture::BDK_NONE) {
+                    m_bsdf_data_texture_ids[int(bsdf_data_kind) - 1] = e.index;
+                }
+                break;
+            }
+            default:
+                MDL_ASSERT(bsdf_data_kind_from_kind(k.m_kind) == IValue_texture::BDK_NONE);
+                break;  // nothing to do for non BSDF data textures
+            }
+        }
         return;
+    }
 
     IAllocator *alloc = m_arena.get_allocator();
 
@@ -1746,25 +1814,52 @@ void LLVM_code_generator::create_resource_tables(Lambda_function const &lambda)
 
     Resource_attr_map const &map = lambda.get_resource_attribute_map();
     for (Resource_attr_map::const_iterator it(map.begin()), end(map.end()); it != end; ++it) {
-        IValue const         *r = it->first;
-        Resource_entry const &e = it->second;
+        Resource_tag_tuple const  &k = it->first;
+        Resource_attr_entry const &e = it->second;
 
-        if (is<IType_texture>(r->get_type())) {
+        switch (k.m_kind) {
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_DEFAULT:
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_LINEAR:
+        case Resource_tag_tuple::RK_TEXTURE_GAMMA_SRGB:
+            // real texture ...
+        case Resource_tag_tuple::RK_SIMPLE_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_SMITH_MULTISCATTER:
+        case Resource_tag_tuple::RK_BECKMANN_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_GGX_VC_MULTISCATTER:
+        case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
+        case Resource_tag_tuple::RK_SHEEN_MULTISCATTER:
+        {
+            // ... and BSDF data textures
             if (tex_entries.size() < e.index + 1)
                 tex_entries.resize(e.index + 1);
             tex_entries[e.index] =
                 Texture_attribute_entry(e.valid, e.u.tex.width, e.u.tex.height, e.u.tex.depth);
-        } else if (is<IType_light_profile>(r->get_type())) {
+            IValue_texture::Bsdf_data_kind bsdf_data_kind =
+                bsdf_data_kind_from_kind(k.m_kind);
+            if (bsdf_data_kind != IValue_texture::BDK_NONE) {
+                m_bsdf_data_texture_ids[int(bsdf_data_kind) - 1] = e.index;
+            }
+            break;
+        }
+        case Resource_tag_tuple::RK_LIGHT_PROFILE:
             if (lp_entries.size() < e.index + 1)
                 lp_entries.resize(e.index + 1);
             lp_entries[e.index] =
                 Light_profile_attribute_entry(e.valid, e.u.lp.power, e.u.lp.maximum);
-        } else {
-            MDL_ASSERT(is<IType_bsdf_measurement>(r->get_type()));
+            break;
+        case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
             if (bm_entries.size() < e.index + 1)
                 bm_entries.resize(e.index + 1);
             bm_entries[e.index] =
                 Bsdf_measurement_attribute_entry(e.valid);
+            break;
+        case Resource_tag_tuple::RK_INVALID_REF:
+            // no attributes to add
+            break;
+        default:
+            MDL_ASSERT(!"unexpected resource kind");
         }
     }
 
@@ -4580,6 +4675,26 @@ bool LLVM_code_generator::can_be_stored_in_ro_segment(IType const *t)
     return false;
 }
 
+// Find a tag for a given resource if available in the resource tag map.
+int LLVM_code_generator::find_resource_tag(IValue_resource const *res) const
+{
+    if (m_resource_tag_map == NULL)
+        return 0;
+
+    // linear search
+    Resource_tag_tuple::Kind kind = kind_from_value(res);
+    char const               *url = res->get_string_value();
+
+    for (size_t i = 0, n = m_resource_tag_map->size(); i < n; ++i) {
+        Resource_tag_tuple const &e = (*m_resource_tag_map)[i];
+
+        // beware of NULL pointer
+        if (e.m_kind == kind && (e.m_url == url || strcmp(e.m_url, url) == 0))
+            return e.m_tag;
+    }
+    return 0;
+}
+
 // Creates a global constant for a value in the LLVM IR.
 llvm::Value *LLVM_code_generator::create_global_const(
     Function_context               &ctx,
@@ -4730,8 +4845,8 @@ Expression_result LLVM_code_generator::translate_value(
     mi::mdl::IValue const *v)
 {
     llvm::Value *res;
-    if (is<mi::mdl::IValue_resource>(v)) {
-        size_t idx = ctx.get_resource_index(cast<mi::mdl::IValue_resource>(v));
+    if (mi::mdl::IValue_resource const *r = as<mi::mdl::IValue_resource>(v)) {
+        size_t idx = ctx.get_resource_index(r);
         res = ctx.get_constant(int(idx));
     } else {
         // non-resource value
@@ -6617,8 +6732,13 @@ Expression_result LLVM_code_generator::translate_call(
             }
         }
 
-        // TODO: implement calling renderer runtime. For now just return false
-        return Expression_result::value(ctx.get_constant(false));
+        if (m_target_lang != TL_HLSL) {
+            // TODO: implement calling renderer runtime. For now just return false
+            return Expression_result::value(ctx.get_constant(false));
+        }
+
+        // try compiler known intrinsic function
+        break;
 
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
@@ -6648,8 +6768,13 @@ Expression_result LLVM_code_generator::translate_call(
             }
         }
 
-        // TODO: implement calling renderer runtime. For now just return second argument
-        return call_expr->translate_argument(*this, ctx, 1, return_derivs);
+        if (m_target_lang != TL_HLSL) {
+            // TODO: implement calling renderer runtime. For now just return second argument
+            return call_expr->translate_argument(*this, ctx, 1, return_derivs);
+        }
+
+        // try compiler known intrinsic function
+        break;
 
     default:
         // try compiler known intrinsic function
@@ -8216,7 +8341,10 @@ Expression_result LLVM_code_generator::translate_node(
                 res = translate_call(ctx, &call);
             } else {
                 char const *signature = call_node->get_name();
-                if (signature[0] == '#') ++signature;  // skip prefix for derivative variants
+                if (signature[0] == '#') {
+                    // skip prefix for derivative variants
+                    ++signature;
+                }
                 mi::base::Handle<mi::mdl::IModule const> mod(resolver->get_owner_module(signature));
                 MDL_module_scope scope(*this, mod.get());
 
@@ -8641,6 +8769,7 @@ llvm::Module *LLVM_code_generator::finalize_module()
     create_light_profile_attribute_table();
     create_bsdf_measurement_attribute_table();
     create_string_table();
+    replace_bsdf_data_calls();
 
     llvm::Module *llvm_module = m_module;
     m_module = NULL;
@@ -9535,6 +9664,36 @@ void LLVM_code_generator::create_string_table()
         llvm::BasicBlock *bb = llvm::BasicBlock::Create(get_llvm_context(), "start", func);
         llvm::IRBuilder<> builder(bb);
         builder.CreateRet(llvm::ConstantInt::get(m_type_mapper.get_int_type(), int(n)));
+    }
+}
+
+// Replace all calls to state::get_bsdf_data_texture_id() by the registered texture IDs.
+void LLVM_code_generator::replace_bsdf_data_calls()
+{
+    llvm::Function *func = m_module->getFunction(
+        "_ZNK5State24get_bsdf_data_texture_idE14Bsdf_data_kind");
+    if (func == nullptr)
+        return;
+
+    for (auto ui = func->user_begin(); ui != func->user_end(); ) {
+        llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(*ui);
+        ++ui;
+        if (call) {
+            llvm::Value *kind_val = call->getArgOperand(1);
+            if (llvm::ConstantInt *const_int = llvm::dyn_cast<llvm::ConstantInt>(kind_val)) {
+                int bsdf_data_kind = const_int->getValue().getZExtValue();
+                int tex_id = 0;
+                if (bsdf_data_kind > 0 && bsdf_data_kind <= IValue_texture::BDK_LAST_KIND) {
+                    tex_id = int(m_bsdf_data_texture_ids[bsdf_data_kind - 1]);
+                }
+
+                llvm::Value *res_val = llvm::ConstantInt::get(m_type_mapper.get_int_type(), tex_id);
+                call->replaceAllUsesWith(res_val);
+                call->eraseFromParent();
+            } else {
+                MDL_ASSERT(!"argument to State::get_bsdf_data_texture_id() must be a constant");
+            }
+        }
     }
 }
 

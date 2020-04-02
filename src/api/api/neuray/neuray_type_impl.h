@@ -41,8 +41,6 @@
 #include <base/lib/log/i_log_assert.h>
 #include <io/scene/mdl_elements/i_mdl_elements_type.h>
 
-#include <base/system/main/neuray_cc_conf.h>
-
 namespace MI {
 
 namespace NEURAY {
@@ -467,78 +465,78 @@ public:
     const mi::neuraylib::IType_alias* create_alias(
         const mi::neuraylib::IType* type,
         mi::Uint32 modifiers,
-        const char* symbol) const NEURAY_OVERRIDE;
+        const char* symbol) const override;
 
-    const mi::neuraylib::IType_bool* create_bool() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_bool* create_bool() const override;
 
-    const mi::neuraylib::IType_int* create_int() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_int* create_int() const override;
 
-    const mi::neuraylib::IType_enum* create_enum( const char* symbol) const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_enum* create_enum( const char* symbol) const override;
 
-    const mi::neuraylib::IType_float* create_float() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_float* create_float() const override;
 
-    const mi::neuraylib::IType_double* create_double() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_double* create_double() const override;
 
-    const mi::neuraylib::IType_string* create_string() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_string* create_string() const override;
 
     const mi::neuraylib::IType_vector* create_vector(
-        const mi::neuraylib::IType_atomic* element_type, mi::Size size) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IType_atomic* element_type, mi::Size size) const override;
 
     const mi::neuraylib::IType_matrix* create_matrix(
-        const mi::neuraylib::IType_vector* column_type, mi::Size columns) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IType_vector* column_type, mi::Size columns) const override;
 
-    const mi::neuraylib::IType_color* create_color() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_color* create_color() const override;
 
     const mi::neuraylib::IType_array* create_immediate_sized_array(
-        const mi::neuraylib::IType* element_type, mi::Size size) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IType* element_type, mi::Size size) const override;
 
     const mi::neuraylib::IType_array* create_deferred_sized_array(
-        const mi::neuraylib::IType* element_type, const char* size) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IType* element_type, const char* size) const override;
 
-    const mi::neuraylib::IType_struct* create_struct( const char* symbol) const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_struct* create_struct( const char* symbol) const override;
 
     const mi::neuraylib::IType_texture* create_texture(
-        mi::neuraylib::IType_texture::Shape shape) const NEURAY_OVERRIDE;
+        mi::neuraylib::IType_texture::Shape shape) const override;
 
-    const mi::neuraylib::IType_light_profile* create_light_profile() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_light_profile* create_light_profile() const override;
 
-    const mi::neuraylib::IType_bsdf_measurement* create_bsdf_measurement() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_bsdf_measurement* create_bsdf_measurement() const override;
 
-    const mi::neuraylib::IType_bsdf* create_bsdf() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_bsdf* create_bsdf() const override;
 
-    const mi::neuraylib::IType_hair_bsdf* create_hair_bsdf() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_hair_bsdf* create_hair_bsdf() const override;
 
-    const mi::neuraylib::IType_edf* create_edf() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_edf* create_edf() const override;
 
-    const mi::neuraylib::IType_vdf* create_vdf() const NEURAY_OVERRIDE;
+    const mi::neuraylib::IType_vdf* create_vdf() const override;
 
-    mi::neuraylib::IType_list* create_type_list() const NEURAY_OVERRIDE;
+    mi::neuraylib::IType_list* create_type_list() const override;
 
     const mi::neuraylib::IType_enum* get_predefined_enum(
-        mi::neuraylib::IType_enum::Predefined_id id) const NEURAY_OVERRIDE;
+        mi::neuraylib::IType_enum::Predefined_id id) const override;
 
     const mi::neuraylib::IType_struct* get_predefined_struct(
-        mi::neuraylib::IType_struct::Predefined_id id) const NEURAY_OVERRIDE;
+        mi::neuraylib::IType_struct::Predefined_id id) const override;
 
     mi::Sint32 compare(
         const mi::neuraylib::IType* lhs,
-        const mi::neuraylib::IType* rhs) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IType* rhs) const override;
 
     mi::Sint32 compare(
         const mi::neuraylib::IType_list* lhs,
-        const mi::neuraylib::IType_list* rhs) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IType_list* rhs) const override;
 
     mi::Sint32 is_compatible(
         const mi::neuraylib::IType* src,
-        const mi::neuraylib::IType* dst) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IType* dst) const override;
 
     const mi::IString* dump(
         const mi::neuraylib::IType* type,
-        mi::Size depth) const NEURAY_OVERRIDE;
+        mi::Size depth) const override;
 
     const mi::IString* dump(
         const mi::neuraylib::IType_list* list,
-        mi::Size depth) const NEURAY_OVERRIDE;
+        mi::Size depth) const override;
 
     // internal methods
 

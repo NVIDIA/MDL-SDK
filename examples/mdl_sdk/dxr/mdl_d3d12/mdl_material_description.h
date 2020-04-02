@@ -75,6 +75,9 @@ namespace mdl_d3d12
         /// of the form [::<package>]::<module>::<material>
         const std::string& get_material_name() const { return m_material_name; }
 
+        /// Name of the material in the scene, which is only for display on the UI or in logs.
+        const std::string& get_scene_name() const { return m_name_in_scene; }
+
         // get material flags e.g. for optimization
         IMaterial::Flags get_flags() const { return m_flags; }
 
@@ -86,6 +89,7 @@ namespace mdl_d3d12
         IScene_loader::Material m_description;
         std::string m_qualified_module_name;
         std::string m_material_name;
+        std::string m_name_in_scene;
         IMaterial::Flags m_flags;
     };
 }

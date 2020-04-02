@@ -29,6 +29,9 @@
 #ifndef MDL_GENERATOR_JIT_RES_MANAGER_H
 #define MDL_GENERATOR_JIT_RES_MANAGER_H 1
 
+#include <mi/mdl/mdl_types.h>
+#include <mi/mdl/mdl_values.h>
+
 namespace mi {
 namespace mdl {
 
@@ -37,11 +40,22 @@ class IValue_resource;
 /// An Interface to handle resources in JIT compiled code.
 class IResource_manager {
 public:
-    /// Register the given resource value and return its 1-based index in the resource table.
-    /// Index 0 represents an invalid resource reference.
+    /// Returns the resource index for the given resource usable by the target code resource
+    /// handler for the corresponding resource type.
     ///
-    /// \param resource  the MDL resource to register
-    virtual size_t get_resource_index(IValue_resource const *resource) = 0;
+    /// \param kind        the resource kind
+    /// \param url         the resource url (might be NULL)
+    /// \param tag         the resource tag (if assigned)
+    /// \param shape       if the resource is a texture: its shape
+    /// \param gamma_mode  if the resource is a texture: its gamma mode
+    ///
+    /// \returns a resource index or 0 if no resource index can be returned
+    virtual size_t get_resource_index(
+        Resource_tag_tuple::Kind   kind,
+        char const                 *url,
+        int                        tag,
+        IType_texture::Shape       shape = IType_texture::TS_2D,
+        IValue_texture::gamma_mode gamma_mode = IValue_texture::gamma_default) = 0;
 
     /// Register a string constant and return its 1 based index in the string table.
     ///

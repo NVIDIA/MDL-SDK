@@ -34,12 +34,61 @@
 #include <mi/base/interface_declare.h>
 
 #include <mi/mdl/mdl_definitions.h>
+#include <mi/mdl/mdl_values.h>
 
 namespace mi {
 namespace mdl {
 
 class IType;
 class Messages;
+
+/// A pair of ((resource_kind, resource_url), (resource_tag, resource_version)).
+/// Used to map accessible resources to (tag, version) pair and as a key into resource
+/// attribute maps.
+struct Resource_tag_tuple {
+    enum Kind {
+        RK_BAD,                   ///< A bad value.
+        RK_INVALID_REF,           ///< A invalid reference value.
+        RK_TEXTURE_GAMMA_DEFAULT, ///< A texture value with default gamma.
+        RK_TEXTURE_GAMMA_LINEAR,  ///< A texture value with linear gamma.
+        RK_TEXTURE_GAMMA_SRGB,    ///< A texture value with SRGB gamma.
+        RK_LIGHT_PROFILE,         ///< A light profile value.
+        RK_BSDF_MEASUREMENT,      ///< A bsdf_measurement value.
+        RK_STRING,                ///< A string value.
+
+        // BSDF_DATA resource kinds
+        RK_SIMPLE_GLOSSY_MULTISCATTER,
+        RK_BACKSCATTERING_GLOSSY_MULTISCATTER,
+        RK_BECKMANN_SMITH_MULTISCATTER,
+        RK_GGX_SMITH_MULTISCATTER,
+        RK_BECKMANN_VC_MULTISCATTER,
+        RK_GGX_VC_MULTISCATTER,
+        RK_WARD_GEISLER_MORODER_MULTISCATTER,
+        RK_SHEEN_MULTISCATTER,
+    };
+
+    Kind        m_kind;    ///< The resource kind.
+    int         m_tag;     ///< The assigned tag.
+    char const  *m_url;    ///< The resource URL, NULL mapped to "".
+
+    /// Default constructor.
+    Resource_tag_tuple()
+    : m_kind(RK_BAD)
+    , m_tag(0)
+    , m_url("")
+    {}
+
+    /// Constructor.
+    Resource_tag_tuple(
+        Kind        kind,
+        char const  *url,
+        int         tag)
+    : m_kind(kind)
+    , m_tag(tag)
+    , m_url(url == NULL ? "" : url)
+    {
+    }
+};
 
 /// Generic interface for generated code of a MDL Core backend.
 class IGenerated_code : public
@@ -85,6 +134,16 @@ template<typename T>
 T const *as(IGenerated_code const *type) {
     return (type->get_kind() == T::s_kind) ? static_cast<T const *>(type) : NULL;
 }
+
+/// Convert a IValue_texture::Bsdf_data_kind to a Resource_tag_tuple kind.
+///
+/// \param kind  the value kind
+Resource_tag_tuple::Kind kind_from_bsdf_data_kind(IValue_texture::Bsdf_data_kind kind);
+
+/// Convert a value to a Resource_tag_tuple kind.
+///
+/// \param val  the value
+Resource_tag_tuple::Kind kind_from_value(IValue const *val);
 
 }  // mdl
 }  // mi

@@ -71,32 +71,27 @@ class Mdl_info_impl : public mi::base::Interface_implement<T_info>
             const std::string& simple_name,
             const std::string& qualified_name)
         : m_simple_name(simple_name)
-        , m_qualified_name(qualified_name){};
-        
+        , m_qualified_name(qualified_name) {};
+
         virtual  ~Mdl_info_impl() {};
 
         /// Returns the simple_name.
-        const char* get_simple_name() const { return m_simple_name.c_str(); }
+        const char* get_simple_name() const final { return m_simple_name.c_str(); }
 
         /// Returns the qualified name.
-        const char* get_qualified_name() const { return m_qualified_name.c_str(); }
+        const char* get_qualified_name() const final { return m_qualified_name.c_str(); }
 
     protected:
         mi::base::Handle<const Mdl_discovery_result_impl> m_result;
         std::string m_simple_name;
         std::string m_qualified_name;
-       
-
     };
 
-/// This class implements the MDL data structure IMdl_Module_Info.  
+/// This class implements the MDL data structure IMdl_Module_Info.
 class Mdl_module_info_impl
     : public Mdl_info_impl<mi::neuraylib::IMdl_module_info>
 {
     public:
-
-        mi::neuraylib::IMdl_info::Kind get_kind() const 
-            { return mi::neuraylib::IMdl_info::Kind::DK_MODULE; }
 
         Mdl_module_info_impl(
             const std::string& simple_name,
@@ -116,35 +111,30 @@ class Mdl_module_info_impl
 
         void add_shadow(Mdl_module_info_impl* shadow);
 
-        const mi::IString* get_resolved_path() const;
+        mi::neuraylib::IMdl_info::Kind get_kind() const final;
 
-        mi::Size get_search_path_index() const;
+        const mi::IString* get_resolved_path() const final;
 
-        const char* get_search_path() const;
+        mi::Size get_search_path_index() const final;
 
-        mi::Size get_shadows_count() const;
+        const char* get_search_path() const final;
 
-        const Mdl_module_info_impl* get_shadow(mi::Size index) const;
+        mi::Size get_shadows_count() const final;
 
-        bool in_archive() const;
+        const Mdl_module_info_impl* get_shadow(mi::Size index) const final;
+
+        bool in_archive() const final;
 
         void set_archive(bool val);
 
         void sort_shadows();
 
     private:
-
-        bool successfully_constructed() { return m_successfully_constructed; }
-
         std::string             m_resolved_path;
         std::string             m_search_path;
         mi::Size                m_search_index;
         bool                    m_in_archive;
         std::vector<mi::base::Handle<Mdl_module_info_impl>>m_shadows;
-
-        /// Indicates whether the constructor successfully constructed the instance.
-        /// \see #successfully_constructed()
-        bool m_successfully_constructed;
 };
 
 
@@ -153,11 +143,6 @@ class Mdl_xliff_info_impl
     : public Mdl_info_impl<mi::neuraylib::IMdl_xliff_info>
 {
 public:
-
-    mi::neuraylib::IMdl_info::Kind get_kind() const
-    {
-        return mi::neuraylib::IMdl_info::Kind::DK_XLIFF;
-    }
 
     Mdl_xliff_info_impl(
         const std::string& simple_name,
@@ -179,29 +164,24 @@ public:
 
     const char* get_extension() const;
 
-    const char* get_resolved_path() const { return m_resolved_path.c_str(); }
+    mi::neuraylib::IMdl_info::Kind get_kind() const final;
 
-    mi::Size get_search_path_index() const;
+    const char* get_resolved_path() const final;
 
-    const char* get_search_path() const; 
+    mi::Size get_search_path_index() const final;
 
-    bool in_archive() const;
+    const char* get_search_path() const final;
+
+    bool in_archive() const final;
 
     void set_archive(bool val);
 
 private:
-
-    bool successfully_constructed() { return m_successfully_constructed; }
-
     std::string             m_resolved_path;
     std::string             m_search_path;
     std::string             m_extension;
     mi::Size                m_search_index;
     bool                    m_in_archive;
-    
-    /// Indicates whether the constructor successfully constructed the instance.
-    /// \see #successfully_constructed()
-    bool m_successfully_constructed;
 };
 
 
@@ -240,21 +220,21 @@ public:
 
     virtual ~Mdl_resource_info_impl() {};
 
-    void add_shadow(Mdl_resource_info_impl* shadow) { 
-        m_shadows.push_back(make_handle_dup(shadow)); 
+    void add_shadow(Mdl_resource_info_impl* shadow) {
+        m_shadows.push_back(make_handle_dup(shadow));
     }
 
     const char* get_extension() const { return m_extension.c_str(); };
 
-    const char* get_resolved_path() const { return m_resolved_path.c_str(); }
+    const char* get_resolved_path() const final { return m_resolved_path.c_str(); }
 
-    const char* get_search_path() const { return m_search_path.c_str(); }
+    const char* get_search_path() const final { return m_search_path.c_str(); }
 
-    mi::Size get_search_path_index() const { return m_search_index; }
+    mi::Size get_search_path_index() const final { return m_search_index; }
 
-    mi::Size get_shadows_count() const { return m_shadows.size(); }
+    mi::Size get_shadows_count() const final { return m_shadows.size(); }
 
-    const Mdl_resource_info_impl* get_shadow(mi::Size index) const {
+    const Mdl_resource_info_impl* get_shadow(mi::Size index) const final {
         if (m_shadows.size() <= index)
             return nullptr;
 
@@ -263,7 +243,7 @@ public:
         return shadow.get();
     }
 
-    bool in_archive() const { return m_in_archive; }
+    bool in_archive() const final { return m_in_archive; }
 
     void set_archive(bool val) { m_in_archive = val; }
 
@@ -276,32 +256,21 @@ public:
 
 private:
 
-    bool successfully_constructed() { return m_successfully_constructed; }
-
     std::string             m_resolved_path;
     std::string             m_extension;
     std::string             m_search_path;
     mi::Size                m_search_index;
     bool                    m_in_archive;
-    
-    std::vector<mi::base::Handle<Mdl_resource_info_impl>>m_shadows;
 
-    /// Indicates whether the constructor successfully constructed the instance.
-    /// \see #successfully_constructed()
-    bool m_successfully_constructed;
+    std::vector<mi::base::Handle<Mdl_resource_info_impl>>m_shadows;
 };
 
 
-/// This class implements the MDL data structure IMdl_texture_info.  
+/// This class implements the MDL data structure IMdl_texture_info.
 class Mdl_texture_info_impl
     : public Mdl_resource_info_impl<mi::neuraylib::IMdl_texture_info>
 {
 public:
-
-    mi::neuraylib::IMdl_info::Kind get_kind() const
-    {
-        return mi::neuraylib::IMdl_info::Kind::DK_TEXTURE;
-    }
 
     Mdl_texture_info_impl(
         const std::string& simple_name,
@@ -312,7 +281,7 @@ public:
         mi::Size s_index,
         bool is_archive)
         : Mdl_resource_info_impl(
-            simple_name, 
+            simple_name,
             qualified_name,
             resolved_path,
             extension,
@@ -321,18 +290,15 @@ public:
             is_archive) {};
 
     virtual ~Mdl_texture_info_impl() {};
+
+    mi::neuraylib::IMdl_info::Kind get_kind() const final;
 };
 
-/// This class implements the MDL data structure IMdl_lightprofile_info.  
+/// This class implements the MDL data structure IMdl_lightprofile_info.
 class Mdl_lightprofile_info_impl
     : public Mdl_resource_info_impl<mi::neuraylib::IMdl_lightprofile_info>
 {
 public:
-
-    mi::neuraylib::IMdl_info::Kind get_kind() const
-    {
-        return mi::neuraylib::IMdl_info::Kind::DK_LIGHTPROFILE;
-    }
 
     Mdl_lightprofile_info_impl(
         const std::string& simple_name,
@@ -352,18 +318,15 @@ public:
             is_archive) {};
 
     virtual ~Mdl_lightprofile_info_impl() {};
+
+    mi::neuraylib::IMdl_info::Kind get_kind() const final;
 };
 
-/// This class implements the MDL data structure IMdl_bsdf_info.  
+/// This class implements the MDL data structure IMdl_bsdf_info.
 class Mdl_measured_bsdf_info_impl
     : public Mdl_resource_info_impl<mi::neuraylib::IMdl_measured_bsdf_info>
 {
 public:
-
-    mi::neuraylib::IMdl_info::Kind get_kind() const
-    {
-        return mi::neuraylib::IMdl_info::Kind::DK_MEASURED_BSDF;
-    }
 
     Mdl_measured_bsdf_info_impl(
         const std::string& simple_name,
@@ -383,6 +346,8 @@ public:
             is_archive) {};
 
         virtual ~Mdl_measured_bsdf_info_impl() {};
+
+        mi::neuraylib::IMdl_info::Kind get_kind() const final;
 };
 
 
@@ -391,8 +356,7 @@ class Mdl_package_info_impl
     : public Mdl_info_impl<mi::neuraylib::IMdl_package_info>
 {
     public:
-        mi::neuraylib::IMdl_info::Kind get_kind() const override
-            { return m_kind; }
+        mi::neuraylib::IMdl_info::Kind get_kind() const final;
 
         Mdl_package_info_impl(
             const std::string& simple_name,
@@ -499,31 +463,28 @@ class Mdl_package_info_impl
         const Mdl_package_info_impl* get_package(mi::Size index) const;
 
         /// Returns the number of modules and sub-packages contained in this package.
-        mi::Size get_child_count() const override;
+        mi::Size get_child_count() const final;
 
         /// Returns a child of this package.
         /// index \in [0, max(0, get_child_count()-1)]
-        const IMdl_info* get_child(mi::Size index) const override;
+        const IMdl_info* get_child(mi::Size index) const final;
 
         /// Returns an absolute path to the package in the file system.
-        const mi::IString* get_resolved_path(mi::Size index) const override;
+        const mi::IString* get_resolved_path(mi::Size index) const final;
 
         /// Returns a search path referenced by index.
-        const char* get_search_path(mi::Size index) const override;
+        const char* get_search_path(mi::Size index) const final;
 
         /// Returns the number of search paths.
-        mi::Size get_search_path_index_count() const override;
+        mi::Size get_search_path_index_count() const final;
 
         /// Returns the index of search paths.
-        mi::Size get_search_path_index(mi::Size idx) const override;
+        mi::Size get_search_path_index(mi::Size idx) const final;
 
         /// Returns true if the package has been discovered inside of an archive, false if not.
-        bool in_archive(Size index) const override;
+        bool in_archive(Size index) const final;
 
     private:
-
-        bool successfully_constructed() { return m_successfully_constructed; }
-
         std::vector<std::string> m_paths;
         std::vector<std::string> m_resolved_paths;
         std::vector<bool> m_in_archive;
@@ -535,10 +496,6 @@ class Mdl_package_info_impl
         std::vector<mi::base::Handle<Mdl_texture_info_impl>> m_textures;
         std::vector<mi::base::Handle<Mdl_lightprofile_info_impl>> m_lightprofiles;
         std::vector<mi::base::Handle<Mdl_measured_bsdf_info_impl>> m_measured_bsdfs;
-        
-        /// Indicates whether the constructor successfully constructed the instance.
-        /// \see #successfully_constructed()
-        bool m_successfully_constructed;
 };
 
 
@@ -548,11 +505,11 @@ class Mdl_discovery_api_impl
     public boost::noncopyable
 {
     public:
-        Mdl_discovery_api_impl(mi::neuraylib::INeuray* neuray); 
+        Mdl_discovery_api_impl(mi::neuraylib::INeuray* neuray);
 
         ~Mdl_discovery_api_impl();
 
-        const mi::neuraylib::IMdl_discovery_result* discover(mi::Uint32 filter) const;
+        const mi::neuraylib::IMdl_discovery_result* discover(mi::Uint32 filter) const final;
 
         mi::Sint32 start();
 
@@ -560,8 +517,8 @@ class Mdl_discovery_api_impl
 
     private:
 
-        // Checks if a graph item name is a valid MDL identifier.
-        bool is_valid_mdl_identifier(const char* identifier) const;
+        // Checks if a graph item name is a valid MDL module or package name.
+        bool is_valid_node_name(const char* identifier) const;
 
         // Checks if a search path exists already.
         bool is_known_search_path(
@@ -596,9 +553,9 @@ class Mdl_discovery_api_impl
 
         // Direct recursion to create a graph out of an archive entry.
         bool discover_archive_recursive(
-            mi::base::Handle<Mdl_package_info_impl> parent, 
+            mi::base::Handle<Mdl_package_info_impl> parent,
             const char* previous_module,
-            const char* q_path, 
+            const char* q_path,
             const char* search_path,
             const char* res_path,
             const char* extension,
@@ -619,7 +576,7 @@ class Mdl_discovery_api_impl
         MI::SYSTEM::Access_module<MI::PATH::Path_module> m_path_module;
 };
 
-/// This class implements the discover result.  
+/// This class implements the discover result.
 class Mdl_discovery_result_impl
     : public mi::base::Interface_implement< mi::neuraylib::IMdl_discovery_result>
 {
@@ -630,13 +587,13 @@ class Mdl_discovery_result_impl
         ~Mdl_discovery_result_impl() {};
 
         /// Returns a pointer to the root of mdl graph.
-        const mi::neuraylib::IMdl_package_info* get_graph() const;
+        const mi::neuraylib::IMdl_package_info* get_graph() const final;
 
         /// Returns a search path referenced by index.
-        const char* get_search_path(mi::Size index) const;
+        const char* get_search_path(mi::Size index) const final;
 
         /// Returns the number of search paths.
-        mi::Size get_search_paths_count() const;
+        mi::Size get_search_paths_count() const final;
 
     private:
         mi::base::Handle<const mi::neuraylib::IMdl_package_info> m_graph;

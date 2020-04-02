@@ -287,8 +287,11 @@ Mdl_compiled_material* Mdl_material_instance::create_compiled_material(
     }
 
     mi::base::Handle<const mi::mdl::IGenerated_code_dag::IMaterial_instance> instance(
-        create_dag_material_instance( transaction, /*use_temporaries*/ true, class_compilation,
-           context));
+        create_dag_material_instance(
+            transaction,
+            /*use_temporaries*/ true,
+            class_compilation,
+            context));
     if( !instance.is_valid_interface())
         return nullptr;
 
@@ -363,11 +366,12 @@ Mdl_material_instance::create_dag_material_instance(
         }
     }
 
+    bool load_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
+
     // initialize MDL material instance
-    Call_evaluator    call_evaluator(
-        transaction,
-        context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES));
-    Mdl_call_resolver resolver( transaction);
+    Call_evaluator<mi::mdl::IGenerated_code_dag> call_evaluator(
+        code_dag.get(), transaction, load_resources);
+    Mdl_call_resolver resolver(transaction);
 
     mi::Uint32 flags = class_compilation
         ?
@@ -389,36 +393,37 @@ Mdl_material_instance::create_dag_material_instance(
         class_compilation ? 0 : &call_evaluator,
         mdl_meters_per_scene_unit,
         mdl_wavelength_min, mdl_wavelength_max);
-    switch( error_code) {
-        case mi::mdl::IGenerated_code_dag::EC_NONE:
-            break;
-        case mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH: {
-            
+
+    switch(error_code) {
+    case mi::mdl::IGenerated_code_dag::EC_NONE:
+        break;
+    case mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH:
+        {
             add_and_log_message(context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
                 "Type mismatch for an argument in a graph rooted at the material "
                 "definition \"" + 
                 m_definition_db_name + "\".",
                 mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH, 
                 Message::MSG_COMPILER_DAG), -1);
-            return 0;
         }
-        case mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED: {
-
+        return 0;
+    case mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED:
+        {
             add_and_log_message(context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
                 "The thin-walled material instance rooted of the material definition \"" +
                 m_definition_db_name + "\" has "
                 "different transmission for surface and backface.",
                 mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED, 
                 Message::MSG_COMPILER_DAG), -2);
-            return 0;
         }
-        case mi::mdl::IGenerated_code_dag::EC_INSTANTIATION_ERROR:
-        case mi::mdl::IGenerated_code_dag::EC_INVALID_INDEX:
-        case mi::mdl::IGenerated_code_dag::EC_MATERIAL_HAS_ERROR:
-        case mi::mdl::IGenerated_code_dag::EC_TOO_FEW_ARGUMENTS:
-        case mi::mdl::IGenerated_code_dag::EC_TOO_MANY_ARGUMENTS:
-            ASSERT( M_SCENE, false);
-            break;
+        return 0;
+    case mi::mdl::IGenerated_code_dag::EC_INSTANTIATION_ERROR:
+    case mi::mdl::IGenerated_code_dag::EC_INVALID_INDEX:
+    case mi::mdl::IGenerated_code_dag::EC_MATERIAL_HAS_ERROR:
+    case mi::mdl::IGenerated_code_dag::EC_TOO_FEW_ARGUMENTS:
+    case mi::mdl::IGenerated_code_dag::EC_TOO_MANY_ARGUMENTS:
+        ASSERT( M_SCENE, false);
+        break;
     }
 
     const mi::mdl::Messages& msgs = instance->access_messages();
@@ -428,6 +433,18 @@ Mdl_material_instance::create_dag_material_instance(
         context->set_result(-3);
         return 0;
     }
+
+    if (load_resources) {
+        Resource_updater_instance updater(
+            transaction,
+            resolver,
+            instance.get(),
+            code_dag->get_module_file_name(),
+            code_dag->get_module_name());
+
+        updater.update_resource_literals();
+    }
+
     instance->retain();
     return instance.get();
 }

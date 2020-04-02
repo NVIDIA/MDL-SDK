@@ -35,6 +35,7 @@
 #include "descriptor_heap.h"
 #include "mdl_material.h"
 #include "mdl_sdk.h"
+#include "texture.h"
 
 #include "example_shared.h"
 
@@ -81,6 +82,7 @@ namespace mdl_d3d12
         // Otherwise, resources are added to the material (when separate link units are used).
 
         Mdl_resource_kind kind;
+        Texture_dimension dimension = Texture_dimension::Undefined;
         switch (resource->get_kind())
         {
             case mi::neuraylib::IValue::VK_TEXTURE:
@@ -94,8 +96,13 @@ namespace mdl_d3d12
                 switch (texture_type->get_shape())
                 {
                     case mi::neuraylib::IType_texture::TS_2D:
+                        kind = Mdl_resource_kind::Texture;
+                        dimension = Texture_dimension::Texture_2D;
+                        break;
+
                     case mi::neuraylib::IType_texture::TS_3D:
                         kind = Mdl_resource_kind::Texture;
+                        dimension = Texture_dimension::Texture_3D;
                         break;
 
                     default:
@@ -119,28 +126,17 @@ namespace mdl_d3d12
                 return 0;
         }
 
-        // store textures at the material (when using no shared target)
-        if (m_material != nullptr)
-        {
-            size_t mat_resource_index = m_material->register_resource(kind, name);
-            index = static_cast<mi::Uint32>(mat_resource_index +
-                (m_target->get_resource_names(kind).size() - 1));
-        }
-        // otherwise store it at target code level
-        else
-        {
-            m_target->get_resource_names(kind).emplace_back(name);
-            index = static_cast<mi::Uint32>(m_target->get_resource_names(kind).size() - 1);
-        }
+        // store textures at the material
+        size_t mat_resource_index = m_material->register_resource(kind, dimension, name);
 
         // log these manually defined indices
         log_info(
             "target code id: " + std::to_string(m_target->get_id()) +
-            " - texture id: " + std::to_string(index) +
-            (m_material ? (" (material id: " + std::to_string(m_material->get_id()) + ")") : "") +
+            " - texture id: " + std::to_string(mat_resource_index) +
+            " (material id: " + std::to_string(m_material->get_id()) + ")" +
             " - resource: " + std::string(name) + " (reused material)");
 
-        return index;
+        return mat_resource_index;
     }
 
     mi::Uint32 Mdl_material_target::Resource_callback::get_string_index(
@@ -169,17 +165,15 @@ namespace mdl_d3d12
         , m_hlsl_source_code("")
         , m_dxil_compiled_library(nullptr)
         , m_read_only_data_segment(nullptr)
-        , m_resource_names()
-        , m_material_resource_count()
+        , m_target_resources()
         , m_generation_required(true)
         , m_compilation_required(true)
     {
         // add the empty resources
         for (size_t i = 0, n = static_cast<size_t>(Mdl_resource_kind::_Count); i < n; ++i)
         {
-            m_resource_names[static_cast<Mdl_resource_kind>(i)] = std::vector<std::string>();
-            m_resource_names[static_cast<Mdl_resource_kind>(i)].emplace_back("");
-            m_material_resource_count[static_cast<Mdl_resource_kind>(i)] = 0;
+            Mdl_resource_kind kind_i = static_cast<Mdl_resource_kind>(i);
+            m_target_resources[kind_i] = std::vector<Mdl_resource_assignment>();
         }
     }
 
@@ -229,6 +223,7 @@ namespace mdl_d3d12
             "mdl_emission_intensity_" + std::to_string(material->get_id());
 
         std::string thin_walled_name = "mdl_thin_walled_" + std::to_string(material->get_id());
+        std::string hair_name = "mdl_hair_" + std::to_string(material->get_id());
 
         // select expressions to generate HLSL code for
         std::vector<mi::neuraylib::Target_function_description> selected_functions;
@@ -248,6 +243,8 @@ namespace mdl_d3d12
         selected_functions.push_back(mi::neuraylib::Target_function_description(
             "thin_walled", thin_walled_name.c_str()));
 
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "hair", hair_name.c_str()));
 
         // get the compiled material and add the material to the link unit
         mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
@@ -294,58 +291,21 @@ namespace mdl_d3d12
             ? -1
             : static_cast<int32_t>(selected_functions[4].function_index);
 
+        // function index for "hair"
+        interface_data.indices.hair_function_index =
+            selected_functions[5].function_index == static_cast<mi::Size>(-1)
+            ? -1
+            : static_cast<int32_t>(selected_functions[5].function_index);
+
+        // if the material contains a hair BSDF, we use that instead of the surface BSDF
+        // TODO remove after testing
+        if (contains_hair_bsdf(compiled_material.get()))
+            interface_data.indices.scattering_function_index = 
+                interface_data.indices.hair_function_index;
+
         // also constant for the entire material
         interface_data.argument_layout_index = selected_functions[0].argument_block_index;
-
-        // get the maximum number of texture slots of per material
-        // and thereby the minimum number of texture resource slots for each material in this
-        // target has to provide (all materials need the same descriptor table)
-        if (!m_app->get_options()->share_target_code)
-        {
-            size_t tex_count = 0;
-            for (size_t a = 0, n = compiled_material->get_parameter_count(); a < n; ++a)
-            {
-                mi::base::Handle<const mi::neuraylib::IValue> v(compiled_material->get_argument(a));
-                switch (v->get_kind())
-                {
-                    case mi::neuraylib::IValue::VK_TEXTURE:
-                    {
-                        mi::base::Handle<const mi::neuraylib::IType> type(
-                            v->get_type());
-
-                        mi::base::Handle<const mi::neuraylib::IType_texture> texture_type(
-                            type->get_interface<const mi::neuraylib::IType_texture>());
-
-                        switch (texture_type->get_shape())
-                        {
-                            case mi::neuraylib::IType_texture::TS_2D:
-                            case mi::neuraylib::IType_texture::TS_3D: 
-                                tex_count++; break;
-                            default: 
-                                break;
-                        }
-                        break;
-                    
-                    }
-                    default: break;
-                }
-            }
-
-            if (m_material_resource_count[Mdl_resource_kind::Texture] < tex_count)
-                m_material_resource_count[Mdl_resource_kind::Texture] = tex_count;
-        }
-        // otherwise, the resource counts per material are zero as all resources are managed by the
-        // target itself
-
         return true;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    size_t Mdl_material_target::get_material_resource_count(Mdl_resource_kind kind) const
-    {
-        auto found = m_material_resource_count.find(kind);
-        return found == m_material_resource_count.end() ? 0 : found->second;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -384,6 +344,15 @@ namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
+    size_t Mdl_material_target::get_material_resource_count(
+        Mdl_resource_kind kind) const
+    {
+        const auto& found = m_material_resource_count.find(kind);
+        return found->second;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
     bool Mdl_material_target::visit_materials(std::function<bool(Mdl_material*)> action)
     {
         std::lock_guard<std::mutex> lock(m_materials_mtx);
@@ -403,6 +372,10 @@ namespace mdl_d3d12
             return true;
         }
 
+        // create a command list for uploading data to the GPU
+        Command_queue* command_queue = m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        D3DCommandList* command_list = command_queue->get_command_list();
+
         // since this method can be called from multiple threads simultaneously
         // a new context for is created
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(m_sdk->create_context());
@@ -416,15 +389,11 @@ namespace mdl_d3d12
             return false;
         }
 
-        // empty resource list (in case of reload)
+        // empty resource list (in case of reload) and rest the counter
         for (size_t i = 0, n = static_cast<size_t>(Mdl_resource_kind::_Count); i < n; ++i)
         {
-            std::vector<std::string>& list = m_resource_names[static_cast<Mdl_resource_kind>(i)];
-            list.clear();
-            list.emplace_back("");
-
-            // rest the counter
-            m_material_resource_count[static_cast<Mdl_resource_kind>(i)] = 0;
+            Mdl_resource_kind kind_i = static_cast<Mdl_resource_kind>(i);
+            m_target_resources[kind_i].clear();
         }
 
         // add materials to link unit
@@ -450,41 +419,38 @@ namespace mdl_d3d12
             pair.second->set_target_interface(this, processed_hashes[hash]);
         }
 
-        {
-            Timing t("generating target code (id: " + std::to_string(m_id) + ")");
-            m_target_code = m_sdk->get_backend().translate_link_unit(
-                link_unit.get(), context.get());
-        }
-
-        std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
+        // generate HLSL code
+        m_target_code = m_sdk->get_backend().translate_link_unit(link_unit.get(), context.get());
         if (!m_sdk->log_messages(context.get()))
         {
             log_error("MDL target code generation failed.", SRC);
             return false;
         }
 
-        Timing t2("loading MDL resources (id: " + std::to_string(m_id) + ")");
-
-        // create a command list for uploading data to the GPU
-        Command_queue* command_queue = m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-        D3DCommandList* command_list = command_queue->get_command_list();
-
         // add all textures known to the link unit
         for (size_t t = 1, n = m_target_code->get_texture_count(); t < n; ++t)
         {
+            Mdl_resource_assignment set(Mdl_resource_kind::Texture);
+            set.resource_name = m_target_code->get_texture(t);
+            set.runtime_resource_id = t;
+
             switch (m_target_code->get_texture_shape(t))
             {
                 case mi::neuraylib::ITarget_code::Texture_shape_2d:
+                    set.dimension = Texture_dimension::Texture_2D;
+                    break;
+
                 case mi::neuraylib::ITarget_code::Texture_shape_3d:
                 case mi::neuraylib::ITarget_code::Texture_shape_bsdf_data:
-                    m_resource_names[Mdl_resource_kind::Texture].emplace_back(
-                        m_target_code->get_texture(t));
+                    set.dimension = Texture_dimension::Texture_3D;
                     break;
 
                 default:
                     log_error("Only 2D and 3D textures are supported by this example.", SRC);
                     return false;
             }
+
+            m_target_resources[Mdl_resource_kind::Texture].emplace_back(set);
         }
 
         // create per material resources, parameter bindings, ...
@@ -526,13 +492,29 @@ namespace mdl_d3d12
             return false;
         }
 
+        // at this point, we know the number of resources in instances of the materials.
+        // Since the root signature for all instances of the "same" material (probably different
+        // parameter sets when using MDL class compilation) has to be identical, we go for the
+        // maximum amount of occurring resources.
+        for (size_t i = 0, n = static_cast<size_t>(Mdl_resource_kind::_Count); i < n; ++i)
+            m_material_resource_count[static_cast<Mdl_resource_kind>(i)] = 0;
+
+        visit_materials([&](const Mdl_material* mat)
+        { 
+            for (size_t i = 0, n = static_cast<size_t>(Mdl_resource_kind::_Count); i < n; ++i)
+            {
+                Mdl_resource_kind kind_i = static_cast<Mdl_resource_kind>(i);
+                size_t current = mat->get_resources(kind_i).size();
+                m_material_resource_count[kind_i] = 
+                    std::max(m_material_resource_count[kind_i], current);
+            }
+            return true; 
+        });
+
         // in order to load resources in parallel a continuous block of resource handles
         // for this target_code is allocated
         Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
         size_t handle_count = 1; // read-only segment
-        handle_count += m_resource_names[Mdl_resource_kind::Texture].size() - 1;// texture 2Ds
-        handle_count += m_resource_names[Mdl_resource_kind::Texture].size() - 1;// texture 3Ds
-        // light profiles, ...
 
         // if we already have a block on the resource heap (previous generation)
         // we try to reuse is if it fits
@@ -566,9 +548,10 @@ namespace mdl_d3d12
                 "MDL_ReadOnly_" + std::string(name));
 
             read_only_data_segment->set_data(
-                m_target_code->get_ro_data_segment_name(ro_data_seg_index));
+                m_target_code->get_ro_data_segment_data(ro_data_seg_index),
+                m_target_code->get_ro_data_segment_size(ro_data_seg_index));
 
-            if (m_read_only_data_segment) delete m_read_only_data_segment;
+            if (!m_read_only_data_segment) delete m_read_only_data_segment;
             m_read_only_data_segment = read_only_data_segment;
         }
 
@@ -576,7 +559,7 @@ namespace mdl_d3d12
         {
             m_read_only_data_segment = new Buffer(m_app, 4, "MDL_ReadOnly_nullptr");
             uint32_t zero(0);
-            m_read_only_data_segment->set_data(&zero);
+            m_read_only_data_segment->set_data(&zero, 1);
         }
 
         // create resource view on the heap (at the first position of the target codes block)
@@ -588,73 +571,6 @@ namespace mdl_d3d12
         if (m_read_only_data_segment && !m_read_only_data_segment->upload(command_list))
             return false;
 
-        tasks.clear();
-
-        // load the texture in parallel, if not forced otherwise
-        // skip the invalid texture that is always present
-
-        size_t n = m_resource_names[Mdl_resource_kind::Texture].size();
-        std::vector<Texture*> textures;
-        textures.resize(n - 1, nullptr);
-
-        for (size_t t = 1; t < n; ++t)
-        {
-            const char* texture_name = m_resource_names[Mdl_resource_kind::Texture][t].c_str();
-            log_info(
-                "target code id: " + std::to_string(get_id()) +
-                " - texture id: " + std::to_string(t) +
-                " - resource: " + std::string(texture_name));
-
-            // load sequentially
-            if (m_app->get_options()->force_single_theading)
-            {
-                textures[t - 1] = m_sdk->get_library()->access_texture_resource(
-                    texture_name, command_list);
-            }
-            // load asynchronously
-            else
-            {
-                tasks.emplace_back(std::thread([&, t, texture_name]()
-                {
-                    // no not fill command lists from different threads
-                    D3DCommandList* local_command_list = command_queue->get_command_list();
-
-                    textures[t - 1] = m_sdk->get_library()->access_texture_resource(
-                        texture_name, local_command_list);
-
-                    command_queue->execute_command_list(local_command_list);
-                }));
-            }
-        }
-
-        // wait for all loading tasks
-        for (auto &t : tasks)
-            t.join();
-
-        // create a resource view on the heap
-        // starting at the second position in the block 
-        for (size_t t = 1; t < n; ++t)
-        {
-            // texture is null, loading failed
-            if (!textures[t - 1])
-                return false;
-
-            // 2D view
-            Descriptor_heap_handle heap_handle = m_first_resource_heap_handle.create_offset(t);
-            if (!heap_handle.is_valid())
-                return false;
-
-            if (!resource_heap.create_shader_resource_view(textures[t - 1], heap_handle))
-                return false;
-
-            // 3D view
-            heap_handle = heap_handle.create_offset(n-1);
-            if (!heap_handle.is_valid())
-                return false;
-
-            if (!resource_heap.create_shader_resource_view(textures[t - 1], heap_handle))
-                return false;
-        }
 
         // prepare descriptor table for all per target resources
         // -------------------------------------------------------------------
@@ -667,15 +583,6 @@ namespace mdl_d3d12
         // bind read-only data segment to shader
         m_resource_descriptor_table.register_srv(0, 2, 0);
 
-        // bind textures to shader
-        size_t tex_count = textures.size();
-
-        if (tex_count > 0)
-        {
-            m_resource_descriptor_table.register_srv(1, 2, 1, tex_count);
-            m_resource_descriptor_table.register_srv(1 + tex_count, 2, 1 + tex_count, tex_count);
-        }
-
         // generate some dxr specific shader code to hook things up
         // -------------------------------------------------------------------
 
@@ -684,42 +591,46 @@ namespace mdl_d3d12
 
         // per target data
         m_hlsl_source_code += "#define MDL_TARGET_REGISTER_SPACE space2\n";
-        m_hlsl_source_code += "#define MDL_RO_DATA_SEGMENT_SLOT t0\n";
-        m_hlsl_source_code += "#define MDL_TARGET_TEXTURE_COUNT " + 
-            std::to_string(textures.size()) + "\n";
-        m_hlsl_source_code += "#define MDL_TARGET_TEXTURE_2D_SLOT_BEGIN t1\n";
-        m_hlsl_source_code += "#define MDL_TARGET_TEXTURE_3D_SLOT_BEGIN t" +
-            std::to_string(textures.size() + 1 /*t1 above*/) + "\n";
+        m_hlsl_source_code += "#define MDL_TARGET_RO_DATA_SEGMENT_SLOT t0\n";
+        m_hlsl_source_code += "\n";
 
         // per material data
-        size_t material_tex_count = m_material_resource_count[Mdl_resource_kind::Texture];
-        m_hlsl_source_code += "#define MDL_MATERIAL_REGISTER_SPACE space3\n";
-        m_hlsl_source_code += "#define MDL_ARGUMENT_BLOCK_SLOT t1\n";
-        m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_COUNT " + 
-            std::to_string(material_tex_count) + "\n";
-        m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_2D_SLOT_BEGIN t3\n";
-        m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_3D_SLOT_BEGIN t" + 
-            std::to_string(material_tex_count + 3 /*t3 above*/) + "\n";
+        m_hlsl_source_code += "#define MDL_MATERIAL_REGISTER_SPACE space3\n"; // there are more
+        m_hlsl_source_code += "#define MDL_MATERIAL_ARGUMENT_BLOCK_SLOT t1\n";
+        m_hlsl_source_code += "#define MDL_MATERIAL_RESOURCE_INFO_SLOT t2\n";
+        m_hlsl_source_code += "\n";
+        m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_2D_REGISTER_SPACE space4\n";
+        m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_3D_REGISTER_SPACE space5\n";
+        m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_SLOT_BEGIN t0\n";
+        m_hlsl_source_code += "\n";
 
         // global data
         m_hlsl_source_code += "#define MDL_TEXTURE_SAMPLER_SLOT s0\n";
         m_hlsl_source_code += "#define MDL_LATLONGMAP_SAMPLER_SLOT s1\n";
         m_hlsl_source_code += "#define MDL_NUM_TEXTURE_RESULTS " +
-            std::to_string(m_sdk->get_num_texture_results()) + "\n";
+            std::to_string(m_app->get_options()->texture_results_cache_size) + "\n";
 
         m_hlsl_source_code += "\n";
         if (m_app->get_options()->automatic_derivatives) m_hlsl_source_code += "#define USE_DERIVS\n";
         if (m_app->get_options()->enable_auxiliary) m_hlsl_source_code += "#define ENABLE_AUXILIARY\n";
         m_hlsl_source_code += "#define MDL_DF_HANDLE_SLOT_MODE -1\n";
 
+        // since scene data access is more expensive than direct vertex data access and since 
+        // texture coordinates are extremely common, MDL typically fetches those from the state.
+        // for demonstration purposes, this renderer uses the scene data instead which makes 
+        // texture coordinates optional
         m_hlsl_source_code += "\n";
+        m_hlsl_source_code += "#define SCENE_DATA_ID_TEXCOORD_0 " +
+            std::to_string(std::max(m_target_code->get_string_constant_count(), mi::Size(1))) + "\n";
+
+        m_hlsl_source_code += "\n";
+        m_hlsl_source_code += "#include \"content/common.hlsl\"\n";
         m_hlsl_source_code += "#include \"content/mdl_target_code_types.hlsl\"\n";
         m_hlsl_source_code += "#include \"content/mdl_renderer_runtime.hlsl\"\n\n";
         m_hlsl_source_code += m_target_code->get_code();
 
         // assuming multiple materials that have been compiled to this target/link unit
         // it has to be possible to select the individual functions based on the hit object
-
 
         std::string init_switch_function[2] = {
         {
@@ -816,9 +727,11 @@ namespace mdl_d3d12
                 }
             }
             else if (dist_kind == mi::neuraylib::ITarget_code::DK_BSDF ||
+                     dist_kind == mi::neuraylib::ITarget_code::DK_HAIR_BSDF ||
                      dist_kind == mi::neuraylib::ITarget_code::DK_EDF)
             {
-                size_t index = static_cast<size_t>(dist_kind) - 1;
+                // store BSDFs and Hair BSDFs at index 0 and EDFs at index 1
+                size_t index = dist_kind == mi::neuraylib::ITarget_code::DK_EDF ? 1 : 0;
 
                 switch (func_kind)
                 {
@@ -952,8 +865,6 @@ namespace mdl_d3d12
 
         // compile to DXIL
         {
-            Timing t("compiling HLSL to DXIL (id: " + std::to_string(m_id) + ")");
-
             std::map<std::string, std::string> defines;
             defines["TARGET_CODE_ID"] = std::to_string(m_id);
 

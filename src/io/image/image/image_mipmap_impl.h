@@ -65,6 +65,11 @@ class Mipmap_impl
     public boost::noncopyable
 {
 public:
+    /// Default constructor.
+    ///
+    /// Creates a dummy mipmap (1x1 pink pixel)
+    Mipmap_impl();
+
     /// Constructor.
     ///
     /// Creates a memory-based mipmap with given pixel type, width, height, and layers of the

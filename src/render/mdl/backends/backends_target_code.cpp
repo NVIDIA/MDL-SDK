@@ -78,7 +78,7 @@ public:
     /// \param resource  the resource value
     ///
     /// \returns a resource index or 0 if no resource index can be returned
-    mi::Uint32 get_resource_index(MI::MDL::IValue_resource const *resource) NEURAY_FINAL {
+    mi::Uint32 get_resource_index(MI::MDL::IValue_resource const *resource) final {
         return m_target_code->get_known_resource_index(m_transaction, resource);
     }
 
@@ -88,7 +88,7 @@ public:
     /// The value 0 is always the "not known string".
     ///
     /// \param s  the string value
-    mi::Uint32 get_string_index(MI::MDL::IValue_string const *s) NEURAY_FINAL {
+    mi::Uint32 get_string_index(MI::MDL::IValue_string const *s) final {
         return m_target_code->get_string_index(s->get_value());
     }
 
@@ -369,17 +369,46 @@ const mi::Float32* Target_code::get_texture_df_data(
     if (index < m_texture_table.size() &&
         m_texture_table[index].get_texture_shape() == mi::neuraylib::ITarget_code::Texture_shape_bsdf_data) {
 
-        size_t w=0, h=0, d=0;
-        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
-            m_texture_table[index].get_df_data_kind(), w, h, d);
-        rx = w;
-        ry = h;
-        rz = d;
-        size_t s;
-        return reinterpret_cast<const mi::Float32*>(
-            mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data(m_texture_table[index].get_df_data_kind(), s));
+        return get_df_data_texture(m_texture_table[index].get_df_data_kind(), rx, ry, rz);
     }
     return nullptr;
+}
+
+static mi::neuraylib::Df_data_kind convert_df_data_kind(
+    mi::mdl::IValue_texture::Bsdf_data_kind kind)
+{
+    switch (kind)
+    {
+    case  mi::mdl::IValue_texture::BDK_NONE:
+        return mi::neuraylib::DFK_NONE;
+    case mi::mdl::IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER:
+        return mi::neuraylib::DFK_BACKSCATTERING_GLOSSY_MULTISCATTER;
+    case mi::mdl::IValue_texture::BDK_BECKMANN_SMITH_MULTISCATTER:
+        return mi::neuraylib::DFK_BECKMANN_SMITH_MULTISCATTER;
+    case mi::mdl::IValue_texture::BDK_BECKMANN_VC_MULTISCATTER:
+        return mi::neuraylib::DFK_BECKMANN_VC_MULTISCATTER;
+    case mi::mdl::IValue_texture::BDK_GGX_SMITH_MULTISCATTER:
+        return mi::neuraylib::DFK_GGX_SMITH_MULTISCATTER;
+    case mi::mdl::IValue_texture::BDK_GGX_VC_MULTISCATTER:
+        return mi::neuraylib::DFK_GGX_VC_MULTISCATTER;
+    case mi::mdl::IValue_texture::BDK_SHEEN_MULTISCATTER:
+        return mi::neuraylib::DFK_SHEEN_MULTISCATTER;
+    case mi::mdl::IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER:
+        return mi::neuraylib::DFK_SIMPLE_GLOSSY_MULTISCATTER;
+    case mi::mdl::IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER:
+        return mi::neuraylib::DFK_WARD_GEISLER_MORODER_MULTISCATTER;
+    default:
+        break;
+    }
+    return mi::neuraylib::DFK_INVALID;
+}
+
+mi::neuraylib::Df_data_kind Target_code::get_texture_df_data_kind(Size index) const
+{
+    if (index < m_texture_table.size()) {
+        return convert_df_data_kind(m_texture_table[index].get_df_data_kind());
+    }
+    return mi::neuraylib::DFK_INVALID;
 }
 
 mi::Size Target_code::get_light_profile_count() const
@@ -913,6 +942,23 @@ mi::Uint32 Target_code::get_string_index(char const *s) const
             return mi::Uint32(i);
     }
     return 0u;
+}
+
+const mi::Float32* Target_code::get_df_data_texture(
+    mi::mdl::IValue_texture::Bsdf_data_kind kind,
+    mi::Size &rx,
+    mi::Size &ry,
+    mi::Size &rz)
+{
+    size_t w = 0, h = 0, d = 0;
+    mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data_resolution(
+        kind, w, h, d);
+    rx = w;
+    ry = h;
+    rz = d;
+    size_t s;
+    return reinterpret_cast<const mi::Float32*>(
+        mi::mdl::libbsdf_data::get_libbsdf_multiscatter_data(kind, s));
 }
 
 /// Returns the resource index for use in an \c ITarget_argument_block of resources already

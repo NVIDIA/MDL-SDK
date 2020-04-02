@@ -32,6 +32,7 @@
 
 #include "pch.h"
 
+#include "neuray_class_factory.h"
 #include "neuray_impexp_utilities.h"
 #include "neuray_recording_transaction.h"
 #include "neuray_transaction_impl.h"
@@ -55,9 +56,14 @@
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/system/main/access_module.h>
 #include <base/lib/path/i_path.h>
+
+#include <io/scene/dbimage/i_dbimage.h>
+#include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
+#include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
+
 
 #include <regex>
 
@@ -243,8 +249,9 @@ mi::neuraylib::IImport_result_ext* Impexp_utilities::create_import_result_ext(
 }
 
 std::vector<std::string> Impexp_utilities::get_recorded_elements(
-    Recording_transaction* recording_transaction)
+    const Transaction_impl* transaction, Recording_transaction* recording_transaction)
 {
+    const Class_factory* class_factory = transaction->get_class_factory();
     const std::vector<DB::Tag>& tags = recording_transaction->get_stored_tags();
 
     std::vector<std::string> names;
@@ -252,6 +259,17 @@ std::vector<std::string> Impexp_utilities::get_recorded_elements(
         const char* name = recording_transaction->tag_to_name( *it);
         if( name)
             names.push_back( name);
+
+        // Skip DB elements that have not been registered with the API's class factory.
+        SERIAL::Class_id class_id = class_factory->get_class_id( transaction, *it);
+        if( !class_factory->is_class_registered( class_id))
+            continue;
+
+        // Implementation classes of resources should have been skipped. They are an internal
+        // implementation detail and not visible in the API.
+        ASSERT( M_NEURAY_API, class_id != DBIMAGE::ID_IMAGE_IMPL);
+        ASSERT( M_NEURAY_API, class_id != LIGHTPROFILE::ID_LIGHTPROFILE_IMPL);
+        ASSERT( M_NEURAY_API, class_id != BSDFM::ID_BSDF_MEASUREMENT_IMPL);
     }
 
     return names;
@@ -626,3 +644,4 @@ mi::IString*  Impexp_utilities::uvtile_string_to_marker(
 } // namespace NEURAY
 
 } // namespace MI
+

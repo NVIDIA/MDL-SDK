@@ -448,42 +448,45 @@ public:
     mi::neuraylib::IReader* get_reader( const char* container_filename, const char* member_filename);
 };
 
-class Mdl_image_set : public MI::DBIMAGE::Image_set
+/// The implementation of Image_set used by the MDL integration
+class Mdl_image_set : public DBIMAGE::Image_set
 {
 public:
     
     Mdl_image_set(
         mi::mdl::IMDL_resource_set* set, 
-        const std::string& file_name,
-        const std::string& container_name = "");
+        const std::string& filename,
+        const std::string& container_filename = "");
 
     mi::Size get_length() const;
-
-    char const * get_mdl_file_path() const;
-
-    char const * get_container_filename() const;
-
-    char const *get_mdl_url(mi::Size i) const;
-
-    char const *get_resolved_filename(mi::Size i) const;
-
-    char const *get_container_membername(mi::Size i) const;
-
-    bool get_uv_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const;
-
-    mi::neuraylib::IReader *open_reader(mi::Size i) const;
 
     bool is_uvtile() const;
 
     bool is_mdl_container() const;
 
+    void get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const;
+
+    const char* get_original_filename() const;
+
+    const char* get_container_filename() const;
+
+    const char* get_mdl_file_path() const;
+
+    const char* get_resolved_filename( mi::Size i) const;
+
+    const char* get_container_membername( mi::Size i) const;
+
+    mi::neuraylib::IReader* open_reader( mi::Size i) const;
+
+    mi::neuraylib::ICanvas* get_canvas( mi::Size i) const;
+
+    const char* get_image_format() const;
+
 private:
 
     mi::base::Handle<mi::mdl::IMDL_resource_set> m_resource_set;
-
     std::string m_mdl_file_path;
-    std::string m_container_name;
-
+    std::string m_container_filename;
     bool m_is_container;
 };
 

@@ -35,8 +35,6 @@
 #include <vector>
 #include <map>
 
-#include <base/system/main/neuray_cc_conf.h>
-
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_code_generators.h>
@@ -237,16 +235,16 @@ public:
     // API methods
 
     /// Returns the target argument block data.
-    const char* get_data() const NEURAY_OVERRIDE;
+    const char* get_data() const override;
 
     /// Returns the target argument block data.
-    char* get_data() NEURAY_OVERRIDE;
+    char* get_data() override;
 
     /// Returns the size of the target argument block data.
-    mi::Size get_size() const NEURAY_OVERRIDE;
+    mi::Size get_size() const override;
 
     /// Clones the target argument block (to make it writeable).
-    ITarget_argument_block *clone() const NEURAY_OVERRIDE;
+    ITarget_argument_block *clone() const override;
 
 private:
     /// Destructor.
@@ -309,7 +307,7 @@ public:
     // API methods
 
     /// Get the size of the target argument block.
-    mi::Size get_size() const NEURAY_OVERRIDE;
+    mi::Size get_size() const override;
 
     /// Get the number of arguments / elements at the given layout state.
     ///
@@ -317,7 +315,7 @@ public:
     ///               argument value block. The default value is used for the top-level.
     mi::Size get_num_elements(
         mi::neuraylib::Target_value_layout_state state =
-            mi::neuraylib::Target_value_layout_state()) const NEURAY_OVERRIDE;
+            mi::neuraylib::Target_value_layout_state()) const override;
 
     /// Get the offset, the size and the kind of the argument / element inside the argument
     /// block at the given layout state.
@@ -332,7 +330,7 @@ public:
         mi::neuraylib::IValue::Kind &kind,
         mi::Size &arg_size,
         mi::neuraylib::Target_value_layout_state state =
-            mi::neuraylib::Target_value_layout_state()) const NEURAY_OVERRIDE;
+            mi::neuraylib::Target_value_layout_state()) const override;
 
     /// Get the layout state for the i'th argument / element inside the argument value block
     /// at the given layout state.
@@ -345,7 +343,7 @@ public:
     mi::neuraylib::Target_value_layout_state get_nested_state(
         mi::Size i,
         mi::neuraylib::Target_value_layout_state state =
-        mi::neuraylib::Target_value_layout_state()) const NEURAY_OVERRIDE;
+        mi::neuraylib::Target_value_layout_state()) const override;
 
     /// Set the value inside the given block at the given layout state.
     ///
@@ -368,7 +366,7 @@ public:
         mi::neuraylib::IValue const *value,
         mi::neuraylib::ITarget_resource_callback *resource_callback,
         mi::neuraylib::Target_value_layout_state state =
-            mi::neuraylib::Target_value_layout_state()) const NEURAY_OVERRIDE;
+            mi::neuraylib::Target_value_layout_state()) const override;
 
     // Non-API methods
 
@@ -415,7 +413,9 @@ public:
     }
 
     /// Creates and stores bsdf data textures in the database.
-    void store_df_data(mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind);
+    ///
+    /// \return The tag of the texture in the database
+    DB::Tag store_df_data(mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind);
 
     /// Returns the database name for the given df data kind.
     static const char* get_texture_db_name(mi::mdl::IValue_texture::Bsdf_data_kind kind);
@@ -439,46 +439,22 @@ private:
         void get_pixel(
             mi::Uint32 x_offset,
             mi::Uint32 y_offset,
-            mi::Float32* floats) const
-        {
-            mi::Uint32 p = ((y_offset * m_resolution_x) + x_offset);
-            floats[0] = m_data[p];
-        }
+            mi::Float32* floats) const final;
 
         void set_pixel(
             mi::Uint32 x_offset,
             mi::Uint32 y_offset,
-            const  mi::Float32* floats)
-        {
-            // pixel data cannot be changed.
-            return;
-        }
+            const  mi::Float32* floats) final;
 
-        const char* get_type() const
-        {
-            return "Float32";
-        }
+        const char* get_type() const final;
 
-        mi::Uint32 get_resolution_x() const
-        {
-            return m_resolution_x;
-        }
+        mi::Uint32 get_resolution_x() const final;
 
-        mi::Uint32 get_resolution_y() const
-        {
-            return m_resolution_y;
-        }
+        mi::Uint32 get_resolution_y() const final;
 
-        const void* get_data() const
-        {
-            return m_data;
-        }
+        const void* get_data() const final;
 
-        virtual void* get_data()
-        {
-            // pixel data cannot be changed.
-            return nullptr;
-        }
+        void* get_data() final;
 
     private:
 
@@ -504,79 +480,33 @@ private:
 
         // methods of mi::neuraylib::ICanvas_base
 
-        mi::Uint32 get_resolution_x() const
-        {
-            return m_tiles[0]->get_resolution_x();
-        }
+        mi::Uint32 get_resolution_x() const final;
 
-        mi::Uint32 get_resolution_y() const
-        {
-            return m_tiles[0]->get_resolution_y();
-        }
+        mi::Uint32 get_resolution_y() const final;
 
-        const char* get_type() const
-        {
-            return "Float32";
-        }
+        const char* get_type() const final;
 
-        mi::Uint32 get_layers_size() const
-        {
-            return m_tiles.size();
-        }
+        mi::Uint32 get_layers_size() const final;
 
-        mi::Float32 get_gamma() const
-        {
-            return 1.0f;
-        }
+        mi::Float32 get_gamma() const final;
 
-        void set_gamma(mi::Float32)
-        {
-            // gamma cannot be changed.
-        }
+        void set_gamma(mi::Float32) final;
 
         // methods of mi::neuraylib::ICanvas
 
-        mi::Uint32 get_tile_resolution_x() const
-        {
-            return m_tiles[0]->get_resolution_x();
-        }
+        mi::Uint32 get_tile_resolution_x() const final;
 
-        mi::Uint32 get_tile_resolution_y() const
-        {
-            return m_tiles[0]->get_resolution_y();
-        }
+        mi::Uint32 get_tile_resolution_y() const final;
 
-        mi::Uint32 get_tiles_size_x() const
-        {
-            return 1;
-        }
+        mi::Uint32 get_tiles_size_x() const final;
 
-        mi::Uint32 get_tiles_size_y() const
-        {
-            return 1;
-        }
+        mi::Uint32 get_tiles_size_y() const final;
 
-        const mi::neuraylib::ITile* get_tile(mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0) const
-        {
-            if (layer >= m_tiles.size() ||
-                pixel_x >= m_tiles[0]->get_resolution_x() ||
-                pixel_y >= m_tiles[0]->get_resolution_y())
-                return nullptr;
+        const mi::neuraylib::ITile* get_tile(
+            mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0) const final;
 
-            m_tiles[layer]->retain();
-            return m_tiles[layer].get();
-        }
-
-        mi::neuraylib::ITile* get_tile(mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0)
-        {
-            if (layer >= m_tiles.size() ||
-                pixel_x >= m_tiles[0]->get_resolution_x() ||
-                pixel_y >= m_tiles[0]->get_resolution_y())
-                return nullptr;
-
-            m_tiles[layer]->retain();
-            return m_tiles[layer].get();
-        }
+        mi::neuraylib::ITile* get_tile(
+            mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0) final;
 
     private:
 
@@ -591,29 +521,35 @@ private:
             : m_canvas(mi::base::make_handle_dup(canvas)) { }
 
         // methods from DBIMAGE::Image_set
-        mi::Size get_length() const
-        {
-            return 1;
-        }
+        mi::Size get_length() const final;
 
-        bool get_uv_mapping(mi::Size i, mi::Sint32& /*u*/, mi::Sint32& /*v*/) const
-        {
-            return false;
-        }
+        bool is_uvtile() const final;
 
-        virtual mi::neuraylib::ICanvas* get_canvas(mi::Size i) const
-        {
-            if (i == 0) {
-                m_canvas->retain();
-                return m_canvas.get();
-            }
-            return nullptr;
-        }
+        bool is_mdl_container() const final;
+
+        void get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const final;
+
+        const char* get_original_filename() const final;
+
+        const char* get_container_filename() const final;
+
+        const char* get_mdl_file_path() const final;
+
+        const char* get_resolved_filename( mi::Size i) const final;
+
+        const char* get_container_membername( mi::Size i) const final;
+
+        mi::neuraylib::IReader* open_reader( mi::Size i) const final;
+
+        mi::neuraylib::ICanvas* get_canvas( mi::Size i) const final;
+
+        const char* get_image_format() const final;
+
     private:
         mi::base::Handle <mi::neuraylib::ICanvas> m_canvas;
     };
 
-    mi::Sint32 store_texture(
+    DB::Tag store_texture(
         mi::Uint32 rx,
         mi::Uint32 ry,
         mi::Uint32 rz,

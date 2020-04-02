@@ -296,12 +296,16 @@ public:
     /// Get the zip archive name.
     char const *get_container_name() const { return m_path.c_str(); }
 
+    /// Returns true if this container supports resource hashes.
+    bool has_resource_hashes() const { return m_has_resource_hashes; }
+
 protected:
     /// Constructor.
     explicit MDL_zip_container(
         IAllocator *alloc,
         char const *path,
-        zip_t      *za);
+        zip_t      *za,
+        bool       supports_resource_hashes);
 
     /// Destructor
     virtual ~MDL_zip_container();
@@ -338,8 +342,11 @@ protected:
     /// The zip archive handle.
     zip_t *m_za;
 
-    /// header of the zip file
+    /// The header of the zip file.
     MDL_zip_container_header m_header;
+
+    /// True, if this container supports resource hashes.
+    bool m_has_resource_hashes;
 };
 
 /// Helper class for file from an archive.

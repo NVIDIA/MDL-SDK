@@ -45,6 +45,7 @@ is running.
   <tr><td>#mi::neuraylib::IImage_api               </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IMdl_archive_api         </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IMdl_compiler            </td><td>yes</td></tr>
+  <tr><td>#mi::neuraylib::IMdl_configuration       </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IMdl_discovery_api       </td><td>yes</td></tr>
 \if  MDL_BIN_RELEASE
   <tr><td>#mi::neuraylib::IMdl_distiller_api       </td><td>yes</td></tr>

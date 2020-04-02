@@ -117,7 +117,7 @@ public:
         if (c == '\0') {
             return TT_EOF;
         } // check for absolute paths; Unix, Windows UNC and Windows paths starting with "X:/"
-        else if (c == '/' || (isalpha(c) && m_curr[1] == ':' && m_curr[2] == '/')) {
+        else if (c == '/' || (is_latin_alpha(c) && m_curr[1] == ':' && m_curr[2] == '/')) {
             unsigned index = 0;
             do {
                 NEXT_CHAR;
@@ -144,7 +144,7 @@ public:
                     NEXT_CHAR;
                     // check for absolute paths; Unix, Windows UNC and 
                     // Windows paths starting with "X:/"
-                    if (c == '/' || (isalpha(c) && m_curr[1] == ':' && m_curr[2] == '/')) {
+                    if (c == '/' || (is_latin_alpha(c) && m_curr[1] == ':' && m_curr[2] == '/')) {
                         unsigned index = 0;
                         do {
                             NEXT_CHAR;
@@ -167,26 +167,26 @@ public:
                             m_curr += 2;
                             c = m_curr[0];
                         }
-                    } while (isalnum(c) || c == '_');
+                    } while (!is_end(c));
                 }
                 goto check_for_array_type;
             }
-        } else if (isalpha(c)) {
+        } else if (!is_end(c)) {
             do {
                 NEXT_CHAR;
-            } while (isalnum(c) || c == '_');
+            } while (!is_end(c));
 check_for_array_type:
             if (c == '[') {
                NEXT_CHAR;
 
-               if (isalpha(c)) {
+               if (is_latin_alpha(c)) {
+                    do {
+                        NEXT_CHAR;
+                    } while (is_latin_alpha(c) || c == '_');
+               } else if (is_latin_digit(c)) {
                    do {
                        NEXT_CHAR;
-                   } while (isalnum(c) || c == '_');
-               } else if (isdigit(c)) {
-                   do {
-                       NEXT_CHAR;
-                   } while (isdigit(c));
+                   } while (is_latin_digit(c));
                }
                if (c == ']') {
                    NEXT_CHAR;
@@ -195,14 +195,26 @@ check_for_array_type:
                return TT_ERROR;
             }
             // handle operator
-            if (m_len == 8 && strncmp(m_start, "operator", m_len) == 0) {
-                if (c == '(' && m_curr[1] == ')') {
+            if (m_len >= 8 && strncmp(m_start, "operator", 8) == 0) {
+                bool is_operator = false;
+                if (c == '(' && m_curr[1] == ')' && m_curr[2] == '(') {
                     // special handling for operator()
                     NEXT_CHAR;
                     NEXT_CHAR;
+                    is_operator = true;
+                } else if (c == '[' && m_curr[1] == ']' && m_curr[2] == '(') {
+                    // special handling for operator[]
+                    NEXT_CHAR;
+                    NEXT_CHAR;
+                    is_operator = true;
+                } else if (c == ',' && m_curr[1] == '(') {
+                    // special handling for operator,
+                    NEXT_CHAR;
+                    is_operator = true;
                 } else {
-                    for (bool inside = true; inside;) {
-                        switch (c) {
+                    is_operator = (m_len > 8) && (c == '(');
+                    for (size_t i = 8; i < m_len; ++i) {
+                        switch (m_start[i]) {
                         case '~':
                         case '!':
                         case '.':
@@ -217,19 +229,15 @@ check_for_array_type:
                         case '^':
                         case '&':
                         case '|':
-                        case '[':
-                        case ']':
-                        case ',':
                         case '?':
-                            NEXT_CHAR;
                             break;
                         default:
-                            inside = false;
+                            is_operator = false;
                             break;
                         }
                     }
                 }
-                if (m_len > 8)
+                if (is_operator)
                     return TT_OPERATOR;
             }
             return TT_ID;
@@ -260,6 +268,33 @@ check_for_array_type:
 
         reset_position(pos);
         return num;
+    }
+
+    /// Check if the given character is definitely not part of the current package/module/entity
+    /// name.
+    static bool is_end(char c) {
+        switch (c) {
+        case '\0':
+        case ',':
+        case '(':
+        case ')':
+        case '[':
+        case ']':
+        case ':':
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    /// Check if the given character is a latin alphabetic character.
+    static bool is_latin_alpha(char c) {
+        return c > 0 && c < 0x80 && isalpha(c);
+    }
+
+    /// Check if the given character is a latin digit.
+    static bool is_latin_digit(char c) {
+        return c > 0 && c < 0x80 && isdigit(c);
     }
 
 private:
@@ -1117,7 +1152,7 @@ bool Module::restore_import_entries(IModule_cache *cache) const
             if (cache == NULL)
                 return false;
 
-            mi::base::Handle<IModule const> imod(cache->lookup(entry.get_absolute_name()));
+            mi::base::Handle<IModule const> imod(cache->lookup(entry.get_absolute_name(), NULL));
             if (imod.is_valid_interface()) {
                 import = impl_cast<Module>(imod.get());
                 entry.enter_module(weak_lock, import);
@@ -2861,6 +2896,11 @@ IDefinition const *Module::find_signature(
     }
     string name(start, len, get_allocator());
 
+    // check if this is a deprecated symbol
+    size_t pos = name.find_last_of('$');
+    if (pos != string::npos)
+        name = name.substr(0, pos);
+
     Signature_matcher matcher(get_allocator(), m_compiler, lexer);
 
     ISymbol const *sym = NULL;
@@ -4013,20 +4053,20 @@ int Module::promote_call_arguments(
     if (rules & PR_SPOT_EDF_ADD_SPREAD_PARAM) {
         if (param_index == 0) {
             // add M_PI as 1. argument
-            IValue_float const  *v = m_value_factory.create_float(M_PIf);
-            IExpression const   *e = m_expr_factory.create_literal(v);
-            arg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(arg);
+            IValue_float const  *v    = m_value_factory.create_float(M_PIf);
+            IExpression const   *e    = m_expr_factory.create_literal(v);
+            IArgument const     *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
             return param_index + 1;
         }
     }
     if (rules & PC_MEASURED_EDF_ADD_MULTIPLIER) {
         if (param_index == 0) {
             // add 1.0 as 1. argument
-            IValue_float const  *v = m_value_factory.create_float(1.0);
-            IExpression const   *e = m_expr_factory.create_literal(v);
-            arg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(arg);
+            IValue_float const  *v    = m_value_factory.create_float(1.0);
+            IExpression const   *e    = m_expr_factory.create_literal(v);
+            IArgument const     *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
             return param_index + 1;
         }
     }
@@ -4056,8 +4096,8 @@ int Module::promote_call_arguments(
 
             tu_call->add_argument(a);
 
-            arg = m_expr_factory.create_positional_argument(tu_call);
-            call->add_argument(arg);
+            IArgument const *narg = m_expr_factory.create_positional_argument(tu_call);
+            call->add_argument(narg);
             return param_index + 1;
         }
     }
@@ -4105,8 +4145,8 @@ int Module::promote_call_arguments(
 
             int2_call->add_argument(a);
 
-            arg = m_expr_factory.create_positional_argument(int2_call);
-            call->add_argument(arg);
+            IArgument const *narg = m_expr_factory.create_positional_argument(int2_call);
+            call->add_argument(narg);
             return param_index + 1;
         }
     }
@@ -4131,18 +4171,18 @@ int Module::promote_call_arguments(
 
             int2_call->add_argument(a);
 
-            arg = m_expr_factory.create_positional_argument(int2_call);
-            call->add_argument(arg);
+            IArgument const *narg = m_expr_factory.create_positional_argument(int2_call);
+            call->add_argument(narg);
             return param_index + 1;
         }
     }
     if (rules & PR_ROUNDED_CORNER_ADD_ROUNDNESS) {
         if (param_index == 1) {
             // add roundness as 2. argument
-            IValue_float const  *v = m_value_factory.create_float(1.0f);
-            IExpression const   *e = m_expr_factory.create_literal(v);
-            arg = m_expr_factory.create_positional_argument(e);
-            call->add_argument(arg);
+            IValue_float const  *v    = m_value_factory.create_float(1.0f);
+            IExpression const   *e    = m_expr_factory.create_literal(v);
+            IArgument const     *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
             return param_index + 1;
         }
     }
@@ -4157,15 +4197,16 @@ int Module::promote_call_arguments(
             IExpression_reference *hair_ref = m_expr_factory.create_reference(tn);
             IExpression_call *hair_call = m_expr_factory.create_call(hair_ref);
 
-            IArgument const   *a = call->get_argument(5);
+            IArgument const *a    = call->get_argument(5);
+            IArgument const *narg = NULL;
             if (a->get_kind() == IArgument::AK_POSITIONAL) {
-                arg = m_expr_factory.create_positional_argument(hair_call);
+                narg = m_expr_factory.create_positional_argument(hair_call);
             } else {
-                ISymbol const *sh = m_name_factory.create_symbol("hair");
-                ISimple_name const * sn_hair = m_name_factory.create_simple_name(sh);
-                arg = m_expr_factory.create_named_argument(sn_hair, hair_call);
+                ISymbol const      *sh      = m_name_factory.create_symbol("hair");
+                ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
+                narg = m_expr_factory.create_named_argument(sn_hair, hair_call);
             }
-            call->add_argument(arg);
+            call->add_argument(narg);
 
             return param_index + 1;
         }
@@ -4191,8 +4232,8 @@ int Module::promote_call_arguments(
 
             color_call->add_argument(a);
 
-            arg = m_expr_factory.create_positional_argument(color_call);
-            call->add_argument(arg);
+            IArgument const *narg = m_expr_factory.create_positional_argument(color_call);
+            call->add_argument(narg);
             return param_index + 1;
         }
     }
@@ -4689,20 +4730,22 @@ static IType_name const *promote_name(
     }
     sym = mod.get_symbol_table().get_symbol(n.c_str());
 
-    IQualified_name *n_qn = mod.get_name_factory()->create_qualified_name();
+    Name_factory *name_fact = mod.get_name_factory();
+
+    IQualified_name *n_qn = name_fact->create_qualified_name();
 
     for (int i = 0; i < n_components - 1; ++i) {
         n_qn->add_component(qn->get_component(i));
     }
 
-    sn = mod.get_name_factory()->create_simple_name(sym);
+    sn = name_fact->create_simple_name(sym);
     n_qn->add_component(sn);
 
     if (qn->is_absolute())
         n_qn->set_absolute();
     n_qn->set_definition(qn->get_definition());
 
-    IType_name *n_tn = mod.get_name_factory()->create_type_name(n_qn);
+    IType_name *n_tn = name_fact->create_type_name(n_qn);
 
     if (tn->is_absolute())
         n_tn->set_absolute();

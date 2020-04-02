@@ -45,6 +45,19 @@
 namespace mi {
 namespace mdl {
 
+namespace {
+
+/// Calculate the name hash.
+static size_t calc_name_hash(char const *name)
+{
+    size_t hash = 0;
+    for (size_t i = 0; name[i] != '\0'; ++i)
+        hash = hash * 9 ^ size_t(name[i]);
+    return hash;
+}
+
+}
+
 // -------------------------- DAG IR node --------------------------
 
 /// Abstract base class for all expressions.
@@ -220,7 +233,7 @@ private:
     , m_semantic(sema)
     , m_ret_type(ret_type)
     , m_name(Arena_strdup(*arena, name))
-    , m_name_hash(calc_name_hash(name) ^ size_t(sema * 9))
+    , m_name_hash(calc_name_hash(name) ^ size_t(sema) * 9)
     , m_parameter_names(arena)
     , m_arguments(arena)
     {
@@ -235,15 +248,6 @@ private:
         }
 
         MDL_ASSERT(sema != operator_to_semantic(IExpression::OK_SELECT));
-    }
-
-    /// Calculate the name hash.
-    static size_t calc_name_hash(char const *name)
-    {
-        size_t hash = 0;
-        for (size_t i = 0; name[i] != '\0'; ++i)
-            hash = hash * 9 ^ size_t(name[i]);
-        return hash;
     }
 
 private:
@@ -310,7 +314,8 @@ size_t DAG_node_factory_impl::Hash_dag_node::operator()(
     DAG_node const *node) const
 {
     DAG_node::Kind kind = node->get_kind();
-    size_t         hash = 0;
+    auto           it   = m_temp_name_map.find(node);
+    size_t         hash = it != m_temp_name_map.end() ? calc_name_hash(it->second) : 0;
 
     switch (kind) {
     case DAG_node::EK_CONSTANT:
@@ -353,6 +358,17 @@ bool DAG_node_factory_impl::Equal_dag_node::operator()(
 
     if (kind != b->get_kind())
         return false;
+
+    auto it_a = m_temp_name_map.find(a);
+    auto it_b = m_temp_name_map.find(b);
+    bool has_name_a = it_a != m_temp_name_map.end();
+    bool has_name_b = it_b != m_temp_name_map.end();
+    if (has_name_a != has_name_b)
+        return false;
+
+    if (has_name_a && strcmp(it_a->second, it_b->second) != 0)
+        return false;
+
     switch (kind) {
     case DAG_node::EK_CONSTANT:
         {
@@ -423,6 +439,7 @@ DAG_node_factory_impl::DAG_node_factory_impl(
 , m_cse_enabled(true)
 , m_opt_enabled(true)
 , m_unsafe_math_opt(true)
+, m_expose_names_of_let_expressions(false)
 , m_inline_allowed(true)
 , m_noinline_ignored(false)
 , m_needs_state_import(false)
@@ -433,7 +450,16 @@ DAG_node_factory_impl::DAG_node_factory_impl(
 , m_mdl_meters_per_scene_unit(1.0f)
 , m_state_wavelength_min(380.0f)
 , m_state_wavelength_max(780.0f)
-, m_value_table(0, Value_table::hasher(), Value_table::key_equal(), arena.get_allocator())
+, m_temp_name_map(
+    0,
+    Definition_temporary_name_map::hasher(),
+    Definition_temporary_name_map::key_equal(),
+    arena.get_allocator())
+, m_value_table(
+    0,
+    Value_table::hasher(m_temp_name_map),
+    Value_table::key_equal(m_temp_name_map),
+    arena.get_allocator())
 {
 }
 
@@ -1333,7 +1359,8 @@ DAG_node const *DAG_node_factory_impl::create_call(
         break;
     }
 
-    if (m_opt_enabled) {
+    if (m_opt_enabled && all_args_without_name(call_args, num_call_args)) {
+
         if (semantic_is_operator(sema)) {
             IExpression::Operator op = semantic_to_operator(sema);
 
@@ -2189,7 +2216,7 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
 
             MDL_ASSERT(arguments.size() == n_cols * n_rows);
 
-            int idx = 0;
+            size_t idx = 0;
             for (size_t col = 0; col < n_cols; ++col) {
                 IValue const *row_vals[4];
                 for (size_t row = 0; row < n_rows; ++row, ++idx) {
@@ -2294,65 +2321,6 @@ IValue const *DAG_node_factory_impl::evaluate_intrinsic_function(
     return NULL;
 }
 
-// Set a tag, version pair into a resource literal.
-void DAG_node_factory_impl::set_resource_tag(
-    DAG_constant const *c,
-    int                tag,
-    unsigned           ver)
-{
-    MDL_ASSERT(identify_empty() && "cannot set resource tags if CSE is enabled");
-
-    IValue const *v = c->get_value();
-    if (IValue_resource const *r = as<IValue_resource>(v)) {
-        IValue_resource const *n = NULL;
-        switch (r->get_kind()) {
-        case IValue::VK_TEXTURE:
-            {
-                IValue_texture const *t = cast<IValue_texture>(r);
-                if (t->get_type()->get_shape() == IType_texture::TS_BSDF_DATA) {
-                    n = m_value_factory.create_bsdf_data_texture(
-                        t->get_bsdf_data_kind(),
-                        tag,
-                        ver);
-                } else {
-                    n = m_value_factory.create_texture(
-                        t->get_type(),
-                        t->get_string_value(),
-                        t->get_gamma_mode(),
-                        tag,
-                        ver);
-                }
-            }
-            break;
-        case IValue::VK_LIGHT_PROFILE:
-            {
-                IValue_light_profile const *l = cast<IValue_light_profile>(r);
-                n = m_value_factory.create_light_profile(
-                    l->get_type(),
-                    l->get_string_value(),
-                    tag,
-                    ver);
-            }
-            break;
-        case IValue::VK_BSDF_MEASUREMENT:
-            {
-                IValue_bsdf_measurement const *b = cast<IValue_bsdf_measurement>(r);
-                n = m_value_factory.create_bsdf_measurement(
-                    b->get_type(),
-                    b->get_string_value(),
-                    tag,
-                    ver);
-            }
-            break;
-        default:
-            break;
-        }
-        if (n != NULL) {
-            ((Constant_impl *)c)->set_value(n);
-        }
-    }
-}
-
 // Enable the folding of scene unit conversion functions.
 void DAG_node_factory_impl::enable_unit_conv_fold(float mdl_meters_per_scene_unit)
 {
@@ -2375,6 +2343,86 @@ void DAG_node_factory_impl::enable_wavelength_fold(
 bool DAG_node_factory_impl::is_owner(DAG_node const *n) const
 {
     return m_builder.get_arena()->contains(n);
+}
+
+void DAG_node_factory_impl::add_node_name(DAG_node const *node, char const *name)
+{
+    m_temp_name_map[node] = Arena_strdup(*m_builder.get_arena(), name);
+}
+
+bool DAG_node_factory_impl::all_args_without_name(DAG_node const *args[], int n_args) const
+{
+    if (!m_expose_names_of_let_expressions) {
+        MDL_ASSERT(m_temp_name_map.empty());
+        return true;
+    }
+
+    for (int i = 0; i < n_args; ++i)
+        if (m_temp_name_map.find(args[i]) != m_temp_name_map.end())
+            return false;
+    return true;
+}
+
+bool DAG_node_factory_impl::all_args_without_name(DAG_call::Call_argument const args[], int n_args) const
+{
+    if (!m_expose_names_of_let_expressions) {
+        MDL_ASSERT(m_temp_name_map.empty());
+        return true;
+    }
+
+    for (int i = 0; i < n_args; ++i)
+        if (m_temp_name_map.find(args[i].arg) != m_temp_name_map.end())
+            return false;
+    return true;
+}
+
+DAG_node const *DAG_node_factory_impl::shallow_copy(DAG_node const *node)
+{
+    No_CSE_scope scope(*this);
+
+    switch (node->get_kind())
+    {
+        case DAG_node::EK_CONSTANT:
+        {
+            DAG_constant const *c     = cast<DAG_constant>(node);
+            IValue const       *value = c->get_value();
+            return create_constant(value);
+        }
+        case DAG_node::EK_PARAMETER:
+        {
+            DAG_parameter const *p    = cast<DAG_parameter>(node);
+            IType const         *type = p->get_type();
+            int                 index = p->get_index();
+            return create_parameter(type, index);
+        }
+        case DAG_node::EK_TEMPORARY:
+        {
+            DAG_temporary const *t    = cast<DAG_temporary>(node);
+            DAG_node const      *expr = t->get_expr();
+            int                 index = t->get_index();
+            return create_temporary(expr, index);
+        }
+        case DAG_node::EK_CALL:
+        {
+            DAG_call const         *call    = cast<DAG_call>(node);
+            int                    n_params = call->get_argument_count();
+            IDefinition::Semantics sema     = call->get_semantic();
+            char const             *name    = call->get_name();
+            IType const            *type    = call->get_type();
+
+            VLA<DAG_call::Call_argument> args(get_allocator(), n_params);
+
+            for (int i = 0; i < n_params; ++i) {
+                args[i].param_name = call->get_parameter_name(i);
+                args[i].arg        = call->get_argument(i);
+            }
+
+            return create_call(name, sema, args.data(), args.size(), type);
+        }
+    }
+
+    MDL_ASSERT(!"Unsupported DAG node kind");
+    return node;
 }
 
 // Create an operator call.
@@ -2940,17 +2988,18 @@ DAG_node_factory_impl::create_constructor_call(
 {
     Value_vector values(num_call_args, NULL, get_allocator());
 
-    bool all_const = true;
+    bool all_args_const = true;
     for (int i = 0; i < num_call_args; ++i) {
         DAG_node const *arg = call_args[i].arg;
         if (is<DAG_constant>(arg)) {
             values[i] = cast<DAG_constant>(arg)->get_value();
         } else {
-            all_const = false;
+            all_args_const = false;
             break;
         }
     }
-    if (all_const) {
+
+    if (all_args_const && all_args_without_name(call_args, num_call_args)) {
         if (IValue const *v = evaluate_constructor(
                 m_value_factory, sema, ret_type, values)) {
             return create_constant(v);
@@ -3356,22 +3405,22 @@ DAG_node const *DAG_node_factory_impl::remove_clamped_components(
 DAG_node *DAG_node_factory_impl::identify_remember(
     DAG_node *node)
 {
-    if (m_cse_enabled) {
-        Value_table::iterator it = m_value_table.find(node);
-        if (it == m_value_table.end()) {
-            m_value_table.insert(node);
-            return node;
-        }
-        // already known, drop this and return the other
-        size_t id = node->get_id();
-        if (id + 1 == m_next_id) {
-            // recover the ID
-            --m_next_id;
-        }
-        m_builder.get_arena()->drop(node);
-        return *it;
+    if (!m_cse_enabled)
+        return node;
+
+    Value_table::iterator it = m_value_table.find(node);
+    if (it == m_value_table.end()) {
+        m_value_table.insert(node);
+        return node;
     }
-    return node;
+    // already known, drop this and return the other
+    size_t id = node->get_id();
+    if (id + 1 == m_next_id) {
+        // recover the ID
+        --m_next_id;
+    }
+    m_builder.get_arena()->drop(node);
+    return *it;
 }
 
 // Create a df::*_mix() call.

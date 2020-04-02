@@ -688,7 +688,7 @@ void invalid_parameter_handler(
         "Invalid parameter detected in function %s. File: %s Line: %d\n",
         STRING::wchar_to_utf8(function).c_str(), STRING::wchar_to_utf8(file).c_str(), line);
     LOG::mod_log->error(M_DISK, Mod_log::C_DISKTRACE, 777,
-        "Expression: %s", STRING::wchar_to_utf8(expression));
+        "Expression: %s", STRING::wchar_to_utf8(expression).c_str());
 }
 
 struct Reset_guard

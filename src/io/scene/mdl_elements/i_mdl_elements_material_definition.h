@@ -125,6 +125,8 @@ public:
 
     const IExpression* get_temporary( DB::Transaction* transaction, mi::Size index) const;
 
+    const char* get_temporary_name( DB::Transaction* transaction, mi::Size index) const;
+
     const char* get_thumbnail() const;
 
     Mdl_material_instance* create_material_instance(

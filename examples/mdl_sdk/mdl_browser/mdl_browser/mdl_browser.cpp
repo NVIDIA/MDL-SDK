@@ -31,6 +31,7 @@
 // example helper
 #include "mdl_sdk_helper.h"
 #include "mdl_browser_command_line_options.h"
+#include "example_shared.h"
 
 // system
 #include <iostream>
@@ -128,7 +129,7 @@ int run_non_qt_application(Mdl_qt_plugin_interface* plugin,
 }
 
 
-int main(int argc, char* argv[])
+int MAIN_UTF8(int argc, char* argv[])
 {
     // parse command line options of the example
     Mdl_browser_command_line_options options(argc, argv);
@@ -164,3 +165,5 @@ int main(int argc, char* argv[])
 
     return exit_code;
 }
+
+COMMANDLINE_TO_UTF8

@@ -72,7 +72,9 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
         FreeImage_Initialise();
 
     if( FreeImage_FIFSupportsExportType( m_format, FIT_BITMAP)) {
-        if( FreeImage_FIFSupportsExportBPP( m_format, 32))
+        // Disable pixel type "Rgba" for export for "jpeg". The format claims to support exports
+        // with 32 bpp, but this works only for CMYK color types.
+        if( FreeImage_FIFSupportsExportBPP( m_format, 32) && m_format != FIF_JPEG)
             m_supported_types.push_back( "Rgba");
         if( FreeImage_FIFSupportsExportBPP( m_format, 24))
             m_supported_types.push_back( "Rgb");
@@ -82,18 +84,29 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
         m_supported_types.push_back( convert_freeimage_pixel_type_to_neuray_pixel_type(FIT_RGBA16));
     if( FreeImage_FIFSupportsExportType( m_format, FIT_RGB16))
         m_supported_types.push_back( convert_freeimage_pixel_type_to_neuray_pixel_type( FIT_RGB16));
-    if( FreeImage_FIFSupportsExportType( m_format, FIT_RGBAF))
+    // Disable pixel types "Color" and "Rgb_fp" for export for "psd". Re-import looks good, but
+    // looks broken in Gimp 2.10.8, and fails with Adobe Photoshop. See
+    // https://sourceforge.net/p/freeimage/bugs/302/ .
+    if( FreeImage_FIFSupportsExportType( m_format, FIT_RGBAF) && m_format != FIF_PSD)
         m_supported_types.push_back( convert_freeimage_pixel_type_to_neuray_pixel_type( FIT_RGBAF));
-    if( FreeImage_FIFSupportsExportType( m_format, FIT_RGBF))
+    if( FreeImage_FIFSupportsExportType( m_format, FIT_RGBF) && m_format != FIF_PSD)
         m_supported_types.push_back( convert_freeimage_pixel_type_to_neuray_pixel_type( FIT_RGBF));
-    if( FreeImage_FIFSupportsExportType( m_format, FIT_FLOAT))
+    // Disable pixel type "Float32" for export for "psd". Re-import fails, looks broken in Gimp
+    // 2.10.8, and fails with Adobe Photoshop. See https://sourceforge.net/p/freeimage/bugs/301/ .
+    if( FreeImage_FIFSupportsExportType( m_format, FIT_FLOAT) && m_format != FIF_PSD)
         m_supported_types.push_back( convert_freeimage_pixel_type_to_neuray_pixel_type( FIT_FLOAT));
     if( FreeImage_FIFSupportsExportType( m_format, FIT_INT32))
         m_supported_types.push_back( convert_freeimage_pixel_type_to_neuray_pixel_type( FIT_INT32));
 
-    // Disable export for "jp2" (does not work for unknown reasons).
+    // Disable export for "jp2" (does not work for unknown reasons, see bug 12505).
     if( m_format == FIF_JP2)
         m_supported_types.clear();
+
+    // Disable export for "jxr" (apparently only available on Windows, re-import fails (at least on
+    // Linux), import with Gimp 2.10.8 fails). See https://sourceforge.net/p/freeimage/bugs/294/ .
+    if( m_format == FIF_JXR)
+        m_supported_types.clear();
+    
 
     return true;
 }

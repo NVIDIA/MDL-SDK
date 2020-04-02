@@ -171,18 +171,20 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
             // optional: check integrity of a (the created) MDLE file.
             mdle_api->validate_mdle(mdle_path.c_str(), context.get());
             check_success(print_messages(context.get()));
-        
+
             // load the MDLE module
             mdl_compiler->load_module(transaction.get(), mdle_path.c_str(), context.get());
             check_success(print_messages(context.get()));
 
-            // the database name begins with 'mdle::'
-            // followed by the full path of the mdle file (using forward slashes) with a leading '/'
-            // there is only one material/function to load, which is 'main'
-            // the database name uses forward slashes
-            // so, this results in:  mdle::<normalized_path>::main
-            std::string main_db_name = mdle_to_db_name(mdle_path);
-            std::cerr << "main_db_name: " << main_db_name.c_str() << std::endl;
+            // get database name of MDLE module
+            const char* mdle_db_name = mdl_compiler->get_module_db_name(transaction.get(), mdle_path.c_str());
+            std::cerr << "MDLE DB name: " << mdle_db_name << std::endl;
+
+            // the main material of an MDLE module is always called "main"
+            std::string main_db_name(mdle_db_name);
+            main_db_name += "::main";
+
+            std::cerr << "MDLE main DB name: " << main_db_name << std::endl;
 
             // get the main material
             mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
@@ -209,11 +211,11 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 
         // ----------------------------------------------------------------------------------------
 
-        // export a function to a second mdle
+        // export a function to a second MDLE
         const char* mdle_file_name2 = "example_function.mdle";
        
         {
-            // setup the export to mdle
+            // setup the export to MDLE
             mi::base::Handle<mi::IStructure> data(transaction->create<mi::IStructure>("Mdle_data"));
 
             // specify the material/function that will become the "main" of the MDLE
@@ -267,10 +269,27 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
             mdl_compiler->load_module(transaction.get(), mdle_path.c_str(), context.get());
             check_success(print_messages(context.get()));
 
-            // the database name of functions contains the parameter list
-            // therefore, the module has to be loaded first, to then get the main function name
-            std::string main_db_name = mdle_to_db_name_with_signature(transaction.get(), mdle_path);
-            std::cerr << "main_db_name: " << main_db_name.c_str() << std::endl;
+            // get database name of MDLE module
+            const char* mdle_db_name = mdl_compiler->get_module_db_name(transaction.get(), mdle_path.c_str());
+            std::cerr << "MDLE DB name: " << mdle_db_name << std::endl;
+
+            // get database name of main function
+            mi::base::Handle<const mi::neuraylib::IModule> mdle_module(
+                transaction->access<mi::neuraylib::IModule>(mdle_db_name));
+            check_success(mdle_module.is_valid_interface());
+
+            std::string main_db_name = mdle_db_name + std::string("::main");
+            mi::base::Handle<const mi::IArray> functions(
+                mdle_module->get_function_overloads(main_db_name.c_str()));
+
+            check_success(functions.is_valid_interface());
+            check_success(functions->get_length() == 1);
+
+            mi::base::Handle<const mi::IString> main_db_name_str(
+                functions->get_element<const mi::IString>(0));
+
+            main_db_name = main_db_name_str->get_c_str();
+            std::cerr << "MDLE main DB name: " << main_db_name << std::endl;
 
             // get the main function
             mi::base::Handle<const mi::neuraylib::IFunction_definition> function_definition(

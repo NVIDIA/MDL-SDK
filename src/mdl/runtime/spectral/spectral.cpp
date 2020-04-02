@@ -597,6 +597,67 @@ void cs_refl_to_spectrum(
     }
 }
 
+
+void cs_emission_to_spectrum(
+    float values[SPECTRAL_XYZ_RES],
+    const float color[3],
+    const Color_space_id cs)
+{
+    memset(values, 0, SPECTRAL_XYZ_RES * sizeof(float));
+
+    const Chroma_grid_info *chroma_grid_info;
+    const Chroma_cell *chroma_cells;
+    const float *chroma_spectra;
+    switch (cs)
+    {
+        default:
+        case CS_XYZ:
+            chroma_grid_info = &chroma_grid_info_e;
+            chroma_cells = chroma_cells_e;
+            chroma_spectra = chroma_spectra_e;
+            break;
+        case CS_ACES:
+        case CS_ACEScg:
+            chroma_grid_info = &chroma_grid_info_d60;
+            chroma_cells = chroma_cells_d60;
+            chroma_spectra = chroma_spectra_d60;
+            break;
+        case CS_sRGB:
+        case CS_Rec2020:
+            chroma_grid_info = &chroma_grid_info_d65;
+            chroma_cells = chroma_cells_d65;
+            chroma_spectra = chroma_spectra_d65;
+            break;
+    }
+
+    float val_XYZ[3];
+    convert_cs_to_XYZ(val_XYZ, color, cs);
+
+    const float sum = val_XYZ[0] + val_XYZ[1] + val_XYZ[2];
+    const float x = val_XYZ[0] / sum;
+    const float y = val_XYZ[1] / sum;
+
+    unsigned int idx[4];
+    float w[4];
+    const unsigned int num = get_spectra(idx, w, x, y, chroma_grid_info, chroma_cells);
+    if (num == 0)
+        return;
+
+    for (unsigned int j = 0; j < num; ++j)
+    {
+        const float *s = &chroma_spectra[idx[j] * (SPECTRAL_XYZ_RES + 1) + 1];
+
+        for (unsigned int k = 0; k < SPECTRAL_XYZ_RES; ++k)
+            values[k] += w[j] * s[k];
+    }
+
+    // do scaling since tables were constructed for simple matrix product "M_srgb * (x,y,z) * spectrum = color", not for integral spectral radiometric -> photometric
+    const float scale = sum * (float)(1.0 / (683.002 * (SPECTRAL_XYZ_LAMBDA_STEP)));
+    for (unsigned int j = 0; j < SPECTRAL_XYZ_RES; ++j)
+        values[j] *= scale;
+}
+
+
 } // namespace mi
 } // namespace mdl
 } // namespace spectral

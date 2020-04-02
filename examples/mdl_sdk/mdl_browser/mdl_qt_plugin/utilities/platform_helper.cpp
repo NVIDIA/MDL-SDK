@@ -47,6 +47,7 @@
     #include <sys/stat.h>
     #include <Shlobj.h>
     #include <Knownfolders.h>
+    #include <codecvt>
 #else
     #include <cstdlib>
     #include <dlfcn.h>
@@ -105,13 +106,17 @@ time_t Platform_helper::get_file_change_time(const std::string& path)
 {    
 #ifdef MI_PLATFORM_WINDOWS
     struct _stat64i32 result {};
-    if(!_stat(path.c_str(), &result)==0)
+
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+    std::wstring wpath = conv.from_bytes(path);
+
+    if(!_wstat(wpath.c_str(), &result)==0)
 #else
     struct stat result {};
     if(!stat(path.c_str(), &result)==0)
 #endif
     {
-        std::cerr << "last modified date of \"" << path.c_str() << "\" could not be read.";
+        std::cerr << "last modified date of \"" << path.c_str() << "\" could not be read.\n";
         return 0;
     }
 

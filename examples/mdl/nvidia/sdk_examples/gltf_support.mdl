@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2019 NVIDIA Corporation. All rights reserved.
+ * Copyright 2020 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,14 +26,15 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-mdl 1.4;
+mdl 1.6;
 
-import anno::*;
-import base::*;
-import df::*;
-import math::*;
-import state::*;
-import tex::*;
+import ::anno::*;
+import ::base::*;
+import ::df::*;
+import ::math::*;
+import ::state::*;
+import ::tex::*;
+import ::scene::*;
 
 export enum gltf_alpha_mode {
     opaque,
@@ -41,7 +42,7 @@ export enum gltf_alpha_mode {
     blend
 };
 
-float compute_opacity(gltf_alpha_mode mode,  float alpha,  float cutoff) {
+float compute_opacity(gltf_alpha_mode mode, float alpha, float cutoff) {
     switch (mode) {
         case mask:
             return alpha < cutoff ? 0.0 : 1.0;
@@ -149,12 +150,13 @@ export material gltf_material(
 
     // handling GLTF parameters
     // ------------------------------------------------------------------------
-    float4 base_float4 = gltf_prepare_tex_float4(base_color_texture, base_color_texture_coord_index);
+    float4 base_float4 = gltf_prepare_tex_float4(base_color_texture, base_color_texture_coord_index) *
+                         scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color base_color = base_color_factor * color(base_float4.x, base_float4.y, base_float4.z);
     float alpha = base_alpha * base_float4.w;
 
     float3 metallic_roughness = gltf_prepare_tex_float3(metallic_roughness_texture, metallic_roughness_texture_coord_index);
-    float metallic = metallic_factor * metallic_roughness.x;
+    float metallic = metallic_factor * math::max(metallic_roughness.x, metallic_roughness.z);
     float roughness = roughness_factor * metallic_roughness.y;
 
     float3 normal = gltf_prepare_normal(normal_texture, normal_texture_coord_index, normal_texture_tangent_index, normal_scale_factor);
@@ -277,7 +279,8 @@ export material gltf_material_khr_specular_glossiness(
 
     // handling GLTF parameters
     // ------------------------------------------------------------------------
-    float4 diffuse_float4 = gltf_prepare_tex_float4(diffuse_texture, diffuse_texture_coord_index);
+    float4 diffuse_float4 = gltf_prepare_tex_float4(diffuse_texture, diffuse_texture_coord_index) *
+                            scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color diffuse = diffuse_factor * color(diffuse_float4.x, diffuse_float4.y, diffuse_float4.z);
     float alpha = base_alpha * diffuse_float4.w;
 
@@ -305,7 +308,7 @@ export material gltf_material_khr_specular_glossiness(
 
 	// specular BRDF
 	bsdf specular_brdf = df::microfacet_ggx_smith_bsdf(
-        tint: color(1.0) * occlusion,
+        tint: color(occlusion),
 	    roughness_u: a, 
         roughness_v: a, 
         tangent_u: state::texture_tangent_u(0));

@@ -212,6 +212,11 @@ const mi::neuraylib::IExpression* Material_definition_impl::get_temporary( mi::S
     return ef->create( result_int.get(), this->cast_to_major());
 }
 
+const char* Material_definition_impl::get_temporary_name( mi::Size index) const
+{
+    return get_db_element()->get_temporary_name( get_db_transaction(), index );
+}
+
 } // namespace NEURAY
 
 } // namespace MI

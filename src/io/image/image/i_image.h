@@ -240,13 +240,18 @@ public:
         bool is_cubemap = false) const = 0;
 
     /// Creates an array of mipmaps from the given canvas.
-    /// 
+    ///
     /// \param mipmaps            A vector to which the created mipmaps are written.
     /// \param base_canvas        The canvas to create the mipmaps from.
     /// \param gamma              An optional gamma value. If this value is different from
     ///                           zero it is used instead of the canvas gamma.
-    virtual void create_mipmaps(std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
-        const mi::neuraylib::ICanvas* base_canvas, mi::Float32 gamma=0.0f) const = 0;
+    virtual void create_mipmaps(
+        std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
+        const mi::neuraylib::ICanvas* base_canvas,
+        mi::Float32 gamma = 0.0f) const = 0;
+
+    /// Creates a dummy mipmap (1x1 pink pixel).
+    virtual IMipmap* create_dummy_mipmap() = 0;
 
     /// Creates a memory-based canvas with given pixel type, width, height, and layers.
     ///

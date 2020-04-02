@@ -32,8 +32,37 @@ function(FIND_D3D12_EXT)
         return()
     endif()
 
-    set(WINDOWS_SDK_DIR "C:/Program Files (x86)/Windows Kits/10/Include/10.0.17763.0" 
-        CACHE PATH "Directory that contains the header, e.g.: \"C:/Program Files (x86)/Windows Kits/10/Include/10.0.17763.0\"")
+    # make sure there is a windows kit folder set
+    if(NOT CMAKE_WINDOWS_KITS_10_DIR)
+        set(CMAKE_WINDOWS_KITS_10_DIR "C:/Program Files (x86)/Windows Kits/10" CACHE PATH "The specified directory is expected to contain Include/10.0.* directories, where * has to be >= 17763.")
+        message(STATUS "Guessing the Windows Kit directory: ${CMAKE_WINDOWS_KITS_10_DIR}")
+    endif()
+
+    # parse version number
+    if(CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION)
+        STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+" _SDK_VERSION_STRING ${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION})
+    else()
+        set(_SDK_VERSION_STRING "10.0.0.0")
+    endif()
+
+    if(${_SDK_VERSION_STRING} VERSION_LESS "10.0.17763.0")
+        # use the guessed windows kit folder and look for the latest version
+        message(WARNING "Guessing the Windows Kit directory. If the configuration fails, try to set 'CMAKE_WINDOWS_KITS_10_DIR'. The specified directory is expected to contain Include/10.0.* directories, where * has to be >=17763. The guessed path is '${CMAKE_WINDOWS_KITS_10_DIR}'.")
+        # find the latest version
+        file(GLOB _KITS RELATIVE ${CMAKE_WINDOWS_KITS_10_DIR}/Include ${CMAKE_WINDOWS_KITS_10_DIR}/Include/*)
+        foreach(_KIT ${_KITS})
+            message(STATUS "Found Windows 10 Kit version ${_KIT}")
+            if(${_KIT} VERSION_GREATER_EQUAL ${_SDK_VERSION_STRING})
+                set(_SDK_VERSION_STRING ${_KIT})
+            endif()
+        endforeach()
+
+        if(${_SDK_VERSION_STRING} VERSION_LESS "10.0.17763.0")
+            message(FATAL_ERROR "Windows SDK Version 10.0.17763.0 or later is required for Direct3D with ray tracing support.")
+        endif()
+
+        message(WARNING "Using Windows 10 Kit version ${_SDK_VERSION_STRING}. It might be needed to set this version manually in the 'General'-section in the Visual Studio property page of projects that use D3D12.")
+    endif()
 
     if(NOT MDL_ENABLE_D3D12_EXAMPLES)
         message(WARNING "Examples that require D3D12 are disabled. Enable the option 'MDL_ENABLE_D3D12_EXAMPLES' and resolve the required dependencies to re-enable them.")
@@ -43,13 +72,13 @@ function(FIND_D3D12_EXT)
     # find headers
     find_file(_D3D12_HEADER "D3d12.h"
         HINTS
-            ${WINDOWS_SDK_DIR}/um
+            ${CMAKE_WINDOWS_KITS_10_DIR}/Include/${_SDK_VERSION_STRING}/um
         )
     get_filename_component(_D3D12_INCLUDE_DIR "${_D3D12_HEADER}" DIRECTORY)
 
     if(NOT EXISTS ${_D3D12_INCLUDE_DIR})
-        message(FATAL_ERROR "The dependency \"d3d12\" could not be resolved. Please specify WINDOWS_SDK_DIR. Alternatively, you can disable the option 'MDL_ENABLE_D3D12_EXAMPLES'.")
-    endif()  
+        message(FATAL_ERROR "The dependency \"d3d12\" could not be resolved. Please install a Windows SDK >= 10.0.17763.0 and/or specify CMAKE_WINDOWS_KITS_10_DIR. Alternatively, you can disable the option 'MDL_ENABLE_D3D12_EXAMPLES'.")
+    endif()
 
     # libs
     string(REPLACE "Windows Kits/10/Include" "Windows Kits/10/lib" _D3D12_LIBRARY_DIR ${_D3D12_INCLUDE_DIR})
@@ -88,6 +117,9 @@ function(FIND_D3D12_EXT)
 
     foreach(_SHARED ${_D3D12_SHARED})
         if(NOT EXISTS ${_SHARED})
+            message(STATUS "D3D12_INCLUDE_DIR: ${_D3D12_INCLUDE_DIR}")
+            message(STATUS "D3D12_LIBRARY_DIR: ${_D3D12_LIBRARY_DIR}")
+            message(STATUS "D3D12_BIN_DIR: ${_D3D12_BIN_DIR}")
             message(STATUS "D3D12_DLL: ${_D3D12_DLL}")
             message(STATUS "D3D12_SDK_LAYER_DLL: ${_D3D12_SDK_LAYER_DLL}")
             message(STATUS "D3D12_COMPILER_DLL: ${_D3D12_COMPILER_DLL}")

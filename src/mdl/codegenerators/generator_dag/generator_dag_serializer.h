@@ -152,6 +152,16 @@ public:
         write_unsigned(kind);
     }
 
+    /// Write an IValue kind.
+    void write_encoded(IValue::Kind kind) {
+        write_unsigned(kind);
+    }
+
+    /// Write a Resource_tag_tuple kind.
+    void write_encoded(Resource_tag_tuple::Kind kind) {
+        write_unsigned(kind);
+    }
+
 private:
     /// pointer serializer for DAG IR nodes.
     Pointer_serializer<DAG_node> m_ir_nodes;
@@ -300,6 +310,20 @@ template<>
 inline DAG_node::Kind DAG_deserializer::read_encoded() {
     unsigned k = read_unsigned();
     return DAG_node::Kind(k);
+}
+
+/// Read a DAG kind.
+template<>
+inline IValue::Kind DAG_deserializer::read_encoded() {
+    unsigned k = read_unsigned();
+    return IValue::Kind(k);
+}
+
+/// Read a Resource_tag_tuple kind.
+template<>
+inline Resource_tag_tuple::Kind DAG_deserializer::read_encoded() {
+    unsigned k = read_unsigned();
+    return Resource_tag_tuple::Kind(k);
 }
 
 } // mdl

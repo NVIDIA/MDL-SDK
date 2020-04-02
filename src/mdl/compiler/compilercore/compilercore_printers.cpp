@@ -826,6 +826,13 @@ void Printer::print_type_prefix(IType_enum const *e_type)
         print(*s);
 }
 
+// Returns true if a variable declaration of kind T v(a); can be rewritten as T v = a;
+bool Printer::can_rewite_constructor_init(IExpression const * init)
+{
+    // need semantic info to decide
+    return false;
+}
+
 /// Ensures that the ascii representation of a float constant
 /// has a '.' and add the given format character.
 static char *to_float_constant(char *s, char fmt_char)
@@ -2014,15 +2021,15 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 pop_color();
 
                 if (IExpression const *init = d->get_variable_init(i)) {
-                    if (is_constructor_init(d->get_type_name(),init)) {
+                    if (is_constructor_init(d->get_type_name(), init)) {
                         IExpression_call const *call = cast<IExpression_call>(init);
                         int count = call->get_argument_count();
-                        if (count == 1) {
+                        if (count == 1 && can_rewite_constructor_init(init)) {
                             // rewrite T v(a) into T v = a;
                             print(" = ");
                             print(call->get_argument(0), /*priority=*/0, /*ignore_named=*/true);
                         } else if (count > 0) {
-                            bool vertical = 1 < count;
+                            bool vertical = 3 < count;
                             print("(");
                             if (vertical) {
                                 ++m_indent;
@@ -2783,6 +2790,9 @@ public:
     /// \param e_type  the enum type to print
     void print_type_prefix(IType_enum const *e_type) MDL_FINAL;
 
+    /// Returns true if a variable declaration of kind T v(a); can be rewritten as T v = a;
+    virtual bool can_rewite_constructor_init(IExpression const * init) MDL_FINAL;
+
     /// Prints a resource value.
     ///
     /// \param res   the resource value
@@ -3122,6 +3132,28 @@ void Sema_printer::set_colors(Color_table const &table, bool enable)
 {
     enable_color(enable);
     m_color_table = table;
+}
+
+// Returns true if a variable declaration of kind T v(a); can be rewritten as T v = a;
+bool Sema_printer::can_rewite_constructor_init(IExpression const * init)
+{
+    if (!is<IExpression_call>(init))
+        return false;
+
+    IExpression_call const      *call = cast<IExpression_call>(init);
+    IExpression_reference const *ref  = as<IExpression_reference>(call->get_reference());
+
+    if (ref == NULL)
+        return false;
+
+    IDefinition const *def = ref->get_definition();
+    if (def == NULL)
+        return false;
+
+    IDefinition::Semantics sema = def->get_semantics();
+    return sema == IDefinition::DS_COPY_CONSTRUCTOR ||
+        sema == IDefinition::DS_CONV_CONSTRUCTOR ||
+        sema == IDefinition::DS_MATRIX_DIAG_CONSTRUCTOR;
 }
 
 // Constructor.

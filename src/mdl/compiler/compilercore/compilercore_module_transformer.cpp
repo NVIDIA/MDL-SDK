@@ -192,22 +192,24 @@ static IExpression_reference const *promote_call_reference(
     if (rules == Module::PR_NO_CHANGE)
         return ref;
 
-    sym = mod.get_name_factory()->create_symbol(n.c_str());
+    Name_factory *name_fact = mod.get_name_factory();
 
-    IQualified_name *n_qn = mod.get_name_factory()->create_qualified_name();
+    sym = name_fact->create_symbol(n.c_str());
+
+    IQualified_name *n_qn = name_fact->create_qualified_name();
 
     for (int i = 0; i < n_components - 1; ++i) {
         n_qn->add_component(mod.clone_name(qn->get_component(i)));
     }
 
-    sn = mod.get_name_factory()->create_simple_name(sym);
+    sn = name_fact->create_simple_name(sym);
     n_qn->add_component(sn);
 
     if (qn->is_absolute())
         n_qn->set_absolute();
     n_qn->set_definition(qn->get_definition());
 
-    IType_name *n_tn = mod.get_name_factory()->create_type_name(n_qn);
+    IType_name *n_tn = name_fact->create_type_name(n_qn);
 
     if (tn->is_absolute())
         n_tn->set_absolute();

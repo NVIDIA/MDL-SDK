@@ -230,6 +230,11 @@ void Image_module_impl::create_mipmaps(
     }
 }
 
+IMipmap* Image_module_impl::create_dummy_mipmap()
+{
+    return new Mipmap_impl();
+}
+
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     Pixel_type pixel_type,
     mi::Uint32 width,
@@ -792,13 +797,6 @@ bool Image_module_impl::export_mipmap(
     const char* output_filename,
     mi::Uint32 quality) const
 {
-    DISK::File_writer_impl writer;
-    if( !writer.open( output_filename)) {
-        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "Failed to open image file \"%s\".", output_filename);
-        return false;
-    }
-
     std::string root, extension;
     HAL::Ospath::splitext( output_filename, root, extension);
     if( !extension.empty() && extension[0] == '.' )
@@ -821,6 +819,13 @@ bool Image_module_impl::export_mipmap(
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" supports only the import, but not the export of images.",
             plugin->get_name());
+        return false;
+    }
+
+    DISK::File_writer_impl writer;
+    if( !writer.open( output_filename)) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "Failed to open image file \"%s\".", output_filename);
         return false;
     }
 
@@ -1318,7 +1323,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_miplevel(
 
     // Create the miplevel
     mi::neuraylib::ICanvas* canvas = new Canvas_impl(
-        pixel_type, width, height, tile_width, tile_height, layers, 
+        pixel_type, width, height, tile_width, tile_height, layers,
         get_canvas_is_cubemap(prev_canvas), prev_canvas->get_gamma());
 
     mi::Uint32 nr_of_tiles_x = (width + tile_width - 1) / tile_width;

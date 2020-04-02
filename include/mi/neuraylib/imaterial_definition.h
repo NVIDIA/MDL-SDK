@@ -209,6 +209,18 @@ public:
     ///                         range.
     virtual const IExpression* get_temporary( Size index) const = 0;
 
+    /// Returns the name of a temporary.
+    ///
+    /// \note Names of temporaries are not necessarily unique, e.g., due to inlining. Names are for
+    ///       informational purposes and should not be used to identify a particular temporary.
+    ///
+    /// \see #mi::neuraylib::IMdl_configuration::set_expose_names_of_let_expressions()
+    ///
+    /// \param index            The index of the temporary.
+    /// \return                 The name of the temporary, or \c NULL if the temporary has no name
+    ///                         or \p index is out of range.
+    virtual const char* get_temporary_name( Size index) const = 0;
+
     /// Returns the expression of a temporary.
     ///
     /// This templated member function is a wrapper of the non-template variant for the user's

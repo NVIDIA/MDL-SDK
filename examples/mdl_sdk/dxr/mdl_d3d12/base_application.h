@@ -56,6 +56,7 @@ namespace mdl_d3d12
         Texture* back_buffer;
         D3D12_CPU_DESCRIPTOR_HANDLE back_buffer_rtv;
 
+        size_t frame_number;
         size_t backbuffer_width;
         size_t backbuffer_height;
     };
@@ -76,9 +77,10 @@ namespace mdl_d3d12
             , ray_depth(6)
             , scene_directory(".")
             , output_file("output.png")
+            , lpe("beauty")
             , iterations(1)
-            , share_target_code(true)
             , enable_auxiliary(true)
+            , texture_results_cache_size(16)
             , automatic_derivatives(false)
             , handle_z_axis_up(false)
             , units_per_meter(1.0f)
@@ -98,9 +100,10 @@ namespace mdl_d3d12
         size_t ray_depth;
         std::string scene_directory;
         std::string output_file;
+        std::string lpe;
         size_t iterations;
-        bool share_target_code;
         bool enable_auxiliary;
+        size_t texture_results_cache_size;
         bool automatic_derivatives;
         bool handle_z_axis_up;
         float units_per_meter;

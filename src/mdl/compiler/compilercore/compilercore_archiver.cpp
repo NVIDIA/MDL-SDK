@@ -2159,7 +2159,7 @@ MDL_zip_container_archive::MDL_zip_container_archive(
     char const  *path,
     zip_t       *za,
     bool         with_manifest)
-: MDL_zip_container(alloc, path, za)
+: MDL_zip_container(alloc, path, za, /*supports_resource_hashes=*/false)
 , m_manifest(with_manifest ? parse_manifest() : NULL)
 {
 }
@@ -2167,8 +2167,7 @@ MDL_zip_container_archive::MDL_zip_container_archive(
 // Get the manifest.
 Manifest *MDL_zip_container_archive::parse_manifest()
 {
-    if (MDL_zip_container_file *fp = file_open("MANIFEST"))
-    {
+    if (MDL_zip_container_file *fp = file_open("MANIFEST")) {
         Allocator_builder builder(m_alloc);
 
         File_handle *manifest_fp =

@@ -155,8 +155,8 @@ File_handle::File_handle(
     IAllocator *alloc,
     FILE       *fp)
 : m_alloc(alloc)
-, m_kind(FH_FILE)
 , m_container(NULL)
+, m_kind(FH_FILE)
 , m_owns_container(false)
 {
     u.fp = fp;
@@ -170,8 +170,8 @@ File_handle::File_handle(
     bool                    owns_archive,
     MDL_zip_container_file *fp)
 : m_alloc(alloc)
-, m_kind(kind)
 , m_container(archive)
+, m_kind(kind)
 , m_owns_container(owns_archive)
 {
     u.z_fp = fp;
@@ -183,8 +183,8 @@ File_handle::File_handle(
     Kind                    kind,
     MDL_zip_container_file *fp)
 : m_alloc(fh->m_alloc)
-, m_kind(kind)
 , m_container(fh->m_container)
+, m_kind(kind)
 , m_owns_container(false)
 {
     MDL_ASSERT(fh->get_kind() != FH_FILE);
@@ -1031,7 +1031,8 @@ bool File_resolver::is_string_based(string const &canonical_file_path) const
         return false;
 
     // check the module cache
-    mi::base::Handle<const mi::mdl::IModule> module(m_module_cache->lookup(module_name.c_str()));
+    mi::base::Handle<const mi::mdl::IModule> module(
+        m_module_cache->lookup(module_name.c_str(), NULL));
     if (!module.is_valid_interface())
         return false;
 
@@ -1078,8 +1079,8 @@ string File_resolver::consider_search_paths(
     }
 
     if (!is_resource && resolved_filename.empty() && is_string_based(canonical_file_mask)) {
-        MDL_ASSERT(udim_mode == NO_UDIM && "non-resource files should not be UDIM");
-        return get_string_based_prefix() + canonical_file_mask.substr(1);
+            MDL_ASSERT(udim_mode == NO_UDIM && "non-resource files should not be UDIM");
+            return get_string_based_prefix() + canonical_file_mask.substr(1);
     }
 
     // Make resolved filename absolute.
@@ -1325,10 +1326,7 @@ bool File_resolver::is_killed(
             return true;
         }
 
-        if (e != NULL)
-            s = e + 1;
-        else
-            break;
+        s = e + 1;
     }
 
     return false;
@@ -1791,7 +1789,7 @@ string File_resolver::resolve_filename(
             }
         }
 
-        mi::base::Handle<IModule const> mod(m_module_cache->lookup(module_name.c_str()));
+        mi::base::Handle<IModule const> mod(m_module_cache->lookup(module_name.c_str(), NULL));
 
         if (mod.is_valid_interface()) {
             abs_file_name = string(mod->get_filename(), m_alloc);
@@ -1809,6 +1807,12 @@ string File_resolver::resolve_filename(
             file = convert_slashes_to_os_separators(url_mask);
             file = simplify_path(file, os_separator());
             if (!is_url_absolute(file.c_str())) {
+
+                // skip first slash 
+                // TODO fix earlier
+                if (file[0] == os_separator())
+                    file = file.substr(1);
+
                 // for MDLE, the current working directory is the MDLE file
                 file = current_working_directory + ':' + file;
             }
@@ -2014,9 +2018,16 @@ IMDL_import_result *File_resolver::resolve_import(
 
     string absolute_name = to_module_name(canonical_file_name.c_str());
     MDL_ASSERT(absolute_name.substr(absolute_name.size() - 4) == ".mdl");
+    absolute_name = absolute_name.substr(0, absolute_name.size() - 4);
+
+    if (absolute_name == m_repl_module_name) {
+        // do the replacement
+        os_file_name = m_repl_file_name;
+    }
+
     return builder.create<MDL_import_result>(
         m_alloc,
-        absolute_name.substr(0, absolute_name.size() - 4),
+        absolute_name,
         os_file_name);
 }
 
@@ -2071,10 +2082,41 @@ IMDL_resource_set *File_resolver::resolve_resource(
         // single return
         Allocator_builder builder(m_alloc);
 
+        bool has_hash = false;
+        unsigned char hash[16];
+
+        char const *p = strstr(os_file_name.c_str(), ".mdle:");
+        if (p != NULL) {
+            string container_name(os_file_name.c_str(), p + 5, m_alloc);
+            p += 6;
+
+            MDL_zip_container_error_code err;
+            MDL_zip_container *container =
+                MDL_zip_container_mdle::open(m_alloc, container_name.c_str(), err);
+
+            if (container != NULL) {
+                if (container->has_resource_hashes()) {
+                    if (MDL_zip_container_file *z_f = container->file_open(p)) {
+                        size_t length = 0;
+                        unsigned char const *stored_hash =
+                            z_f->get_extra_field(MDLE_EXTRA_FIELD_ID_MD, length);
+
+                        if (stored_hash != NULL && length == 16) {
+                            memcpy(hash, stored_hash, 16);
+                            has_hash = true;
+                        }
+                        z_f->close();
+                    }
+                }
+                container->close();
+            }
+        }
+
         return builder.create<MDL_resource_set>(
             m_alloc,
             abs_file_name.c_str(),
-            os_file_name.c_str());
+            os_file_name.c_str(),
+            has_hash ? hash : NULL);
     }
 }
 
@@ -2270,12 +2312,13 @@ Buffered_archive_resource_reader::~Buffered_archive_resource_reader()
 MDL_resource_set::MDL_resource_set(
     IAllocator *alloc,
     char const *url,
-    char const *filename)
+    char const *filename,
+    unsigned char const hash[16])
 : Base(alloc)
 , m_arena(alloc)
 , m_entries(
     1,
-    Resource_entry(Arena_strdup(m_arena, url), Arena_strdup(m_arena, filename), 0, 0),
+    Resource_entry(Arena_strdup(m_arena, url), Arena_strdup(m_arena, filename), 0, 0, hash),
     &m_arena)
 , m_udim_mode(NO_UDIM)
 , m_url_mask(url, alloc)
@@ -2289,7 +2332,6 @@ MDL_resource_set::MDL_resource_set(
     UDIM_mode  udim_mode,
     char const *url_mask,
     char const *filename_mask)
-
 : Base(alloc)
 , m_arena(alloc)
 , m_entries(&m_arena)
@@ -2401,7 +2443,8 @@ MDL_resource_set *MDL_resource_set::from_mask_file(
                 purl += entry + ofs;
             }
 
-            parse_u_v(s, entry, ofs, purl.c_str(), dname, sep, udim_mode);
+            // so far no hashes for files
+            parse_u_v(s, entry, ofs, purl.c_str(), dname, sep, udim_mode, NULL);
         }
     }
     return s;
@@ -2417,7 +2460,7 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
     UDIM_mode         udim_mode)
 {
     MDL_zip_container_error_code err = EC_OK;
-    MDL_zip_container* container = NULL;
+    MDL_zip_container *container = NULL;
     switch (container_kind) {
     case File_handle::FH_ARCHIVE:
         container = MDL_zip_container_archive::open(alloc, container_name, err);
@@ -2487,7 +2530,26 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
                 string fname(file_name, alloc);
                 fname = convert_slashes_to_os_separators(fname);
 
-                parse_u_v(s, fname.c_str(), ofs, purl.c_str(), container_name_str, ':', udim_mode);
+                bool has_hash = false;
+                unsigned char hash[16];
+
+                if (container->has_resource_hashes()) {
+                    if (MDL_zip_container_file *z_f = container->file_open(file_name)) {
+                        size_t length = 0;
+                        unsigned char const *stored_hash =
+                            z_f->get_extra_field(MDLE_EXTRA_FIELD_ID_MD, length);
+
+                        if (stored_hash != NULL && length == 16) {
+                            memcpy(hash, stored_hash, 16);
+                            has_hash = true;
+                        }
+                        z_f->close();
+                    }
+                }
+
+                parse_u_v(
+                    s, fname.c_str(), ofs, purl.c_str(), container_name_str, ':', udim_mode,
+                    has_hash ? hash : NULL);
             }
         }
 
@@ -2505,7 +2567,8 @@ void MDL_resource_set::parse_u_v(
     char const       *url,
     string const     &prefix,
     char             sep,
-    UDIM_mode        udim_mode)
+    UDIM_mode        udim_mode,
+    unsigned char    hash[16])
 {
     int u = 0, v = 0, sign = 1;
     switch (udim_mode) {
@@ -2530,7 +2593,8 @@ void MDL_resource_set::parse_u_v(
                     Arena_strdup(s->m_arena, url),
                     Arena_strdup(s->m_arena, (prefix + sep + name).c_str()),
                     u,
-                    v
+                    v,
+                    hash
                 )
             );
         }
@@ -2581,7 +2645,8 @@ void MDL_resource_set::parse_u_v(
                     Arena_strdup(s->m_arena, url),
                     Arena_strdup(s->m_arena, (prefix + sep + name).c_str()),
                     u,
-                    v
+                    v,
+                    hash
                 )
             );
         }
@@ -2658,6 +2723,20 @@ IMDL_resource_reader *MDL_resource_set::open_reader(size_t i) const
 UDIM_mode MDL_resource_set::get_udim_mode() const
 {
     return m_udim_mode;
+}
+
+// Get the resource hash value for the i'th file in the set if any.
+bool MDL_resource_set::get_resource_hash(
+    size_t i,
+    unsigned char hash[16]) const
+{
+    if (i < m_entries.size()) {
+        if (m_entries[i].has_hash) {
+            memcpy(hash, m_entries[i].hash, sizeof(m_entries[i].hash));
+            return true;
+        }
+    }
+    return false;
 }
 
 // --------------------------------------------------------------------------

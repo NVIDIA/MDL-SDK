@@ -240,6 +240,10 @@ Code_generator_dag::Code_generator_dag(
         MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS,
         "true",
         "Enable unsafe math optimizations");
+    m_options.add_option(
+        MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS,
+        "false",
+        "Exposes names of let expressions as named temporaries");
 }
 
 char const *Code_generator_dag::get_target_language() const
@@ -262,6 +266,9 @@ IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
     if (m_options.get_bool_option(MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS))
         options |= Generated_code_dag::UNSAFE_MATH_OPTIMIZATIONS;
 
+
+    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS))
+        options |= Generated_code_dag::EXPOSE_NAMES_OF_LET_EXPRESSIONS;
 
     Generated_code_dag *result = m_builder.create<Generated_code_dag>(
         m_builder.get_allocator(),

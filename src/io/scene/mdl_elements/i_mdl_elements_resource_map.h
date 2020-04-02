@@ -1,5 +1,5 @@
-/******************************************************************************
- * Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+/***************************************************************************************************
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,44 +24,47 @@
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *****************************************************************************/
+ **************************************************************************************************/
 
-import QtQuick 2.10
-import QtQuick.Controls 2.3
-import QtQuick.Controls.Material 2.3
-import QtQuick.Layouts 1.3
+#ifndef IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_RESOURCE_MAP_H
+#define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_RESOURCE_MAP_H
 
-Flickable {
-    id: id_control
-    property SidePanel leftPanel
-    property SidePanel rightPanel
+#include <string>
+#include <vector>
 
-    property alias main : id_content.children
-    interactive: false
+#include <mi/mdl/mdl_generated_code.h>
 
-    // main content area
-    Item {
-        id: id_content
-        anchors.fill: parent
-    }
+namespace MI {
+namespace MDL {
 
-    Component.onCompleted: {
-        if(leftPanel) {
-            leftPanel.onPositionChanged.connect(updateContentSize);
-            leftPanel.onWidthChanged.connect(updateContentSize);
-        }
-        if(rightPanel) {
-            rightPanel.onPositionChanged.connect(updateContentSize);
-            rightPanel.onWidthChanged.connect(updateContentSize);
-        }
-        updateContentSize();
-    }
+/// An entry in the resource tag map, mapping accessible resources to (tag, version) pair.
+struct Resource_tag_tuple {
+    mi::mdl::Resource_tag_tuple::Kind m_kind;    ///< The resource kind.
+    std::string                       m_url;     ///< The resource URL.
+    int                               m_tag;     ///< The assigned tag.
 
-    function updateContentSize()
+    /// Default constructor.
+    Resource_tag_tuple()
+    : m_kind(mi::mdl::Resource_tag_tuple::RK_BAD)
+    , m_url("")
+    , m_tag(0)
+    {}
+
+    /// Constructor.
+    Resource_tag_tuple(
+        mi::mdl::Resource_tag_tuple::Kind kind,
+        std::string const                 &url,
+        int                               tag)
+    : m_kind(kind)
+    , m_url(url)
+    , m_tag(tag)
     {
-        if(leftPanel)
-            id_content.anchors.leftMargin = Math.max(leftPanel.width * leftPanel.position, leftPanel.labelWidth);
-        if(rightPanel)
-            id_content.anchors.rightMargin = Math.max(rightMargin.width * rightMargin.position, rightMargin.labelWidth);
     }
-}
+};
+
+typedef std::vector<Resource_tag_tuple> Resource_tag_map;
+
+} // namespace MDL
+} // namespace MI
+
+#endif // IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_RESOURCE_MAP_H

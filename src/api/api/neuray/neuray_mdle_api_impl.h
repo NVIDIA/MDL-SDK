@@ -36,7 +36,6 @@
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdle_api.h>
 #include <mi/mdl/mdl_encapsulator.h>
-#include <base/system/main/neuray_cc_conf.h>
 #include <base/system/main/access_module.h>
 
 #include "neuray_mdl_resource_callback.h"
@@ -126,7 +125,7 @@ private:
     std::unordered_set<std::string> m_reserved_mdle_names;
 };
 
-class Mdle_api_impl NEURAY_FINAL
+class Mdle_api_impl final
   : public mi::base::Interface_implement<mi::neuraylib::IMdle_api>
 {
 public:
@@ -145,26 +144,26 @@ public:
         mi::neuraylib::ITransaction* transaction,
         const char* file_name,
         const mi::IStructure* mdle_data,
-        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi::Sint32 validate_mdle(
         const char* file_name,
-        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi::neuraylib::IReader* get_user_file(
         const char* mdle_file_name,
         const char* user_file_name,
-        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi::Sint32 compare_mdle(
         const char* mdle_file_name_a,
         const char* mdle_file_name_b,
-        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi::Sint32 get_hash(
         const char* mdle_file_name,
         mi::base::Uuid& hash,
-        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context* context) const final;
 
     // internal methods
 
@@ -186,9 +185,8 @@ public:
 
 private:
     // non copyable
-    Mdle_api_impl(Mdle_api_impl const &) NEURAY_DELETED_FUNCTION;
-    Mdle_api_impl &operator=(Mdle_api_impl const &)
-        NEURAY_DELETED_FUNCTION;
+    Mdle_api_impl(Mdle_api_impl const &) = delete;
+    Mdle_api_impl &operator=(Mdle_api_impl const &) = delete;
 
 private:
     mi::neuraylib::INeuray *m_neuray;

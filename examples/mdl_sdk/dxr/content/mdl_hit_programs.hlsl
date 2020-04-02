@@ -1,4 +1,30 @@
-#include "common.hlsl"
+/******************************************************************************
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
 
 #ifndef TARGET_CODE_ID
     #define TARGET_CODE_ID 0
@@ -35,24 +61,32 @@ enum MaterialFlags
 #endif
 
 // Ray tracing acceleration structure, accessed as a SRV
-RaytracingAccelerationStructure SceneBVH : register(t0,space0);
+RaytracingAccelerationStructure SceneBVH : register(t0, space0);
 
 // Environment map and sample data for importance sampling
-Texture2D<float4> environment_texture : register(t0,space1);
-StructuredBuffer<Environment_sample_data> environment_sample_buffer : register(t1,space1);
+Texture2D<float4> environment_texture : register(t0, space1);
+StructuredBuffer<Environment_sample_data> environment_sample_buffer : register(t1, space1);
 
 // ------------------------------------------------------------------------------------------------
 // defined in the local root signature
 // ------------------------------------------------------------------------------------------------
-StructuredBuffer<Vertex> vertices : register(t1);
-StructuredBuffer<uint> indices: register(t2);
 
-cbuffer Geometry_constants : register(b2)
-{
-    uint geometry_index_offset;
-}
+// mesh data
+ByteAddressBuffer vertices : register(t1, space0);
+StructuredBuffer<uint> indices: register(t2, space0);
 
-cbuffer Material_constants : register(b0,MDL_MATERIAL_REGISTER_SPACE)
+// instance data
+ByteAddressBuffer scene_data : register(t3, space0);
+StructuredBuffer<SceneDataInfo> scene_data_infos: register(t4, space0);
+
+// geomety data
+// as long as there are only a few values here, place them directly instead of a constant buffer
+cbuffer _Geometry_constants_0 : register(b2, space0) { uint geometry_vertex_buffer_byte_offset; }
+cbuffer _Geometry_constants_1 : register(b3, space0) { uint geometry_vertex_stride; }
+cbuffer _Geometry_constants_2 : register(b4, space0) { uint geometry_index_offset; }
+cbuffer _Geometry_constants_3 : register(b5, space0) { uint geometry_scene_data_info_offset; }
+
+cbuffer Material_constants : register(b0, MDL_MATERIAL_REGISTER_SPACE)
 {
     // shared for all material compiled from the same MDL material
     int scattering_function_index;
@@ -60,6 +94,7 @@ cbuffer Material_constants : register(b0,MDL_MATERIAL_REGISTER_SPACE)
     int emission_function_index;
     int emission_intensity_function_index;
     int thin_walled_function_index;
+    int hair_function_index;
 
     // individual properties of the different material instances
     int material_id;
@@ -111,65 +146,85 @@ float3 sample_lights(
         pdf);
 
     pdf *= p_select_light;
-    return radiance / pdf; // constant color
+    return radiance / pdf;
 }
 
 
+// fetch vertex data with known layout
+float3 fetch_vertex_data_float3(const uint index, const uint byte_offset)
+{
+    const uint address = 
+        geometry_vertex_buffer_byte_offset + // base address for this part of the mesh
+        geometry_vertex_stride * index +     // offset to the selected vertex
+        byte_offset;                         // offset within the vertex
+
+    return asfloat(vertices.Load3(address));
+}
+
+// fetch vertex data with known layout
+float4 fetch_vertex_data_float4(const uint index, const uint byte_offset)
+{
+    const uint address =
+        geometry_vertex_buffer_byte_offset + // base address for this part of the mesh
+        geometry_vertex_stride * index +     // offset to the selected vertex
+        byte_offset;                         // offset within the vertex
+
+    return asfloat(vertices.Load4(address));
+}
+
 bool is_back_face()
 {
-    // get first index of the triangle, vertex positions, geometry normal in object space
+    // get vertex indices for the hit triangle
     const uint index_offset = 3 * PrimitiveIndex() + geometry_index_offset;
+    const uint3 vertex_indices = uint3(
+        indices[index_offset + 0], indices[index_offset + 1], indices[index_offset + 2]);
 
-    const uint3 vertex_indices = uint3(indices[index_offset + 0],
-                                 indices[index_offset + 1],
-                                 indices[index_offset + 2]);
+    // get position of the hit point
+    const float3 pos0 = fetch_vertex_data_float3(vertex_indices.x, VERT_BYTEOFFSET_POSITION);
+    const float3 pos1 = fetch_vertex_data_float3(vertex_indices.y, VERT_BYTEOFFSET_POSITION);
+    const float3 pos2 = fetch_vertex_data_float3(vertex_indices.z, VERT_BYTEOFFSET_POSITION);
 
-    const float3 pos0 = vertices[vertex_indices.x].position;
-    const float3 pos1 = vertices[vertex_indices.y].position;
-    const float3 pos2 = vertices[vertex_indices.z].position;
+    // compute geometry normal and check for back face hit
     const float3 geom_normal = normalize(cross(pos1 - pos0, pos2 - pos0));
-
     return dot(geom_normal, ObjectRayDirection()) > 0.0f;
 }
 
 void setup_mdl_shading_state(
     out Shading_state_material mdl_state,
-    Attributes attrib,
-    out float3 shading_normal)
+    Attributes attrib)
 {
-    const float3 barycentric = float3(1.0f - attrib.bary.x - attrib.bary.y, 
-                                      attrib.bary.x, 
-                                      attrib.bary.y);
-
-    // first index of the triangle
+    // get vertex indices for the hit triangle
     const uint index_offset = 3 * PrimitiveIndex() + geometry_index_offset;
+    const uint3 vertex_indices = uint3(
+        indices[index_offset + 0], indices[index_offset + 1], indices[index_offset + 2]);
 
+    // coordinates inside the triangle
+    const float3 barycentric = float3(
+        1.0f - attrib.bary.x - attrib.bary.y, attrib.bary.x, attrib.bary.y);
+
+    // mesh transformations
     const float4x4 object_to_world = float4x4(ObjectToWorld(), 0.0f, 0.0f, 0.0f, 1.0f);
     const float4x4 world_to_object = float4x4(WorldToObject(), 0.0f, 0.0f, 0.0f, 1.0f);
 
-    const uint3 vertex_indices = uint3(indices[index_offset + 0],
-                                       indices[index_offset + 1],
-                                       indices[index_offset + 2]);
-
-    const float3 pos0 = vertices[vertex_indices.x].position;
-    const float3 pos1 = vertices[vertex_indices.y].position;
-    const float3 pos2 = vertices[vertex_indices.z].position;
-    const float3 geom_normal = normalize(cross(pos1 - pos0, pos2 - pos0));
-
+    // get position of the hit point
+    const float3 pos0 = fetch_vertex_data_float3(vertex_indices.x, VERT_BYTEOFFSET_POSITION);
+    const float3 pos1 = fetch_vertex_data_float3(vertex_indices.y, VERT_BYTEOFFSET_POSITION);
+    const float3 pos2 = fetch_vertex_data_float3(vertex_indices.z, VERT_BYTEOFFSET_POSITION);
     float3 hit_position = pos0 * barycentric.x + pos1 * barycentric.y + pos2 * barycentric.z;
     hit_position = mul(object_to_world, float4(hit_position, 1)).xyz;
 
-    const float3 normal = normalize(vertices[vertex_indices.x].normal * barycentric.x +
-                                    vertices[vertex_indices.y].normal * barycentric.y +
-                                    vertices[vertex_indices.z].normal * barycentric.z);
+    // get normals (geometry normal and interpolated vertex normal)
+    const float3 geom_normal = normalize(cross(pos1 - pos0, pos2 - pos0));
+    const float3 normal = normalize(
+        fetch_vertex_data_float3(vertex_indices.x, VERT_BYTEOFFSET_NORMAL) * barycentric.x +
+        fetch_vertex_data_float3(vertex_indices.y, VERT_BYTEOFFSET_NORMAL) * barycentric.y +
+        fetch_vertex_data_float3(vertex_indices.z, VERT_BYTEOFFSET_NORMAL) * barycentric.z);
 
-    // transform normals using inverse transpose
+    // transform normals using inverse transpose 
+    // -  world_to_object = object_to_world^-1
+    // -  mul(v, world_to_object) = mul(object_to_world^-T, v)
     float3 world_geom_normal = normalize(mul(float4(geom_normal, 0), world_to_object).xyz);
     const float3 world_normal = normalize(mul(float4(normal, 0), world_to_object).xyz);
-
-    const float2 texcoord0 = vertices[vertex_indices.x].texcoord0 * barycentric.x +
-                             vertices[vertex_indices.y].texcoord0 * barycentric.y +
-                             vertices[vertex_indices.z].texcoord0 * barycentric.z;
 
     // flip geometry normal to the side of the incident ray
     if (dot(world_geom_normal, WorldRayDirection()) > 0.0)
@@ -177,37 +232,57 @@ void setup_mdl_shading_state(
 
     // reconstruct tangent frame from vertex data
     float3 world_tangent, world_binormal;
-    float4 tangent0 = vertices[vertex_indices.x].tangent0 * barycentric.x +
-                      vertices[vertex_indices.y].tangent0 * barycentric.y +
-                      vertices[vertex_indices.z].tangent0 * barycentric.z;
+    float4 tangent0 = 
+        fetch_vertex_data_float4(vertex_indices.x, VERT_BYTEOFFSET_TANGENT) * barycentric.x +
+        fetch_vertex_data_float4(vertex_indices.y, VERT_BYTEOFFSET_TANGENT) * barycentric.y +
+        fetch_vertex_data_float4(vertex_indices.z, VERT_BYTEOFFSET_TANGENT) * barycentric.z;
     tangent0.xyz = normalize(tangent0.xyz);
     world_tangent = normalize(mul(object_to_world, float4(tangent0.xyz, 0)).xyz);
     world_tangent = normalize(world_tangent - dot(world_tangent, world_normal) * world_normal);
     world_binormal = cross(world_normal, world_tangent) * tangent0.w;
 
-    // fill the actual state fields
+    // fill the actual state fields used by MD
     mdl_state.normal = world_normal;
     mdl_state.geom_normal = world_geom_normal;
     mdl_state.position = hit_position;
     mdl_state.animation_time = 0.0f;
-    #ifdef USE_DERIVS
-        mdl_state.text_coords[0].val = float3(texcoord0, 0);
-        mdl_state.text_coords[0].dx = float3(0, 0, 0); // float3(ddx(texcoord0), 0);
-        mdl_state.text_coords[0].dy = float3(0, 0, 0); // float3(ddy(texcoord0), 0);
-    #else
-        mdl_state.text_coords[0] = float3(texcoord0, 0);
-    #endif
     mdl_state.tangent_u[0] = world_tangent;
     mdl_state.tangent_v[0] = world_binormal;
+#ifdef USE_TEXTURE_RESULTS
     mdl_state.text_results = (float4[MDL_NUM_TEXTURE_RESULTS]) 0;
+#endif
     mdl_state.ro_data_segment_offset = 0;
     mdl_state.world_to_object = world_to_object;
     mdl_state.object_to_world = object_to_world;
     mdl_state.object_id = 0;
     mdl_state.arg_block_offset = 0;
 
-    // pass out the shading normal, this has to be reset before calling a second df::init
-    shading_normal = world_normal;
+    // fill the renderer state information
+    mdl_state.renderer_state.scene_data_instance = scene_data;
+    mdl_state.renderer_state.scene_data_infos = scene_data_infos;
+    mdl_state.renderer_state.scene_data_info_offset = geometry_scene_data_info_offset;
+    mdl_state.renderer_state.scene_data_vertex = vertices;
+    mdl_state.renderer_state.scene_data_geometry_byte_offset = geometry_vertex_buffer_byte_offset;
+    mdl_state.renderer_state.hit_vertex_indices = vertex_indices;
+    mdl_state.renderer_state.barycentric = barycentric;
+
+    // get texture coordinates using a manually added scene data element with the scene data id
+    // defined as `SCENE_DATA_ID_TEXCOORD_0` 
+    // (see end of target code generation on application side) 
+    float2 texcoord0 = scene_data_lookup_float2(
+        mdl_state, SCENE_DATA_ID_TEXCOORD_0, float2(0.0f, 1.0f), false);
+
+    // flip v-coordinate without compromising the UDIM tile mapping
+    texcoord0 = float2(texcoord0.x, floor(texcoord0.y) + 1.0f - frac(texcoord0.y));
+
+    #ifdef USE_DERIVS 
+        // would make sense in a rasterizer. for a ray tracers this is not straight forward
+        mdl_state.text_coords[0].val = float3(texcoord0, 0);
+        mdl_state.text_coords[0].dx = float3(0, 0, 0); // float3(ddx(texcoord0), 0);
+        mdl_state.text_coords[0].dy = float3(0, 0, 0); // float3(ddy(texcoord0), 0);
+    #else
+        mdl_state.text_coords[0] = float3(texcoord0, 0);
+    #endif
 }
 
 
@@ -231,8 +306,7 @@ void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attr
 
     // setup MDL state
     Shading_state_material mdl_state;
-    float3 shading_normal;
-    setup_mdl_shading_state(mdl_state, attrib, shading_normal);
+    setup_mdl_shading_state(mdl_state, attrib);
 
 
     // evaluate the cutout opacity
@@ -250,8 +324,10 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 {
     // setup MDL state
     Shading_state_material mdl_state;
-    float3 shading_normal;
-    setup_mdl_shading_state(mdl_state, attrib, shading_normal);
+    setup_mdl_shading_state(mdl_state, attrib);
+
+    // keep the shading normal, this has to be reset before calling a second df::init
+    float3 shading_normal = mdl_state.normal;
 
     // add emission
     //---------------------------------------------------------------------------------------------
@@ -316,69 +392,47 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     }
     #endif
 
-    // Sample Light Sources
+    // Sample Light Sources for next event estimation
     //---------------------------------------------------------------------------------------------
 
-    float3 to_light = float3(0.0f, 0.0f, 0.0f);
-    float pdf = 0.0f;
-    const float3 radiance_over_pdf = sample_lights(mdl_state, to_light, pdf, payload.seed);
+    float3 to_light;
+    float pdf;
+    float3 radiance_over_pdf = sample_lights(mdl_state, to_light, pdf, payload.seed);
 
-    const float cos_theta = dot(to_light, mdl_state.geom_normal);
-    if (((cos_theta > 0.0f) != inside) && pdf != 0.0f)
+    // do not next event estimation (but delay the adding of contribution)
+    float3 contribution = float3(0.0f, 0.0f, 0.0f);
+    const bool next_event_valid = ((dot(to_light, mdl_state.geom_normal) > 0.0f) != inside) && pdf != 0.0f;
+    if (next_event_valid)
     {
-        // cast a shadow ray; assuming light is always outside
-        RayDesc ray;
-        ray.Origin = offset_ray(mdl_state.position, mdl_state.geom_normal * (inside ? -1.0f : 1.0f));
-        ray.Direction = to_light;
-        ray.TMin = 0.0f;
-        ray.TMax = 10000.0f;
+        // call generated mdl function to evaluate the scattering BSDF
+        Bsdf_evaluate_data eval_data = (Bsdf_evaluate_data)0;
+        eval_data.ior1 = ior1;
+        eval_data.ior2 = ior2;
+        eval_data.k1 = -WorldRayDirection();
+        eval_data.k2 = to_light;
+        #if (MDL_DF_HANDLE_SLOT_MODE != -1)
+            eval_data.handle_offset = 0;
+        #endif
+        mdl_bsdf_evaluate(scattering_function_index, eval_data, mdl_state);
 
-        ShadowHitInfo shadow_payload;
-        shadow_payload.isHit = false;
-        shadow_payload.seed = payload.seed;
-
-        TraceRay(
-            SceneBVH,               // AccelerationStructure
-            RAY_FLAG_NONE,          // RayFlags 
-            0xFF /* allow all */,   // InstanceInclusionMask
-            RAY_TYPE_SHADOW,        // RayContributionToHitGroupIndex
-            RAY_TYPE_COUNT,         // MultiplierForGeometryContributionToHitGroupIndex
-            RAY_TYPE_SHADOW,        // MissShaderIndex
-            ray,
-            shadow_payload);
-
-        // not shadowed -> compute lighting 
-        if (!shadow_payload.isHit)
+        // compute lighting for this light
+        if(eval_data.pdf > 0.0f)
         {
-            // call generated mdl function to evaluate the scattering BSDF
-            Bsdf_evaluate_data eval_data = (Bsdf_evaluate_data) 0;
-            eval_data.ior1 = ior1;
-            eval_data.ior2 = ior2;
-            eval_data.k1 = -WorldRayDirection();
-            eval_data.k2 = to_light;
-            #if (MDL_DF_HANDLE_SLOT_MODE != -1)
-                eval_data.handle_offset = 0;
-            #endif
-
-            mdl_bsdf_evaluate(scattering_function_index, eval_data, mdl_state);
-
-            // add to ray contribution
-            const float mis_weight = pdf == DIRAC 
+            const float mis_weight = (pdf == DIRAC)
                 ? 1.0f 
                 : pdf / (pdf + eval_data.pdf);
 
             // sample weight
             const float3 w = payload.weight * radiance_over_pdf * mis_weight;
             #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-                payload.contribution += w * eval_data.bsdf_diffuse;
-                payload.contribution += w * eval_data.bsdf_glossy;
+                contribution += w * eval_data.bsdf_diffuse;
+                contribution += w * eval_data.bsdf_glossy;
             #else
-                payload.contribution += w * eval_data.bsdf_diffuse[0];
-                payload.contribution += w * eval_data.bsdf_glossy[0];
+                contribution += w * eval_data.bsdf_diffuse[0];
+                contribution += w * eval_data.bsdf_glossy[0];
             #endif
         }
     }
-
 
     // Sample direction of the next ray
     //---------------------------------------------------------------------------------------------
@@ -395,29 +449,61 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     if (sample_data.event_type == BSDF_EVENT_ABSORB)
     {
         add_flag(payload.flags, FLAG_DONE);
-        return;
-    }
-
-    // flip inside/outside on transmission
-    // setup next path segment
-    payload.ray_direction_next = sample_data.k2;
-    payload.weight *= sample_data.bsdf_over_pdf;
-    if ((sample_data.event_type & BSDF_EVENT_TRANSMISSION) != 0)
-    {
-        toggle_flag(payload.flags, FLAG_INSIDE);
-        // continue on the opposite side
-        payload.ray_origin_next = offset_ray(mdl_state.position, -mdl_state.geom_normal);
+        // no not return here, we need to do next event estimation first
     }
     else
     {
-        // continue on the current side
-        payload.ray_origin_next = offset_ray(mdl_state.position, mdl_state.geom_normal);
+        // flip inside/outside on transmission
+        // setup next path segment
+        payload.ray_direction_next = sample_data.k2;
+        payload.weight *= sample_data.bsdf_over_pdf;
+        if ((sample_data.event_type & BSDF_EVENT_TRANSMISSION) != 0)
+        {
+            toggle_flag(payload.flags, FLAG_INSIDE);
+            // continue on the opposite side
+            payload.ray_origin_next = offset_ray(mdl_state.position, -mdl_state.geom_normal);
+        }
+        else
+        {
+            // continue on the current side
+            payload.ray_origin_next = offset_ray(mdl_state.position, mdl_state.geom_normal);
+        }
+
+        if ((sample_data.event_type & BSDF_EVENT_SPECULAR) != 0)
+            payload.last_pdf = -1.0f;
+        else
+            payload.last_pdf = sample_data.pdf;
     }
 
-    if ((sample_data.event_type & BSDF_EVENT_SPECULAR) != 0)
-        payload.last_pdf = -1.0f;
-    else
-        payload.last_pdf = sample_data.pdf;
+    // Add contribution from next event estimation if not shadowed
+    //---------------------------------------------------------------------------------------------
+
+    // cast a shadow ray; assuming light is always outside
+    RayDesc ray;
+    ray.Origin = offset_ray(mdl_state.position, mdl_state.geom_normal * (inside ? -1.0f : 1.0f));
+    ray.Direction = to_light;
+    ray.TMin = 0.0f;
+    ray.TMax = 10000.0f;
+
+    // prepare the ray and payload but trace at the end to reduce the amount of data that has
+    // to be recovered after coming back from the shadow trace
+    ShadowHitInfo shadow_payload;
+    shadow_payload.isHit = false;
+    shadow_payload.seed = payload.seed;
+
+    TraceRay(
+        SceneBVH,               // AccelerationStructure
+        RAY_FLAG_NONE,          // RayFlags 
+        0xFF /* allow all */,   // InstanceInclusionMask
+        RAY_TYPE_SHADOW,        // RayContributionToHitGroupIndex
+        RAY_TYPE_COUNT,         // MultiplierForGeometryContributionToHitGroupIndex
+        RAY_TYPE_SHADOW,        // MissShaderIndex
+        ray,
+        shadow_payload);
+
+    // add to ray contribution from next event estiation
+    if (any(contribution) && !shadow_payload.isHit)
+        payload.contribution += contribution;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -444,8 +530,7 @@ void MDL_SHADOW_ANY_HIT_PROGRAM(inout ShadowHitInfo payload, Attributes attrib)
 
     // setup MDL state
     Shading_state_material mdl_state;
-    float3 shading_normal;
-    setup_mdl_shading_state(mdl_state, attrib, shading_normal);
+    setup_mdl_shading_state(mdl_state, attrib);
 
     // evaluate the cutout opacity
     const float opacity = mdl_geometry_cutout_opacity(opacity_function_index, mdl_state);

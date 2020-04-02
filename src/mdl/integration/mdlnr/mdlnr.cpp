@@ -189,6 +189,7 @@ Mdlc_module_impl::Mdlc_module_impl()
   , m_used_with_mdl_sdk_set(false)
   , m_code_cache(0)
   , m_implicit_cast_enabled(true)
+  , m_expose_names_of_let_expressions(false)
   , m_module_wait_queue(0)
 {
 }
@@ -272,6 +273,26 @@ void Mdlc_module_impl::exit()
         delete m_module_wait_queue;
         m_module_wait_queue = NULL;
     }
+
+    // We need to reset m_allocator here for symmetry reasons (and not rely on the destructor).
+#ifdef DEBUG
+    if (g_dbg_allocator) {
+#if 0
+        // Disabled because prod/lib/mdl_sdk/test_imdl_module fails. This needs to be fixed first.
+        SYSTEM::Access_module<MEM::Mem_module> mem_module(/*deferred=*/false);
+        mem_module->set_exit_cb(NULL);
+        m_allocator.reset();
+        delete g_dbg_allocator;
+        g_dbg_allocator = NULL;
+#endif
+    } else {
+        // The debug allocator was destroyed by flush_dbg_allocator() without taking m_allocator
+        // into account. The pointer in m_allocator is now dangling and there is no way to reset
+        // the handle.
+    }
+#else
+    m_allocator.reset();
+#endif
 }
 
 mi::mdl::IMDL *Mdlc_module_impl::get_mdl() const
@@ -358,14 +379,24 @@ bool Mdlc_module_impl::utf8_match(char const *file_mask, char const *file_name) 
     return mi::mdl::utf8_match(file_mask, file_name);
 }
 
+void Mdlc_module_impl::set_implicit_cast_enabled(bool value)
+{
+    m_implicit_cast_enabled = value;
+}
+
 bool Mdlc_module_impl::get_implicit_cast_enabled() const
 {
     return m_implicit_cast_enabled;
 }
 
-void Mdlc_module_impl::set_implicit_cast_enabled(bool v)
+void Mdlc_module_impl::set_expose_names_of_let_expressions(bool value)
 {
-    m_implicit_cast_enabled = v;
+    m_expose_names_of_let_expressions = value;
+}
+
+bool Mdlc_module_impl::get_expose_names_of_let_expressions() const
+{
+    return m_expose_names_of_let_expressions;
 }
 
 MDL::Mdl_module_wait_queue* Mdlc_module_impl::get_module_wait_queue() const

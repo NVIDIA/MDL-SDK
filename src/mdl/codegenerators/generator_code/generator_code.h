@@ -91,6 +91,25 @@ bool equal_coordinate_space(
     IValue const *b,
     char const   *internal_space);
 
+/// Convert a IValue_texture::Bsdf_data_kind to a Resource_tag_tuple kind.
+///
+/// \param kind   the value's bsdf data kind
+/// \param gamma  the value's gamma mode
+Resource_tag_tuple::Kind kind_from_bsdf_data_kind(
+    IValue_texture::Bsdf_data_kind kind,
+    IValue_texture::gamma_mode     gamma);
+
+/// Convert a Resource_tag_tuple to a IValue_texture::Bsdf_data_kind.
+///
+/// \param kind   the value's resource tag tuple kind
+IValue_texture::Bsdf_data_kind bsdf_data_kind_from_kind(
+    Resource_tag_tuple::Kind kind);
+
+/// Convert a value to a Resource_tag_tuple kind.
+///
+/// \param val  the value
+Resource_tag_tuple::Kind kind_from_value(IValue const *val);
+
 }  // mdl
 }  // mi
 

@@ -201,6 +201,11 @@ inline void write(Serializer* serial,  const std::string& value)
     serial->write( value );
 }
 
+inline void write(Serializer* serial, const mi::base::Uuid& value)
+{
+    serial->write( value );
+}
+
 inline void write(Serializer* serial, const mi::math::Color& value)
 {
     serial->write( value );
@@ -282,6 +287,11 @@ inline void read(Deserializer* deser, std::string* value_pointer)
 }
 
 inline void read(Deserializer* deser, mi::math::Color* value_pointer)
+{
+    deser->read( value_pointer );
+}
+
+inline void read(Deserializer* deser, mi::base::Uuid* value_pointer)
 {
     deser->read( value_pointer );
 }

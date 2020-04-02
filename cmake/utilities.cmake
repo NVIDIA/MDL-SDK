@@ -101,35 +101,35 @@ function(TARGET_BUILD_SETUP)
     # LINUX
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
-            PUBLIC
-                "MI_PLATFORM=\"linux-x86-64-gcc\"" #todo add major version number
-                "MI_PLATFORM_UNIX"
-            )
+            target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
+                PUBLIC
+                    "MI_PLATFORM=\"linux-x86-64-gcc\"" #todo add major version number
+                    "MI_PLATFORM_UNIX"
+                )
 
-        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
-            PRIVATE
-                "-fPIC"   # position independent code since we will build a shared object
-                "-m64"    # sets int to 32 bits and long and pointer to 64 bits and generates code for x86-64 architecture
-                "-fno-strict-aliasing"
-                "-march=nocona"
-                "-DHAS_SSE"
-                "$<$<CONFIG:DEBUG>:-gdwarf-3>"
-                "$<$<CONFIG:DEBUG>:-gstrict-dwarf>"
+            target_compile_options(${TARGET_BUILD_SETUP_TARGET}
+                PRIVATE
+                    "-fPIC"   # position independent code since we will build a shared object
+                    "-m64"    # sets int to 32 bits and long and pointer to 64 bits and generates code for x86-64 architecture
+                    "-fno-strict-aliasing"
+                    "-march=nocona"
+                    "-DHAS_SSE"
+                    "$<$<CONFIG:DEBUG>:-gdwarf-3>"
+                    "$<$<CONFIG:DEBUG>:-gstrict-dwarf>"
 
-                # enable additional warnings
-                "-Wall"
-                "-Wvla"
+                    # enable additional warnings
+                    "-Wall"
+                    "-Wvla"
 
-                "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
-                "-Wno-parentheses"
-                "-Wno-sign-compare"
-                "-Wno-narrowing"
-                "-Wno-unused-but-set-variable"
-                "-Wno-unused-local-typedefs"
-                "-Wno-deprecated-declarations"
-                "-Wno-unknown-pragmas"
-            )
+                    "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
+                    "-Wno-parentheses"
+                    "-Wno-sign-compare"
+                    "-Wno-narrowing"
+                    "-Wno-unused-but-set-variable"
+                    "-Wno-unused-local-typedefs"
+                    "-Wno-deprecated-declarations"
+                    "-Wno-unknown-pragmas"
+                )
     endif()
 
     # MACOSX
@@ -137,7 +137,7 @@ function(TARGET_BUILD_SETUP)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
             PUBLIC
-                "MI_PLATFORM=\"macosx-x86-64-clang\"" #todo add major version number
+                "MI_PLATFORM=\"macosx-x86-64-clang900\""
                 "MI_PLATFORM_MACOSX"
                 "MACOSX"
             )
@@ -160,8 +160,8 @@ function(TARGET_BUILD_SETUP)
                 "-Wno-long-long"
                 "-Wwrite-strings"
                 "-Wmissing-field-initializers"
-                "-Wcovered-switch-default"
-                "-Wnon-virtual-dtor"
+                "-Wno-covered-switch-default"
+                "-Wno-non-virtual-dtor"
                 "-fdiagnostics-fixit-info"
                 "-fdiagnostics-parseable-fixits"
             )

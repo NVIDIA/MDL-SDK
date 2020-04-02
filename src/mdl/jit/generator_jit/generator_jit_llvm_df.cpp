@@ -43,6 +43,7 @@
 #include "mdl/codegenerators/generator_dag/generator_dag_walker.h"
 
 
+#include "generator_jit.h"
 #include "generator_jit_llvm.h"
 
 
@@ -717,11 +718,12 @@ public:
             switch (m_kind)
             {
                 case IType::TK_BSDF:
-                    func_name = "black_bsdf";
+                case IType::TK_HAIR_BSDF:
+                    func_name = "gen_black_bsdf";
                     break;
 
                 case IType::TK_EDF:
-                    func_name = "black_edf";
+                    func_name = "gen_black_edf";
                     break;
 
                 default:
@@ -1133,6 +1135,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         IGenerated_code_executable::DK_INVALID;
     switch (root_lambda->get_body()->get_type()->get_kind()) {
     case IType::TK_BSDF: dist_kind = IGenerated_code_executable::DK_BSDF; break;
+    case IType::TK_HAIR_BSDF: dist_kind = IGenerated_code_executable::DK_HAIR_BSDF; break;
     case IType::TK_EDF:  dist_kind = IGenerated_code_executable::DK_EDF; break;
     default:
         MDL_ASSERT(!"Unexpected root lambda type kind");
@@ -1211,6 +1214,9 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     // reset some fields
     m_deriv_infos = NULL;
     m_dist_func = NULL;
+    for (size_t i = 0, n = m_instantiated_dfs.size(); i < n; ++i) {
+        m_instantiated_dfs[i].clear();
+    }
 
     if (!incremental) {
         // finalize the module and store it
@@ -1277,6 +1283,7 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(DAG_call const *dag_ca
     switch (kind)
     {
         case IType::Kind::TK_BSDF: suffix += "_bsdf"; break;
+        case IType::Kind::TK_HAIR_BSDF: suffix += "_hair_bsdf"; break;
         case IType::Kind::TK_EDF:  suffix += "_edf"; break;
         default: break;
     }
@@ -1362,6 +1369,9 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(DAG_call const *dag_ca
         SEMA_CASE(DS_INTRINSIC_DF_FRESNEL_FACTOR,
                   "fresnel_factor")
 
+        SEMA_CASE(DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
+                  "chiang_hair_bsdf")
+
         default:
             MDL_ASSERT(!is_df_semantics(sema) && "unsupported DF function found");
             return NULL;
@@ -1407,6 +1417,10 @@ IDefinition::Semantics LLVM_code_generator::get_libbsdf_function_semantics(llvm:
 
     // df::tint(color, bsdf) overload?
     if (basename == "tint_bsdf")
+        return IDefinition::DS_INTRINSIC_DF_TINT;
+
+    // df::tint(color, hair_bsdf) overload?
+    if (basename == "tint_hair_bsdf")
         return IDefinition::DS_INTRINSIC_DF_TINT;
 
     string builtin_name("::df::", get_allocator());
@@ -1675,40 +1689,8 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
         }
         else if (demangled_name == "::state::get_bsdf_data_texture_id(Bsdf_data_kind)")
         {
-            llvm::Value *kind_val = call->getArgOperand(1);
-            if (llvm::ConstantInt *const_int = llvm::dyn_cast<llvm::ConstantInt>(kind_val)) {
-                IValue_texture::Bsdf_data_kind kind =
-                    IValue_texture::Bsdf_data_kind(const_int->getValue().getZExtValue());
-                mi::base::Handle<ILambda_function> main_ilambda(m_dist_func->get_main_df());
-                Lambda_function const *main_lambda = impl_cast<Lambda_function>(main_ilambda.get());
-                Resource_attr_map const &map = main_lambda->get_resource_attribute_map();
-                llvm::Value *res_val = nullptr;
-                // TODO: Fix slow search for texture
-                for (Resource_attr_map::const_iterator it(map.begin()), end(map.end());
-                        it != end; ++it) {
-                    IValue const *r = it->first;
-                    if (IValue_texture const *tex = as<IValue_texture>(r)) {
-                        if (tex->get_bsdf_data_kind() == kind) {
-                            Expression_result res = translate_value(ctx, r);
-                            res_val = res.as_value(ctx);
-                            break;
-                        }
-                    }
-                }
-
-                // BSDF data not actually used? replace by invalid texture ID
-                if (res_val == nullptr)
-                    res_val = ctx.get_constant(int(0));
-
-                call->replaceAllUsesWith(res_val);
-
-                // Remove old call and let iterator point to instruction before old call
-                ii = --ii->getParent()->getInstList().erase(call);
-                return true;
-            } else {
-                MDL_ASSERT(!"argument to State::get_bsdf_data_texture_id() must be a constant");
-                return false;
-            }
+            // will be handled by finalize_module() when all resources of the link unit are known
+            return true;
         }
     }
 
@@ -1857,11 +1839,9 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
         if (llvm::isa<llvm::PointerType>(param_type))
             param_elem_type = param_type->getPointerElementType();
 
-        // need to convert from or to a derivative value?
-        if (ctx.is_deriv_type(arg_type) && !ctx.is_deriv_type(param_elem_type)) {
-            arg = ctx.get_dual_val(arg);
-            arg_type = arg->getType();
-        } else if (!ctx.is_deriv_type(arg_type) && ctx.is_deriv_type(param_elem_type)) {
+        // need to convert to a derivative value?
+        // can happen for 2D texture access in libbsdf for measured_factor()
+        if (!ctx.is_deriv_type(arg_type) && ctx.is_deriv_type(param_elem_type)) {
             arg = ctx.get_dual(arg);
             arg_type = arg->getType();
         }
@@ -1964,6 +1944,7 @@ void LLVM_code_generator::mark_df_calls(
                 switch (kind)
                 {
                     case IType::TK_BSDF:
+                    case IType::TK_HAIR_BSDF:
                         inst->setMetadata(m_bsdf_param_metadata_id, md);
                         break;                
                     case IType::TK_EDF:
@@ -2120,20 +2101,20 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                 // bsdf
                 if (df_data_type == m_type_bsdf_sample_data) {
                     new_func_type = m_type_bsdf_sample_func;
-                    df_kind = IType::TK_BSDF;
+                    df_kind = IType::TK_BSDF; // or TK_HAIR_BSDF
                 }
                 else if (df_data_type == m_type_bsdf_evaluate_data) {
                     new_func_type = m_type_bsdf_evaluate_func;
-                    df_kind = IType::TK_BSDF;
+                    df_kind = IType::TK_BSDF; // or TK_HAIR_BSDF
                     has_inherited_weight = true;
                 }
                 else if (df_data_type == m_type_bsdf_pdf_data) {
                     new_func_type = m_type_bsdf_pdf_func;
-                    df_kind = IType::TK_BSDF;
+                    df_kind = IType::TK_BSDF; // or TK_HAIR_BSDF
                 }
                 else if (df_data_type == m_type_bsdf_auxiliary_data) {
                     new_func_type = m_type_bsdf_auxiliary_func;
-                    df_kind = IType::TK_BSDF;
+                    df_kind = IType::TK_BSDF; // or TK_HAIR_BSDF
                     has_inherited_weight = true;
                 }
                 // edf
@@ -2164,6 +2145,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                 switch (df_kind)
                 {
                     case IType::TK_BSDF:
+                    case IType::TK_HAIR_BSDF:
                         df_arg = "bsdf_arg";
                         df_arg_var = "bsdf_arg_var";
                         df_struct_name = "struct.BSDF";
@@ -2366,6 +2348,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                             switch (df_kind)
                             {
                                 case IType::TK_BSDF:
+                                case IType::TK_HAIR_BSDF:
                                     arg_var->setMetadata(m_bsdf_param_metadata_id, md);
                                     break;
                                 case IType::TK_EDF:
@@ -2724,6 +2707,7 @@ int LLVM_code_generator::get_metadata_df_param_id(
     switch (kind)
     {
         case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
             md = inst->getMetadata(m_bsdf_param_metadata_id);
             break;
 
@@ -3224,6 +3208,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
     switch (kind)
     {
         case IType::Kind::TK_BSDF:
+        case IType::Kind::TK_HAIR_BSDF:
         {
             switch (m_dist_func_state)
             {
@@ -3235,7 +3220,10 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
                     MDL_ASSERT(!"Invalid bsdf distribution function state");
                     return NULL;
             }
-            operator_name = "ternary_bsdf";
+            if(kind == IType::Kind::TK_HAIR_BSDF)
+                operator_name = "ternary_hair_bsdf";
+            else
+                operator_name = "ternary_bsdf";
             break;
         }
 
@@ -3353,7 +3341,8 @@ llvm::Function *LLVM_code_generator::instantiate_df(
         // check for "bsdf()" or "df::bsdf_component(weight, bsdf())" constant
         if ( (
                 // "bsdf()"
-                is<IValue_invalid_ref>(value) && is<IType_bsdf>(value->get_type())
+                is<IValue_invalid_ref>(value) && 
+                (is<IType_bsdf>(value->get_type()) || is<IType_hair_bsdf>(value->get_type()))
             ) || (
                 // "df::bsdf_component(weight, bsdf())"
                 is<IValue_struct>(value) &&
@@ -3399,10 +3388,17 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     }
 
     DAG_call const *dag_call = cast<DAG_call>(node);
+
+    Instantiated_dfs::const_iterator it = m_instantiated_dfs[m_dist_func_state].find(dag_call);
+    if (it != m_instantiated_dfs[m_dist_func_state].end())
+        return it->second;
     
     IDefinition::Semantics sema = dag_call->get_semantic();
-    if (sema == operator_to_semantic(IExpression::OK_TERNARY))
-        return instantiate_ternary_df(dag_call);
+    if (sema == operator_to_semantic(IExpression::OK_TERNARY)) {
+        llvm::Function *res_func = instantiate_ternary_df(dag_call);
+        m_instantiated_dfs[m_dist_func_state][dag_call] = res_func;
+        return res_func;
+    }
 
     bool is_elemental = is_elemental_df_semantics(sema);
     IType::Kind kind = dag_call->get_type()->get_kind();
@@ -3583,6 +3579,8 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     // optimize function to improve inlining
     m_func_pass_manager->run(*bsdf_func);
 
+    m_instantiated_dfs[m_dist_func_state][dag_call] = bsdf_func;
+
     return bsdf_func;
 }
 
@@ -3648,7 +3646,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
         // no handles
         if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_NONE) {
             llvm::Value *value_ptr = NULL;
-            if (df_kind == mi::mdl::IType::TK_BSDF) {
+            if (df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF) {
                 switch (m_dist_func_state)
                 {
                     case DFSTATE_EVALUATE: {
@@ -3697,7 +3695,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
             llvm::Value *handle_count = NULL;
             if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) { // DF_HSM_POINTER
                 int handle_count_idx = -1;
-                if (df_kind == mi::mdl::IType::TK_BSDF)
+                if (df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF)
                     handle_count_idx = m_dist_func_state == DFSTATE_EVALUATE ? 5 : 4;
                 else if (df_kind == mi::mdl::IType::TK_EDF)
                     handle_count_idx = m_dist_func_state == DFSTATE_EVALUATE ? 2 : -1;
@@ -3729,7 +3727,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
                 // git indices of the fields to initialize
                 int value_0_idx = -1;
                 int value_1_idx = -1;
-                if (df_kind == mi::mdl::IType::TK_BSDF) {
+                if (df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF) {
                     value_0_idx = 
                         m_dist_func_state == DFSTATE_EVALUATE ? 5 : 4; // bsdf_diffuse/albedo
                     value_1_idx = 
@@ -3847,7 +3845,8 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     }
     llvm::CallInst *callinst = ctx->CreateCall(df_func, df_args);
 
-    if (df_kind == mi::mdl::IType::TK_BSDF && m_dist_func_state == DFSTATE_AUXILIARY)
+    if ((df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF) && 
+        m_dist_func_state == DFSTATE_AUXILIARY)
     {
         // normalize function
         IDefinition const *norm_def = m_compiler->find_stdlib_signature(

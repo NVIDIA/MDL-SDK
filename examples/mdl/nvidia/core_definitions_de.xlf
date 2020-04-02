@@ -32,7 +32,7 @@
       <note from="translator">::anno::author(string)</note>
     </trans-unit>
     <trans-unit id="6" approved="yes">
-      <source xml:space="preserve">Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.</source>
+      <source xml:space="preserve">Copyright 2020 NVIDIA Corporation. All rights reserved.</source>
       <target xml:space="preserve"></target>
       <note from="translator">::anno::copyright_notice(string)</note>
     </trans-unit>

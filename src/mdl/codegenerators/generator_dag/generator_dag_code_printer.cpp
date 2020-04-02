@@ -167,9 +167,18 @@ void DAG_code_printer::print_exp(
         break;
     case DAG_node::EK_TEMPORARY:
         {
-            int index = cast<DAG_temporary>(node)->get_index();
+            DAG_temporary const *temporary = cast<DAG_temporary>(node);
+            int index = temporary->get_index();
+            char const *name;
+            if (def_index < 0)
+                name = dag->get_function_temporary_name(-(def_index+1),index);
+            else
+                name = dag->get_material_temporary_name(def_index,index);
             push_color(IPrinter::C_ENTITY);
-            m_printer->printf("t_%d", index);
+            if (*name)
+                m_printer->print(name);
+            else
+                m_printer->printf("t_%d", index);
             pop_color();
         }
         break;
@@ -900,8 +909,13 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
                     Indent_scope scope(depth);
 
                     indent(depth);
-                    m_printer->printf("t_%d = ", k);
-                    print_exp(depth, code_dag, -(i+1), code_dag->get_function_temporary(i, k));
+                    DAG_node const *temporary = code_dag->get_function_temporary(i, k);
+                    char const     *name      = code_dag->get_function_temporary_name(i, k);
+                    if (*name)
+                        m_printer->printf("%s = ", name);
+                    else
+                       m_printer->printf("t_%d = ", k);
+                    print_exp(depth, code_dag, -(i+1), temporary);
                     print(";\n");
                 }
                 indent(depth);
@@ -1026,8 +1040,13 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
                 Indent_scope scope(depth);
 
                 indent(depth);
-                m_printer->printf("t_%d = ", k);
-                print_exp(depth, code_dag, mat_idx, code_dag->get_material_temporary(mat_idx, k));
+                DAG_node const *temporary = code_dag->get_material_temporary(mat_idx, k);
+                char const     *name      = code_dag->get_material_temporary_name(mat_idx, k);
+                if (*name)
+                    m_printer->printf("%s = ", name);
+                else
+                   m_printer->printf("t_%d = ", k);
+                print_exp(depth, code_dag, mat_idx, temporary);
                 print(";\n");
             }
             indent(depth);

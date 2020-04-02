@@ -416,6 +416,7 @@ void Transaction_impl::finish_edit(DB::Info* info, DB::Journal_type journal_type
 
     mi::base::Lock::Block block(&m_database->m_lock);
     info->store_references();
+    info->unpin();
 }
 
 DB::Info* Transaction_impl::get_element(DB::Tag tag, bool do_wait)

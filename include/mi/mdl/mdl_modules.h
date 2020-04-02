@@ -46,6 +46,20 @@ namespace mdl {
 class IModule;
 class IThread_context;
 
+/// Handle that is passed to \c IModule_cache::lookup in order to identify an requested module from
+/// first successful file resolution to notifications about success or failure.
+class IModule_cache_lookup_handle
+{
+public:
+    /// Get an identifier to be used throughout the loading of a module.
+    virtual const char* get_lookup_name() const = 0;
+
+    /// Returns true if this handle belongs to context that loads module.
+    /// If the module is already loaded or the handle belongs to a waiting context, false will be
+    // returned
+    virtual bool is_processing() const = 0;
+};
+
 /// The Interface of a module loaded callback.
 ///
 /// An implementation can be registered on the IModule_cache to get notified when a module is
@@ -56,13 +70,13 @@ public:
     /// Function that is called when the \c module was loaded successfully so that it can be cached.
     ///
     /// \param module   The loaded, valid, module.
-    /// \return         When false is returned, an error is added to the module, which in turn
-    ///                 marks all importing modules invalid, too. True indicate that the module
-    ///                 is registered.
     virtual bool register_module(IModule const *module) = 0;
 
     /// Function that is called when a module was not found or when loading failed.
-    virtual void module_loading_failed(char const *module_name) = 0;
+    ///
+    /// \param handle   A handle created by \c create_lookup_handle which is used throughout the
+    ///                 loading process of a module
+    virtual void module_loading_failed(const IModule_cache_lookup_handle &handle) = 0;
 
     /// Called while loading a module to check if the built-in modules are already registered.
     ///
@@ -83,14 +97,27 @@ public:
 class IModule_cache {
 public:
 
+    /// Create an \c IModule_cache_lookup_handle for this \c IModule_cache implementation.
+    /// Has to be freed using \c free_lookup_handle.
+    virtual IModule_cache_lookup_handle* create_lookup_handle() const = 0;
+
+    /// Free a handle created by \c create_lookup_handle.
+    /// \param handle       a handle created by this module cache.
+    virtual void free_lookup_handle(IModule_cache_lookup_handle* handle) const = 0;
+
     /// Lookup a module.
     ///
     /// \param absname      the absolute name of a MDL module as returned by the module resolver
+    /// \param handle       a handle created by \c create_lookup_handle which is used throughout the
+    ///                     loading process of a module or NULL in case the goal is to just check
+    ///                     if a module is loaded.
     ///
     /// \return             If this module is already known, return it, otherwise NULL.
     ///
     /// \note  The module must be returned with increased reference count.
-    virtual IModule const *lookup(char const *absname) const = 0;
+    virtual IModule const *lookup(
+        char const *absname, 
+        IModule_cache_lookup_handle *handle) const = 0;
 
     /// Get the module loading callback which is used to notify the cache or the integration
     /// about successfully loaded modules.

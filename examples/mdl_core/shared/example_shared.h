@@ -426,7 +426,8 @@ public:
     /// \returns the module name of this entity if found, an empty string otherwise
     std::string get_module_name(char const *entity_name) const
     {
-        if (entity_name == nullptr) return std::string();
+        if (entity_name == nullptr)
+            return std::string();
 
         // search for last colon before an opening parenthesis
         char const *last_colon = nullptr;
@@ -436,7 +437,8 @@ public:
             ++ptr;
         }
 
-        if (last_colon == nullptr || last_colon == entity_name) return std::string();
+        if (last_colon == nullptr || last_colon == entity_name)
+            return std::string();
         return std::string(entity_name, last_colon - 1);
     }
 
@@ -447,7 +449,7 @@ public:
     /// \param entity_name    the entity name
     ///
     /// \returns the owning module of this entity if found, nullptr otherwise
-    mi::mdl::IModule const *get_owner_module(char const *entity_name) const override
+    mi::mdl::IModule const *get_owner_module(char const *entity_name) const final
     {
         std::string module_name(get_module_name(entity_name));
 
@@ -467,12 +469,39 @@ public:
         return nullptr;
     }
 
+    /// Find the owner code DAG of a given entity name.
+    /// If the entity name does not contain a colon, you should return the builtins DAG,
+    /// which you can identify by calling its owner module's IModule::is_builtins().
+    ///
+    /// \param entity_name    the entity name
+    ///
+    /// \returns the owning module of this entity if found, NULL otherwise
+    mi::mdl::IGenerated_code_dag const *get_owner_dag(char const *entity_name) const final
+    {
+        return nullptr;
+    }
+
+    /// Create an \c IModule_cache_lookup_handle for this \c IModule_cache implementation.
+    /// Has to be freed using \c free_lookup_handle.
+    mi::mdl::IModule_cache_lookup_handle* create_lookup_handle() const final
+    {
+        return nullptr;
+    }
+
+    /// Free a handle created by \c create_lookup_handle.
+    /// \param handle       a handle created by this module cache.
+    void free_lookup_handle(mi::mdl::IModule_cache_lookup_handle* handle) const final
+    {
+    }
+
     /// Lookup a module.
     ///
     /// \param absname  the absolute name of an MDL module as returned by the module resolver
     ///
     /// \return  If this module is already known, return it, otherwise nullptr.
-    mi::mdl::IModule const *lookup(char const *absname) const override
+    mi::mdl::IModule const *lookup(
+        char const *absname,
+        mi::mdl::IModule_cache_lookup_handle * /*handle*/) const final
     {
         // search for the module name
         auto it = m_modules.find(absname);
@@ -485,7 +514,7 @@ public:
     }
 
     /// Get the module loading callback.
-    mi::mdl::IModule_loaded_callback *get_module_loading_callback() const override
+    mi::mdl::IModule_loaded_callback *get_module_loading_callback() const final
     {
         return nullptr;
     }

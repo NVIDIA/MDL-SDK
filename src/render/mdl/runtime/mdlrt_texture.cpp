@@ -385,11 +385,15 @@ Texture_2d::Texture_2d(
     DB::Access<DBIMAGE::Image> image(texture->get_image(), trans);
     m_is_valid = image->is_valid();
 
+    DB::Access<DBIMAGE::Image_impl> image_impl;
+    if (m_is_valid)
+        image_impl.set(image->get_impl_tag(), trans);
+
     m_is_udim = image->is_uvtile();
     unsigned int num_tiles;
     if (m_is_udim)
     {
-        const unsigned int *tm = image->get_tile_mapping(
+        const unsigned int *tm = image_impl->get_tile_mapping(
             m_udim_num_u, m_udim_num_v,
             m_udim_offset_u, m_udim_offset_v);
         const unsigned int s = m_udim_num_u * m_udim_num_v;
@@ -412,7 +416,7 @@ Texture_2d::Texture_2d(
     m_tile_resolutions.resize(num_tiles);
 
     for (unsigned int i = 0; i < num_tiles; ++i) {
-        mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap(i));
+        mi::base::Handle<const IMAGE::IMipmap> mipmap(image_impl->get_mipmap(i));
         mi::Uint32 num_levels = use_derivatives ? mipmap->get_nlevels() : 1;
 
         m_canvases[i].resize(num_levels);
@@ -783,7 +787,11 @@ Texture_3d::Texture_3d(
     DB::Access<DBIMAGE::Image> image(texture->get_image(), trans);
     m_is_valid = image->is_valid();
 
-    mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap() );
+    DB::Access<DBIMAGE::Image_impl> image_impl;
+    if (m_is_valid)
+        image_impl.set(image->get_impl_tag(), trans);
+
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(image->get_mipmap(trans));
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0 ));
     m_canvas = IMAGE::Access_canvas(canvas.get(), true);
     m_resolution = mi::Uint32_3(
@@ -966,7 +974,7 @@ Texture_cube::Texture_cube(
     DB::Access<DBIMAGE::Image> image(texture->get_image(), trans);
     m_is_valid = image->is_valid();
 
-    mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap() );
+    mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap(trans) );
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0 ));
     m_canvas = IMAGE::Access_canvas(canvas.get(), true);
     m_resolution = mi::Uint32_3(

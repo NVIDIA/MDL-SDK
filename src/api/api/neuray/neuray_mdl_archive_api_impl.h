@@ -33,8 +33,6 @@
 #ifndef API_API_NEURAY_MDL_ARCHIVE_API_IMPL_H
 #define API_API_NEURAY_MDL_ARCHIVE_API_IMPL_H
 
-#include <base/system/main/neuray_cc_conf.h>
-
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_archiver.h>
 #include <mi/neuraylib/imdl_archive_api.h>
@@ -54,7 +52,7 @@ namespace MDLC { class Mdlc_module; }
 
 namespace NEURAY {
 
-class Mdl_archive_api_impl NEURAY_FINAL
+class Mdl_archive_api_impl final
   : public mi::base::Interface_implement<mi::neuraylib::IMdl_archive_api>,
     public boost::noncopyable
 {
@@ -72,26 +70,26 @@ public:
     mi::Sint32 create_archive(
         const char* directory,
         const char* archive,
-        const mi::IArray* manifest_fields) NEURAY_FINAL;
+        const mi::IArray* manifest_fields) final;
 
     mi::Sint32 extract_archive(
         const char* archive,
-        const char* directory)  NEURAY_FINAL;
+        const char* directory)  final;
 
     const mi::neuraylib::IManifest* get_manifest(
-        const char* archive) NEURAY_FINAL;
+        const char* archive) final;
 
     mi::neuraylib::IReader* get_file(
         const char* archive,
-        const char* filename) NEURAY_FINAL;
+        const char* filename) final;
 
     mi::neuraylib::IReader* get_file(
-        const char* filename) NEURAY_FINAL;
+        const char* filename) final;
 
     mi::Sint32 set_extensions_for_compression(
-        const char* extensions) NEURAY_FINAL;
+        const char* extensions) final;
 
-    const char* get_extensions_for_compression() const NEURAY_FINAL;
+    const char* get_extensions_for_compression() const final;
 
     // internal methods
 
@@ -133,15 +131,15 @@ public:
 
     // methods of mi::neuraylib::IManifest
 
-    mi::Size get_number_of_fields() const;
+    mi::Size get_number_of_fields() const final;
 
-    const char* get_key( mi::Size index) const;
+    const char* get_key( mi::Size index) const final;
 
-    const char* get_value( mi::Size index) const;
+    const char* get_value( mi::Size index) const final;
 
-    mi::Size get_number_of_fields( const char* key) const;
+    mi::Size get_number_of_fields( const char* key) const final;
 
-    const char* get_value( const char* key, mi::Size index) const;
+    const char* get_value( const char* key, mi::Size index) const final;
 
 private:
 

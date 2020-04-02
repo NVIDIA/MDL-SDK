@@ -33,7 +33,6 @@
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
-#include <base/system/main/neuray_cc_conf.h>
 #include <mi/neuraylib/imdl_entity_resolver.h>
 
 namespace mi
@@ -56,15 +55,15 @@ public:
     Mdl_resource_set_impl(mi::mdl::IMDL_resource_set *set);
 
     // API methods
-    mi::Size get_count() const NEURAY_FINAL;
+    mi::Size get_count() const final;
 
-    const char *get_mdl_url(mi::Size i) const NEURAY_FINAL;
+    const char *get_mdl_url(mi::Size i) const final;
     
-    const char *get_filename(mi::Size i) const NEURAY_FINAL;
+    const char *get_filename(mi::Size i) const final;
     
-    bool get_udim_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const NEURAY_FINAL;
+    bool get_udim_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const final;
     
-    mi::neuraylib::IReader *open_reader(mi::Size i) const NEURAY_FINAL;
+    mi::neuraylib::IReader *open_reader(mi::Size i) const final;
 
 private:
     mi::base::Handle<mi::mdl::IMDL_resource_set> m_resource_set;
@@ -84,15 +83,15 @@ public:
     mi::neuraylib::IMdl_resource_set *resolve_resource_file_name(
         const char     *file_path,
         const char     *owner_file_path,
-        const char     *owner_name) NEURAY_FINAL;
+        const char     *owner_name) final;
 
     mi::neuraylib::IReader *open_resource(
         const char     *file_path,
         const char     *owner_file_path,
-        const char     *owner_name) NEURAY_FINAL;
+        const char     *owner_name) final;
 
     const char *resolve_module_name(
-        const char *name) NEURAY_FINAL;
+        const char *name) final;
 
 private:
     mi::base::Handle<mi::mdl::IEntity_resolver> m_entity_resolver;

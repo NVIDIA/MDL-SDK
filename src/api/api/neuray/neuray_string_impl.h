@@ -73,7 +73,7 @@ public:
     /// Constructor
     ///
     /// The string is initialized to the empty string.
-    String_impl();
+    String_impl(const char* str=nullptr);
 
     /// Destructor
     ~String_impl();

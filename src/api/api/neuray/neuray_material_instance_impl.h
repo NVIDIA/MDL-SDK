@@ -33,8 +33,6 @@
 #ifndef API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
 #define API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
 
-#include <base/system/main/neuray_cc_conf.h>
-
 #include <mi/neuraylib/imaterial_instance.h>
 
 #include "neuray_db_element_impl.h"
@@ -47,7 +45,7 @@ namespace MDL { class Mdl_material_instance; }
 namespace NEURAY {
 
 /// This class implements MDL material instances.
-class Material_instance_impl NEURAY_FINAL
+class Material_instance_impl final
     : public Attribute_set_impl<Db_element_impl<mi::neuraylib::IMaterial_instance,
     MDL::Mdl_material_instance> >
 {
@@ -66,46 +64,46 @@ public:
 
     // public API methods
 
-    mi::neuraylib::Element_type get_element_type() const NEURAY_FINAL;
+    mi::neuraylib::Element_type get_element_type() const final;
 
-    const char* get_material_definition() const NEURAY_FINAL;
+    const char* get_material_definition() const final;
 
-    const char* get_mdl_material_definition() const NEURAY_FINAL;
+    const char* get_mdl_material_definition() const final;
 
-    mi::Size get_parameter_count() const NEURAY_FINAL;
+    mi::Size get_parameter_count() const final;
 
-    const char* get_parameter_name(mi::Size index) const NEURAY_FINAL;
+    const char* get_parameter_name(mi::Size index) const final;
 
-    mi::Size get_parameter_index(const char* name) const NEURAY_FINAL;
+    mi::Size get_parameter_index(const char* name) const final;
 
-    const mi::neuraylib::IType_list* get_parameter_types() const NEURAY_FINAL;
+    const mi::neuraylib::IType_list* get_parameter_types() const final;
 
-    const mi::neuraylib::IExpression_list* get_arguments() const NEURAY_FINAL;
+    const mi::neuraylib::IExpression_list* get_arguments() const final;
 
     mi::Sint32 set_arguments(
-        const mi::neuraylib::IExpression_list* arguments) NEURAY_FINAL;
+        const mi::neuraylib::IExpression_list* arguments) final;
 
     mi::Sint32 set_argument(
         mi::Size index,
-        const mi::neuraylib::IExpression* argument) NEURAY_FINAL;
+        const mi::neuraylib::IExpression* argument) final;
 
     mi::Sint32 set_argument(
         const char* name,
-        const mi::neuraylib::IExpression* argument) NEURAY_FINAL;
+        const mi::neuraylib::IExpression* argument) final;
 
     mi::neuraylib::ICompiled_material* create_compiled_material(
         mi::Uint32 flags,
-        mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context* context) const final;
 
-    bool is_default() const NEURAY_FINAL;
+    bool is_default() const final;
 
-    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi_static_assert(sizeof(Compilation_options) == sizeof(mi::Uint32));
 
     mi::Sint32 repair(
         mi::Uint32 flags,
-        mi::neuraylib::IMdl_execution_context* context) NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context* context) final;
 };
 
 } // namespace NEURAY

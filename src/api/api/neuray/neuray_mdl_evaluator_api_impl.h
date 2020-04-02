@@ -37,7 +37,6 @@
 #include <mi/neuraylib/imdl_evaluator_api.h>
 #include <mi/neuraylib/imdl_compiler.h>
 
-#include <base/system/main/neuray_cc_conf.h>
 #include <base/system/main/access_module.h>
 
 namespace mi {
@@ -57,7 +56,7 @@ namespace MDLC { class Mdlc_module; }
 
 namespace NEURAY {
 
-class Mdl_evaluator_api_impl NEURAY_FINAL
+class Mdl_evaluator_api_impl final
   : public mi::base::Interface_implement<mi::neuraylib::IMdl_evaluator_api>
 {
 public:
@@ -87,7 +86,7 @@ public:
         mi::neuraylib::IValue_factory           *fact,
         mi::neuraylib::IMaterial_instance const *inst,
         mi::Size                                 index,
-        mi::Sint32                               *error) const NEURAY_FINAL;
+        mi::Sint32                               *error) const final;
 
     /// Evaluates if a function call parameter is enabled (i.e. the enable_if condition
     /// computes true).
@@ -104,7 +103,7 @@ public:
         mi::neuraylib::IValue_factory           *fact,
         mi::neuraylib::IFunction_call const     *call,
         mi::Size                                index,
-        mi::Sint32                              *error) const NEURAY_FINAL;
+        mi::Sint32                              *error) const final;
 
     // internal methods
 
@@ -126,8 +125,8 @@ public:
 
 private:
     // non copyable
-    Mdl_evaluator_api_impl(Mdl_evaluator_api_impl const &) NEURAY_DELETED_FUNCTION;
-    Mdl_evaluator_api_impl &operator=(Mdl_evaluator_api_impl const &) NEURAY_DELETED_FUNCTION;
+    Mdl_evaluator_api_impl(Mdl_evaluator_api_impl const &) = delete;
+    Mdl_evaluator_api_impl &operator=(Mdl_evaluator_api_impl const &) = delete;
 
 private:
     mi::neuraylib::INeuray *m_neuray;

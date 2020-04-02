@@ -447,9 +447,9 @@ static void create_environment(
     // Copy the image data to a CUDA array
     const cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float4>();
     check_cuda_success(cudaMallocArray(env_tex_data, &channel_desc, rx, ry));
-    check_cuda_success(cudaMemcpyToArray(
+    check_cuda_success(cudaMemcpy2DToArray(
         *env_tex_data, 0, 0, pixels,
-        rx * ry * sizeof(float4), cudaMemcpyHostToDevice));
+        rx * sizeof(float4), rx * sizeof(float4), ry, cudaMemcpyHostToDevice));
 
     // Create a CUDA texture
     cudaResourceDesc res_desc;
@@ -898,8 +898,10 @@ static void render_scene(
     {
         // Prepare the needed data of all target codes for the GPU
         Material_gpu_context material_gpu_context(options.enable_derivatives);
-        if (!material_gpu_context.prepare_target_code_data(target_codes[0].get()))
+        if (!material_gpu_context.prepare_target_code_data(target_codes[0].get())) {
+            fprintf(stderr, "Error: preparing data for GPU failed\n");
             terminate();
+        }
         kernel_params.tc_data = reinterpret_cast<Target_code_data *>(
             material_gpu_context.get_device_target_code_data_list());
         kernel_params.arg_block_list = reinterpret_cast<char const **>(

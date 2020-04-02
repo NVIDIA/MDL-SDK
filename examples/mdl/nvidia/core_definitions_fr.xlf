@@ -324,8 +324,8 @@
 ::anno::author(string) light_ies</note>
             </trans-unit>
             <trans-unit id="56">
-                <source xml:space="preserve">Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.</source>
-                <target xml:space="preserve">Copyright (c) 2019 NVIDIA CORPORATION. Tous droits réservés.</target>
+                <source xml:space="preserve">Copyright 2020 NVIDIA Corporation. All rights reserved.</source>
+                <target xml:space="preserve">Copyright 2020 NVIDIA Corporation. Tous droits réservés.</target>
                 <note from="translator">::anno::copyright_notice(string) blend_colors(color,color,::base::color_layer_mode,float)
 ::anno::copyright_notice(string) file_texture(texture_2d,::base::mono_mode,float,float,float2,float2,float,bool,int,bool)
 ::anno::copyright_notice(string) perlin_noise_texture(color,color,bool,int,bool,float,float,float3,float3,float3,int)

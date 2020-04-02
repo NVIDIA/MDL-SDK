@@ -68,8 +68,8 @@ namespace mdl_d3d12
     }
 
     Transform Transform::look_at(
-        const DirectX::XMFLOAT3& camera_pos, 
-        const DirectX::XMFLOAT3& focus, 
+        const DirectX::XMFLOAT3& camera_pos,
+        const DirectX::XMFLOAT3& focus,
         const DirectX::XMFLOAT3& up)
     {
         DirectX::XMMATRIX lookat =
@@ -97,15 +97,15 @@ namespace mdl_d3d12
     // --------------------------------------------------------------------------------------------
 
     const Bounding_box Bounding_box::Invalid = Bounding_box(
-        DirectX::XMFLOAT3 { std::numeric_limits<float>::max(),
-                            std::numeric_limits<float>::max(), 
-                            std::numeric_limits<float>::max() },
-        DirectX::XMFLOAT3 { std::numeric_limits<float>::min(), 
-                            std::numeric_limits<float>::min(), 
-                            std::numeric_limits<float>::min() });
+        DirectX::XMFLOAT3{std::numeric_limits<float>::max(),
+                            std::numeric_limits<float>::max(),
+                            std::numeric_limits<float>::max()},
+        DirectX::XMFLOAT3{std::numeric_limits<float>::min(),
+                            std::numeric_limits<float>::min(),
+                            std::numeric_limits<float>::min()});
 
     const Bounding_box Bounding_box::Zero = Bounding_box();
-    
+
     Bounding_box::Bounding_box(const DirectX::XMFLOAT3& min, const DirectX::XMFLOAT3& max)
         : min(min)
         , max(max)
@@ -136,14 +136,14 @@ namespace mdl_d3d12
         if (s.min.y == s.min.y) max.y = std::max(max.y, s.max.y);
         if (s.min.z == s.min.z) max.z = std::max(max.z, s.max.z);
     }
-    
+
     Bounding_box Bounding_box::extend(const Bounding_box& box, const DirectX::XMFLOAT3& point)
     {
         Bounding_box b = box;
         b.extend(point);
         return b;
     }
-    
+
     void Bounding_box::extend(const DirectX::XMFLOAT3& point)
     {
         // ignore NaNs
@@ -169,14 +169,14 @@ namespace mdl_d3d12
     void Bounding_box::get_corners(std::vector<DirectX::XMVECTOR>& out_corners) const
     {
         out_corners.resize(8);
-        out_corners[0] = DirectX::XMVECTOR { min.x, max.y, max.z, 1.0f };
-        out_corners[1] = DirectX::XMVECTOR { max.x, max.y, max.z, 1.0f };
-        out_corners[2] = DirectX::XMVECTOR { max.x, min.y, max.z, 1.0f };
-        out_corners[3] = DirectX::XMVECTOR { min.x, min.y, max.z, 1.0f };
-        out_corners[4] = DirectX::XMVECTOR { min.x, max.y, min.z, 1.0f };
-        out_corners[5] = DirectX::XMVECTOR { max.x, max.y, min.z, 1.0f };
-        out_corners[6] = DirectX::XMVECTOR { max.x, min.y, min.z, 1.0f };
-        out_corners[7] = DirectX::XMVECTOR { min.x, min.y, min.z, 1.0f };
+        out_corners[0] = DirectX::XMVECTOR{min.x, max.y, max.z, 1.0f};
+        out_corners[1] = DirectX::XMVECTOR{max.x, max.y, max.z, 1.0f};
+        out_corners[2] = DirectX::XMVECTOR{max.x, min.y, max.z, 1.0f};
+        out_corners[3] = DirectX::XMVECTOR{min.x, min.y, max.z, 1.0f};
+        out_corners[4] = DirectX::XMVECTOR{min.x, max.y, min.z, 1.0f};
+        out_corners[5] = DirectX::XMVECTOR{max.x, max.y, min.z, 1.0f};
+        out_corners[6] = DirectX::XMVECTOR{max.x, min.y, min.z, 1.0f};
+        out_corners[7] = DirectX::XMVECTOR{min.x, min.y, min.z, 1.0f};
     }
 
     Bounding_box Bounding_box::transform(const Bounding_box& box, const Transform& transformation)
@@ -211,7 +211,7 @@ namespace mdl_d3d12
     }
 
     DirectX::XMFLOAT3 Bounding_box::center() const
-    { 
+    {
         return {
             (min.x + max.x) * 0.5f,
             (min.y + max.y) * 0.5f,
@@ -241,44 +241,236 @@ namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
-    Mesh::Geometry::Geometry()
-        : m_geometry_handle()
+    namespace
+    {
+        // c++11
+        static const uint32_t VERTEX_INFO_KIND =    0xF0000000u;
+        static const uint32_t VERTEX_INFO_ELEMENT = 0x0F800000u;
+        static const uint32_t VERTEX_INFO_INTERP = 0x00F00000u;
+
+        static const uint32_t VERTEX_INFO_UNIFORM = 0x00010000u;
+        // 3 bits left
+        static const uint32_t VERTEX_INFO_STRIDE = 0x0000FFFFu;
+
+        // c++14
+        /*
+        static const uint32_t VERTEX_INFO_KIND =    0b 1111 0000  0000 0000  0000 0000  0000 0000 u;
+        static const uint32_t VERTEX_INFO_ELEMENT = 0b 0000 1111  0000 0000  0000 0000  0000 0000 u;
+        static const uint32_t VERTEX_INFO_INTERP =  0b 0000 0000  1111 0000  0000 0000  0000 0000 u;
+        static const uint32_t VERTEX_INFO_UNIFORM = 0b 0100 0000  0000 0001  0000 0000  0000 0000 u;
+        /// 3 bits left
+        static const uint32_t VERTEX_INFO_STRIDE =  0b 0000 0000  0000 0000  1111 1111  1111 1111 u;
+        */
+    }
+
+    Scene_data::Info::Info()
+        : m_packed_data(0)
+        , m_byte_offset(0)
     {
     }
 
+    Scene_data::Kind Scene_data::Info::get_kind() const
+    {
+        uint32_t kind = (m_packed_data & VERTEX_INFO_KIND) >> 28;
+        return static_cast<Scene_data::Kind>(kind);
+    }
+    void Scene_data::Info::set_kind(Scene_data::Kind value)
+    {
+        m_packed_data = m_packed_data & ~VERTEX_INFO_KIND;
+        m_packed_data += static_cast<uint32_t>(value) << 28;
+    }
+
+    Scene_data::Element_type Scene_data::Info::get_element_type() const
+    {
+        uint32_t type = (m_packed_data & VERTEX_INFO_ELEMENT) >> 24;
+        return static_cast<Scene_data::Element_type>(type);
+    }
+    void Scene_data::Info::set_element_type(Scene_data::Element_type value)
+    {
+        m_packed_data = m_packed_data & ~VERTEX_INFO_ELEMENT;
+        m_packed_data += static_cast<uint32_t>(value) << 24;
+    }
+
+    Scene_data::Interpolation_mode Scene_data::Info::get_interpolation_mode() const
+    {
+        uint32_t mode = (m_packed_data & VERTEX_INFO_INTERP) >> 20;
+        return static_cast<Scene_data::Interpolation_mode>(mode);
+    }
+    void Scene_data::Info::set_interpolation_mode(Scene_data::Interpolation_mode value)
+    {
+        m_packed_data = m_packed_data & ~VERTEX_INFO_INTERP;
+        m_packed_data += static_cast<uint32_t>(value) << 20;
+    }
+
+    bool Scene_data::Info::get_uniform() const
+    {
+        return (m_packed_data & VERTEX_INFO_UNIFORM) > 0;
+
+    }
+    void Scene_data::Info::set_uniform(bool value)
+    {
+        if (value)
+            m_packed_data = m_packed_data | VERTEX_INFO_UNIFORM;
+        else
+            m_packed_data = m_packed_data & ~VERTEX_INFO_UNIFORM;
+    }
+
+    uint16_t Scene_data::Info::get_byte_stride() const
+    {
+        return uint16_t(m_packed_data & VERTEX_INFO_STRIDE);
+    }
+    void Scene_data::Info::set_byte_stride(uint16_t value)
+    {
+        m_packed_data = m_packed_data & ~VERTEX_INFO_STRIDE;
+        m_packed_data += value;
+    }
+
+    uint32_t Scene_data::Info::get_byte_offset() const
+    {
+        return m_byte_offset;
+    }
+    void Scene_data::Info::set_byte_offset(uint32_t value)
+    {
+        m_byte_offset = value;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    Mesh::Geometry::Geometry(
+        Base_application* app,
+        const Mesh& parent_mesh,
+        const IScene_loader::Primitive& primitive,
+        size_t index_in_mesh)
+        : m_app(app)
+        , m_name(parent_mesh.get_name() + "_" + std::to_string(index_in_mesh))
+        , m_index_in_mesh(index_in_mesh)
+        , m_geometry_handle()
+        , m_vertex_buffer_byte_offset(static_cast<uint32_t>(primitive.vertex_buffer_byte_offset))
+        , m_vertex_count(primitive.vertex_count)
+        , m_index_offset(static_cast<uint32_t>(primitive.index_offset))
+        , m_index_count(primitive.index_count)
+        , m_scene_data_info_offset(0)
+        , m_vertex_layout(primitive.vertex_element_layout.size())
+    {
+        for (size_t s = 0; s < primitive.vertex_element_layout.size(); s++)
+            m_vertex_layout[s] = primitive.vertex_element_layout[s];
+    }
+
+    Mesh::Geometry::~Geometry()
+    {
+    }
+
+    bool Mesh::Geometry::update_scene_data_infos(
+        const std::unordered_map<std::string, uint32_t>& scene_data_name_map,
+        Scene_data::Info* scene_data_buffer,
+        uint32_t geometry_scene_data_info_offset,
+        uint32_t geometry_scene_data_info_count)
+    {
+        // gather information required for the scene data
+        for (auto& e : m_vertex_layout)
+        {
+            auto found = scene_data_name_map.find(e.semantic);
+            if (found == scene_data_name_map.end())
+                continue;
+
+            if (found->second >= geometry_scene_data_info_count)
+            {
+                log_warning("Implementation issue in DXR. Per vertex scene data ignored due to "
+                            "insufficient space in the info-buffer: " + m_name +
+                            " Semantic: " + e.semantic);
+                continue;
+            }
+
+            // if the data is available on this geometry, fill the info
+            Scene_data::Info& info = 
+                scene_data_buffer[geometry_scene_data_info_offset + found->second];
+            info.set_kind(Scene_data::Kind::Vertex);
+            info.set_byte_offset(e.byte_offset);
+            info.set_byte_stride(static_cast<uint16_t>(get_vertex_stride()));
+            info.set_interpolation_mode(e.interpolation_mode);
+            info.set_uniform(false);
+
+            switch (e.kind)
+            {
+                case Scene_data::Value_kind::Int:
+                case Scene_data::Value_kind::Int2:
+                case Scene_data::Value_kind::Int3:
+                case Scene_data::Value_kind::Int4:
+                    info.set_element_type(Scene_data::Element_type::Int);
+                    break;
+                case Scene_data::Value_kind::Float:
+                case Scene_data::Value_kind::Vector2:
+                case Scene_data::Value_kind::Vector3:
+                case Scene_data::Value_kind::Vector4:
+                    info.set_element_type(Scene_data::Element_type::Float);
+                    break;
+                case Scene_data::Value_kind::Color:
+                    info.set_element_type(Scene_data::Element_type::Color);
+                    break;
+            }
+        }
+        // keep this offset, it's required by the renderer 
+        m_scene_data_info_offset = geometry_scene_data_info_offset;
+        return true;
+    }
+
+    size_t Mesh::Geometry::get_vertex_stride() const
+    {
+        return m_vertex_layout.back().byte_offset + m_vertex_layout.back().element_size;
+    }
+
+    // --------------------------------------------------------------------------------------------
+ 
     Mesh::Mesh(
-        Base_application* app, 
-        Raytracing_acceleration_structure* acceleration_structure, 
+        Base_application* app,
+        Raytracing_acceleration_structure* acceleration_structure,
         const IScene_loader::Mesh& mesh_desc)
 
         : m_app(app)
         , m_name(mesh_desc.name)
-        , m_vertex_buffer(new Vertex_buffer<Vertex>(
-            app, mesh_desc.vertices.size(), mesh_desc.name + "_VertexBuffer"))
+        , m_vertex_buffer(new Vertex_buffer<uint8_t>(
+            app, mesh_desc.vertex_data.size(), mesh_desc.name + "_VertexBuffer"))
         , m_index_buffer(new Index_buffer(
             app, mesh_desc.indices.size(), mesh_desc.name + "_IndexBuffer"))
         , m_acceleration_structur(acceleration_structure)
         , m_blas()
-        , m_geometries(mesh_desc.primitives.size())
+        , m_geometries()
     {
-        m_vertex_buffer->set_data(mesh_desc.vertices.data());
-        m_index_buffer->set_data(mesh_desc.indices.data());
+        m_vertex_buffer->set_data(mesh_desc.vertex_data);
+        m_index_buffer->set_data(mesh_desc.indices);
         m_blas = m_acceleration_structur->add_bottom_level_structure(mesh_desc.name + "_BLAS");
 
         m_local_aabb = Bounding_box::Invalid;
 
+        std::vector<Scene_data::Info> primvar_vertex_infos;
+
         for (size_t i = 0, n = mesh_desc.primitives.size(); i < n; ++i)
         {
-            auto& p = mesh_desc.primitives[i];
-            m_geometries[i].m_geometry_handle = m_acceleration_structur->add_geometry(
-                m_blas,
-                m_vertex_buffer, p.vertex_offset, p.vertex_count, 0,
-                m_index_buffer, p.index_offset, p.index_count);
-            m_geometries[i].m_index_offset = static_cast<uint32_t>(p.index_offset);
-            m_geometries[i].m_index_in_mesh = i;
+            m_geometries.push_back(Mesh::Geometry(app, *this, mesh_desc.primitives[i], i));
+            Mesh::Geometry& part = m_geometries.back();
 
-            for (auto&& v : mesh_desc.vertices)
-                m_local_aabb.extend(v.position);
+            // add geometry to acceleration structure
+            part.m_geometry_handle = m_acceleration_structur->add_geometry(
+                m_blas,
+                m_vertex_buffer,
+                part.get_vertex_buffer_byte_offset(),
+                part.get_vertex_count(),
+                part.get_vertex_stride(),
+                0 /* vertex byte offset */,
+                m_index_buffer, 
+                part.get_index_offset(),
+                part.get_index_count());
+
+
+            // compute local bounding box
+            const uint8_t* vertex_buffer_part = mesh_desc.vertex_data.data() +
+                part.get_vertex_buffer_byte_offset();
+            for (size_t v = 0; v < part.get_vertex_count(); ++v)
+            {
+                auto vec = reinterpret_cast<const DirectX::XMFLOAT3*>(
+                    vertex_buffer_part + v * part.get_vertex_stride());
+                m_local_aabb.extend(*vec);
+            }
         }
     }
 
@@ -288,13 +480,29 @@ namespace mdl_d3d12
         delete m_index_buffer;
     }
 
-    Mesh::Instance::Instance()
-        : m_instance_handle()
+    Mesh::Instance::Instance(
+        Base_application* app,
+        const IScene_loader::Node& node_desc)
+        : m_app(app)
+        , m_mesh(nullptr)
+        , m_instance_handle()
         , m_materials()
+        , m_scene_data_infos(nullptr)
+        , m_scene_data(node_desc.scene_data)
+        , m_scene_data_buffer(nullptr)
     {
     }
 
-    Mesh::Instance* Mesh::create_instance()
+    Mesh::Instance::~Instance()
+    {
+        if (m_scene_data_infos)
+            delete m_scene_data_infos;
+
+        if (m_scene_data_buffer)
+            delete m_scene_data_buffer;
+    }
+
+    Mesh::Instance* Mesh::create_instance(const IScene_loader::Node& node_desc)
     {
         auto handle = m_acceleration_structur->add_instance(
             m_blas,
@@ -302,11 +510,167 @@ namespace mdl_d3d12
 
         if (!handle.is_valid()) return nullptr;
 
-        Mesh::Instance* instance = new Mesh::Instance();
+        Mesh::Instance* instance = new Mesh::Instance(m_app, node_desc);
         instance->m_mesh = this;
         instance->m_instance_handle = handle;
         instance->m_materials.resize(m_geometries.size(), nullptr);
         return instance;
+    }
+
+    namespace
+    {
+        template<typename T>
+        uint32_t asuint(T value)
+        {
+            union
+            {
+                uint32_t u;
+                T t;
+            } data;
+            data.t = value;
+            return data.u;
+        }
+    }
+
+    bool Mesh::Instance::update_scene_data_infos(D3DCommandList* command_list)
+    {
+        std::vector<Scene_data::Info> scene_data_infos;
+        std::vector<uint32_t> scene_data;
+
+        // iterate over all mesh parts
+        if (!m_mesh->visit_geometries([&](Mesh::Geometry* part)
+        {
+            // get material for this part of this instance
+            const IMaterial* material = get_material(part);
+
+            // map scene data between material and geometry
+            const std::unordered_map<std::string, uint32_t>& scene_data_name_map =
+                material->get_scene_data_name_map();
+
+            // to keep it simple and assuming there are not that many used scene data names as well
+            // as small, ideally densely packed, scene data IDs, a dense map is used to store the
+            // mapping infos about the data layout on the GPU
+            // so find the maximum ID and use it as size
+            uint32_t info_count = 0;
+            for (auto& pair : scene_data_name_map)
+                info_count = std::max(info_count, pair.second);
+            info_count++; // IDs are used as index
+
+            uint32_t info_offset = static_cast<uint32_t>(scene_data_infos.size());
+            scene_data_infos.insert(
+                scene_data_infos.end(), info_count, Scene_data::Info());
+
+            // update the info block reserved for this geometry
+            // this will only affect scene data when the name matches an vertex element semantic
+            if (!part->update_scene_data_infos(
+                scene_data_name_map, scene_data_infos.data(), info_offset, info_count))
+                return false;
+
+            // update the per object/instance scene data info
+            for (auto present_data : m_scene_data)
+            {
+                // check if this data is requested by the material
+                auto found = scene_data_name_map.find(present_data.name);
+                if (found == scene_data_name_map.end())
+                    continue;
+
+                // this should only modify infos that currently have kind invalid
+                // otherwise the vertex semantic would be overridden
+                Scene_data::Info& info = scene_data_infos[info_offset + found->second];
+                if (info.get_kind() != Scene_data::Kind::None)
+                    continue;
+
+                info.set_kind(Scene_data::Kind::Instance);
+                info.set_byte_offset(scene_data.size() * sizeof(uint32_t));
+                info.set_interpolation_mode(Scene_data::Interpolation_mode::None);
+                info.set_uniform(true);
+
+                size_t element_count = 0;
+                switch (present_data.kind)
+                {
+                    case Scene_data::Value_kind::Int:
+                        element_count = 1;
+                        info.set_element_type(Scene_data::Element_type::Int);
+                        break;
+                    case Scene_data::Value_kind::Int2:
+                        element_count = 2;
+                        info.set_element_type(Scene_data::Element_type::Int);
+                        break;
+                    case Scene_data::Value_kind::Int3:
+                        element_count = 3;
+                        info.set_element_type(Scene_data::Element_type::Int);
+                        break;
+                    case Scene_data::Value_kind::Int4:
+                        element_count = 4;
+                        info.set_element_type(Scene_data::Element_type::Int);
+                        break;
+                    case Scene_data::Value_kind::Float:
+                        element_count = 1;
+                        info.set_element_type(Scene_data::Element_type::Float);
+                        break;
+                    case Scene_data::Value_kind::Vector2:
+                        element_count = 2;
+                        info.set_element_type(Scene_data::Element_type::Float);
+                        break;
+                    case Scene_data::Value_kind::Vector3:
+                        element_count = 3;
+                        info.set_element_type(Scene_data::Element_type::Float);
+                        break;
+                    case Scene_data::Value_kind::Vector4:
+                        element_count = 4;
+                        info.set_element_type(Scene_data::Element_type::Float);
+                        break;
+                    case Scene_data::Value_kind::Color:
+                        element_count = 3;
+                        info.set_element_type(Scene_data::Element_type::Color);
+                        break;
+                }
+                info.set_byte_stride(element_count * 4);
+
+                // copy the data into the instance_scene_data (and later to the GPU buffer)
+                for (size_t i = 0; i < element_count; ++i)
+                    scene_data.push_back(asuint(present_data.data_int[i]));
+            }
+            return true;
+        })) return false;
+
+        // resize if to small or create if not yet done
+        if (m_scene_data_infos && m_scene_data_infos->get_element_count() < scene_data_infos.size())
+        {
+            delete m_scene_data_infos;
+            m_scene_data_infos = nullptr;
+        }
+        if (!m_scene_data_infos)
+        {
+            m_scene_data_infos = new Structured_buffer<Scene_data::Info>(
+                m_app, scene_data_infos.size(), 
+                m_mesh->get_name() + "[Instance]_SceneDataInfos");
+        }
+        
+        // same for the data
+        if (m_scene_data_buffer && m_scene_data_buffer->get_element_count() < scene_data.size())
+        {
+            delete m_scene_data_buffer;
+            m_scene_data_buffer = nullptr;
+        }
+        if (!m_scene_data_buffer && !scene_data.empty())
+        {
+            m_scene_data_buffer = new Structured_buffer<uint32_t>(
+                m_app, scene_data.size(),
+                m_mesh->get_name() + "[Instance]_InstanceSceneData");
+        }
+
+        // upload only if there is data
+        if (!scene_data.empty())
+        {
+            m_scene_data_buffer->set_data(scene_data);
+            if (!m_scene_data_buffer->upload(command_list))
+                return false;
+        }
+
+        // push info data to the GPU
+        m_scene_data_infos->set_data(scene_data_infos);
+        return m_scene_data_infos->upload(command_list);
     }
 
     bool Mesh::upload_buffers(D3DCommandList* command_list)
@@ -351,7 +715,8 @@ namespace mdl_d3d12
         , m_far_plane_distance(camera_desc.far_plane_distance)
         , m_projection_changed(true)
     {
-        m_constants = new Constant_buffer<Camera::Constants>(m_app, m_name + "_Constants");
+        m_constants = 
+            new Dynamic_constant_buffer<Camera::Constants>(m_app, m_name + "_Constants", 2);
     }
 
     Camera::~Camera()
@@ -366,22 +731,22 @@ namespace mdl_d3d12
 
         if (transform_changed)
         {
-            m_constants->data.view = DirectX::XMMatrixInverse(nullptr, global_transform);
-            m_constants->data.view_inv = global_transform;
+            Camera::Constants& data = m_constants->data();
+            data.view = DirectX::XMMatrixInverse(nullptr, global_transform);
+            data.view_inv = global_transform;
         }
 
         if (m_projection_changed)
         {
-            m_constants->data.perspective = DirectX::XMMatrixPerspectiveFovRH(
+            Camera::Constants& data = m_constants->data();
+            data.perspective = DirectX::XMMatrixPerspectiveFovRH(
                 m_field_of_view, m_aspect_ratio, m_near_plane_distance, m_far_plane_distance);
 
-            m_constants->data.perspective_inv =
-                DirectX::XMMatrixInverse(nullptr, m_constants->data.perspective);
+            data.perspective_inv =
+                DirectX::XMMatrixInverse(nullptr, data.perspective);
 
             m_projection_changed = false;
         }
-
-        m_constants->upload();
     }
 
     // --------------------------------------------------------------------------------------------
@@ -561,7 +926,7 @@ namespace mdl_d3d12
                         // mesh already handles?
                         auto it = handled_meshes.find(src_child.index);
                         if (it != handled_meshes.end()) {
-                            child->m_mesh_instance = it->second->create_instance();
+                            child->m_mesh_instance = it->second->create_instance(src_child);
                             break;
                         }
 
@@ -581,7 +946,7 @@ namespace mdl_d3d12
                         // create mesh
                         Mesh* mesh = new Mesh(
                             m_app, m_acceleration_structure, scene.meshes[src_child.index]);
-                        child->m_mesh_instance = mesh->create_instance();
+                        child->m_mesh_instance = mesh->create_instance(src_child);
                         handled_meshes[src_child.index] = mesh;
 
                         // keep track of which geometry uses which material
@@ -608,7 +973,7 @@ namespace mdl_d3d12
                 child->set_local_transformation(src_child.local);
 
                 // add to parent
-                parent.add_child(std::move(child));
+                parent.add_child(child);
 
                 // go down recursively
                 for (const auto& c : src_child.children)
@@ -730,9 +1095,9 @@ namespace mdl_d3d12
 
         // add to selected parent or the root
         if (parent)
-            parent->m_children.emplace_back(node);
+            parent->add_child(node);
         else
-            m_root.m_children.emplace_back(node);
+            m_root.add_child(node);
 
         return node;
     }

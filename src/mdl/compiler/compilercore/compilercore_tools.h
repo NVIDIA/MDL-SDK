@@ -224,7 +224,7 @@ static inline IValue const *create_int2_zero(
 /// Check, if two float values are BITWISE identical.
 static inline bool bit_equal_float(float a, float b)
 {
-    union { size_t z; float f; } u1, u2;
+    union { size_t z; float f; } u1, u2; //-V117
 
     u1.z = 0;
     u1.f = a;
@@ -238,7 +238,7 @@ static inline bool bit_equal_float(float a, float b)
 /// Check, if two float values are BITWISE identical.
 static inline bool bit_equal_float(double a, double b)
 {
-    union { size_t z[2]; double d; } u1, u2;
+    union { size_t z[2]; double d; } u1, u2; //-V117
 
     u1.z[0] = 0;
     u1.z[1] = 0;

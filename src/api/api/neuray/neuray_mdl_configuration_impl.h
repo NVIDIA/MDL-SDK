@@ -60,16 +60,20 @@ public:
     /// Constructor of Mdl_configuration_impl
     ///
     /// \param neuray_impl           The neuray instance which contains this Mdl_configuration_impl.
-    Mdl_configuration_impl(mi::neuraylib::INeuray* neuray);
+    Mdl_configuration_impl( mi::neuraylib::INeuray* neuray);
 
     /// Destructor of Mdl_configuration_impl
     ~Mdl_configuration_impl();
 
     // public API methods
 
-    mi::Sint32 set_implicit_cast_enabled( bool value);
+    mi::Sint32 set_implicit_cast_enabled( bool value) final;
 
-    bool get_implicit_cast_enabled() const;
+    bool get_implicit_cast_enabled() const final;
+
+    mi::Sint32 set_expose_names_of_let_expressions( bool value) final;
+
+    bool get_expose_names_of_let_expressions() const final;
 
     // internal methods
 

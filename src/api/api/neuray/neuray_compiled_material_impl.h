@@ -33,8 +33,6 @@
 #ifndef API_API_NEURAY_COMPILED_MATERIAL_IMPL_H
 #define API_API_NEURAY_COMPILED_MATERIAL_IMPL_H
 
-#include <base/system/main/neuray_cc_conf.h>
-
 #include <mi/neuraylib/icompiled_material.h>
 
 #include "neuray_db_element_impl.h"
@@ -68,50 +66,54 @@ public:
 
     // public API methods
 
-    mi::neuraylib::Element_type get_element_type() const NEURAY_FINAL;
+    mi::neuraylib::Element_type get_element_type() const final;
 
-    const mi::neuraylib::IExpression_direct_call* get_body() const NEURAY_FINAL;
+    const mi::neuraylib::IExpression_direct_call* get_body() const final;
 
-    mi::Size get_temporary_count() const NEURAY_FINAL;
+    mi::Size get_temporary_count() const final;
 
-    const mi::neuraylib::IExpression* get_temporary( mi::Size index) const NEURAY_FINAL;
+    const mi::neuraylib::IExpression* get_temporary( mi::Size index) const final;
 
-    mi::Float32 get_mdl_meters_per_scene_unit() const NEURAY_FINAL;
+    mi::Float32 get_mdl_meters_per_scene_unit() const final;
 
-    mi::Float32 get_mdl_wavelength_min() const NEURAY_FINAL;
+    mi::Float32 get_mdl_wavelength_min() const final;
 
-    mi::Float32 get_mdl_wavelength_max() const NEURAY_FINAL;
+    mi::Float32 get_mdl_wavelength_max() const final;
 
-    bool depends_on_state_transform() const NEURAY_FINAL;
+    bool depends_on_state_transform() const final;
 
-    bool depends_on_state_object_id() const NEURAY_FINAL;
+    bool depends_on_state_object_id() const final;
 
-    bool depends_on_global_distribution() const NEURAY_FINAL;
+    bool depends_on_global_distribution() const final;
 
-    mi::Size get_parameter_count() const NEURAY_FINAL;
+    mi::Size get_referenced_scene_data_count() const final;
 
-    const char* get_parameter_name( mi::Size index) const NEURAY_FINAL;
+    char const *get_referenced_scene_data_name( mi::Size index) const final;
 
-    const mi::neuraylib::IValue* get_argument( mi::Size index) const NEURAY_FINAL;
+    mi::Size get_parameter_count() const final;
 
-    mi::base::Uuid get_hash() const NEURAY_FINAL;
+    const char* get_parameter_name( mi::Size index) const final;
 
-    mi::base::Uuid get_slot_hash( mi::neuraylib::Material_slot slot) const NEURAY_FINAL;
+    const mi::neuraylib::IValue* get_argument( mi::Size index) const final;
 
-    const mi::neuraylib::IExpression* lookup_sub_expression( const char* path) const NEURAY_FINAL;
+    mi::base::Uuid get_hash() const final;
+
+    mi::base::Uuid get_slot_hash( mi::neuraylib::Material_slot slot) const final;
+
+    const mi::neuraylib::IExpression* lookup_sub_expression( const char* path) const final;
 
     const mi::IString* get_connected_function_db_name(
         const char* material_instance_name, 
         mi::Size parameter_index, 
-        mi::Sint32* errors) const NEURAY_FINAL;
+        mi::Sint32* errors) const final;
 
-    mi::neuraylib::Material_opacity get_opacity() const NEURAY_FINAL;
+    mi::neuraylib::Material_opacity get_opacity() const final;
 
-    mi::neuraylib::Material_opacity get_surface_opacity() const NEURAY_FINAL;
+    mi::neuraylib::Material_opacity get_surface_opacity() const final;
 
-    bool get_cutout_opacity(mi::Float32 *cutout_opacity) const NEURAY_FINAL;
+    bool get_cutout_opacity(mi::Float32 *cutout_opacity) const final;
 
-    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
 
     // own methods
 

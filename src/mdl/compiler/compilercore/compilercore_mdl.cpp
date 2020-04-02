@@ -1039,7 +1039,7 @@ Module *MDL::load_module(
 
     // make sure there is a waiting table entry in case the module needs loading
     if (cache) {
-        mi::base::Handle<const mi::mdl::IModule> existing_module(cache->lookup(module_name));
+        mi::base::Handle<const mi::mdl::IModule> existing_module(cache->lookup(module_name, NULL));
         if (existing_module) {
             // the module is cached and we load it anyway
             MDL_ASSERT(!"tied to load an already cached module");
@@ -1086,24 +1086,6 @@ Module *MDL::load_module(
     }
 
     module->analyze(cache, ctx, get_compiler_bool_option(ctx, option_resolve_resources, true));
-
-    if (cache != NULL) {
-        if (IModule_loaded_callback *cb = cache->get_module_loading_callback()) {
-            if (!module->is_valid()) {
-                // notify about failure
-                cb->module_loading_failed(module->get_name());
-            } else {
-                // add an entry to the database
-                if (!cb->register_module(module)) {
-                    // there is a problem with this module outside of MDL Core, e.g. DB name clashes
-                    module->access_messages_impl().add_error_message(
-                        EXTERNAL_APPLICATION_ERROR, 'C', 0, 0,
-                        "Module loading callback reported a registration failure.");
-                }
-            }
-        }
-    }
-
     return module;
 }
 
@@ -1188,6 +1170,46 @@ IModule const *MDL::load_module_from_stream(
         copy_message(ctx->access_messages_impl(), res);
     return res;
 }
+
+namespace
+{
+    // report success or failure of the loading process to the application
+    void report_module_loading_result(
+        Module *mod, 
+        IModule_cache *module_cache,
+        IModule_cache_lookup_handle *cache_lookup_handle)
+    {
+        // only if there is a module cache
+        if (!module_cache) 
+            return;
+        // ... and a registered callback
+        IModule_loaded_callback *cb = module_cache->get_module_loading_callback();
+        if (!cb)
+            return;
+
+        MDL_ASSERT(cache_lookup_handle && cache_lookup_handle->is_processing() &&
+                   "Module is not supposed to be processed in this context");
+
+        // notify waiting threads about success or failure
+        if (!mod || !mod->is_valid()) {
+            // notify about failure
+            cb->module_loading_failed(*cache_lookup_handle);
+        } else {
+            MDL_ASSERT(std::strcmp(mod->get_name(), cache_lookup_handle->get_lookup_name()) == 0 &&
+                        "The Module name and the cache lookup name do not match.");
+
+            // add an entry to the database
+            if (!cb->register_module(mod)) {
+                // there is a problem with this module outside of MDL Core, e.g. DB name clashes
+                mod->access_messages_impl().add_error_message(
+                    EXTERNAL_APPLICATION_ERROR, 'C', 0, 0,
+                    "Module loading callback reported a registration failure.");
+            }
+        }
+    }
+}
+
+
 // Compile a module with a given name.
 Module const *MDL::compile_module(
     Thread_context &ctx,
@@ -1210,23 +1232,11 @@ Module const *MDL::compile_module(
         resolver.set_module_replacement(repl_module_name, repl_file_name);
     }
 
+    // resolve the module file
     mi::base::Handle<IMDL_import_result> result(resolve_import(
         resolver, module_name, /*owner_module=*/NULL, /*pos=*/NULL));
     if (!result.is_valid_interface()) {
         // name could not be resolved
-        if (module_cache != NULL) {
-            // notify via callback
-            if (IModule_loaded_callback *callback = module_cache->get_module_loading_callback()) {
-                if (module_name[0] == ':' && module_name[1] == ':') {
-                    callback->module_loading_failed(module_name);
-                } else {
-                    // produce the qualified name for a proper cache lookup
-                    string abs_module_name("::", get_allocator());
-                    abs_module_name.append(module_name);
-                    callback->module_loading_failed(abs_module_name.c_str());
-                }
-            }
-        }
         return NULL;
     }
 
@@ -1237,9 +1247,21 @@ Module const *MDL::compile_module(
         return std_mod;
     }
 
+    // if the module was resolved successful and there is a cache, 
+    // announce that this module is now created or wait for another thread that currently processes 
+    // this module and then continue returning the cached module (processed by the other thread)
+    IModule_loaded_callback *cb = module_cache ? module_cache->get_module_loading_callback() : NULL;
+    IModule_cache_lookup_handle* cache_lookup_handle = cb 
+        ? module_cache->create_lookup_handle() : NULL;
+
     if (module_cache != NULL) {
-        Module const *cached_mod = impl_cast<Module>(module_cache->lookup(mname.c_str()));
+        Module const *cached_mod = impl_cast<Module>(
+            module_cache->lookup(mname.c_str(), cache_lookup_handle));
+
         if (cached_mod != NULL) {
+            // free the handle 
+            module_cache->free_lookup_handle(cache_lookup_handle);
+
             if (!cached_mod->is_analyzed()) {
                 // We found a not analyzed module. This can only happen if we
                 // import something that is not processed because we have a dependency
@@ -1249,6 +1271,17 @@ Module const *MDL::compile_module(
             }
             return cached_mod;
         }
+        // loading failed on different thread
+        else if(cache_lookup_handle && !cache_lookup_handle->is_processing()) {
+            ctx.access_messages_impl().add_error_message(
+                ERRONEOUS_IMPORT, 'C', 0, 0,
+                "Loading module failed on a different context.");
+
+            // free the handle 
+            module_cache->free_lookup_handle(cache_lookup_handle);
+            return NULL;
+        }
+        // continue with loading the module on this context
     }
 
     mi::base::Handle<IInput_stream> input(result->open(ctx));
@@ -1256,20 +1289,32 @@ Module const *MDL::compile_module(
     if (!input) {
         // FIXME: add an error ??
 
+        // If the top module can not be opened, notify all other waiting threads
         if (module_cache != NULL) {
+            MDL_ASSERT(cache_lookup_handle->is_processing() &&
+                "Module is not supposed to be processed in this context");
+
             // notify via callback
-            if (IModule_loaded_callback *cb = module_cache->get_module_loading_callback()) {
-                cb->module_loading_failed(mname.c_str());
-            }
+            if (cb)
+                cb->module_loading_failed(*cache_lookup_handle);
+
+            // free the handle 
+            module_cache->free_lookup_handle(cache_lookup_handle);
         }
         return NULL;
     }
-    Module *mod = load_module(module_cache, &ctx, mname.c_str(), input.get(), Module::MF_STANDARD);
-    if (mod == NULL) {
-        // any error was already handled by load_module() above
-        return NULL;
-    }
 
+    // load and compile the actual module
+    Module *mod = load_module(module_cache, &ctx, mname.c_str(), input.get(), Module::MF_STANDARD);
+
+    // notify waiting threads about success or failure
+    report_module_loading_result(mod, module_cache, cache_lookup_handle);
+
+    // free the handle 
+    if (module_cache && cache_lookup_handle)
+        module_cache->free_lookup_handle(cache_lookup_handle);
+
+    // any error was already handled by load_module() above
     return mod;
 }
 
@@ -1307,9 +1352,21 @@ Module const *MDL::compile_module_from_stream(
         return NULL;
     }
 
+    // if the module was resolved successful and there is a cache, 
+    // announce that this module is now created or wait for another thread that currently processes 
+    // this module and then continue returning the cached module (processed by the other thread)
+    IModule_loaded_callback *cb = module_cache ? module_cache->get_module_loading_callback() : NULL;
+    IModule_cache_lookup_handle* cache_lookup_handle = cb
+        ? module_cache->create_lookup_handle() : NULL;
+
     if (module_cache != NULL) {
-        Module const *cached_mod = impl_cast<Module>(module_cache->lookup(module_name));
+        Module const *cached_mod = impl_cast<Module>(
+            module_cache->lookup(module_name, cache_lookup_handle));
+
         if (cached_mod != NULL) {
+            // free the handle 
+            module_cache->free_lookup_handle(cache_lookup_handle);
+
             // already exists, overwrite is not allowed
             cached_mod->release();
             return NULL;
@@ -1319,10 +1376,15 @@ Module const *MDL::compile_module_from_stream(
     // note: this will set the message list's file name to msg_name
     Module *mod = load_module(
         module_cache, &ctx, module_name, input, Module::MF_STANDARD, msg_name);
-    if (mod == NULL) {
-        // any error was already handled by load_module() above
-        return NULL;
-    }
+
+    // notify waiting threads about success or failure
+    report_module_loading_result(mod, module_cache, cache_lookup_handle);
+
+    // free the handle 
+    if (module_cache && cache_lookup_handle)
+        module_cache->free_lookup_handle(cache_lookup_handle);
+
+    // any error was already handled by load_module() above
     return mod;
 }
 

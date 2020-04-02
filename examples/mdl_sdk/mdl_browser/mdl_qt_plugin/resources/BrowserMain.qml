@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-
 import QtQuick 2.10
 import QtQuick.Controls 2.3
 import QtQuick.Controls.Material 2.3
@@ -173,13 +172,11 @@ Rectangle {
 
                 // child index: 0
                 Selection.SelList {
-                    anchors.fill: parent
                     model: parent.model
                 }
 
                 // child index: 1
                 Selection.SelGrid {
-                    anchors.fill: parent
                     model: parent.model
                 }
             }

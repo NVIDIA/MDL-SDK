@@ -1,5 +1,84 @@
 Change Log
 ==========
+MDL SDK 2020 (327300.2022): 22 Feb 2020
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2020 (327300.2022) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+- General
+
+    - A new function `mi::neuraylib::IMdl_compiler::get_df_data_texture()` has been added.
+    - A new function `mi::neuraylib::ITarget_code::get_texture_df_data_kind()` has been
+      added.
+    - A new enum `mi::neuraylib::Df_data_kind` has been added.
+    - A new flag on `mi::neuraylib::IMdl_configuration` instructs the MDL compiler to keep the
+      names of let expressions and expose them as temporaries on MDL material and function definitions.
+      This brings the structure of the material/function definition presented in the API closer to the
+      one in the .mdl file.
+    - The FreeImage plugin is now based on FreeImage 3.18.0.
+
+- MDL Compiler and Backends
+
+    - Support for the chiang `hair_bsdf` has been added to the code generator for distribution
+      functions.
+
+    - Changes to the internal representation of builtin MDL operators.
+      MDL supports a variety of operators, potentially featuring an endless number of instances:
+      - array index `operator[]`
+      - array length symbol
+      - ternary operator `?:`
+
+      Previously, 'local' definitions were created for every used instance of these operators in an MDL
+      module:
+      - array index operator on type T in module M: `M::T@(T,int)`
+      - array length symbol on type T in module M: `M::T.len(T)`
+      - ternary operator on type T in module M: `M::operator?(bool,T,T)`
+
+      This representation had several drawbacks:
+      - there might be one definition for the same operator in every module
+      - if the operator was not used inside the source of a module, it was not created
+      
+      Especially the second point lead to several problems in the editing application. Hence, starting
+      with the 2020.0.0 release, the internal representation was changed and operators are now
+      represented by 'global' template-like definitions:
+      - array index operator: `operator[](<0>[],int)`
+      - array length operator: `operator_len(<0>[])`
+      - ternary operator: `operator?(bool,<0>,<0>)`
+
+      In addition, the name of the cast operator was changed from `operator_cast()` to
+      `operator_cast(<0>)`.
+
+      Drawback: When inspecting the types of the operators definition, 'int' is returned for the
+      template types, but this might be changed in the future by expanding the type system.
+
+    - Support for HLSL scene data renderer runtime functions has been added. See the 
+     `scene_data_*` functions in `mdl_renderer_runtime.hlsl` MDL SDK DXR example for an
+      example implementation.
+
+- MDL SDK examples
+
+    - `example_dxr`:
+        - The texture loading pipeline has been simplified and support for UDIM textures has been
+          added.
+        - Support for scene data introduced in MDL 1.6 (prim vars) has been added.
+    - `example_df_cuda`:
+        - Support for evaluation of hair-bsdfs on an analytical cylinder has been added.
+
+
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+
+    - Support for multiple multiscatter textures in one target code object has been fixed.
+
+    - Support for multiscatter textures with disabled `resolve_resources` backend option has
+      been fixed.
+
+    - Multiple HLSL code generation problems leading to non-compilable code have been fixed.
+
+
 MDL SDK 2019.2 (325000.1814): 18 Dec 2019
 -----------------------------------------------
 

@@ -290,21 +290,25 @@ namespace mdl_d3d12
 
         /// Add geometry to a bottom level structure.
         /// This can be mesh parts with different materials.
-        template<typename TVertex>
+        ///
+        /// \param vertex_buffer                // vertex buffer of the mesh (contains all parts)
+        /// \param vertex_buffer_byte_offset    // base address of the first vertex in the buffer
+        /// \param vertex_count                 // number of vertices to add
+        /// \param vertex_stride_in_byte        // size of a vertex in bytes
+        /// \param vertex_position_byte_offset  // offset to the position semantic within a vertex
+        /// \param index_buffer                 // index data for the entire mesh
+        /// \param index_offset                 // offset in the index_buffer for the part to add
+        /// \param index_count                  // number of indices to add (triangle_count x 3)
         const Geometry_handle add_geometry(
             const BLAS_handle& blas,
-            Vertex_buffer<TVertex>* vertex_buffer,
-            size_t vertex_offset,
+            Buffer* vertex_buffer,
+            size_t vertex_buffer_byte_offset,
             size_t vertex_count,
-            size_t vertex_position_offset,
+            size_t vertex_stride_in_byte,
+            size_t vertex_position_byte_offset,
             Index_buffer* index_buffer,
             size_t index_offset,
-            size_t index_count)
-        {
-            return add_geometry(blas,
-                vertex_buffer, sizeof(TVertex), vertex_offset, vertex_count, vertex_position_offset,
-                index_buffer, index_offset, index_count);
-        }
+            size_t index_count);
 
         /// Create an instance of a BLAS with all its geometries.
         const Instance_handle add_instance(
@@ -367,17 +371,6 @@ namespace mdl_d3d12
         ComPtr<ID3D12Resource> m_instance_buffer;
         ComPtr<ID3D12Resource> m_top_level_structure;
         ComPtr<ID3D12Resource> m_scratch_resource;
-
-        const Geometry_handle add_geometry(
-            const BLAS_handle& blas,
-            Buffer* vertex_buffer,
-            size_t vertex_stride_in_byte,
-            size_t vertex_offset,
-            size_t vertex_count, 
-            size_t vertex_position_offset,
-            Index_buffer* index_buffer,
-            size_t index_offset,
-            size_t index_count);
 
         bool build_bottom_level_structure(D3DCommandList* command_list, size_t blas_index);
         bool build_top_level_structure(D3DCommandList* command_list);

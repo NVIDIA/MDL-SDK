@@ -37,8 +37,12 @@
     #define MDL_DF_HANDLE_SLOT_MODE -1
 #endif
 
-#ifdef USE_DERIVS
- // Used by the texture runtime.
+#if defined(MDL_NUM_TEXTURE_RESULTS) && (MDL_NUM_TEXTURE_RESULTS > 0)
+    #define USE_TEXTURE_RESULTS
+#endif
+
+
+ // Used by the texture runtime when derivatives are enabled.
 struct Derived_float2
 {
     float2 val;
@@ -46,14 +50,14 @@ struct Derived_float2
     float2 dy;
 };
 
-// Used for the texture coordinates.
+// Used for the texture coordinates when derivatives are enabled.
 struct Derived_float3
 {
     float3 val;
     float3 dx;
     float3 dy;
 };
-#endif
+
 
 struct Shading_state_material
 {
@@ -104,8 +108,9 @@ struct Shading_state_material
     /// This field is only relevant for code generated with
     /// #mi::neuraylib::IMdl_backend::translate_material_df() or
     /// #mi::neuraylib::ILink_unit::add_material_df(). In other cases this may be NULL.
+#ifdef USE_TEXTURE_RESULTS
     float4            text_results[MDL_NUM_TEXTURE_RESULTS];
-
+#endif
     /// An offset for accesses to the read-only data segment. Will be added before
     /// calling any "mdl_read_rodata_as_*" function.
     /// The data of the read-only data segment is accessible as the first segment
@@ -130,6 +135,13 @@ struct Shading_state_material
 
     /// An offset to add to any argument block read accesses.
     uint              arg_block_offset;
+
+#ifdef RENDERER_STATE_TYPE
+    /// A user-defined structure that allows to pass renderer information; for instance about the 
+    /// hit-point or buffer references; to mdl run-time functions. This is especially required for
+    /// the scene data access. The fields of this structure are not altered by generated code.
+    RENDERER_STATE_TYPE renderer_state;
+#endif
 };
 
 #ifdef WITH_ENUM_SUPPORT  // HLSL 2017 and above support enums
@@ -264,11 +276,11 @@ struct Bsdf_evaluate_data {
                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     #endif
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 bsdf_diffuse;        ///< output: (diffuse part of the) bsdf * dot(normal, k2)
-        float3 bsdf_glossy;         ///< output: (glossy part of the) bsdf * dot(normal, k2)
+        float3 bsdf_diffuse;        ///< in/out: (diffuse part of the) bsdf * dot(normal, k2)
+        float3 bsdf_glossy;         ///< in/out: (glossy part of the) bsdf * dot(normal, k2)
     #else
-        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse) bsdf * dot(normal, k2)
-        float3 bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy) bsdf * dot(normal, k2)
+        float3 bsdf_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< in/out: (diffuse) bsdf * dot(normal, k2)
+        float3 bsdf_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< in/out: (glossy) bsdf * dot(normal, k2)
     #endif
     float pdf;                      ///< output: pdf (non-projected hemisphere)
 };
@@ -323,9 +335,9 @@ struct Edf_evaluate_data
     #endif
     float cos;                      ///< output: dot(normal, k1)
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 edf;                 ///< output: edf
+        float3 edf;                 ///< in/out: edf
     #else
-        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; ///< output: edf
+        float3 edf[MDL_DF_HANDLE_SLOT_MODE]; ///< in/out: edf
     #endif
     float pdf;                      ///< output: pdf (non-projected hemisphere)
 };

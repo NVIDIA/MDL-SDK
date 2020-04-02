@@ -74,6 +74,20 @@ public:
         update(buf, 4);
     }
 
+    /// Update the MD5 sum by an unsigned 64bit.
+    void update(mi::Uint64 v) {
+        unsigned char buf[8] = {
+            static_cast<unsigned char>(v),
+            static_cast<unsigned char>(v >> 8),
+            static_cast<unsigned char>(v >> 16),
+            static_cast<unsigned char>(v >> 24),
+            static_cast<unsigned char>(v >> 32),
+            static_cast<unsigned char>(v >> 40),
+            static_cast<unsigned char>(v >> 48),
+            static_cast<unsigned char>(v >> 56) };
+        update(buf, 8);
+    }
+
     /// Update the MD5 sum by a signed 32bit.
     void update(mi::Sint32 v) {
         update(mi::Uint32(v));

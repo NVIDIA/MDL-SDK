@@ -33,8 +33,6 @@
 #ifndef API_API_NEURAY_MATERIAL_DEFINITION_IMPL_H
 #define API_API_NEURAY_MATERIAL_DEFINITION_IMPL_H
 
-#include <base/system/main/neuray_cc_conf.h>
-
 #include <mi/neuraylib/imaterial_definition.h>
 
 #include "neuray_db_element_impl.h"
@@ -47,7 +45,7 @@ namespace MDL { class Mdl_material_definition; }
 namespace NEURAY {
 
 /// This class implements an MDL material definition.
-class Material_definition_impl NEURAY_FINAL
+class Material_definition_impl final
     : public Attribute_set_impl<Db_element_impl<mi::neuraylib::IMaterial_definition,
                                                 MDL::Mdl_material_definition> >
 {
@@ -65,50 +63,51 @@ public:
 
     // public API methods
 
-    mi::neuraylib::Element_type get_element_type() const NEURAY_FINAL;
+    mi::neuraylib::Element_type get_element_type() const final;
 
-    const char* get_module() const NEURAY_FINAL;
+    const char* get_module() const final;
 
-    const char* get_mdl_name() const NEURAY_FINAL;
+    const char* get_mdl_name() const final;
 
-    const char* get_prototype() const NEURAY_FINAL;
+    const char* get_prototype() const final;
 
-    bool is_exported() const NEURAY_FINAL;
+    bool is_exported() const final;
 
-    mi::Size get_parameter_count() const NEURAY_FINAL;
+    mi::Size get_parameter_count() const final;
 
-    const char* get_parameter_name( mi::Size index) const NEURAY_FINAL;
+    const char* get_parameter_name( mi::Size index) const final;
 
-    mi::Size get_parameter_index( const char* name) const NEURAY_FINAL;
+    mi::Size get_parameter_index( const char* name) const final;
 
-    const mi::neuraylib::IType_list* get_parameter_types() const NEURAY_FINAL;
+    const mi::neuraylib::IType_list* get_parameter_types() const final;
 
-    const mi::neuraylib::IExpression_list* get_defaults() const NEURAY_FINAL;
+    const mi::neuraylib::IExpression_list* get_defaults() const final;
 
-    const mi::neuraylib::IExpression_list* get_enable_if_conditions() const NEURAY_FINAL;
+    const mi::neuraylib::IExpression_list* get_enable_if_conditions() const final;
 
-    mi::Size get_enable_if_users(mi::Size index) const NEURAY_FINAL;
+    mi::Size get_enable_if_users(mi::Size index) const final;
 
-    mi::Size get_enable_if_user(mi::Size index, mi::Size u_index) const NEURAY_FINAL;
+    mi::Size get_enable_if_user(mi::Size index, mi::Size u_index) const final;
 
-    const mi::neuraylib::IAnnotation_block* get_annotations() const NEURAY_FINAL;
+    const mi::neuraylib::IAnnotation_block* get_annotations() const final;
 
-    const mi::neuraylib::IAnnotation_list* get_parameter_annotations() const NEURAY_FINAL;
+    const mi::neuraylib::IAnnotation_list* get_parameter_annotations() const final;
 
-    const char* get_thumbnail() const NEURAY_FINAL;
+    const char* get_thumbnail() const final;
 
-    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const NEURAY_FINAL;
+    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi::neuraylib::IMaterial_instance* create_material_instance(
         const mi::neuraylib::IExpression_list* arguments,
-        mi::Sint32* errors = 0) const NEURAY_FINAL;
+        mi::Sint32* errors = 0) const final;
 
-    const mi::neuraylib::IExpression_direct_call* get_body() const NEURAY_FINAL;
+    const mi::neuraylib::IExpression_direct_call* get_body() const final;
 
-    mi::Size get_temporary_count() const NEURAY_FINAL;
+    mi::Size get_temporary_count() const final;
 
-    const mi::neuraylib::IExpression* get_temporary( mi::Size index) const NEURAY_FINAL;
+    const mi::neuraylib::IExpression* get_temporary( mi::Size index) const final;
 
+    const char* get_temporary_name( mi::Size index) const final;
 };
 
 } // namespace NEURAY

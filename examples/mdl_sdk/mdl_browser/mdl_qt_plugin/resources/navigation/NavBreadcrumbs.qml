@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-
 import QtQuick 2.10
 import QtQuick.Controls 2.3
 import QtQuick.Controls.Material 2.3
@@ -92,8 +91,7 @@ Rectangle {
             ItemDelegate {
                 id: id_item
                 padding: 0
-                anchors.top: id_delegate.top
-                anchors.bottom: id_delegate.bottom
+                Layout.fillHeight: true
                 implicitWidth: id_label.implicitWidth + ((index == 0) // the following defines the spacing
                     ? id_textMetricsFull.boundingRect.height * 0.75 
                     : id_textMetricsFull.boundingRect.height * 0.25) 
@@ -168,7 +166,7 @@ Rectangle {
                 id: id_sep
                 visible: {index < (id_listView.count - 1)}
                 width: visible ? implicitWidth : 0
-                anchors.verticalCenter: id_delegate.verticalCenter
+                Layout.alignment: Qt.AlignHCenter
                 font.pointSize: 10
                 text: "::"
             }

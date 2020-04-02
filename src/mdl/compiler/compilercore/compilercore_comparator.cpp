@@ -74,18 +74,35 @@ class Module_cache : public IModule_cache {
     };
 
 public:
+    /// Create a IModule_cache_lookup_handle for this IModule_cache implementation.
+    IModule_cache_lookup_handle *create_lookup_handle() const MDL_FINAL {
+        // we do not support parallel loading in the comparator yet
+        return NULL;
+    }
+
+    /// Free a handle created by create_lookup_handle().
+    void free_lookup_handle(
+        IModule_cache_lookup_handle *handle) const MDL_FINAL {
+        // we do not support parallel loading in the comparator yet
+    }
+
     /// Lookup a module.
     ///
-    /// \param absname  the absolute name of a MDL module as returns my the module resolver
+    /// \param absname      the absolute name of a MDL module as returns my the module
+    ///                     resolver
+    /// \param handle       a handle used throughout the loading process of a model or NULL in case
+    ///                     the goal is to just check if a module is loaded.
     ///
     /// \return  If this module is already known, return it, otherwise NULL.
     ///
     /// \note  The module must be returned with increased reference count.
-    IModule const *lookup(char const *absname) const MDL_FINAL;
+    IModule const *lookup(
+        char const                  *absname,
+        IModule_cache_lookup_handle *handle) const MDL_FINAL;
 
     /// Get the module loading callback
     IModule_loaded_callback *get_module_loading_callback() const MDL_FINAL {
-        MDL_ASSERT(!"That part of the IModule_cache interface is not implemented.");
+        // we do not support parallel loading in the comparator yet
         return NULL;
     }
 
@@ -565,7 +582,9 @@ private:
 // ---------------------------- Module_cache ----------------------------
 
 // Lookup a module.
-IModule const *Module_cache::lookup(char const *absname) const
+IModule const *Module_cache::lookup(
+    char const *absname,
+    IModule_cache_lookup_handle *handle) const
 {
     if (Cache_entry *p = find(absname)) {
         // move to front

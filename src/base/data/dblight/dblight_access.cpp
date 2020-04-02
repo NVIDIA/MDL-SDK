@@ -33,25 +33,25 @@
 #include "pch.h"
 
 #include <base/system/main/i_assert.h>
-#include <base/data/db/i_db_info.h>
-#include <base/data/db/i_db_transaction.h>
 #include <base/data/db/i_db_access.h>
+#include <base/data/db/i_db_info.h>
 
 namespace MI {
 
 namespace DB {
 
 Access_base::Access_base()
-  : m_pointer(NULL),
-    m_transaction(NULL),
-    m_info(NULL),
+  : m_pointer(nullptr),
+    m_transaction(nullptr),
+    m_info(nullptr),
     m_is_edit(false)
-{}
+{
+}
 
 Access_base::Access_base(const Access_base& access)
-  : m_pointer(NULL),
-    m_transaction(NULL),
-    m_info(NULL),
+  : m_pointer(nullptr),
+    m_transaction(nullptr),
+    m_info(nullptr),
     m_is_edit(false)
 {
     set_access(access);
@@ -89,9 +89,9 @@ Element_base* Access_base::set_access(
 
     if (tag.is_invalid()) {
         // does not point to anything, anymore
-        m_pointer = NULL;
-        m_info = NULL;
-        return NULL;
+        m_pointer = nullptr;
+        m_info = nullptr;
+        return nullptr;
     }
 
     // lookup the tag in the context of the current transaction
@@ -104,7 +104,7 @@ Element_base* Access_base::set_access(
 #if 1
     MI_ASSERT(false);
 #else
-    mod_log->debug(M_DB, Mod_log::C_DATABASE,
+    LOG::mod_log->debug(M_DB, LOG::Mod_log::C_DATABASE,
         "Access will return empty element (transaction no longer open or "
         "fragmented jobs have been cancelled).");
 #endif
@@ -126,8 +126,8 @@ Element_base* Access_base::set_access(const Access_base& source)
     m_journal_type = source.m_journal_type;
 
     if (!m_info) {
-        m_pointer = NULL;
-        return NULL;
+        m_pointer = nullptr;
+        return nullptr;
     }
 
     m_info->pin();
@@ -155,9 +155,9 @@ Element_base* Access_base::set_edit(
 
     if (tag.is_invalid()) {
         // does not point to anything, anymore
-        m_pointer = NULL;
-        m_info = NULL;
-        return NULL;
+        m_pointer = nullptr;
+        m_info = nullptr;
+        return nullptr;
     }
 
     m_info = m_transaction->edit_element(tag);
@@ -173,8 +173,8 @@ Element_base* Access_base::set_edit(
 const SCHED::Job* Access_base::get_job() const
 {
     MI_ASSERT(false);
-    if (m_tag.is_invalid() || m_transaction == NULL || !m_info->get_is_job())
-        return NULL;
+    if (m_tag.is_invalid() || !m_transaction || !m_info->get_is_job())
+        return nullptr;
     return m_info->get_job();
 }
 
@@ -205,8 +205,7 @@ void Access_base::cleanup()
             // cleanup after an edit was finished. This includes updating references,
             // sending data over the network etc.
             m_transaction->finish_edit(m_info, m_journal_type);
-            m_info->unpin();
-            m_info = NULL;
+            m_info = nullptr;
         }
         m_is_edit = false;
     } else {

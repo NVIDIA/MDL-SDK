@@ -927,10 +927,10 @@ static void resolve_0_90_symmetry_type_b(
 
     for(Uint i=0; i<nb_horizontal_angles_in; i++)
     {
-        horizontal_angles_out[nb_horizontal_angles_in+i-1] = 
+        horizontal_angles_out[nb_horizontal_angles_in+i-1] =
             mi::math::radians(horizontal_angles_in[i]);
         if (i > 0)
-            horizontal_angles_out[nb_horizontal_angles_in-i-1] = 
+            horizontal_angles_out[nb_horizontal_angles_in-i-1] =
                 -mi::math::radians(horizontal_angles_in[i]);
     }
 
@@ -1574,7 +1574,7 @@ bool Lightprofile_ies_parser::setup_lightprofile(
     {
         // Theta in interval [0, M_PI], 0 on the north pole, i.e., vertical reverse for type C
         for(Uint i=0; i<m_nb_vertical_angles; i++)
-            vertical_angles[m_nb_vertical_angles-1-i] = 
+            vertical_angles[m_nb_vertical_angles-1-i] =
                 Scalar(M_PI-mi::math::radians(m_vertical_angles[i]));
 
         // cp. IESNA spec. 3.18
@@ -1592,7 +1592,7 @@ bool Lightprofile_ies_parser::setup_lightprofile(
         else if((first_angle == 90.f) && (last_angle == 270.f) )      // 90-270 plane symmetry
         {
             // note: this mode is no longer allowed in IESNA-LM-63-02 files
-            
+
             // TODO This method seems to assume that the value of the median horizontal angle is
             // 180 degrees.
             resolve_90_270_plane_symmetry_type_c(m_horizontal_angles, horizontal_angles,

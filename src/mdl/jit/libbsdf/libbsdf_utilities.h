@@ -1109,4 +1109,10 @@ BSDF_INLINE float color_measured_curve_factor_estimate(
             math::saturate(measured_curve_factor(cosine, values, num_values)));
 }
 
+BSDF_INLINE float sinh(float x)
+{
+    float ex = math::exp(x);
+    return 0.5f * (ex - 1.f / ex);
+}
+
 #endif // MDL_LIBBSDF_UTILITIES_H

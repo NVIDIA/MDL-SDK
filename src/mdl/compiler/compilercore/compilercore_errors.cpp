@@ -601,6 +601,9 @@ char const *get_error_template(
             return "using alias declaration require MDL version 1.6 or later";
         case PACKAGE_NAME_CONTAINS_FORBIDDEN_CHAR:
             return "package name contains forbidden character '$0'";
+        case ABSOLUTE_ALIAS_NOT_AT_BEGINNING:
+            return "Alias name '$0' defines an absolute path, but is not at the beginning of a "
+                "qualified name";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:

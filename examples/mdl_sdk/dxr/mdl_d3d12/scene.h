@@ -44,6 +44,8 @@ namespace mdl_d3d12
     struct Update_args;
 
     template<typename T> class Constant_buffer;
+    template<typename T> class Dynamic_constant_buffer;
+    template<typename T> class Structured_buffer;
 
     struct Vertex
     {
@@ -134,6 +136,107 @@ namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
+    class Scene_data
+    {
+    public:
+
+        /// Scope a scene data element belongs to
+        enum class Kind
+        {
+            None = 0,       // used as invalid or not present
+            Vertex = 1,     // data is expected to be found in the vertex buffers
+            Instance = 2    // data is to be found in the per mesh instance buffer
+        };
+
+        /// Currently supported types of scene data
+        enum class Value_kind
+        {
+            Int,
+            Int2,
+            Int3,
+            Int4,
+            Float,
+            Vector2,
+            Vector3,
+            Vector4,
+            Color
+        };
+
+        /// Basic element type of the scene data
+        enum class Element_type
+        {
+            Float = 0,
+            Int = 1,
+            Color = 2
+        };
+
+        /// interpolation of the data over the primitive 
+        enum class Interpolation_mode
+        {
+            None = 0,       // default for instance / object data
+            Linear = 1,     // default for floating point vertex data
+            Nearest = 2,    // default for integer vertex data
+        };
+
+        /// Describes the layout of a certain scene data element in the scene data buffer.
+        /// There are several use cases to consider:
+        /// 
+        /// - Vertex data in an interleaved or non-interleaved vertex buffer
+        ///   The address of the data to fetch computes as:
+        ///   base_address + vertex_id * byte_stride + byte_offset
+        ///
+        /// - Global scene data (not implemented yet)
+        ///
+        /// - Per object data (not implemented yet)
+        struct Info
+        {
+            explicit Info();
+
+            /// Scope a scene data element belongs to (4 bits)
+            Kind get_kind() const;
+            void set_kind(Kind value);
+
+            /// Basic element type of the scene data (4 bits)
+            Element_type get_element_type() const;
+            void set_element_type(Element_type value);
+
+            /// Interpolation of the data over the primitive (4 bits)
+            Interpolation_mode get_interpolation_mode() const;
+            void set_interpolation_mode(Interpolation_mode value);
+
+            /// Indicates whether there the scene data is uniform. (1 bit)
+            bool get_uniform() const;
+            void set_uniform(bool value);
+
+            /// Offset between two elements. For interleaved vertex buffers, this is the vertex size
+            /// in byte. For non-interleaved buffers, this is the element size in byte. (16 bit)
+            uint16_t get_byte_stride() const;
+            void set_byte_stride(uint16_t value);
+
+            /// The offset to the data element within an interleaved vertex buffer, or the absolute
+            /// offset to the base (e.g. of the geometry data) in non-interleaved buffers 
+            uint32_t get_byte_offset() const;
+            void set_byte_offset(uint32_t value);
+
+        private:
+            uint32_t m_packed_data;
+            uint32_t m_byte_offset;
+        };
+
+        struct Value
+        {
+            Value_kind kind;
+            std::string name;
+            union
+            {
+                int32_t data_int[4];
+                float data_float[4];
+            };
+        };
+    };
+
+    // --------------------------------------------------------------------------------------------
+
     class IScene_loader
     {
     public:
@@ -154,16 +257,43 @@ namespace mdl_d3d12
             size_t index;
             Transform local;
             std::vector<Node> children;
+
+            std::vector<Scene_data::Value> scene_data;
         };
+
+        /// Date element stored per vertex, e.g.: position, normal, ... , vertex color
+        struct Vertex_element
+        {
+            /// Name of the semantic (name of the prim-var)
+            std::string semantic;
+
+            /// Data type
+            Scene_data::Value_kind kind;
+
+            /// the i`th prim-var at this vertex (data is stored interleaved)
+            uint8_t layout_index;
+
+            /// the offset to the data within the vertex (data is stored interleaved)
+            uint32_t byte_offset;
+
+            /// size of the date in bytes (multiple of 4 bytes)
+            uint32_t element_size;
+
+            /// interpolation of the data over the primitive 
+            Scene_data::Interpolation_mode interpolation_mode;
+        };
+
 
         class Primitive
         {
         public:
-            size_t vertex_offset;
+            size_t vertex_buffer_byte_offset;
             size_t vertex_count;
             size_t index_offset;
             size_t index_count;
             size_t material;
+
+            std::vector<Vertex_element> vertex_element_layout;
         };
 
         class Mesh
@@ -171,7 +301,7 @@ namespace mdl_d3d12
         public:
             std::string name;
             std::vector<Primitive> primitives;
-            std::vector<Vertex> vertices;
+            std::vector<uint8_t> vertex_data;
             std::vector<uint32_t> indices;
         };
 
@@ -276,31 +406,76 @@ namespace mdl_d3d12
         friend class Scene;
 
     public:
+        struct Instance;
         struct Geometry
         {
             friend class Mesh;
-            friend class Scene;
+            friend struct Instance;
 
-            explicit Geometry();
+            explicit Geometry(
+                Base_application* app, 
+                const Mesh& parent_mesh,
+                const IScene_loader::Primitive& primitive,
+                size_t index_in_mesh);
+
+            ~Geometry();
 
             const Raytracing_acceleration_structure::Geometry_handle& get_geometry_handle() const { 
                 return m_geometry_handle;
             }
 
-            uint32_t get_index_offset() const { return m_index_offset; }
+            size_t get_index_in_mesh() const { return m_index_in_mesh; }
+            size_t get_vertex_buffer_byte_offset() const { return m_vertex_buffer_byte_offset; }
+            size_t get_vertex_stride() const;
+            size_t get_vertex_count() const { return m_vertex_count; }
+            size_t get_index_offset() const { return m_index_offset; }
+            size_t get_index_count() const { return m_index_count; }
+
+            /// index of the first info in the scene data info buffer
+            size_t get_scene_data_info_buffer_offset() const { return m_scene_data_info_offset; }
+
+            const std::vector<IScene_loader::Vertex_element>& get_vertex_layout() const  { 
+                return m_vertex_layout; 
+            }
 
         private:
+            bool update_scene_data_infos(
+                const std::unordered_map<std::string, uint32_t>& scene_data_name_map,
+                Scene_data::Info* scene_data_buffer,
+                uint32_t geometry_scene_data_info_offset,
+                uint32_t geometry_scene_data_info_count);
+
+
+            Base_application* m_app;
+            std::string m_name;
             size_t m_index_in_mesh;
             Raytracing_acceleration_structure::Geometry_handle m_geometry_handle;
-            uint32_t m_index_offset;
+
+            size_t m_vertex_buffer_byte_offset;
+            size_t m_vertex_count;
+            size_t m_index_offset;
+            size_t m_index_count;
+            size_t m_scene_data_info_offset;
+            
+            std::vector<IScene_loader::Vertex_element> m_vertex_layout;
         };
 
         struct Instance
         {
             friend class Mesh;
-            explicit Instance();
+            explicit Instance(
+                Base_application* app,
+                const IScene_loader::Node& node_desc);
+            ~Instance();
+
+            /// update scene data of the instance along with per vertex data of the geometry
+            /// of this instance, it also involves the scene data name that appear in the 
+            /// material assigned to the geometry, so afterwards, material assignments
+            /// are not possible or require another update of the scene data infos.
+            bool update_scene_data_infos(D3DCommandList* command_list);
 
             const Mesh* get_mesh() const { return m_mesh; }
+            Mesh* get_mesh() { return m_mesh; }
 
             const IMaterial* get_material(const Mesh::Geometry* geometry) const { 
                 return m_materials[geometry->m_index_in_mesh]; 
@@ -314,10 +489,32 @@ namespace mdl_d3d12
                 return m_instance_handle;
             }
 
+            const Structured_buffer<Scene_data::Info>* get_scene_data_info_buffer() const
+            {
+                return m_scene_data_infos;
+            }
+
+            /// The per object/instance buffer data, can be NULL if there is no such data.
+            const Structured_buffer<uint32_t>* get_scene_data_buffer() const
+            {
+                return m_scene_data_buffer;
+            }
+
         private: 
+            Base_application* m_app;
             Mesh* m_mesh;
             Raytracing_acceleration_structure::Instance_handle m_instance_handle;
             std::vector<IMaterial*> m_materials; // materials for each geometry
+
+            // contains scene data infos on a per object base and vertex (of the meshes geometry)
+            Structured_buffer<Scene_data::Info>* m_scene_data_infos;
+
+            // contains scene data (CPU side, pushed to GPU in update_scene_data_infos(...))
+            std::vector<Scene_data::Value> m_scene_data;
+
+            // contains scene data (GPU side)
+            Structured_buffer<uint32_t>* m_scene_data_buffer;
+
         };
 
         explicit Mesh(
@@ -326,15 +523,17 @@ namespace mdl_d3d12
             const IScene_loader::Mesh& mesh_desc);
         virtual ~Mesh();
 
-        Instance* create_instance();
+        Instance* create_instance(const IScene_loader::Node& node_desc);
         bool upload_buffers(D3DCommandList* command_list);
+
+        const std::string& get_name() const { return m_name; }
 
         const std::vector<Geometry>& get_geometries() const { return m_geometries; }
 
         bool visit_geometries(std::function<bool(const Geometry*)> action) const;
         bool visit_geometries(std::function<bool(Geometry*)> action);
 
-        const Vertex_buffer<Vertex>* get_vertex_buffer() const { return m_vertex_buffer; }
+        const Vertex_buffer<uint8_t>* get_vertex_buffer() const { return m_vertex_buffer; }
         const Index_buffer* get_index_buffer() const { return m_index_buffer; }
 
         const Bounding_box& get_local_bounding_box() const { return m_local_aabb; };
@@ -343,7 +542,7 @@ namespace mdl_d3d12
         Base_application* m_app;
         
         std::string m_name;
-        Vertex_buffer<Vertex>* m_vertex_buffer;
+        Vertex_buffer<uint8_t>* m_vertex_buffer;
         Index_buffer* m_index_buffer;
 
         Raytracing_acceleration_structure* m_acceleration_structur;
@@ -376,7 +575,7 @@ namespace mdl_d3d12
         virtual ~Camera();
 
         const std::string& get_name() const { return m_name; }
-        const Constant_buffer<Camera::Constants>* get_constants() const { return m_constants; }
+        const Dynamic_constant_buffer<Camera::Constants>* get_constants() const { return m_constants; }
 
         float get_field_of_view () const { return m_field_of_view; }
         void set_field_of_view(float vertical_fov) {
@@ -400,7 +599,7 @@ namespace mdl_d3d12
         float m_far_plane_distance;
         bool m_projection_changed;
         
-        Constant_buffer<Camera::Constants>* m_constants;
+        Dynamic_constant_buffer<Camera::Constants>* m_constants;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -446,11 +645,13 @@ namespace mdl_d3d12
         const Bounding_box& get_local_bounding_box() const;
 
         // get the world transformation of this node (read-only).
-        const DirectX::XMMATRIX& get_global_transformation() { return m_global_transformation; }
+        const DirectX::XMMATRIX& get_global_transformation() const { return m_global_transformation; }
 
         void add_child(Scene_node* to_add);
 
         void update(const Update_args& args);
+
+        const Scene_node* get_parent() const { return m_parent; }
 
     private:
         void update_bounding_volumes();
@@ -492,6 +693,9 @@ namespace mdl_d3d12
         /// get the id of the target code that contains this material. 
         /// can be used with the material library for instance.
         virtual size_t get_target_code_id() const = 0;
+
+        /// get the scene data names mapped to IDs that will be requested in the shader.
+        virtual const std::unordered_map<std::string, uint32_t>& get_scene_data_name_map() const = 0;
 
         /// get the GPU handle of to the first resource of the target in the descriptor heap
         virtual D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const = 0;

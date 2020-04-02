@@ -31,7 +31,6 @@
 
 #include <mi/neuraylib/imdl_execution_context.h>
 #include <mi/base/interface_implement.h>
-#include <base/system/main/neuray_cc_conf.h>
 
 
 namespace MI {
@@ -53,36 +52,36 @@ public:
     virtual ~Mdl_execution_context_impl();
     
     // public interface functions
-    mi::Size get_messages_count() const NEURAY_FINAL;
+    mi::Size get_messages_count() const final;
 
-    mi::Size get_error_messages_count() const NEURAY_FINAL;
+    mi::Size get_error_messages_count() const final;
 
-    const mi::neuraylib::IMessage* get_message(mi::Size index) const NEURAY_FINAL;
+    const mi::neuraylib::IMessage* get_message(mi::Size index) const final;
 
-    const mi::neuraylib::IMessage* get_error_message(mi::Size index) const NEURAY_FINAL;
+    const mi::neuraylib::IMessage* get_error_message(mi::Size index) const final;
 
 
-    mi::Size get_option_count() const NEURAY_FINAL;
+    mi::Size get_option_count() const final;
 
-    const char* get_option_name(mi::Size index) const NEURAY_FINAL;
+    const char* get_option_name(mi::Size index) const final;
 
-    const char* get_option_type(const char* name) const NEURAY_FINAL;
+    const char* get_option_type(const char* name) const final;
 
-    mi::Sint32 get_option(const char* name, const char*& value) const NEURAY_FINAL;
+    mi::Sint32 get_option(const char* name, const char*& value) const final;
 
-    mi::Sint32 get_option(const char* name, mi::Float32& value) const NEURAY_FINAL;
+    mi::Sint32 get_option(const char* name, mi::Float32& value) const final;
 
-    mi::Sint32 get_option(const char* name, bool& value) const NEURAY_FINAL;
+    mi::Sint32 get_option(const char* name, bool& value) const final;
 
-    mi::Sint32 get_option(const char* name, mi::base::IInterface** value) const NEURAY_FINAL;
+    mi::Sint32 get_option(const char* name, mi::base::IInterface** value) const final;
 
-    mi::Sint32 set_option(const char* name, const char* value) NEURAY_FINAL;
+    mi::Sint32 set_option(const char* name, const char* value) final;
 
-    mi::Sint32 set_option(const char* name, mi::Float32 value) NEURAY_FINAL;
+    mi::Sint32 set_option(const char* name, mi::Float32 value) final;
 
-    mi::Sint32 set_option(const char* name, bool value) NEURAY_FINAL;
+    mi::Sint32 set_option(const char* name, bool value) final;
 
-    mi::Sint32 set_option(const char* name, mi::base::IInterface* value) NEURAY_FINAL;
+    mi::Sint32 set_option(const char* name, mi::base::IInterface* value) final;
 
     
     // own stuff

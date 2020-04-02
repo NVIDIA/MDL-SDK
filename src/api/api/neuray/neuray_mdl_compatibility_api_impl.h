@@ -36,7 +36,6 @@
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_compatibility_api.h>
 
-#include <base/system/main/neuray_cc_conf.h>
 #include <base/system/main/access_module.h>
 
 namespace mi {
@@ -52,7 +51,7 @@ namespace MDLC { class Mdlc_module; }
 
 namespace NEURAY {
 
-class Mdl_compatibility_api_impl NEURAY_FINAL
+class Mdl_compatibility_api_impl final
   : public mi::base::Interface_implement<mi::neuraylib::IMdl_compatibility_api>
 {
 public:
@@ -71,13 +70,13 @@ public:
         const char*                         module_name,
         const char*                         repl_file_name,
         const  mi::IArray*                  search_paths,
-        mi::neuraylib::IMdl_execution_context*  context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context*  context) const final;
 
      mi::Sint32 compare_archives(
         const char*                         archive_fname1,
         const char*                         archive_fname2,
         const  mi::IArray*                  search_paths,
-        mi::neuraylib::IMdl_execution_context*  context) const NEURAY_FINAL;
+        mi::neuraylib::IMdl_execution_context*  context) const final;
 
     // internal methods
 
@@ -99,9 +98,8 @@ public:
 
 private:
     // non copyable
-    Mdl_compatibility_api_impl(Mdl_compatibility_api_impl const &) NEURAY_DELETED_FUNCTION;
-    Mdl_compatibility_api_impl &operator=(Mdl_compatibility_api_impl const &)
-        NEURAY_DELETED_FUNCTION;
+    Mdl_compatibility_api_impl(Mdl_compatibility_api_impl const &) = delete;
+    Mdl_compatibility_api_impl &operator=(Mdl_compatibility_api_impl const &) = delete;
 
 private:
     mi::neuraylib::INeuray *m_neuray;

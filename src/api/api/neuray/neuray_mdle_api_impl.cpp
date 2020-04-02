@@ -785,7 +785,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         // add origin annotation
         std::string definiton_name = db_transaction->tag_to_name(prototype_tag);
         definiton_name = definiton_name.substr(definiton_name.find("::"));// strip mdl::/mdle:: prefix
-        definiton_name = definiton_name.substr(0, definiton_name.rfind("(")); // strip signature
+        definiton_name = definiton_name.substr(0, definiton_name.rfind('(')); // strip signature
 
         mi::base::Handle<MI::MDL::IValue> anno_value(
             vf.create_string(definiton_name.c_str()));
@@ -1086,11 +1086,7 @@ mi::Sint32 Mdle_api_impl::get_hash(
     }
     mdle->close();
 
-    // convert
-    hash.m_id1 = (h[0]  << 24) | (h[1]  << 16) | (h[2]  << 8) | h[3];
-    hash.m_id2 = (h[4]  << 24) | (h[5]  << 16) | (h[6]  << 8) | h[7];
-    hash.m_id3 = (h[8]  << 24) | (h[9]  << 16) | (h[10] << 8) | h[11];
-    hash.m_id4 = (h[12] << 24) | (h[13] << 16) | (h[14] << 8) | h[15];
+    hash = MDL::convert_hash(h);
 
     return 0;
 }

@@ -554,13 +554,13 @@ MDL_zip_container_header& MDL_zip_container_header::operator=(
 MDL_zip_container::MDL_zip_container(
     IAllocator *alloc,
     char const *path,
-    zip_t      *za/*,
-    bool        with_manifest*/)
-    : m_alloc(alloc)
-    , m_path(path, alloc)
-    , m_za(za)
-    , m_header("\0\0\0\0", 4, 0, 0)
-//    , m_manifest(with_manifest ? parse_manifest() : NULL)
+    zip_t      *za,
+    bool       supports_resource_hashes)
+: m_alloc(alloc)
+, m_path(path, alloc)
+, m_za(za)
+, m_header("\0\0\0\0", 4, 0, 0)
+, m_has_resource_hashes(supports_resource_hashes)
 {
 }
 
@@ -614,9 +614,9 @@ zip_t *MDL_zip_container::open(
     uint16_t major = (header[4] << 8) + header[5];
     uint16_t minor = (header[6] << 8) + header[7];
     uint32_t mask = (major << 16) + minor;
-    uint32_t mask_min =( header_info.major_version_min << 16) 
+    uint32_t mask_min =( header_info.major_version_min << 16)
                       + header_info.minor_version_min;
-    uint32_t mask_max = (header_info.major_version_max << 16) 
+    uint32_t mask_max = (header_info.major_version_max << 16)
                       + header_info.minor_version_max;
 
     if (mask < mask_min || mask > mask_max) {

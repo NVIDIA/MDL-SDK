@@ -34,7 +34,9 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <cmath>
 #include <Windows.h>
+#include <DirectXMath.h>
 
 #define SRC __FILE__,__LINE__
 
@@ -197,6 +199,97 @@ namespace mdl_d3d12
         std::string m_operation;
         std::chrono::steady_clock::time_point m_start;
     };
+
+    // --------------------------------------------------------------------------------------------
+    // Vector Math 
+    // --------------------------------------------------------------------------------------------
+
+    inline DirectX::XMMATRIX inverse(const DirectX::XMMATRIX& m, DirectX::XMVECTOR* determinants = nullptr)
+    {
+        if (determinants)
+            return DirectX::XMMatrixInverse(determinants, m);
+
+        DirectX::XMVECTOR det;
+        return DirectX::XMMatrixInverse(&det, m);
+    }
+
+
+    // --------------------------------------------------------------------------------------------
+    // Float Math 
+    // --------------------------------------------------------------------------------------------
+
+    inline DirectX::XMFLOAT3 normalize(const DirectX::XMFLOAT3& v)
+    {
+        float inv_length = 1.0f / std::sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+        return {v.x * inv_length, v.y * inv_length, v.z * inv_length};
+    }
+
+    inline float length(const DirectX::XMFLOAT3& v)
+    {
+        return std::sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+    }
+
+    inline float length2(const DirectX::XMFLOAT3& v)
+    {
+        return v.x * v.x + v.y * v.y + v.z * v.z;
+    }
+
+    inline float dot(const DirectX::XMFLOAT3& v1, const DirectX::XMFLOAT3& v2)
+    {
+        return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+    }
+
+
+    inline DirectX::XMFLOAT3 cross(const DirectX::XMFLOAT3& v1, const DirectX::XMFLOAT3& v2)
+    {
+        DirectX::XMFLOAT3 res;
+        res.x = (v1.y * v2.z) - (v1.z * v2.y);
+        res.y = (v1.z * v2.x) - (v1.x * v2.z);
+        res.z = (v1.x * v2.y) - (v1.y * v2.x);
+        return res;
+    }
+
+    inline DirectX::XMFLOAT3 operator-(const DirectX::XMFLOAT3& v1, const DirectX::XMFLOAT3& v2)
+    {
+        DirectX::XMFLOAT3 res;
+        res.x = v1.x - v2.x;
+        res.y = v1.y - v2.y;
+        res.z = v1.z - v2.z;
+        return res;
+    }
+
+    inline DirectX::XMFLOAT3 operator*(const DirectX::XMFLOAT3& v1, float s)
+    {
+        DirectX::XMFLOAT3 res;
+        res.x = v1.x * s;
+        res.y = v1.y * s;
+        res.z = v1.z * s;
+        return res;
+    }
+
+
+    inline void operator*=(DirectX::XMFLOAT3& v, float s)
+    {
+        v.x *= s;
+        v.y *= s;
+        v.z *= s;
+    }
+
+    inline DirectX::XMFLOAT3 operator-(const DirectX::XMFLOAT3& v1)
+    {
+        DirectX::XMFLOAT3 res;
+        res.x = v1.x;
+        res.y = -v1.y;
+        res.z = -v1.z;
+        return res;
+    }
+
+    inline void operator+=(DirectX::XMFLOAT3& v1, const DirectX::XMFLOAT3& v2)
+    {
+        v1.x += v2.x;
+        v1.y += v2.y;
+        v1.z += v2.z;
+    }
 }
 
 #endif

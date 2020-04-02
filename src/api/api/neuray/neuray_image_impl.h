@@ -93,13 +93,16 @@ public:
 
     mi::Uint32 resolution_z( mi::Uint32 level, mi::Uint32 uvtile_id = 0) const;
 
+    bool is_uvtile() const;
+
+    void get_uvtile_uv_ranges(
+        mi::Sint32& min_u, mi::Sint32& min_v, mi::Sint32& max_u, mi::Sint32& max_v) const;
+
     mi::Size get_uvtile_length() const;
 
     mi::Sint32 get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const;
 
     mi::Uint32 get_uvtile_id( Sint32 u, Sint32 v) const;
-
-    bool is_uvtile() const;
 };
 
 } // namespace NEURAY

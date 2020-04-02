@@ -172,6 +172,11 @@ mi::Sint32 Class_factory::register_class(
     return 0;
 }
 
+bool Class_factory::is_class_registered( SERIAL::Class_id class_id) const
+{
+    return m_map_id_api_class_factory.find( class_id) != m_map_id_api_class_factory.end();
+}
+
 bool Class_factory::is_class_registered( const mi::neuraylib::ISerializable* serializable) const
 {
     ASSERT( M_NEURAY_API, serializable);

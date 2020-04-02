@@ -39,7 +39,6 @@
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_compiler.h>
 
-#include <base/system/main/neuray_cc_conf.h>
 #include <base/system/main/access_module.h>
 #include <boost/core/noncopyable.hpp>
 
@@ -75,92 +74,98 @@ public:
 
     // public API methods
 
-    void set_logger( mi::base::ILogger* logger) NEURAY_OVERRIDE;
+    void set_logger( mi::base::ILogger* logger) override;
 
-    mi::base::ILogger* get_logger() NEURAY_OVERRIDE;
+    mi::base::ILogger* get_logger() override;
 
-    mi::Sint32 load_plugin_library( const char* path) NEURAY_OVERRIDE;
-
-
-    mi::Sint32 add_module_path( const char* path) NEURAY_OVERRIDE;
-
-    mi::Sint32 remove_module_path( const char* path) NEURAY_OVERRIDE;
-
-    void clear_module_paths() NEURAY_OVERRIDE;
-
-    mi::Size get_module_paths_length() const NEURAY_OVERRIDE;
-
-    const mi::IString* get_module_path( mi::Size index) const NEURAY_OVERRIDE;
+    mi::Sint32 load_plugin_library( const char* path) override;
 
 
-    mi::Sint32 add_resource_path( const char* path) NEURAY_OVERRIDE;
+    mi::Sint32 add_module_path( const char* path) override;
 
-    mi::Sint32 remove_resource_path( const char* path) NEURAY_OVERRIDE;
+    mi::Sint32 remove_module_path( const char* path) override;
 
-    void clear_resource_paths() NEURAY_OVERRIDE;
+    void clear_module_paths() override;
 
-    mi::Size get_resource_paths_length() const NEURAY_OVERRIDE;
+    mi::Size get_module_paths_length() const override;
 
-    const mi::IString* get_resource_path( mi::Size index) const NEURAY_OVERRIDE;
+    const mi::IString* get_module_path( mi::Size index) const override;
+
+
+    mi::Sint32 add_resource_path( const char* path) override;
+
+    mi::Sint32 remove_resource_path( const char* path) override;
+
+    void clear_resource_paths() override;
+
+    mi::Size get_resource_paths_length() const override;
+
+    const mi::IString* get_resource_path( mi::Size index) const override;
 
     mi::Sint32 load_module(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
-        mi::neuraylib::IMdl_execution_context* context) NEURAY_OVERRIDE;
+        mi::neuraylib::IMdl_execution_context* context) override;
 
     const char* get_module_db_name(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
-        mi::neuraylib::IMdl_execution_context* context) NEURAY_OVERRIDE;
+        mi::neuraylib::IMdl_execution_context* context) override;
 
     mi::Sint32 load_module_from_string(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         const char* module_source,
-        mi::neuraylib::IMdl_execution_context* context) NEURAY_OVERRIDE;
+        mi::neuraylib::IMdl_execution_context* context) override;
 
     mi::Sint32 add_builtin_module(
         const char* module_name,
-        const char* module_source) NEURAY_OVERRIDE;
+        const char* module_source) override;
 
     mi::Sint32 export_module(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         const char* filename,
-        mi::neuraylib::IMdl_execution_context* context) NEURAY_OVERRIDE;
+        mi::neuraylib::IMdl_execution_context* context) override;
 
     mi::Sint32 export_module_to_string(
         mi::neuraylib::ITransaction* transaaction,
         const char* module_name,
         mi::IString* exported_module,
-        mi::neuraylib::IMdl_execution_context* context) NEURAY_OVERRIDE;
+        mi::neuraylib::IMdl_execution_context* context) override;
 
     mi::Sint32 export_canvas(
         const char* filename,
         const mi::neuraylib::ICanvas* canvas,
-        mi::Uint32 quality) const NEURAY_OVERRIDE;
+        mi::Uint32 quality) const override;
 
     mi::Sint32 export_lightprofile(
         const char* filename,
-        const mi::neuraylib::ILightprofile* lightprofile) const NEURAY_OVERRIDE;
+        const mi::neuraylib::ILightprofile* lightprofile) const override;
 
     mi::Sint32 export_bsdf_data(
         const char* filename,
         const mi::neuraylib::IBsdf_isotropic_data* reflection,
-        const mi::neuraylib::IBsdf_isotropic_data* transmission) const NEURAY_OVERRIDE;
+        const mi::neuraylib::IBsdf_isotropic_data* transmission) const override;
 
-    mi::neuraylib::IMdl_backend* get_backend( Mdl_backend_kind kind) NEURAY_OVERRIDE;
+    mi::neuraylib::IMdl_backend* get_backend( Mdl_backend_kind kind) override;
 
     const mi::IString* uvtile_marker_to_string(
         const char* marker,
-        mi::Sint32 u, mi::Sint32 v) const NEURAY_OVERRIDE;
+        mi::Sint32 u, mi::Sint32 v) const override;
 
     const mi::IString*  uvtile_string_to_marker(
-        const char* str, const char* marker) const NEURAY_OVERRIDE;
+        const char* str, const char* marker) const override;
 
-    mi::neuraylib::IMdl_entity_resolver* get_entity_resolver() const NEURAY_OVERRIDE;
+    mi::neuraylib::IMdl_entity_resolver* get_entity_resolver() const override;
 
-    void set_external_resolver(mi::mdl::IEntity_resolver *resolver) const NEURAY_OVERRIDE;
+    void set_external_resolver(mi::mdl::IEntity_resolver *resolver) const override;
+
+    const Float32* get_df_data_texture(
+        mi::neuraylib::Df_data_kind kind,
+        Size &rx,
+        Size &ry,
+        Size &rz) const override;
 
     // internal methods
 

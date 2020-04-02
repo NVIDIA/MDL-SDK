@@ -120,13 +120,19 @@ public:
     /// \note supports only [0-9], [0-9]+, and -? regex so far
     virtual bool utf8_match(char const *file_mask, char const *file_name) const = 0;
 
+    /// Configures, whether casts for compatible types should be inserted by the integration
+    /// when needed.
+    virtual void set_implicit_cast_enabled(bool value) = 0;
+
     /// Returns, whether casts for compatible types should be inserted by the integration
     /// when needed.
     virtual bool get_implicit_cast_enabled() const = 0;
 
-    /// Configures, whether casts for compatible types should be inserted by the integration
-    /// when needed.
-    virtual void set_implicit_cast_enabled(bool v) = 0;
+    /// Defines whether an attempt is made to expose names of let expressions.
+    virtual void set_expose_names_of_let_expressions( bool value) = 0;
+
+    /// Indicates whether an attempt is made to expose names of let expressions.
+    virtual bool get_expose_names_of_let_expressions() const = 0;
 
     /// Returns the module wait queue.
     virtual MDL::Mdl_module_wait_queue* get_module_wait_queue() const = 0;

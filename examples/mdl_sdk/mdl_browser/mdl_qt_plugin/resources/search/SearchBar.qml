@@ -187,14 +187,14 @@ Item {
         spacing: 0
 
         Item {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.fillWidth: true
         }
 
         // -- SORTING ---------------------------------------------
 
         Label {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.rightMargin: 2 * id_control.sortingCriterionSpacing
             text: "sort by:"
             color: sortByColor
@@ -204,7 +204,7 @@ Item {
         SortingCriterion {
             id: id_sort_relevance
             Layout.rightMargin: id_control.sortingCriterionSpacing
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: id_control.presentationBarHeight
 
             name: "Relevance" // ATTENTION: if changed also change in 'View_model.cpp'
@@ -216,7 +216,7 @@ Item {
         SortingCriterion {
             id: id_sort_name
             Layout.rightMargin: id_control.sortingCriterionSpacing
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: id_control.presentationBarHeight
 
             name: "Name" // ATTENTION: if changed also change in 'View_model.cpp'
@@ -228,7 +228,7 @@ Item {
         SortingCriterion {
             id: id_sort_date
             Layout.rightMargin: id_control.sortingCriterionSpacing
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: id_control.presentationBarHeight
 
             name: "Modification Date" // ATTENTION: if changed also change in 'View_model.cpp'
@@ -240,7 +240,7 @@ Item {
         // -- VIEW MODE ---------------------------------------------
 
         Label {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.leftMargin: 2 * id_control.sortingCriterionSpacing
             Layout.rightMargin: 2 * id_control.sortingCriterionSpacing
             text: "view as:"
@@ -249,7 +249,7 @@ Item {
         }
 
         SelectionViewOption {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: id_control.presentationBarHeight
             Layout.preferredWidth: 25
 
@@ -260,7 +260,7 @@ Item {
         }
 
         SelectionViewOption {
-            anchors.verticalCenter: parent.verticalCenter
+            Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: id_control.presentationBarHeight
             Layout.preferredWidth: 25
 

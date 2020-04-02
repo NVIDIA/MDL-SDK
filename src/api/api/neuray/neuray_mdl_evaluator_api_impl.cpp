@@ -79,7 +79,7 @@ public:
     virtual MI::MDL::IExpression const *get_parameter_argument(size_t index) = 0;
 };
 
-class Parameter_helper NEURAY_FINAL : public IParameter_helper {
+class Parameter_helper final : public IParameter_helper {
 public:
     /// Constructor.
     template<typename T>
@@ -90,7 +90,7 @@ public:
     }
 
     /// Get the argument for the parameter with given index.
-    virtual MI::MDL::IExpression const *get_parameter_argument(size_t index) NEURAY_FINAL
+    virtual MI::MDL::IExpression const *get_parameter_argument(size_t index) final
     {
         return m_arguments->get_expression(index);
     }

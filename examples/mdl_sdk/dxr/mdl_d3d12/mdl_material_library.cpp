@@ -55,23 +55,15 @@ namespace mdl_d3d12
     // --------------------------------------------------------------------------------------------
 
     Mdl_material_library::Mdl_material_library(
-        Base_application* app, Mdl_sdk* sdk, bool share_target_code)
+        Base_application* app, Mdl_sdk* sdk)
         : m_app(app)
         , m_sdk(sdk)
-        , m_share_target_code(share_target_code)
         , m_targets()
         , m_target_map()
         , m_targets_mtx()
+        , m_resources()
+        , m_resources_mtx()
     {
-        if (share_target_code)
-        {
-            // depending on the strategy, materials can be compiled to individually targets, 
-            // each using its link unit, or all into one target code, sharing the link unit and 
-            // potentially code. Here we go for the second approach.
-            auto shared = new Target_entry(new Mdl_material_target(app, sdk));
-            m_target_map[""] = shared;
-            m_targets[shared->m_target->get_id()] = shared->m_target;
-        }
     }
 
     // --------------------------------------------------------------------------------------------
@@ -82,15 +74,9 @@ namespace mdl_d3d12
         for (auto& entry : m_targets)
             delete entry.second;
 
-        for (auto&& entry : m_textures)
-            delete entry.second;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    Mdl_material_target* Mdl_material_library::get_shared_target_code()
-    {
-        return m_share_target_code ? m_target_map[""]->m_target : nullptr;
+        for (auto& resource : m_resources)
+            for (auto& entry : resource.second.entries)
+                delete entry.resource;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -105,10 +91,7 @@ namespace mdl_d3d12
         auto found = m_target_map.find(key);
         if (found == m_target_map.end())
         {
-            // in shared target code mode, reuse that target all the time
-            entry = m_share_target_code 
-                ? new Target_entry(m_target_map[""]->m_target)
-                : new Target_entry(new Mdl_material_target(m_app, m_sdk));
+            entry = new Target_entry(new Mdl_material_target(m_app, m_sdk));
 
             // store a key based on the compiled material hash to identify already handled ones
             m_target_map.emplace(key, entry);
@@ -124,9 +107,7 @@ namespace mdl_d3d12
 
     Mdl_material* Mdl_material_library::create(const Mdl_material_description& material_desc)
     {
-        const std::string& mdl_name = 
-            material_desc.get_qualified_module_name() + "::" + material_desc.get_material_name();
-        Mdl_material* mat = new Mdl_material(m_app, mdl_name);
+        Mdl_material* mat = new Mdl_material(m_app, material_desc.get_scene_name());
 
         // since this method can be called from multiple threads simultaneously
         // a new context for is created
@@ -136,7 +117,7 @@ namespace mdl_d3d12
         // if not load, load the module
         std::string module_db_name = load_module(
             material_desc.get_qualified_module_name(), false, context.get());
-        if (!m_sdk->log_messages(context.get()))
+        if (!m_sdk->log_messages(context.get()) || module_db_name.empty())
         {
             delete mat;
             return nullptr;
@@ -155,11 +136,11 @@ namespace mdl_d3d12
         }
 
         // check if the compiled material is already present and reuse it in that case
-        // otherwise create a new target (or use the shared one in shared mode)
+        // otherwise create a new target
         auto target_entry = get_target_for_material_creation(mat->get_material_compiled_hash());
+
         // assign the material to the target
         target_entry->m_target->register_material(mat);
-
         return mat;
     }
 
@@ -251,7 +232,7 @@ namespace mdl_d3d12
         for (auto& mat : changed_materials)
         {
             // check if the compiled material is already present and reuse it in that case
-            // otherwise create a new target (or use the shared one in shared mode)
+            // otherwise create a new target
             auto target_entry = get_target_for_material_creation(mat->get_material_compiled_hash());
             target_entry->m_target->register_material(mat); // no lock, single threaded here
         }
@@ -285,38 +266,73 @@ namespace mdl_d3d12
 
     bool Mdl_material_library::generate_and_compile_targets()
     {
-        Timing t("generating all target code fragments");
-        
+        // generate and compile in separate loops just to be able to measure individual timings
         std::atomic<bool> success = true;
         std::vector<std::thread> tasks;
-
         bool force_single_theading = m_app->get_options()->force_single_theading;
-        visit_target_codes([&](Mdl_material_target* target)
+
         {
-            if (!target->is_generation_required())
-                return true; // skip target and continue visits
+            Timing t("generating target code");
+            visit_target_codes([&](Mdl_material_target* target)
+            {
+                if (!target->is_generation_required())
+                    return true; // skip target and continue visits
 
-            // sequentially
-            if (force_single_theading)
-            {
-                if (!target->generate() || !target->compile())
-                    success.store(false);
-            }
-            // asynchronously
-            else
-            {
-                tasks.emplace_back(std::thread([&, target]()
+                // sequentially
+                if (force_single_theading)
                 {
-                    if (!target->generate() || !target->compile())
+                    if (!target->generate())
                         success.store(false);
-                }));
-            }
-            return true; // continue visits
-        });
+                }
+                // asynchronously
+                else
+                {
+                    tasks.emplace_back(std::thread([&, target]()
+                    {
+                        if (!target->generate())
+                            success.store(false);
+                    }));
+                }
+                return true; // continue visits
+            });
 
-        for (auto &t : tasks)
-            t.join();
+            for (auto &t : tasks)
+                t.join();
 
+            if (!success.load())
+                return false;
+        }
+
+
+        tasks.clear();
+        {
+            Timing t("compiling target code");
+            visit_target_codes([&](Mdl_material_target* target)
+            {
+                if (!target->is_compilation_required())
+                    return true; // skip target and continue visits
+
+                // sequentially
+                if (force_single_theading)
+                {
+                    if (!target->compile())
+                        success.store(false);
+                }
+                // asynchronously
+                else
+                {
+                    tasks.emplace_back(std::thread([&, target]()
+                    {
+                        if (!target->compile())
+                            success.store(false);
+                    }));
+                }
+                return true; // continue visits
+            });
+
+            for (auto &t : tasks)
+                t.join();
+        }
         // false, when at least one task failed
         return success.load();
     }
@@ -391,15 +407,17 @@ namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
-    Texture* Mdl_material_library::access_texture_resource(
-        std::string db_name, D3DCommandList* command_list)
+    Mdl_resource_set* Mdl_material_library::access_texture_resource(
+        std::string db_name, 
+        Texture_dimension dimension, 
+        D3DCommandList* command_list)
     {
         // check if the texture already exists
         {
-            std::lock_guard<std::mutex> lock(m_textures_mtx);
-            auto found = m_textures.find(db_name);
-            if (found != m_textures.end())
-                return found->second;
+            std::lock_guard<std::mutex> lock(m_resources_mtx);
+            auto found = m_resources.find(db_name);
+            if (found != m_resources.end())
+                return &found->second;
         }
 
         // if not, collect all infos required to create the texture
@@ -409,118 +427,181 @@ namespace mdl_d3d12
         mi::base::Handle<const mi::neuraylib::IImage> image(
             m_sdk->get_transaction().access<mi::neuraylib::IImage>(texture->get_image()));
 
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
+        // collect basic information about the number of tiles
+        mi::Size num_tiles = image->get_uvtile_length();
+        mi::Sint32 u_min = std::numeric_limits<mi::Sint32>::max();
+        mi::Sint32 u_max = std::numeric_limits<mi::Sint32>::min();
+        mi::Sint32 v_min = u_min;
+        mi::Sint32 v_max = u_max;
 
-        float gamma = texture->get_effective_gamma();
-        char const* image_type = image->get_type();
-
-        if (image->is_uvtile())
+        // create empty textures for all tiles
         {
-            log_error("The example does not support uvtile textures!", SRC);
-            return nullptr;
-        }
-
-        if (canvas->get_tiles_size_x() != 1 || canvas->get_tiles_size_y() != 1)
-        {
-            log_error("The example does not support tiled images!", SRC);
-            return nullptr;
-        }
-
-        // For simplicity, the texture access functions are only implemented for float4 and
-        // gamma is pre-applied here (all images are converted to linear space).
-        // Convert to linear color space if necessary
-        if (gamma != 1.0f)
-        {
-            // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
-            mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
-                m_sdk->get_image_api().convert(canvas.get(), "Color"));
-            gamma_canvas->set_gamma(gamma);
-            m_sdk->get_image_api().adjust_gamma(gamma_canvas.get(), 1.0f);
-            canvas = gamma_canvas;
-        }
-        else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
-        {
-            // Convert to expected format
-            canvas = m_sdk->get_image_api().convert(canvas.get(), "Color");
-        }
-
-
-        mi::Uint32 tex_width = canvas->get_resolution_x();
-        mi::Uint32 tex_height = canvas->get_resolution_y();
-        mi::Uint32 tex_layers = canvas->get_layers_size();
-
-        // create the d3d texture
-        Texture* texture_resource = new Texture(
-            m_app, GPU_access::shader_resource,
-            tex_width,
-            tex_height,
-            tex_layers,
-            DXGI_FORMAT_R32G32B32A32_FLOAT,
-            db_name);
-
-        // at this point we are pretty sure that the resource is available and valid
-        // so we add it, unless another thread was faster, in which case we discard ours
-        {
-            std::lock_guard<std::mutex> lock(m_textures_mtx);
-            auto found = m_textures.find(db_name);
-            if (found != m_textures.end())
-            {
-                delete texture_resource; // delete ours (before we actually copy data to the GPU)
-                return found->second; // return the other
-            }
+            std::lock_guard<std::mutex> lock(m_resources_mtx);
+            auto found = m_resources.find(db_name);
+            if (found != m_resources.end())
+                return &found->second; // return the other
 
             // add the created texture to the library
-            m_textures[db_name] = texture_resource;
+            m_resources[db_name] = Mdl_resource_set();
+            Mdl_resource_set& set = m_resources[db_name];
+            set.is_udim_tiled = image->is_uvtile();
+
+            // create the resources
+            set.entries = std::vector<Mdl_resource_set::Entry>(
+                num_tiles, Mdl_resource_set::Entry());
+            for (mi::Size tile_id = 0; tile_id < num_tiles; ++tile_id)
+            {
+                mi::base::Handle<const mi::neuraylib::ICanvas> canvas(
+                    image->get_canvas(0, mi::Uint32(tile_id)));
+
+                // create the d3d texture
+                switch (dimension)
+                {
+                    case Texture_dimension::Texture_2D:
+                        set.entries[tile_id].resource = Texture::create_texture_2d(
+                            m_app, GPU_access::shader_resource,
+                            canvas->get_resolution_x(),
+                            canvas->get_resolution_y(),
+                            DXGI_FORMAT_R32G32B32A32_FLOAT, // TODO
+                            set.is_udim_tiled 
+                                ? (db_name + "_tile_" + std::to_string(tile_id)) : db_name);
+                        break;
+
+                    case Texture_dimension::Texture_3D:
+                        set.entries[tile_id].resource = Texture::create_texture_3d(
+                            m_app, GPU_access::shader_resource,
+                            canvas->get_resolution_x(),
+                            canvas->get_resolution_y(),
+                            canvas->get_layers_size(),
+                            DXGI_FORMAT_R32G32B32A32_FLOAT, // TODO
+                            set.is_udim_tiled 
+                                ? (db_name + "_tile_" + std::to_string(tile_id)) : db_name);
+                        break;
+
+                    default:
+                        log_error("Unhandled texture dimension: " + db_name, SRC);
+                        continue;
+                }
+
+
+                mi::Sint32 u, v;
+                image->get_uvtile_uv(mi::Uint32(tile_id), u, v);
+                set.entries[tile_id].udim_u = u;
+                set.entries[tile_id].udim_v = v;
+                u_min = std::min(u_min, u);
+                u_max = std::max(u_max, u);
+                v_min = std::min(v_min, v);
+                v_max = std::max(v_max, v);
+            }
+
+            // resource set data
+            set.udim_u_min = u_min;
+            set.udim_u_max = u_max;
+            set.udim_v_min = v_min;
+            set.udim_v_max = v_max;
+
+            // release the lock so other threads can reference the texture even when the
+            // actual data is not loaded yet. So when loading in parallel, wait if the data
+            // is required on the GPU
         }
 
-        size_t data_row_pitch = texture_resource->get_pixel_stride() * tex_width;
-        size_t gpu_row_pitch = texture_resource->get_gpu_row_pitch();
-        uint8_t* buffer = new uint8_t[gpu_row_pitch * tex_height * tex_layers];
-
-        if(gpu_row_pitch != data_row_pitch) // alignment_needed
-            memset(buffer, 0, gpu_row_pitch * tex_height * tex_layers);
-
-
-        // get and copy data to gpu
-        for (size_t l = 0; l < tex_layers; ++l)
-        {
-            mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0, l));
-            const uint8_t* tex_data = static_cast<const uint8_t*>(tile->get_data());
-
-            // copy line by line if required
-            uint8_t* buffer_layer = buffer + gpu_row_pitch * tex_height * l;
-            if (gpu_row_pitch != data_row_pitch)
-            {
-                for (size_t r = 0; r < tex_height; ++r)
-                    memcpy((void*) (buffer_layer + r * gpu_row_pitch),
-                           (void*) (tex_data + r * data_row_pitch),
-                           data_row_pitch);
-            }
-            else // copy directly
-            {
-                memcpy((void*) buffer_layer, (void*) tex_data, data_row_pitch * tex_height);
-            }
-        }
-
-        // copy data to the GPU
+        // load the actual texture data and copy it to GPU
         bool success = true;
-        if (texture_resource->upload(command_list, (const uint8_t*) buffer, gpu_row_pitch))
+        Mdl_resource_set& set = m_resources[db_name];
+        uint8_t* buffer = nullptr;
+        size_t buffer_size = 0;
+        for (mi::Size tile_id = 0; tile_id < num_tiles; ++tile_id)
         {
-            // .. since the compute pipeline is used for ray tracing
-            texture_resource->transition_to(
-                command_list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        }
-        else
-            success = false;
+            mi::base::Handle<const mi::neuraylib::ICanvas> canvas(
+                image->get_canvas(0, mi::Uint32(tile_id)));
 
-        // free data
-        if (!success)
-        {
-            delete texture_resource;
-            texture_resource = nullptr;
+            // For simplicity, the texture access functions are only implemented for float4 and
+            // gamma is pre-applied here (all images are converted to linear space).
+            // Convert to linear color space if necessary
+            float gamma = texture->get_effective_gamma();
+            char const* image_type = image->get_type();
+            if (gamma != 1.0f)
+            {
+                // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
+                mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
+                    m_sdk->get_image_api().convert(canvas.get(), "Color"));
+                gamma_canvas->set_gamma(gamma);
+                m_sdk->get_image_api().adjust_gamma(gamma_canvas.get(), 1.0f);
+                canvas = gamma_canvas;
+            }
+            else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
+            {
+                // Convert to expected format
+                canvas = m_sdk->get_image_api().convert(canvas.get(), "Color");
+            }
+
+            Texture* texture_resource = static_cast<Texture*>(set.entries[tile_id].resource);
+
+            size_t tex_width = texture_resource->get_width();
+            size_t tex_height = texture_resource->get_height();
+            size_t tex_layers = texture_resource->get_depth();
+            size_t data_row_pitch = texture_resource->get_pixel_stride() * tex_width;
+            size_t gpu_row_pitch = texture_resource->get_gpu_row_pitch();
+
+            // use a temporary buffer for adding padding 
+            size_t new_size = gpu_row_pitch * tex_height * tex_layers;
+            if (buffer_size < new_size)
+            {
+                if (buffer != nullptr) 
+                    delete[] buffer;
+
+                buffer_size = new_size;
+                buffer = new uint8_t[buffer_size];
+
+                if (gpu_row_pitch != data_row_pitch) // alignment required
+                    memset(buffer, 0, buffer_size);  // pad with zeros
+            }
+
+            // get and copy data to GPU
+            for (size_t l = 0; l < tex_layers; ++l)
+            {
+                mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0, l));
+                const uint8_t* tex_data = static_cast<const uint8_t*>(tile->get_data());
+
+                // copy line by line if required
+                uint8_t* buffer_layer = buffer + gpu_row_pitch * tex_height * l;
+                if (gpu_row_pitch != data_row_pitch)
+                {
+                    for (size_t r = 0; r < tex_height; ++r)
+                        memcpy((void*) (buffer_layer + r * gpu_row_pitch),
+                        (void*) (tex_data + r * data_row_pitch),
+                               data_row_pitch);
+                }
+                else // copy directly
+                {
+                    memcpy((void*) buffer_layer, (void*) tex_data, data_row_pitch * tex_height);
+                }
+            }
+
+            // copy data to the GPU
+            if (texture_resource->upload(command_list, (const uint8_t*) buffer, gpu_row_pitch))
+            {
+                // .. since the compute pipeline is used for ray tracing
+                texture_resource->transition_to(
+                    command_list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            }
+            else
+                success = false;
+
+            // free data
+            if (!success)
+            {
+                std::lock_guard<std::mutex> lock(m_resources_mtx);
+                for (auto& entry : set.entries)
+                    delete entry.resource;
+
+                m_resources.erase(db_name);
+                delete[] buffer;
+                return nullptr;
+            }
         }
+
         delete[] buffer;
-        return texture_resource;
+        return &m_resources[db_name];
     }
-
 }

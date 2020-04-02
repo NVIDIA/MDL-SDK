@@ -26,7 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-
 import QtQuick 2.10
 import QtQuick.Controls 2.3
 import QtQuick.Controls.Material 2.3
@@ -34,10 +33,10 @@ import QtQuick.Layouts 1.3
 
 import "../search" as Search
 
-ColumnLayout {
+RowLayout {
     id: id_control
 
-    property real scrollBarWidth: 7.5
+    property real scrollBarWidth: 10
     width: parent.width
     height: parent.height
 
@@ -58,11 +57,14 @@ ColumnLayout {
         id_grid.currentIndex = -1
     }
 
+
+
     GridView {
         id: id_grid
-        anchors.fill: parent
-        anchors.leftMargin: { sideMargin + ((id_control.width - 2 * sideMargin) % id_control.elementSize) / 2 }
-        anchors.rightMargin: anchors.leftMargin
+
+        Layout.fillHeight: true
+        Layout.fillWidth: true
+        Layout.leftMargin: { sideMargin + ((id_control.width - 2 * sideMargin) % id_control.elementSize) / 2 }
 
         cellWidth: id_control.elementSize
         cellHeight: id_control.elementSize + 30
@@ -99,14 +101,7 @@ ColumnLayout {
         }
 
         ScrollBar.vertical: ScrollBar {
-            parent: id_control
-
-            anchors.top: id_grid.top
-            anchors.left: id_grid.right
-            anchors.leftMargin: 5
-            anchors.bottom: id_grid.bottom
-
-            implicitWidth: scrollBarWidth
+            implicitWidth: id_control.scrollBarWidth
         }
     }
 }

@@ -50,6 +50,7 @@ Light_profile::Light_profile(
     Tag_type const  &tex_t,
     DB::Transaction *trans)
 : m_light_profile(tex_t, trans)
+, m_light_profile_impl(m_light_profile->get_impl_tag(), trans)
 {
     m_res_t = m_light_profile->get_resolution_theta();
     m_res_p = m_light_profile->get_resolution_phi();
@@ -64,7 +65,7 @@ Light_profile::Light_profile(
     m_inv_delta_p = m_delta_p ? (1.f / m_delta_p) : 0.f;
 
     // phi-mayor: [m_m_res_t x m_res_p]
-    const float* m_data = m_light_profile->get_data();
+    const float* m_data = m_light_profile_impl->get_data();
     m_candela_multiplier = m_light_profile->get_candela_multiplier();
     m_total_power = 0.0f;
 
@@ -172,7 +173,7 @@ mi::Float32 Light_profile::evaluate(const mi::Float32_2& theta_phi) const
     const unsigned int idx_theta_p1 = (idx_theta + 1 >= m_res_t) ? 0 : 1;
     const unsigned int idx_phi_p1   = (idx_phi   + 1 >= m_res_p) ? 0 : m_res_t;
 
-    const float* eval_data = m_light_profile->get_data();
+    const float* eval_data = m_light_profile_impl->get_data();
     float value = lerp(
         lerp(eval_data[k + 0          + 0], eval_data[k + 0          + idx_theta_p1], u),
         lerp(eval_data[k + idx_phi_p1 + 0], eval_data[k + idx_phi_p1 + idx_theta_p1], u),

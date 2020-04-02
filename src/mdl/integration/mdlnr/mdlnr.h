@@ -80,9 +80,13 @@ public:
 
     bool utf8_match(char const *file_mask, char const *file_name) const;
 
+    void set_implicit_cast_enabled(bool value);
+
     bool get_implicit_cast_enabled() const;
 
-    void set_implicit_cast_enabled(bool v);
+    void set_expose_names_of_let_expressions(bool value);
+
+    bool get_expose_names_of_let_expressions() const;
 
     MDL::Mdl_module_wait_queue* get_module_wait_queue() const;
 
@@ -103,8 +107,11 @@ private:
     /// The code cache used for JIT-generated source code.
     mi::mdl::ICode_cache *m_code_cache;
 
-    /// Flag that indicates weather the integration should insert casts when needed (and possible).
+    /// Flag that indicates whether the integration should insert casts when needed (and possible).
     bool m_implicit_cast_enabled;
+
+    /// Flag that indicates whether the integration should insert casts when needed (and possible).
+    bool m_expose_names_of_let_expressions;
 
     /// The module wait queue.
     MDL::Mdl_module_wait_queue *m_module_wait_queue;

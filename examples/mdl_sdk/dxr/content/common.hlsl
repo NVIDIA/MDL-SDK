@@ -122,15 +122,116 @@ struct Attributes
     float2 bary;
 };
 
-// standard vertex format for this example
-struct Vertex
+
+//-------------------------------------------------------------------------------------------------
+// Scene Data API
+//-------------------------------------------------------------------------------------------------
+
+/// interpolation of the data over the primitive 
+enum SceneDataInterpolationMode
 {
-    float3 position;
-    float3 normal;
-    float2 texcoord0;
-    float4 tangent0;
+    SCENE_DATA_INTERPOLATION_MODE_NONE = 0,
+    SCENE_DATA_INTERPOLATION_MODE_LINEAR = 1,
+    SCENE_DATA_INTERPOLATION_MODE_NEAREST = 2,
 };
 
+/// Scope a scene data element belongs to
+enum SceneDataKind
+{
+    SCENE_DATA_KIND_NONE = 0,
+    SCENE_DATA_KIND_VERTEX = 1,
+    SCENE_DATA_KIND_INSTANCE = 2,
+};
+
+/// Basic element type of the scene data
+enum SceneDataElementType
+{
+    SCENE_DATA_ELEMENT_TYPE_FLOAT = 0,
+    SCENE_DATA_ELEMENT_TYPE_INT = 1,
+    SCENE_DATA_ELEMENT_TYPE_COLOR = 2
+};
+
+// Infos about the interleaved vertex layout (compressed)
+struct SceneDataInfo
+{
+    /// Scope a scene data element belongs to (4 bits)
+    inline SceneDataKind GetKind()
+    {
+        return (SceneDataKind) ((packed_data.x & 0xF0000000u) >> 28);
+    }
+
+    /// Basic element type of the scene data (4 bits)
+    inline SceneDataElementType GetElementType()
+    {
+        return (SceneDataElementType) ((packed_data.x & 0x0F000000u) >> 24);
+    }
+
+    /// Interpolation of the data over the primitive (4 bits)
+    SceneDataInterpolationMode GetInterpolationMode()
+    {
+        return (SceneDataInterpolationMode) ((packed_data.x & 0x00F00000u) >> 20);
+    }
+
+    /// Indicates whether there the scene data is uniform. (1 bit)
+    bool GetUniform()
+    {
+        return (packed_data.x & 0x00010000u) > 0;
+    }
+
+    /// Offset between two elements. For interleaved vertex buffers, this is the vertex size in byte.
+    /// For non-interleaved buffers, this is the element size in byte. (16 bit)
+    uint GetByteStride()
+    {
+        return (packed_data.x & 0x0000FFFFu);
+    }
+
+    /// The offset to the data element within an interleaved vertex buffer, or the absolute
+    /// offset to the base (e.g. of the geometry data) in non-interleaved buffers 
+    uint GetByteOffset()
+    {
+        return packed_data.y;
+    }
+
+    // use getter function to unpack, see scene.cpp for corresponding c++ code for packing
+    uint2 packed_data;
+};
+
+// renderer state object that is passed to mdl runtime functions
+struct DXRRendererState
+{
+    // scene data buffer for object/instance data
+    ByteAddressBuffer scene_data_instance;
+
+    // The mapping between scene_data_id and scene data buffer layout
+    StructuredBuffer<SceneDataInfo> scene_data_infos;
+
+    // index offset for the first info object relevant for this geometry
+    uint scene_data_info_offset;
+
+    // the per mesh scene data buffer, includes the vertex buffer
+    ByteAddressBuffer scene_data_vertex;
+
+    // global offset in the data buffer (for object, geometry, ...)
+    uint scene_data_geometry_byte_offset;
+
+    // vertex indices if the hit triangle (from index buffer)
+    uint3 hit_vertex_indices;
+
+    // barycentric coordinates of the hit point within the triangle
+    float3 barycentric;
+};
+// use this structure as renderer state int the MDL shading state material 
+#define RENDERER_STATE_TYPE DXRRendererState
+
+
+// Positions, normals, and tangents are mandatory for this renderer. The vertex buffer always
+// contains this data at the beginning of the (interleaved) per vertex data.
+enum VertexByteOffset
+{
+    VERT_BYTEOFFSET_POSITION = 0,
+    VERT_BYTEOFFSET_NORMAL = 12,
+    VERT_BYTEOFFSET_TANGENT = 24,
+};
 
 //-------------------------------------------------------------------------------------------------
 // random number generator based on the Optix SDK
@@ -280,7 +381,7 @@ float3 environment_sample(
 // Avoiding self intersections (see Ray Tracing Gems, Ch. 6)
 //-------------------------------------------------------------------------------------------------
 
-float3 offset_ray(float3 p, float3 n)
+float3 offset_ray(const float3 p, const float3 n)
 {
     const float origin = 1.0f / 32.0f;
     const float float_scale = 1.0f / 65536.0f;

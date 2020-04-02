@@ -51,6 +51,9 @@ public:
     /// The type of vectors of values.
     typedef vector<IValue const *>::Type Value_vector;
 
+    /// The type of maps from temporary values (DAG-IR nodes) to temporary names (strings).
+    typedef ptr_hash_map<DAG_node const, char const *>::Type Definition_temporary_name_map;
+
 
     /// Constructor.
     ///
@@ -114,7 +117,7 @@ public:
     Value_factory const &get_value_factory() const { return m_value_factory; }
 
     /// Clear the value table.
-    void identify_clear() { m_value_table.clear(); }
+    void identify_clear() { m_value_table.clear(); m_temp_name_map.clear(); }
 
     /// Check if the value table is empty.
     bool identify_empty() const { return m_value_table.empty(); }
@@ -138,6 +141,19 @@ public:
     bool enable_unsafe_math_opt(bool flag) {
         bool res = m_unsafe_math_opt; m_unsafe_math_opt = flag; return res;
     }
+
+    /// Enable exposing names of let expressions.
+    ///
+    /// \param flag  If true, exposing names of let epressions will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_expose_names_of_let_expressions(bool flag) {
+        bool res = m_expose_names_of_let_expressions; m_expose_names_of_let_expressions = flag;
+        return res;
+    }
+
+    /// Check if exposing names of let expressions is enabled.
+    bool is_exposing_names_of_let_expressions_enabled() const
+    { return m_expose_names_of_let_expressions; }
 
     /// Enable ignoring no-inline annotations of functions.
     ///
@@ -250,13 +266,6 @@ public:
         IValue const * const   arguments[],
         size_t                 n_args) const;
 
-    /// Set a tag, version pair into a resource literal.
-    ///
-    /// \param lit  the literal
-    /// \param tag  the tag value
-    /// \param ver  the tag version
-    void set_resource_tag(DAG_constant const *c, int tag, unsigned ver);
-
     /// Retrieve the current call evaluator.
     ICall_evaluator *get_call_evaluator() const { return m_call_evaluator; }
 
@@ -284,6 +293,29 @@ public:
 
     /// Check if this node factory owns the given DAG node.
     bool is_owner(DAG_node const *n) const;
+
+    /// Adds a name to a given DAG node.
+    void add_node_name(DAG_node const *node, char const *name);
+
+    /// Clears all node names.
+    void clear_node_names() { m_temp_name_map.clear(); }
+
+    /// Returns the name map for temporaries.
+    const Definition_temporary_name_map& get_temp_name_map() const { return m_temp_name_map; }
+
+    /// Return true iff all arguments are without name.
+    bool all_args_without_name(DAG_node const *args[], int n_args) const;
+
+    /// Return true iff all arguments are without name.
+    bool all_args_without_name(DAG_call::Call_argument const args[], int n_args) const;
+
+    /// Return the next unique ID that will be assigned.
+    ///
+    /// Can be used to decide whether CSE elided the construction of a new node.
+    size_t get_next_id() const { return m_next_id; }
+
+    /// Return a shallow copy of the top-level node with CSE disabled.
+    DAG_node const *shallow_copy(DAG_node const *node);
 
 private:
     /// Build a call to a conversion from a ::tex::gamma value to int.
@@ -476,6 +508,9 @@ private:
     /// If set, unsafe math optimizations are enabled.
     unsigned m_unsafe_math_opt : 1;
 
+    /// If set, names of let expressions are exposed as named temporaries.
+    unsigned m_expose_names_of_let_expressions : 1;
+
     /// If set, inlining is allowed.
     unsigned m_inline_allowed : 1;
 
@@ -507,14 +542,23 @@ private:
     /// The value of state::wavelength_max().
     float m_state_wavelength_max;
 
+    /// The map for temporary names.
+    Definition_temporary_name_map m_temp_name_map;
+
     /// A hash functor for DAG IR nodes.
     struct Hash_dag_node {
+        Hash_dag_node(const Definition_temporary_name_map& temp_name_map)
+        : m_temp_name_map(temp_name_map) { }
         size_t operator()(DAG_node const *node) const;
+        const Definition_temporary_name_map& m_temp_name_map;
     };
 
     /// An Equal functor for DAG IR nodes.
     struct Equal_dag_node {
+        Equal_dag_node(const Definition_temporary_name_map& temp_name_map)
+        : m_temp_name_map(temp_name_map) { }
         bool operator()(DAG_node const *a, DAG_node const *b) const;
+        const Definition_temporary_name_map& m_temp_name_map;
     };
 
     typedef hash_set<
@@ -598,7 +642,7 @@ class No_OPT_scope {
 public:
     /// RAII constructor.
     ///
-    /// \param factory  the node factory on which OPTIOMIZATION will be switched off
+    /// \param factory  the node factory on which OPTIMIZATION will be switched off
     explicit No_OPT_scope(DAG_node_factory_impl &factory)
     : m_factory(factory)
     , m_flag(factory.enable_opt(false))
@@ -612,6 +656,28 @@ private:
     /// the factory to switch
     DAG_node_factory_impl &m_factory;
     /// the old OPT flag
+    bool m_flag;
+};
+
+/// RAII scope "ignore NO-inline"
+class Ignore_NO_INLINE_scope {
+public:
+    /// RAII constructor.
+    ///
+    /// \param factory  the node factory on which CSE will be switched off
+    explicit Ignore_NO_INLINE_scope(DAG_node_factory_impl &factory)
+    : m_factory(factory)
+    , m_flag(factory.enable_ignore_noinline(true))
+    {
+    }
+
+    /// RAII destructor.
+    ~Ignore_NO_INLINE_scope() { m_factory.enable_ignore_noinline(m_flag); }
+
+private:
+    /// the factory to switch
+    DAG_node_factory_impl &m_factory;
+    /// the old INLINE flag
     bool m_flag;
 };
 

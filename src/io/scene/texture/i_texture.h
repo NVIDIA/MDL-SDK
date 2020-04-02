@@ -32,6 +32,7 @@
 #ifndef IO_SCENE_TEXTURE_I_TEXTURE_H
 #define IO_SCENE_TEXTURE_I_TEXTURE_H
 
+#include <mi/base/uuid.h>
 #include <base/data/db/i_db_tag.h>
 #include <base/data/db/i_db_journal_type.h>
 #include <io/scene/scene/i_scene_scene_element.h>
@@ -40,9 +41,9 @@ namespace mi { namespace neuraylib { class IReader; } }
 
 namespace MI {
 
-namespace SERIAL { class Serializer; class Deserializer; }
-
+namespace DB { class Transaction; }
 namespace DBIMAGE { class Image_set; }
+namespace SERIAL { class Serializer; class Deserializer; }
 
 namespace TEXTURE {
 
@@ -147,18 +148,22 @@ private:
 /// filename to DB element name is used to detect already loaded textures/images. In such a case,
 /// the tag of the existing DB element is returned.
 ///
-/// \param transaction         The DB transaction to be used.
-/// \param image_set_desc      Description of the resolved image set to be loaded.
-/// \param shared              Indicates whether a possibly already existing DB element for that
-///                            resource should simply be reused. Otherwise, independent DB
-///                            elements are created, even if the resource has already been loaded.
-/// \param gamma               The gamma value of the texture.
-/// \return                    The tag of that texture (invalid in case of failures).
-
+/// \param transaction           The DB transaction to be used.
+/// \param image_set_desc        Description of the resolved image set to be loaded.
+/// \param impl_hash             Hash of the data in the implementation DB element. Use {0,0,0,0} if
+///                              hash is not known.
+/// \param shared_proxy          Indicates whether a possibly already existing proxy DB element for
+///                              that resource should simply be reused (the decision is based on
+///                              the DB element name derived from \c image_set, not on
+///                              \c impl_hash). Otherwise, an independent proxy DB element is
+///                              created, even if the resource has already been loaded.
+/// \param gamma                 The gamma value of the texture.
+/// \return                      The tag of that texture (invalid in case of failures).
 DB::Tag load_mdl_texture(
     DB::Transaction* transaction,
     DBIMAGE::Image_set* image_set,
-    bool shared,
+    const mi::base::Uuid& impl_hash,
+    bool shared_proxy,
     mi::Float32 gamma);
 
 } // namespace TEXTURE

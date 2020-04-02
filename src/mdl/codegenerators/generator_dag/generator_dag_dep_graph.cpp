@@ -1601,7 +1601,7 @@ void DAG_dependence_graph::create_exported_nodes(
                 IType const          *ret_type = f_type->get_return_type()->skip_type_alias();
 
                 if (is<IType_vector>(ret_type)) {
-                    string name = m_dag_builder.def_to_name(def, module);
+                    string name = m_dag_builder.type_to_name(ret_type);
 
                     // create nodes for field access here
                     for (int l = 0, n_params = f_type->get_parameter_count(); l < n_params; ++l) {

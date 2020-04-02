@@ -398,28 +398,6 @@ __device__ inline float3 environment_eval(
     return make_float3(t.x, t.y, t.z) * params.env_intensity;
 }
 
-
-// Intersect a sphere with given radius located at the (0,0,0)
-__device__ inline float intersect_sphere(
-    const float3 &pos,
-    const float3 &dir,
-    const float radius)
-{
-    const float b = 2.0f * dot(dir, pos);
-    const float c = dot(pos, pos) - radius * radius;
-
-    float tmp = b * b - 4.0f * c;
-    if (tmp < 0.0f)
-        return -1.0f;
-
-    tmp = sqrtf(tmp);
-    const float t0 = (((b < 0.0f) ? -tmp : tmp) - b) * 0.5f;
-    const float t1 = c / t0;
-
-    const float m = fminf(t0, t1);
-    return m > 0.0f ? m : fmaxf(t0, t1);
-}
-
 //-------------------------------------------------------------------------------------------------
 
 struct auxiliary_data
@@ -467,6 +445,285 @@ struct Ray_state
     uint32_t lpe_current_state;
     auxiliary_data* aux;
 };
+
+
+struct Ray_hit_info
+{
+    float distance;
+    float3 position;
+    float3 normal;
+    float3 tangent_u;
+    float3 tangent_v;
+    #ifdef ENABLE_DERIVATIVES
+        tct_deriv_float3 texture_coords[1];
+    #else
+        tct_float3 texture_coords[1];
+    #endif
+};
+
+
+#define GT_SPHERE_RADIUS 1.0f
+__device__ inline bool intersect_sphere(
+    const Ray_state &ray_state,
+    const Kernel_params &params,
+    Ray_hit_info& out_hit)
+{
+    const float r = GT_SPHERE_RADIUS;
+    const float b = 2.0f * dot(ray_state.dir, ray_state.pos);
+    const float c = dot(ray_state.pos, ray_state.pos) - r * r;
+
+    float tmp = b * b - 4.0f * c;
+    if (tmp < 0.0f)
+        return false;
+
+    tmp = sqrtf(tmp);
+    const float t0 = (((b < 0.0f) ? -tmp : tmp) - b) * 0.5f;
+    const float t1 = c / t0;
+
+    const float m = fminf(t0, t1);
+    out_hit.distance = m > 0.0f ? m : fmaxf(t0, t1);
+    if (out_hit.distance < 0.0f)
+        return false;
+
+    // compute geometry state
+    out_hit.position = ray_state.pos + ray_state.dir * out_hit.distance;
+    out_hit.normal = normalize(out_hit.position);
+
+    const float phi = atan2f(out_hit.normal.x, out_hit.normal.z);
+    const float theta = acosf(out_hit.normal.y);
+
+    const float3 uvw = make_float3(
+        (phi * (float) (0.5 / M_PI) + 0.5f) * 2.0f,
+        1.0f - theta * (float) (1.0 / M_PI),
+        0.0f);
+
+    // compute surface derivatives
+    float sp, cp;
+    sincosf(phi, &sp, &cp);
+    const float st = sinf(theta);
+    out_hit.tangent_u = make_float3(cp * st, 0.0f, -sp * st) * (float) M_PI;
+    out_hit.tangent_v = make_float3(sp * out_hit.normal.y, -st, cp * out_hit.normal.y) * (float) (-M_PI);
+
+    #ifdef ENABLE_DERIVATIVES
+        out_hit.texture_coords[0].val = uvw;
+        out_hit.texture_coords[0].dx = make_float3(0.0f, 0.0f, 0.0f);
+        out_hit.texture_coords[0].dy = make_float3(0.0f, 0.0f, 0.0f);
+    #else
+        out_hit.texture_coords[0] = uvw;
+    #endif
+    
+    return true;
+}
+
+#define GT_HAIR_RADIUS 0.35f
+#define GT_HAIR_LENGTH 3.0f
+__device__ inline bool intersect_hair(
+    const Ray_state &ray_state,
+    const Kernel_params &params,
+    Ray_hit_info& out_hit)
+{
+    const float r = GT_HAIR_RADIUS;
+    const float a = ray_state.dir.x * ray_state.dir.x + ray_state.dir.z * ray_state.dir.z;
+    const float b = 2.0f * (ray_state.dir.x * ray_state.pos.x + ray_state.dir.z * ray_state.pos.z);
+    const float c = ray_state.pos.x * ray_state.pos.x + ray_state.pos.z * ray_state.pos.z - r * r;
+
+    float tmp = b * b - 4.0f * a * c;
+    if (tmp < 0.0f)
+        return false;
+
+    tmp = sqrtf(tmp);
+    const float q = (((b < 0.0f) ? -tmp : tmp) - b) * 0.5f;
+    const float t0 = q / a;
+    const float t1 = c / q;
+
+    const float m = fminf(t0, t1);
+    out_hit.distance = m > 0.0f ? m : fmaxf(t0, t1);
+    if (out_hit.distance < 0.0f)
+        return false;
+
+    // compute geometry state
+    out_hit.position = ray_state.pos + ray_state.dir * out_hit.distance;
+    out_hit.normal = normalize(make_float3(out_hit.position.x, 0.0f, out_hit.position.z));
+
+    if (fabsf(out_hit.position.y) > GT_HAIR_LENGTH * 0.5f)
+        return false;
+
+    const float phi = atan2f(out_hit.position.z, out_hit.position.x);
+
+    const float3 uvw = make_float3(
+        (out_hit.position.y + GT_HAIR_LENGTH * 0.5f) / GT_HAIR_LENGTH, // position along the hair
+        phi * (float) (0.5f / M_PI) + 0.5f, // position around the hair in the range [0, 1]
+        2.0f * GT_HAIR_RADIUS); // thickness of the hair
+
+    // compute surface derivatives
+    out_hit.tangent_u = make_float3(0.0, 1.0, 0.0);
+    out_hit.tangent_v = cross(out_hit.normal, out_hit.tangent_u);
+
+    #ifdef ENABLE_DERIVATIVES
+        out_hit.texture_coords[0].val = uvw;
+        out_hit.texture_coords[0].dx = make_float3(0.0f, 0.0f, 0.0f);
+        out_hit.texture_coords[0].dy = make_float3(0.0f, 0.0f, 0.0f);
+    #else
+        out_hit.texture_coords[0] = uvw;
+    #endif
+
+    return true;
+}
+
+__device__ inline bool intersect_geometry(
+    Ray_state &ray_state,
+    const Kernel_params &params,
+    Ray_hit_info& out_hit)
+{
+    switch (Geometry_type(params.geometry))
+    {
+        case GT_SPHERE:
+            if (!intersect_sphere(ray_state, params, out_hit))
+                return false;
+            break;
+        case GT_HAIR:        
+            if (!intersect_hair(ray_state, params, out_hit))
+                return false;
+            break;
+        default:
+            return false;
+    }
+
+    ray_state.pos = out_hit.position;
+
+
+    #ifdef ENABLE_DERIVATIVES
+    if (params.use_derivatives && ray_state.intersection == 0)
+    {
+        // compute ray differential for one-pixel offset rays
+        // ("Physically Based Rendering", 3rd edition, chapter 10.1.1)
+        const float d = dot(out_hit.normal, ray_state.pos);
+        const float tx = (d - dot(out_hit.normal, ray_state.pos_rx)) / dot(out_hit.normal, ray_state.dir_rx);
+        const float ty = (d - dot(out_hit.normal, ray_state.pos_ry)) / dot(out_hit.normal, ray_state.dir_ry);
+        ray_state.pos_rx += ray_state.dir_rx * tx;
+        ray_state.pos_ry += ray_state.dir_ry * ty;
+
+        float4 A;
+        float2 B_x, B_y;
+        if (fabsf(out_hit.normal.x) > fabsf(out_hit.normal.y) && fabsf(out_hit.normal.x) > fabsf(out_hit.normal.z))
+        {
+            B_x = make_float2(
+                ray_state.pos_rx.y - ray_state.pos.y,
+                ray_state.pos_rx.z - ray_state.pos.z);
+            B_y = make_float2(
+                ray_state.pos_ry.y - ray_state.pos.y,
+                ray_state.pos_ry.z - ray_state.pos.z);
+            A = make_float4(
+                out_hit.tangent_u.y, out_hit.tangent_u.z, out_hit.tangent_v.y, out_hit.tangent_v.z);
+        }
+        else if (fabsf(out_hit.normal.y) > fabsf(out_hit.normal.z))
+        {
+            B_x = make_float2(
+                ray_state.pos_rx.x - ray_state.pos.x,
+                ray_state.pos_rx.z - ray_state.pos.z);
+            B_y = make_float2(
+                ray_state.pos_ry.x - ray_state.pos.x,
+                ray_state.pos_ry.z - ray_state.pos.z);
+            A = make_float4(
+                out_hit.tangent_u.x, out_hit.tangent_u.z, out_hit.tangent_v.x, out_hit.tangent_v.z);
+        }
+        else
+        {
+            B_x = make_float2(
+                ray_state.pos_rx.x - ray_state.pos.x,
+                ray_state.pos_rx.y - ray_state.pos.y);
+            B_y = make_float2(
+                ray_state.pos_ry.x - ray_state.pos.x,
+                ray_state.pos_ry.y - ray_state.pos.y);
+            A = make_float4(
+                out_hit.tangent_u.x, out_hit.tangent_u.y, out_hit.tangent_v.x, out_hit.tangent_v.y);
+        }
+
+        const float det = A.x * A.w - A.y * A.z;
+        if (fabsf(det) > 1e-10f)
+        {
+            const float inv_det = 1.0f / det;
+
+            out_hit.texture_coords[0].dx.x = inv_det * (A.w * B_x.x - A.z * B_x.y);
+            out_hit.texture_coords[0].dx.y = inv_det * (A.x * B_x.y - A.y * B_x.x);
+
+            out_hit.texture_coords[0].dy.x = inv_det * (A.w * B_y.x - A.z * B_y.y);
+            out_hit.texture_coords[0].dy.y = inv_det * (A.x * B_y.y - A.y * B_y.x);
+        }
+    }
+    #endif
+
+    out_hit.tangent_u = normalize(out_hit.tangent_u);
+    out_hit.tangent_v = normalize(out_hit.tangent_v);
+    return true;
+}
+
+
+__device__ bool cull_point_light(
+    const Kernel_params &params,
+    const float3 &light_position,
+    const float3 &light_direction /*to light*/,
+    const float3 &normal)
+{
+    switch (params.geometry)
+    {
+        case GT_SPHERE:
+        {
+            // same as default, but allow lights inside the sphere
+            const float inside = (squared_length(light_position) < GT_SPHERE_RADIUS) ? -1.f : 1.f;
+            return (dot(light_direction, normal) * inside) <= 0.0f;
+        }
+        case GT_HAIR:
+            // ignore light sources within the volume
+            return (light_position.x * light_position.x + 
+                    light_position.z * light_position.z) < GT_SPHERE_RADIUS;
+        default: 
+            // ignore light from behind
+            return dot(light_direction, normal) <= 0.0f;
+    }
+}
+
+__device__ bool cull_env_light(
+    const Kernel_params &params,
+    const float3 &light_direction /*to light*/,
+    const float3 &normal)
+{
+    switch (params.geometry)
+    {
+        case GT_HAIR:
+            // allow light from behind
+            return false;
+
+        case GT_SPHERE:
+        default:
+            // ignore light from behind
+            return dot(light_direction, normal) <= 0.0f;
+    }
+}
+
+
+__device__ void continue_ray(
+    Ray_state& ray_state,
+    const Ray_hit_info &hit_indo,
+    unsigned int event_type,
+    const Kernel_params &params)
+{
+    switch (params.geometry)
+    {
+
+    case GT_HAIR:
+        if (event_type == BSDF_EVENT_GLOSSY_TRANSMISSION)
+        {
+            // conservative
+            ray_state.pos += ray_state.dir * 2.0f * GT_HAIR_RADIUS;
+            ray_state.inside = false;
+        }
+        break;
+
+    default:
+        return;
+    }
+}
 
 //-------------------------------------------------------------------------------------------------
 
@@ -548,7 +805,7 @@ __device__ inline void accumulate_next_event_contribution(
 //-------------------------------------------------------------------------------------------------
 
 
-__device__ inline bool trace_sphere(
+__device__ inline bool trace_scene(
     Rand_state &rand_state,
     Ray_state &ray_state,
     const Kernel_params &params)
@@ -558,8 +815,8 @@ __device__ inline bool trace_sphere(
         return false;
 
     // intersect with geometry
-    const float t = intersect_sphere(ray_state.pos, ray_state.dir, 1.0f);
-    if (t < 0.0f) {
+    Ray_hit_info hit;
+    if (!intersect_geometry(ray_state, params, hit)) {
         if (ray_state.intersection == 0 && params.mdl_test_type != MDL_TEST_NO_ENV) {
             // primary ray miss, add environment contribution
             const float2 uv = environment_coords(ray_state.dir);
@@ -573,88 +830,7 @@ __device__ inline bool trace_sphere(
         }
         return false;
     }
-
-    // compute geometry state
-    ray_state.pos += ray_state.dir * t;
-    const float3 normal = normalize(ray_state.pos);
-
-    const float phi = atan2f(normal.x, normal.z);
-    const float theta = acosf(normal.y);
-
-    const float3 uvw = make_float3(
-        (phi * (float)(0.5 / M_PI) + 0.5f) * 2.0f,
-        1.0f - theta * (float)(1.0 / M_PI),
-        0.0f);
-
-    // compute surface derivatives
-    float sp, cp;
-    sincosf(phi, &sp, &cp);
-    const float st = sinf(theta);
-    float3 tangent_u = make_float3(cp * st, 0.0f, -sp * st) * (float)M_PI;
-    float3 tangent_v = make_float3(sp * normal.y, -st, cp * normal.y) * (float)(-M_PI);
-
-#ifdef ENABLE_DERIVATIVES
-    tct_deriv_float3 texture_coords[1] = {
-        { uvw, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } } };
-
-    if (params.use_derivatives && ray_state.intersection == 0)
-    {
-        // compute ray differential for one-pixel offset rays
-        // ("Physically Based Rendering", 3rd edition, chapter 10.1.1)
-        const float d = dot(normal, ray_state.pos);
-        const float tx = (d - dot(normal, ray_state.pos_rx)) / dot(normal, ray_state.dir_rx);
-        const float ty = (d - dot(normal, ray_state.pos_ry)) / dot(normal, ray_state.dir_ry);
-        ray_state.pos_rx += ray_state.dir_rx * tx;
-        ray_state.pos_ry += ray_state.dir_ry * ty;
-
-        float4 A;
-        float2 B_x, B_y;
-        if (fabsf(normal.x) > fabsf(normal.y) && fabsf(normal.x) > fabsf(normal.z)) {
-            B_x = make_float2(
-                ray_state.pos_rx.y - ray_state.pos.y,
-                ray_state.pos_rx.z - ray_state.pos.z);
-            B_y = make_float2(
-                ray_state.pos_ry.y - ray_state.pos.y,
-                ray_state.pos_ry.z - ray_state.pos.z);
-            A = make_float4(
-                tangent_u.y, tangent_u.z, tangent_v.y, tangent_v.z);
-        } else if (fabsf(normal.y) > fabsf(normal.z)) {
-            B_x = make_float2(
-                ray_state.pos_rx.x - ray_state.pos.x,
-                ray_state.pos_rx.z - ray_state.pos.z);
-            B_y = make_float2(
-                ray_state.pos_ry.x - ray_state.pos.x,
-                ray_state.pos_ry.z - ray_state.pos.z);
-            A = make_float4(
-                tangent_u.x, tangent_u.z, tangent_v.x, tangent_v.z);
-        } else {
-            B_x = make_float2(
-                ray_state.pos_rx.x - ray_state.pos.x,
-                ray_state.pos_rx.y - ray_state.pos.y);
-            B_y = make_float2(
-                ray_state.pos_ry.x - ray_state.pos.x,
-                ray_state.pos_ry.y - ray_state.pos.y);
-            A = make_float4(
-                tangent_u.x, tangent_u.y, tangent_v.x, tangent_v.y);
-        }
-
-        const float det = A.x * A.w - A.y * A.z;
-        if (fabsf(det) > 1e-10f) {
-            const float inv_det = 1.0f / det;
-
-            texture_coords[0].dx.x = inv_det * (A.w * B_x.x - A.z * B_x.y);
-            texture_coords[0].dx.y = inv_det * (A.x * B_x.y - A.y * B_x.x);
-
-            texture_coords[0].dy.x = inv_det * (A.w * B_y.x - A.z * B_y.y);
-            texture_coords[0].dy.y = inv_det * (A.x * B_y.y - A.y * B_y.x);
-        }
-    }
-#else
-    tct_float3 texture_coords[1] = { uvw };
-#endif
-    tangent_u = normalize(tangent_u);
-    tangent_v = normalize(tangent_v);
-
+    
     float4 texture_results[16];
 
     // material of the current object
@@ -665,13 +841,13 @@ __device__ inline bool trace_sphere(
 
     // create state
     Mdl_state state = {
-        normal,
-        normal,
-        ray_state.pos,
+        hit.normal,
+        hit.normal,
+        hit.position,
         0.0f,
-        texture_coords,
-        &tangent_u,
-        &tangent_v,
+        hit.texture_coords,
+        &hit.tangent_u,
+        &hit.tangent_v,
         texture_results,
         NULL,
         identity,
@@ -711,15 +887,15 @@ __device__ inline bool trace_sphere(
         if (is_valid(func_idx)) {
             mdl_resources.set_target_code_index(params, func_idx);    // init resource handler
             const char* arg_block = get_arg_block(params, func_idx);  // get material parameters
-            prepare_state(params, func_idx, state, normal); // init state
+            prepare_state(params, func_idx, state, hit.normal); // init state
 
             float3 abs_coeff;
             as_expression(func_idx)(
                 &abs_coeff, &state, &mdl_resources.data, NULL, arg_block);
 
-            ray_state.weight.x *= abs_coeff.x > 0.0f ? expf(-abs_coeff.x * t) : 1.0f;
-            ray_state.weight.y *= abs_coeff.y > 0.0f ? expf(-abs_coeff.y * t) : 1.0f;
-            ray_state.weight.z *= abs_coeff.z > 0.0f ? expf(-abs_coeff.z * t) : 1.0f;
+            ray_state.weight.x *= abs_coeff.x > 0.0f ? expf(-abs_coeff.x * hit.distance) : 1.0f;
+            ray_state.weight.y *= abs_coeff.y > 0.0f ? expf(-abs_coeff.y * hit.distance) : 1.0f;
+            ray_state.weight.z *= abs_coeff.z > 0.0f ? expf(-abs_coeff.z * hit.distance) : 1.0f;
         }
     }
 
@@ -735,7 +911,7 @@ __device__ inline bool trace_sphere(
             // init for the use of the materials emission intensity
             mdl_resources.set_target_code_index(params, intensity_func_idx); // init resource handler
             const char* arg_block = get_arg_block(params, intensity_func_idx); // get material parameters
-            prepare_state(params, intensity_func_idx, state, normal); // init state
+            prepare_state(params, intensity_func_idx, state, hit.normal); // init state
 
             as_expression(intensity_func_idx)(
                 &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
@@ -744,7 +920,7 @@ __device__ inline bool trace_sphere(
         // init for the use of the materials EDF
         mdl_resources.set_target_code_index(params, func_idx); // init resource handler
         const char* arg_block = get_arg_block(params, func_idx); // get material parameters
-        prepare_state(params, func_idx, state, normal); // init state
+        prepare_state(params, func_idx, state, hit.normal); // init state
         as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
         // evaluate EDF
@@ -794,7 +970,7 @@ __device__ inline bool trace_sphere(
         // init for the use of the materials BSDF
         mdl_resources.set_target_code_index(params, func_idx); // init resource handler
         const char* arg_block = get_arg_block(params, func_idx); // get material parameters
-        prepare_state(params, func_idx, state, normal); // init state
+        prepare_state(params, func_idx, state, hit.normal); // init state
 
         // initialize BSDF
         // Note, that this will change the state.normal (needs to be reset before using EDFs)
@@ -811,8 +987,10 @@ __device__ inline bool trace_sphere(
 
         // for thin_walled materials there is no 'inside'
         bool thin_walled = false;
-        as_expression(get_mdl_function_index(material.thin_walled))(
-            &thin_walled, &state, &mdl_resources.data, NULL, arg_block);
+        Mdl_function_index thin_walled_func_idx = get_mdl_function_index(material.thin_walled);
+        if (is_valid(thin_walled_func_idx))
+            as_expression(thin_walled_func_idx)(
+                &thin_walled, &state, &mdl_resources.data, NULL, arg_block);
 
         // initialize shared fields
         if (ray_state.inside && !thin_walled)
@@ -873,9 +1051,7 @@ __device__ inline bool trace_sphere(
         if (params.light_intensity > 0.0f)
         {
             float3 to_light = params.light_pos - ray_state.pos;
-            const float check_sign = squared_length(params.light_pos) < 1.0f ? -1.0f : 1.0f;
-            
-            if (dot(to_light, normal) * check_sign > 0.0f)
+            if(!cull_point_light(params, params.light_pos, to_light, hit.normal))
             {
                 const float inv_squared_dist = 1.0f / squared_length(to_light);
                 const float3 f = params.light_color * params.light_intensity * 
@@ -902,7 +1078,7 @@ __device__ inline bool trace_sphere(
                         &eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
                     // we know if we reflect or transmit
-                    if (dot(to_light, normal) > 0.0f) {
+                    if (dot(to_light, hit.normal) > 0.0f) {
                         transition_glossy = TRANSITION_SCATTER_GR;
                         transition_diffuse = TRANSITION_SCATTER_DR;
                     } else {
@@ -960,8 +1136,7 @@ __device__ inline bool trace_sphere(
             float pdf;
             const float3 f = environment_sample(light_dir, pdf, make_float3(xi0, xi1, xi2), params);
 
-            const float cos_theta = dot(light_dir, normal);
-            if (cos_theta > 0.0f && pdf > 0.0f)
+            if (!cull_env_light(params, light_dir, hit.normal) && pdf > 0.0f)
             {
                 eval_data.k2 = light_dir;
 
@@ -987,7 +1162,7 @@ __device__ inline bool trace_sphere(
                         (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
 
                     // we know if we reflect or transmit
-                    if (dot(light_dir, normal) > 0.0f) {
+                    if (dot(light_dir, hit.normal) > 0.0f) {
                         transition_glossy = TRANSITION_SCATTER_GR;
                         transition_diffuse = TRANSITION_SCATTER_DR;
                     } else {
@@ -1078,10 +1253,13 @@ __device__ inline bool trace_sphere(
                 #endif
                 params);
 
+            // depending on the geometry, the ray might be displaced before continuing
+            continue_ray(ray_state, hit, sample_data.event_type, params);
+
             if (ray_state.inside)
             {
                 // avoid self-intersections
-                ray_state.pos -= normal * 0.001f;
+                ray_state.pos -= hit.normal * 0.001f;
 
                 return true; // continue bouncing in sphere
             }
@@ -1132,7 +1310,7 @@ struct render_result
     auxiliary_data aux;
 };
 
-__device__ inline render_result render_sphere(
+__device__ inline render_result render_scene(
     Rand_state &rand_state,
     const Kernel_params &params,
     const unsigned x,
@@ -1174,7 +1352,7 @@ __device__ inline render_result render_sphere(
     const unsigned int max_inters = params.max_path_length - 1;
     for (ray_state.intersection = 0; ray_state.intersection < max_inters; ++ray_state.intersection)
     {
-        if (!trace_sphere(rand_state, ray_state, params))
+        if (!trace_scene(rand_state, ray_state, params))
             break;
     }
     
@@ -1209,7 +1387,7 @@ __device__ inline unsigned int display(float3 val, const float tonemap_scale)
 
 
 // CUDA kernel rendering simple geometry with IBL
-extern "C" __global__ void render_sphere_kernel(
+extern "C" __global__ void render_scene_kernel(
     const Kernel_params kernel_params)
 {
     const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1228,7 +1406,7 @@ extern "C" __global__ void render_sphere_kernel(
     clear(aux);
     for (unsigned int s = 0; s < kernel_params.iteration_num; ++s)
     {
-        res = render_sphere(
+        res = render_scene(
             rand_state,
             kernel_params,
             x, y);

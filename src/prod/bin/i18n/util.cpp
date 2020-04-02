@@ -759,7 +759,7 @@ std::string get_mdl_system_directory()
 std::string get_module_name(const std::string& qualified_material_name)
 {
     std::string stripped_mdl_name;
-    size_t p = qualified_material_name.find("(");
+    size_t p = qualified_material_name.find('(');
     if (p == std::string::npos)
         stripped_mdl_name = qualified_material_name;
     else // strip function signature

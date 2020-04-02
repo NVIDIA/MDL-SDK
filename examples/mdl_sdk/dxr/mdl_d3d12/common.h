@@ -111,6 +111,7 @@ namespace mdl_d3d12
     class Resource
     {
     public:
+        virtual ~Resource() = default;
         virtual std::string get_debug_name() const = 0;
     };
 
