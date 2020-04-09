@@ -844,7 +844,7 @@ void CodeGenSchedModels::createInstRWClass(Record *InstRWDef) {
     SC.Writes = SchedClasses[OldSCIdx].Writes;
     SC.Reads = SchedClasses[OldSCIdx].Reads;
     SC.ProcIndices.push_back(0);
-    // If we had an old class, copy it's InstRWs to this new class.
+    // If we had an old class, copy its InstRWs to this new class.
     if (OldSCIdx) {
       Record *RWModelDef = InstRWDef->getValueAsDef("SchedModel");
       for (Record *OldRWDef : SchedClasses[OldSCIdx].InstRWs) {

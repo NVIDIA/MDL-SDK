@@ -915,7 +915,7 @@ XMLNode* XMLNode::InsertAfterChild( XMLNode* afterThis, XMLNode* addThis )
     }
     if ( afterThis == addThis ) {
         // Current state: BeforeThis -> AddThis -> OneAfterAddThis
-        // Now AddThis must disappear from it's location and then
+        // Now AddThis must disappear from its location and then
         // reappear between BeforeThis and OneAfterAddThis.
         // So just leave it where it is.
         return addThis;

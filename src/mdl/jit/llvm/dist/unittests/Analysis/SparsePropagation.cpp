@@ -53,7 +53,7 @@ public:
   /// interesting; the rest are special states used by the generic solver. The
   /// UntrackedVal state differs from the other three in that the generic
   /// solver uses it to avoid doing unnecessary work. In particular, when a
-  /// value moves to the UntrackedVal state, it's users are not notified.
+  /// value moves to the UntrackedVal state, its users are not notified.
   enum TestLatticeStateTy {
     UndefinedVal,
     ConstantVal,

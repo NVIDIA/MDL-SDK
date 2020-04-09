@@ -1274,7 +1274,7 @@ WidenIV::WidenedRecTy WidenIV::getExtendedOperandRecurrence(NarrowIVDefUse DU) {
 }
 
 /// Is this instruction potentially interesting for further simplification after
-/// widening it's type? In other words, can the extend be safely hoisted out of
+/// widening its type? In other words, can the extend be safely hoisted out of
 /// the loop with SCEV reducing the value to a recurrence on the same loop. If
 /// so, return the extended recurrence and the kind of extension used. Otherwise
 /// return {nullptr, Unknown}.

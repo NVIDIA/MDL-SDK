@@ -183,7 +183,7 @@ public:
   /// traversal of the blocks.
   ///
   /// Unlike a block pointer, its order has meaning (location in the
-  /// topological sort) and it's class is the same regardless of block type.
+  /// topological sort) and its class is the same regardless of block type.
   struct BlockNode {
     using IndexType = uint32_t;
 

@@ -1833,7 +1833,7 @@ static void printMachOUniversalHeaders(const object::MachOUniversalBinary *UB,
     if (OFA.getOffset() > size)
       outs() << " (past end of file)";
     if (OFA.getOffset() % (1 << OFA.getAlign()) != 0)
-      outs() << " (not aligned on it's alignment (2^" << OFA.getAlign() << ")";
+      outs() << " (not aligned on its alignment (2^" << OFA.getAlign() << ")";
     outs() << "\n";
     outs() << "    size " << OFA.getSize();
     big_size = OFA.getOffset() + OFA.getSize();

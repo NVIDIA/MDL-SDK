@@ -161,7 +161,7 @@ public:
     // meant to be used for non-Qt-based applications.
     virtual void show_select_material_dialog(Mdl_qt_plugin_context* context, Mdl_qt_plguin_browser_handle& out_handle) = 0;
 
-    // to be called from the application to unload the plugin and free it's resources.
+    // to be called from the application to unload the plugin and free its resources.
     virtual void unload() = 0;
 
 protected:

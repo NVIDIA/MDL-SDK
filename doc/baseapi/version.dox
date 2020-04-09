@@ -36,7 +36,7 @@ compatibility between different versions.
 \if SHARED_LIB_VERSION
 \section mi_base_version_api API Version of a Shared Library
 
-<b>This section does currently not apply. It will be reviewed towards
+<b>This section does currently not apply. It will be reviewed toward
 the end of the Base API development</b>
 
 Assuming the API is provided in the form of a shared library (also

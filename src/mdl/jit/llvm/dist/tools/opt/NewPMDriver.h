@@ -46,7 +46,7 @@ enum VerifierKind {
 ///
 /// This function only exists factored away from opt.cpp in order to prevent
 /// inclusion of the new pass manager headers and the old headers into the same
-/// file. It's interface is consequentially somewhat ad-hoc, but will go away
+/// file. Its interface is consequentially somewhat ad-hoc, but will go away
 /// when the transition finishes.
 ///
 /// ThinLTOLinkOut is only used when OK is OK_OutputThinLTOBitcode, and can be

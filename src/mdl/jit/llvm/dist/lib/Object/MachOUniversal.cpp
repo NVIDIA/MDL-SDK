@@ -168,7 +168,7 @@ MachOUniversalBinary::MachOUniversalBinary(MemoryBufferRef Source, Error &Err)
       Err = malformedError("offset: " + Twine(A.getOffset()) +
         " for cputype (" + Twine(A.getCPUType()) + ") cpusubtype (" +
         Twine(A.getCPUSubType() & ~MachO::CPU_SUBTYPE_MASK) +
-        ") not aligned on it's alignment (2^" + Twine(A.getAlign()) + ")");
+        ") not aligned on its alignment (2^" + Twine(A.getAlign()) + ")");
       return;
     }
     if (A.getOffset() < MinSize) {

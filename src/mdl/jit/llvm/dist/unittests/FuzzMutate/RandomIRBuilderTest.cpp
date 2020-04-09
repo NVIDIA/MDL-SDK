@@ -119,7 +119,7 @@ TEST(RandomIRBuilderTest, InsertValueIndexes) {
   for (auto *T: Types) {
     // Loop to account for possible random decisions
     for (int i = 0; i < 10; ++i) {
-      // Create value we want to insert. Only it's type matters.
+      // Create value we want to insert. Only its type matters.
       Srcs[1] = ConstantInt::get(T, 5);
 
       // Try to pick correct index

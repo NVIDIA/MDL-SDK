@@ -348,7 +348,7 @@ public:
       }
     } else if (isRegisterClass()) {
       // For register sets, sort by number of registers. This guarantees that
-      // a set will always sort before all of it's strict supersets.
+      // a set will always sort before all of its strict supersets.
       if (Registers.size() != RHS.Registers.size())
         return Registers.size() < RHS.Registers.size();
     } else {

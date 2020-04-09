@@ -197,7 +197,7 @@ void X86EVEX2VEXTablesEmitter::run(raw_ostream &OS) {
       continue;
 
     // Add VEX encoded instructions to one of VEXInsts vectors according to
-    // it's opcode.
+    // its opcode.
     if (Inst->TheDef->getValueAsDef("OpEnc")->getName() == "EncVEX") {
       uint64_t Opcode = getValueFromBitsInit(Inst->TheDef->
                                              getValueAsBitsInit("Opcode"));

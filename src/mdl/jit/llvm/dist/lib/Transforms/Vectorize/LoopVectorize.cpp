@@ -4391,7 +4391,7 @@ bool LoopVectorizationCostModel::memoryInstructionCanBeWidened(Instruction *I,
   if (isScalarWithPredication(I))
     return false;
 
-  // If the instruction's allocated size doesn't equal it's type size, it
+  // If the instruction's allocated size doesn't equal its type size, it
   // requires padding and will be scalarized.
   auto &DL = I->getModule()->getDataLayout();
   auto *ScalarTy = LI ? LI->getType() : SI->getValueOperand()->getType();

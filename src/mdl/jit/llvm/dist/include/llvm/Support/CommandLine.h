@@ -684,7 +684,7 @@ public:
                               const GenericOptionValue &Default,
                               size_t GlobalWidth) const;
 
-  // printOptionDiff - print the value of an option and it's default.
+  // printOptionDiff - print the value of an option and its default.
   //
   // Template definition ensures that the option and default have the same
   // DataType (via the same AnyOptionValue).

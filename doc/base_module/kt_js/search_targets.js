@@ -3,7 +3,7 @@ var search_targets =
 
   ["1 Introduction", [
     ["base", "1001", "Material Definition Language (MDL) enables users to define the reflective, transmissive, emissive and volumetric properties of objects. For details regarding the elemental distribution functions and operations, please see the MDL specification."],
-    ["base", "1002", "The module <tt>base.mdl</tt> provides a set of texturing functions covering the whole range from bitmap to procedural texturing. In addition, module <tt>base.mdl</tt> provides helper functions to make some common tasks easy, as well as provide backwards compatibility support for some legacy parameter semantics."]
+    ["base", "1002", "The module <tt>base.mdl</tt> provides a set of texturing functions covering the whole range from bitmap to procedural texturing. In addition, module <tt>base.mdl</tt> provides helper functions to make some common tasks easy, as well as provide backward compatibility support for some legacy parameter semantics."]
   ]],
   ["2.1 Texturing functions", [
     ["base", "1003", "The main purpose of the module <tt>mdl</tt> is to provide material creators with a comprehensive set of texturing functions to spatial variations to their materials."],
@@ -1756,7 +1756,7 @@ var search_targets =
     ["base", "2903", "<tt>bool</tt>"],
     ["base", "2904", "<tt>false</tt>"],
     ["base", "2906", "no"],
-    ["base", "2907", "Allows backwards compatibility with mia material"]
+    ["base", "2907", "Allows backward compatibility with mia material"]
   ]]
 ];
 

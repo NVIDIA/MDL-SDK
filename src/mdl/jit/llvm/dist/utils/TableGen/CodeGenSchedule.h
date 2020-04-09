@@ -299,7 +299,7 @@ class CodeGenSchedModels {
   RecVec ProcResGroups;
 
   // Map each instruction to its unique SchedClass index considering the
-  // combination of it's itinerary class, SchedRW list, and InstRW records.
+  // combination of its itinerary class, SchedRW list, and InstRW records.
   using InstClassMapTy = DenseMap<Record*, unsigned>;
   InstClassMapTy InstrClassMap;
 

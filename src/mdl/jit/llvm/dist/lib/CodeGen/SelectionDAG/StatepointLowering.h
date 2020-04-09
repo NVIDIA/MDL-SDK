@@ -103,7 +103,7 @@ public:
 
 private:
   /// Maps pre-relocation value (gc pointer directly incoming into statepoint)
-  /// into it's location (currently only stack slots)
+  /// into its location (currently only stack slots)
   DenseMap<SDValue, SDValue> Locations;
 
   /// A boolean indicator for each slot listed in the FunctionInfo as to

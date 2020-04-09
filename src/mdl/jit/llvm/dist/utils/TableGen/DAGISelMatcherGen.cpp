@@ -310,7 +310,7 @@ void MatcherGen::EmitOperatorMatchCode(const TreePatternNode *N,
   // If this is an 'and R, 1234' where the operation is AND/OR and the RHS is
   // a constant without a predicate fn that has more than one bit set, handle
   // this as a special case.  This is usually for targets that have special
-  // handling of certain large constants (e.g. alpha with it's 8/16/32-bit
+  // handling of certain large constants (e.g. alpha with its 8/16/32-bit
   // handling stuff).  Using these instructions is often far more efficient
   // than materializing the constant.  Unfortunately, both the instcombiner
   // and the dag combiner can often infer that bits are dead, and thus drop

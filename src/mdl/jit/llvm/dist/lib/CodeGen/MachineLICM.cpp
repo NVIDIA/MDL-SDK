@@ -941,7 +941,7 @@ static bool isInvariantStore(const MachineInstr &MI,
 
 // Return true if the input MI is a copy instruction that feeds an invariant
 // store instruction. This means that the src of the copy has to satisfy
-// isCallerPreservedPhysReg and atleast one of it's users should satisfy
+// isCallerPreservedPhysReg and atleast one of its users should satisfy
 // isInvariantStore.
 static bool isCopyFeedingInvariantStore(const MachineInstr &MI,
                                         const MachineRegisterInfo *MRI,

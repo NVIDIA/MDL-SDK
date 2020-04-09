@@ -769,7 +769,7 @@ CloneInstructionInExitBlock(Instruction &I, BasicBlock &ExitBlock, PHINode &PN,
 
     // Sinking call-sites need to be handled differently from other
     // instructions.  The cloned call-site needs a funclet bundle operand
-    // appropriate for it's location in the CFG.
+    // appropriate for its location in the CFG.
     SmallVector<OperandBundleDef, 1> OpBundles;
     for (unsigned BundleIdx = 0, BundleEnd = CI->getNumOperandBundles();
          BundleIdx != BundleEnd; ++BundleIdx) {

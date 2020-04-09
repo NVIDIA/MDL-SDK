@@ -287,7 +287,7 @@ public:
     ///
     /// \param marker_status    Type of error encountered.
     /// \param serializable     Pointer to serializable object that failed deserializing.
-    ///                         Only it's class id is known to be defined.
+    ///                         Only its class id is known to be defined.
     virtual void handle(Marker_status status, const T* serializable) = 0;
 };
 

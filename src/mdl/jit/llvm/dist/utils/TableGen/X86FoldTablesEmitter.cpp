@@ -616,7 +616,7 @@ void X86FoldTablesEmitter::run(raw_ostream &OS) {
     auto Match = find_if(OpcRegInsts, IsMatch(MemInst, Records));
     if (Match != OpcRegInsts.end()) {
       const CodeGenInstruction *RegInst = *Match;
-      // If the matched instruction has it's "FoldGenRegForm" set, map the
+      // If the matched instruction has its "FoldGenRegForm" set, map the
       // memory form instruction to the register form instruction pointed by
       // this field
       if (RegInst->TheDef->isValueUnset("FoldGenRegForm")) {

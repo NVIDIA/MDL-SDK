@@ -3944,7 +3944,7 @@ Expected<RuleMatcher> GlobalISelEmitter::runOnPattern(const PatternToMatch &P) {
       if (!Dst->getChild(0)->isLeaf())
         return failedImport("EXTRACT_SUBREG operand #0 isn't a leaf");
 
-      // We can assume that a subregister is in the same bank as it's super
+      // We can assume that a subregister is in the same bank as its super
       // register.
       DstIOpRec = getInitValueAsRegClass(Dst->getChild(0)->getLeafValue());
 

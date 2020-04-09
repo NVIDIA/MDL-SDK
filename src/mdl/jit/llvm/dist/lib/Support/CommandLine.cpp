@@ -1662,7 +1662,7 @@ void generic_parser_base::printOptionInfo(const Option &O,
 
 static const size_t MaxOptWidth = 8; // arbitrary spacing for printOptionDiff
 
-// printGenericOptionDiff - Print the value of this option and it's default.
+// printGenericOptionDiff - Print the value of this option and its default.
 //
 // "Generic" options have each value mapped to a name.
 void generic_parser_base::printGenericOptionDiff(

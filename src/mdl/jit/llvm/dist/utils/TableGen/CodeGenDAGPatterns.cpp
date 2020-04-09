@@ -2388,7 +2388,7 @@ bool TreePatternNode::ApplyTypeConstraints(TreePattern &TP, bool NotRegisters) {
       Record *OperandNode = Inst.getOperand(i);
 
       // If the instruction expects a predicate or optional def operand, we
-      // codegen this by setting the operand to it's default value if it has a
+      // codegen this by setting the operand to its default value if it has a
       // non-empty DefaultOps field.
       if (OperandNode->isSubClassOf("OperandWithDefaultOps") &&
           !CDP.getDefaultOperand(OperandNode).DefaultOps.empty())

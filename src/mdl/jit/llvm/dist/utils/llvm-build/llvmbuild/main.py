@@ -30,7 +30,7 @@ def cmake_quote_path(value):
     language files.
     """
 
-    # CMake has a bug in it's Makefile generator that doesn't properly quote
+    # CMake has a bug in its Makefile generator that doesn't properly quote
     # strings it generates. So instead of using proper quoting, we just use "/"
     # style paths.  Currently, we only handle escaping backslashes.
     value = value.replace("\\", "/")

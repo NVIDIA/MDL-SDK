@@ -184,7 +184,7 @@ export material gltf_material(
         );
 
     // the metallic component doesn't have a diffuse component, 
-    // it's only glossy base_color is applied to tint it
+    // its only glossy base_color is applied to tint it
     bsdf metallic_component = df::microfacet_ggx_vcavities_bsdf(
         tint: base_color * occlusion, 
         roughness_u: roughness2);

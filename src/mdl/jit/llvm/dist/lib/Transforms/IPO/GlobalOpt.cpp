@@ -423,7 +423,7 @@ static bool GlobalUsersSafeToSRA(GlobalValue *GV) {
         cast<ConstantExpr>(U)->getOpcode() != Instruction::GetElementPtr))
       return false;
 
-    // Check the gep and it's users are safe to SRA
+    // Check the gep and its users are safe to SRA
     if (!isSafeSROAGEP(U))
       return false;
   }

@@ -1083,7 +1083,7 @@ unsigned TargetInstrInfo::getNumMicroOps(const InstrItineraryData *ItinData,
   return 1;
 }
 
-/// Return the default expected latency for a def based on it's opcode.
+/// Return the default expected latency for a def based on its opcode.
 unsigned TargetInstrInfo::defaultDefLatency(const MCSchedModel &SchedModel,
                                             const MachineInstr &DefMI) const {
   if (DefMI.isTransient())

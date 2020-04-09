@@ -735,7 +735,7 @@ TEST_F(ScalarEvolutionsTest, SCEVZeroExtendExprNonIntegral) {
    * then check that no inttoptr/ptrtoint instructions got inserted.
    */
 
-  // Create a module with non-integral pointers in it's datalayout
+  // Create a module with non-integral pointers in its data layout
   Module NIM("nonintegral", Context);
   std::string DataLayout = M.getDataLayoutStr();
   if (!DataLayout.empty())
@@ -809,7 +809,7 @@ TEST_F(ScalarEvolutionsTest, SCEVExitLimitForgetLoop) {
    *
    */
 
-  // Create a module with non-integral pointers in it's datalayout
+  // Create a module with non-integral pointers in its data layout
   Module NIM("nonintegral", Context);
   std::string DataLayout = M.getDataLayoutStr();
   if (!DataLayout.empty())
@@ -907,7 +907,7 @@ TEST_F(ScalarEvolutionsTest, SCEVExitLimitForgetValue) {
    *
    */
 
-  // Create a module with non-integral pointers in it's datalayout
+  // Create a module with non-integral pointers in its data layout
   Module NIM("nonintegral", Context);
   std::string DataLayout = M.getDataLayoutStr();
   if (!DataLayout.empty())
@@ -1133,7 +1133,7 @@ TEST_F(ScalarEvolutionsTest, SCEVExpanderIsSafeToExpandAt) {
    *
    */
 
-  // Create a module with non-integral pointers in it's datalayout
+  // Create a module with non-integral pointers in its data layout
   Module NIM("nonintegral", Context);
   std::string DataLayout = M.getDataLayoutStr();
   if (!DataLayout.empty())
