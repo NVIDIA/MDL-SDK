@@ -82,7 +82,7 @@ public:
     /// Register a texture index.
     ///
     /// \param index        the texture index
-    /// \param is_resolved  true, if this texture has been resolved and exists in the neuray DB
+    /// \param is_resolved  true, if this texture has been resolved and exists in the Neuray DB
     /// \param name         the DB name of the texture at this index, if the texture has been
     ///                     resolved, the unresolved mdl url of the texture otherwise
     /// \param owner_module the owner module name of the texture
@@ -101,10 +101,18 @@ public:
     /// Return the number of texture resources.
     virtual size_t get_texture_count() const = 0;
 
+    /// Returns the number of texture resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid texture).
+    ///
+    /// \return           The body texture count or \c ~0ull, if the value is invalid due to
+    ///                   multiple translate calls.
+    virtual size_t get_body_texture_count() const = 0;
+
     /// Register a light profile.
     ///
     /// \param index        the light profile index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the neuray DB
+    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
     /// \param name         the DB name of this index, if this resource has been resolved,
     ///                     the unresolved mdl url otherwise
     /// \param owner_module the owner module name of the resource
@@ -117,10 +125,18 @@ public:
     /// Return the number of light profile resources.
     virtual size_t get_light_profile_count() const = 0;
 
-    /// Register a bsdf measurement.
+    /// Returns the number of light profile resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid light profile).
     ///
-    /// \param index  the bsdf measurement index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the neuray DB
+    /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    virtual size_t get_body_light_profile_count() const = 0;
+
+    /// Register a BSDF measurement.
+    ///
+    /// \param index        the BSDF measurement index
+    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
     /// \param name         the DB name of this index, if this resource has been resolved,
     ///                     the unresolved mdl url otherwise
     /// \param owner_module the owner module name of the resource
@@ -130,8 +146,16 @@ public:
         char const                                 *name,
         char const                                 *owner_module) = 0;
 
-    /// Return the number of bsdf measurement resources.
+    /// Return the number of BSDF measurement resources.
     virtual size_t get_bsdf_measurement_count() const = 0;
+
+    /// Returns the number of BSDF measurement resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid BSDF measurement).
+    ///
+    /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due
+    ///                   to more than one call to a link unit add function.
+    virtual size_t get_body_bsdf_measurement_count() const = 0;
 };
 
 /// Helper class to enumerate resources in lambda functions.
@@ -1406,8 +1430,12 @@ public:
     /// Constructor.
     Target_code_register()
     : m_texture_table()
+    , m_body_texture_count(0)
     , m_light_profile_table()
+    , m_body_light_profile_count(0)
     , m_bsdf_measurement_table()
+    , m_body_bsdf_measurement_count(0)
+    , m_in_argument_mode(false)
     {
     }
 
@@ -1419,72 +1447,119 @@ public:
     /// Register a texture index.
     ///
     /// \param index        the texture index
-    /// \param is_resolved  true, if this texture has been resolved and exists in the neuray DB
+    /// \param is_resolved  true, if this texture has been resolved and exists in the Neuray DB
     /// \param name         the DB name of the texture at this index, if the texture has been
     ///                     resolved, the unresolved mdl url of the texture otherwise
     /// \param owner_module the owner module name of the texture
     /// \param gamma        the gamma value of the texture
     /// \param type         the type of the texture
-    virtual void register_texture(
+    void register_texture(
         size_t                                     index,
         bool                                       is_resolved,
         char const                                 *name,
         char const                                 *owner_module,
         float                                      gamma,
         mi::neuraylib::ITarget_code::Texture_shape type,
-        mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind)
+        mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind) override
     {
-        m_texture_table.push_back(Texture_entry(index, name, owner_module, is_resolved, gamma, type, df_data_kind));
+        m_texture_table.push_back(
+            Texture_entry(index, name, owner_module, is_resolved, gamma, type, df_data_kind));
+
+        // Is a body resource and body resources count has not been marked as invalid?
+        if (!m_in_argument_mode && m_body_texture_count != ~0ull)
+            ++m_body_texture_count;
     }
 
     /// Return the number of texture resources.
-    virtual size_t get_texture_count() const
+    size_t get_texture_count() const override
     {
         return m_texture_table.size();
+    }
+
+    /// Returns the number of texture resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid texture).
+    ///
+    /// \return           The body texture count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    size_t get_body_texture_count() const override
+    {
+        return m_body_texture_count;
     }
 
     /// Register a light profile.
     ///
     /// \param index  the light profile index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the neuray DB
+    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
     /// \param name         the DB name of this index, if this resource has been resolved,
     ///                     the unresolved mdl url otherwise
     /// \param owner_module the owner module name of the resource
-    virtual void register_light_profile(
+    void register_light_profile(
         size_t                                     index,
         bool                                       is_resolved,
         char const                                 *name,
-        char const                                 *owner_module)
+        char const                                 *owner_module) override
     {
         m_light_profile_table.push_back(Res_entry(index, name));
+
+        // Is a body resource and body resources count has not been marked as invalid?
+        if (!m_in_argument_mode && m_body_light_profile_count != ~0ull)
+            ++m_body_light_profile_count;
     }
 
     /// Return the number of light profile resources.
-    virtual size_t get_light_profile_count() const
+    size_t get_light_profile_count() const override
     {
         return m_light_profile_table.size();
     }
 
-    /// Register a bsdf measurement.
+    /// Returns the number of light profile resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid light profile).
     ///
-    /// \param index  the bsdf measurement index
-    /// \param is_resolved  true, if this resource has been resolved and exists in the neuray DB
+    /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    size_t get_body_light_profile_count() const override
+    {
+        return m_body_light_profile_count;
+    }
+
+    /// Register a BSDF measurement.
+    ///
+    /// \param index        the BSDF measurement index
+    /// \param is_resolved  true, if this resource has been resolved and exists in the Neuray DB
     /// \param name         the DB name of this index, if this resource has been resolved,
     ///                     the unresolved mdl url otherwise
     /// \param owner_module the owner module name of the resource
-    virtual void register_bsdf_measurement(
+    void register_bsdf_measurement(
         size_t                                     index,
         bool                                       is_resolved,
         char const                                 *name,
-        char const                                 *owner_module)
+        char const                                 *owner_module) override
     {
         m_bsdf_measurement_table.push_back(Res_entry(index, name));
+
+        // Is a body resource and body resources count has not been marked as invalid?
+        if (!m_in_argument_mode && m_body_bsdf_measurement_count != ~0ull)
+            ++m_body_bsdf_measurement_count;
+
     }
 
-    /// Return the number of bsdf measurement resources.
-    virtual size_t get_bsdf_measurement_count() const
+    /// Return the number of BSDF measurement resources.
+    size_t get_bsdf_measurement_count() const override
     {
         return m_bsdf_measurement_table.size();
+    }
+
+    /// Returns the number of BSDF measurement resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid BSDF measurement).
+    ///
+    /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    size_t get_body_bsdf_measurement_count() const override
+    {
+        return m_body_bsdf_measurement_count;
     }
 
     /// Retrieve the texture resource table.
@@ -1496,15 +1571,50 @@ public:
     /// Retrieve the texture resource table.
     Resource_table const &get_bsdf_measurement_table() const { return m_bsdf_measurement_table; }
 
+    /// Set whether the next resources will come from arguments.
+    void set_in_argument_mode(bool in_argument_mode)
+    {
+        // going out of argument mode again?
+        if (m_in_argument_mode && !in_argument_mode) {
+            // if there have already been non-body registered resources,
+            // the body counts will become invalid
+            if (m_texture_table.size() > m_body_texture_count)
+                m_body_texture_count = ~0ull;
+
+            if (m_light_profile_table.size() > m_body_light_profile_count)
+                m_body_light_profile_count = ~0ull;
+
+            if (m_bsdf_measurement_table.size() > m_body_bsdf_measurement_count)
+                m_body_bsdf_measurement_count= ~0ull;
+        }
+
+        m_in_argument_mode = in_argument_mode;
+    }
+
 private:
     /// The texture resource table.
     Texture_resource_table m_texture_table;
 
+    /// The number of textures coming from the body of expressions
+    /// (not only from material arguments). ~0ull if invalid.
+    size_t m_body_texture_count;
+
     /// The light profile resource table.
     Resource_table m_light_profile_table;
 
-    /// The bsdf measurement resource table.
+    /// The number of light profiles coming from the body of expressions
+    /// (not only from material arguments). ~0ull if invalid.
+    size_t m_body_light_profile_count;
+
+    /// The BSDF measurement resource table.
     Resource_table m_bsdf_measurement_table;
+
+    /// The number of BSDF measurements coming from the body of expressions
+    /// (not only from material arguments). ~0ull if invalid.
+    size_t m_body_bsdf_measurement_count;
+
+    /// True, if all following resources come from material arguments.
+    bool m_in_argument_mode;
 };
 
 /// Copy Data from the register facility to the target code.
@@ -1542,6 +1652,11 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
         RTE const &entry = *it;
         tc->add_bsdf_measurement_index(entry.m_index, entry.m_name);
     }
+
+    tc->set_body_resource_counts(
+        tc_reg.get_body_texture_count(),
+        tc_reg.get_body_light_profile_count(),
+        tc_reg.get_body_bsdf_measurement_count());
 }
 
 // --------------------- Target argument block class --------------------
@@ -2016,6 +2131,7 @@ mi::Sint32 Link_unit::add_environment(
 
     // enumerate resources ...
     bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
+    m_tc_reg->set_in_argument_mode(false);
     Function_enumerator enumerator(
         *m_tc_reg,
         lambda.get(),
@@ -2111,15 +2227,19 @@ mi::Sint32 Link_unit::add_material(
                 "The compiled material is invalid.", -1);
         return -1;
     }
+
     // argument block index for the entire material
     // (initialized by the first function that requires material arguments)
     size_t arg_block_index = ~0;
 
     mi::base::Handle<MDL::IExpression_factory> ef(MDL::get_expression_factory());
     mi::mdl::IType_factory* tf = m_compiler->get_type_factory();
+    MDL::Mdl_call_resolver resolver(m_transaction);
 
-    bool include_geometry_normal = get_context_option<bool>(
-        context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL);
+    bool resolve_resources =
+        get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
+    bool include_geometry_normal =
+        get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL);
 
     // check internal space configuration
     if (m_internal_space.empty()) {
@@ -2133,8 +2253,26 @@ mi::Sint32 Link_unit::add_material(
     // increment once for each add_material invocation
     m_gen_base_name_suffix_counter++;
 
-    for (mi::Size i = 0; i < description_count; ++i)
-    {
+    // we need to first collect all resources from all expressions to be translated,
+    // then remember the number of (body) resources per resource type,
+    // and then enumerate the argument resources and translate the expressions
+    struct Add_list_item {
+        mi::base::Handle<mi::mdl::IDistribution_function> dist_func;
+        mi::base::Handle<mi::mdl::ILambda_function> lambda_func;
+    };
+
+    std::vector<Add_list_item> add_list_items(description_count);
+
+    Lambda_builder builder(
+        m_compiler.get(),
+        m_transaction,
+        compiled_material->get_mdl_meters_per_scene_unit(),
+        compiled_material->get_mdl_wavelength_min(),
+        compiled_material->get_mdl_wavelength_max(),
+        m_compile_consts,
+        m_calc_derivatives);
+
+    for (mi::Size i = 0; i < description_count; ++i) {
         if (function_descriptions[i].path == NULL) {
             function_descriptions[i].return_code = MDL::add_context_error(
                 context,
@@ -2142,15 +2280,6 @@ mi::Sint32 Link_unit::add_material(
                 -1);
             return -1;
         }
-
-        Lambda_builder builder(
-            m_compiler.get(),
-            m_transaction,
-            compiled_material->get_mdl_meters_per_scene_unit(),
-            compiled_material->get_mdl_wavelength_min(),
-            compiled_material->get_mdl_wavelength_max(),
-            m_compile_consts,
-            m_calc_derivatives);
 
         // get the field corresponding to path
         const mi::mdl::IType* field_type = 0;
@@ -2259,12 +2388,9 @@ mi::Sint32 Link_unit::add_material(
                     break;
                 }
 
-                MDL::Mdl_call_resolver resolver(m_transaction);
-
                 // ... enumerate resources: must be done before we compile ...
                 //     all resource information will be collected in main_df
-                bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
-
+                m_tc_reg->set_in_argument_mode(false);
                 Function_enumerator enumerator(
                     *m_tc_reg, main_df.get(), m_transaction, m_tex_idx,
                     m_lp_idx, m_bm_idx, m_res_index_map,
@@ -2272,11 +2398,6 @@ mi::Sint32 Link_unit::add_material(
                 main_df->enumerate_resources(resolver, enumerator, main_df->get_body());
                 if (!resolve_resources)
                     main_df->set_has_resource_attributes(false);
-
-                // ... also enumerate resources from arguments ...
-                if (compiled_material->get_parameter_count() != 0)
-                    builder.enumerate_resource_arguments(
-                        main_df.get(), compiled_material, enumerator);
 
                 size_t expr_lambda_count = dist_func->get_expr_lambda_count();
                 for (size_t i = 0; i < expr_lambda_count; ++i)
@@ -2295,8 +2416,6 @@ mi::Sint32 Link_unit::add_material(
                 // (for derivatives, optimization already happened while building derivative info,
                 // and doing it again may destroy the analysis result)
                 if (!m_calc_derivatives) {
-                    bool load_resources = get_context_option<bool>(
-                        context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
                     for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i) {
                         mi::base::Handle<mi::mdl::ILambda_function> lambda(
                             dist_func->get_expr_lambda(i));
@@ -2304,35 +2423,23 @@ mi::Sint32 Link_unit::add_material(
                         MDL::Call_evaluator<mi::mdl::ILambda_function> call_evaluator(
                             lambda.get(),
                             m_transaction,
-                            load_resources);
+                            resolve_resources);
 
                         lambda->optimize(&resolver, &call_evaluator);
                     }
                 }
 
-                // ... and add it to the compilation unit
-                size_t index;
-                if (!m_unit->add(
-                    dist_func.get(),
-                    &resolver,
-                    &arg_block_index,
-                    &index))
-                {
-                    MDL::report_messages(m_unit->access_messages(), context);
-                    function_descriptions[i].return_code = 
-                        MDL::add_context_error(context, 
-                            "The JIT backend failed to compile the function at index " 
-                            + std::to_string(i) + ".", -300);
-                    return -1;
-                }
-                function_descriptions[i].function_index = index;
-
+                add_list_items[i].dist_func = dist_func;
+                add_list_items[i].lambda_func = main_df;
                 break;
             }
 
             // if not a distribution function, we assume a generic expression
             default:
             {
+                // set infos that are passed back
+                function_descriptions[i].distribution_kind = mi::neuraylib::ITarget_code::DK_NONE;
+
                 mi::base::Handle<mi::mdl::ILambda_function> lambda(
                     builder.from_sub_expr(
                         compiled_material,
@@ -2347,12 +2454,11 @@ mi::Sint32 Link_unit::add_material(
                     return -1;
                 }
 
-                MDL::Mdl_call_resolver resolver(m_transaction);
                 if (m_calc_derivatives)
                     lambda->initialize_derivative_infos(&resolver);
 
                 // Enumerate resources ...
-                bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
+                m_tc_reg->set_in_argument_mode(false);
                 Function_enumerator enumerator(
                     *m_tc_reg, lambda.get(), m_transaction, m_tex_idx,
                     m_lp_idx, m_bm_idx, m_res_index_map,
@@ -2361,35 +2467,63 @@ mi::Sint32 Link_unit::add_material(
                 if (!resolve_resources)
                     lambda->set_has_resource_attributes(false);
 
-                // ... also enumerate resources from arguments ...
-                if (compiled_material->get_parameter_count() != 0)
-                    builder.enumerate_resource_arguments(
-                        lambda.get(), compiled_material, enumerator);
-
-                // set further infos that are passed back
-                function_descriptions[i].distribution_kind = mi::neuraylib::ITarget_code::DK_NONE;
-
-                // ... and add it to the compilation unit
-                size_t index;
-                if (!m_unit->add(
-                    lambda.get(),
-                    &resolver,
-                    mi::mdl::IGenerated_code_executable::FK_LAMBDA,
-                    &arg_block_index,
-                    &index))
-                {
-                    MDL::report_messages(m_unit->access_messages(), context);
-                    function_descriptions[i].return_code =
-                        MDL::add_context_error(
-                            context, "The JIT backend failed to compile the function at index" + 
-                            std::to_string(i), -30);
-                    return -1;
-                }
-                function_descriptions[i].function_index = index;
+                add_list_items[i].lambda_func = lambda;
                 break;
             }
-
         }
+    }
+
+    // now that all expressions are preprocessed and all resources from the bodies are collected,
+    // process the arguments and add the expressions to the link unit
+    for (mi::Size i = 0; i < description_count; ++i) {
+        if (!add_list_items[i].lambda_func)
+            continue;
+
+        Function_enumerator enumerator(
+            *m_tc_reg, add_list_items[i].lambda_func.get(), m_transaction, m_tex_idx,
+            m_lp_idx, m_bm_idx, m_res_index_map,
+            !resolve_resources, resolve_resources);
+
+        // ... also enumerate resources from arguments ...
+        if (compiled_material->get_parameter_count() != 0) {
+            m_tc_reg->set_in_argument_mode(true);
+            builder.enumerate_resource_arguments(
+                add_list_items[i].lambda_func.get(), compiled_material, enumerator);
+        }
+
+        // ... and add it to the compilation unit
+        size_t index;
+        if (add_list_items[i].dist_func) {
+            if (!m_unit->add(
+                add_list_items[i].dist_func.get(),
+                &resolver,
+                &arg_block_index,
+                &index))
+            {
+                MDL::report_messages(m_unit->access_messages(), context);
+                function_descriptions[i].return_code =
+                    MDL::add_context_error(context,
+                        "The JIT backend failed to compile the function at index "
+                        + std::to_string(i) + ".", -300);
+                return -1;
+            }
+        } else {
+            if (!m_unit->add(
+                add_list_items[i].lambda_func.get(),
+                &resolver,
+                mi::mdl::IGenerated_code_executable::FK_LAMBDA,
+                &arg_block_index,
+                &index))
+            {
+                MDL::report_messages(m_unit->access_messages(), context);
+                function_descriptions[i].return_code =
+                    MDL::add_context_error(
+                        context, "The JIT backend failed to compile the function at index" +
+                        std::to_string(i), -30);
+                return -1;
+            }
+        }
+        function_descriptions[i].function_index = index;
     }
 
     // Was a target argument block layout created for this entity?
@@ -3018,8 +3152,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         lambda->set_has_resource_attributes(false);
 
     // ... also enumerate resources from arguments ...
-    if (compiled_material->get_parameter_count() != 0)
+    if (compiled_material->get_parameter_count() != 0) {
+        tc_reg.set_in_argument_mode(true);
         builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
+    }
 
     // ... and compile
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
@@ -3178,8 +3314,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     }
 
     // ... also enumerate resources from arguments ...
-    if (compiled_material->get_parameter_count() != 0)
+    if (compiled_material->get_parameter_count() != 0) {
+        tc_reg.set_in_argument_mode(true);
         builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
+    }
 
     // ... and compile
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
@@ -3351,8 +3489,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     lambda->enumerate_resources(resolver, enumerator, body);
 
     // ... also enumerate resources from arguments ...
-    if (compiled_material->get_parameter_count() != 0)
+    if (compiled_material->get_parameter_count() != 0) {
+        tc_reg.set_in_argument_mode(true);
         builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
+    }
 
     // ... and compile
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
@@ -3493,8 +3633,10 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         main_df->set_has_resource_attributes(false);
 
     // ... also enumerate resources from arguments ...
-    if (compiled_material->get_parameter_count() != 0)
+    if (compiled_material->get_parameter_count() != 0) {
+        tc_reg.set_in_argument_mode(true);
         lambda_builder.enumerate_resource_arguments(main_df.get(), compiled_material, enumerator);
+    }
 
     size_t expr_lambda_count = dist_func->get_expr_lambda_count();
     for (size_t i = 0; i < expr_lambda_count; ++i) {

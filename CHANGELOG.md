@@ -1,12 +1,47 @@
 Change Log
 ==========
-MDL SDK 2020.0.1 (327300.3640): 30 Mar 2020
+MDL SDK 2020.0.2 (327300.6313): 28 May 2020
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2020.0.2 (327300.6313) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL Compiler and Backends
+
+    - Reduced the minimum roughness threshold for microfacet BSDFs from 1e-3 to 1e-7 to
+      make them usable for mirrors and clear glass, which is inefficient but could be required by
+      ubershaders.
+    - Added `"ro_data_segment"` field to `Shading_state_environment` (`"ro_data_segment_offset"` for
+      HLSL).
+    - Use `"direction"` for the field name of `Shading_state_environment` (HLSL only).
+    - Made `state::position()` derivable.
+
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+
+    - Fixed some rare cases were resources inside MDL functions got lost.
+    - Fixed crash in MDL code generators due to MDL core compiler missing some error messages when
+      a (wrong) member selection has the same name like an enum constant.
+    - Fixed rare NaN in microfacet sampling.
+    - Fixed error value of `ITarget_code::get_body_*()` functions.
+    - Fixed return value of `ITarget_code::create_argument_block()` when required resource callback
+      is missing.
+    - Fixed read-only data segment data not being set for native lambdas.
+    - Fixed resource enumeration when compiling multiple expressions in a link unit with
+      `add_material()`: ensure that resources in material bodies are enumerated first.
+
+
+MDL SDK 2020.0.1 (327300.3640): 30 Mar 2020
+-------------------------------------------
 
 ABI compatible with the MDL SDK 2020.0.1 (327300.3640) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
 
 **Added and Changed Features**
+
 - General
 
     - The standalone tools mdlm and i18n have been extended to support Unicode package/module
@@ -26,6 +61,7 @@ ABI compatible with the MDL SDK 2020.0.1 (327300.3640) binary release
         - Improved cleanup when loading erroneous scenes.
 
 **Fixed Bugs**
+
 - General
 
     - Fixed handling of resources inside function bodies. Previously, these resources were not
@@ -59,6 +95,7 @@ ABI compatible with the MDL SDK 2020 (327300.2022) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
 
 **Added and Changed Features**
+
 - General
 
     - A new function `mi::neuraylib::IMdl_compiler::get_df_data_texture()` has been added.

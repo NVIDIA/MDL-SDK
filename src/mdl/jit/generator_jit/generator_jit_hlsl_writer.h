@@ -379,8 +379,26 @@ private:
     /// Convert an LLVM struct type to an HLSL type.
     hlsl::Type *convert_struct_type(llvm::StructType *type);
 
-    /// Create the HLSL state struct for the corresponding LLVM struct type.
-    hlsl::Type_struct *create_state_struct_type(llvm::StructType *type);
+    /// Create an HLSL struct with the given names for the given LLVM struct type.
+    ///
+    /// \param type             the LLVM struct type
+    /// \param type_name        the name for the HLSL struct type
+    /// \param num_field_names  the number of field names, must match the number of fields
+    ///                         in the LLVM struct type
+    /// \param field_names      the names of the fields of the HLSL struct type
+    /// \param add_to_unit      if true, add the type to the unit, so it will be printed
+    hlsl::Type_struct *create_struct_from_llvm(
+        llvm::StructType *type,
+        char const *type_name,
+        size_t num_field_names,
+        char const * const *field_names,
+        bool add_to_unit);
+
+    /// Create the HLSL state core struct for the corresponding LLVM struct type.
+    hlsl::Type_struct *create_state_core_struct_type(llvm::StructType *type);
+
+    /// Create the HLSL state environment struct for the corresponding LLVM struct type.
+    hlsl::Type_struct *create_state_env_struct_type(llvm::StructType *type);
 
     /// Create the HLSL resource data struct for the corresponding LLVM struct type.
     hlsl::Type_struct *create_res_data_struct_type(llvm::StructType *type);

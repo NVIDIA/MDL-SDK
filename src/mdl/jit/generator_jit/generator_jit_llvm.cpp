@@ -1972,88 +1972,6 @@ llvm::Module *LLVM_code_generator::compile_module(
     return finalize_module();
 }
 
-// Compile an environment lambda function into an LLVM Module and return the LLVM function.
-llvm::Function *LLVM_code_generator::compile_environment_lambda(
-    bool                      incremental,
-    Lambda_function const     &lambda,
-    ICall_name_resolver const *resolver)
-{
-    IAllocator *alloc = m_arena.get_allocator();
-
-    reset_lambda_state();
-
-    // environment functions return the result by reference
-    m_lambda_force_sret = true;
-
-    // environment functions always includes a render state in its interface
-    m_lambda_force_render_state = true;
-
-    if (m_target_lang == TL_NATIVE) {
-        // when running on the CPU, we can disable instancing to speed up code generation
-        disable_function_instancing();
-    }
-
-    // if incremental is false, no module must exists
-    MDL_ASSERT(m_module == NULL || incremental == true);
-
-    if (m_module == NULL) {
-        // create a module for the function
-        create_module("lambda_mod", NULL);
-
-        // initialize the module with user code
-        if (!init_user_modules()) {
-            // drop the module and give up
-            drop_llvm_module(m_module);
-            return NULL;
-        }
-    }
-
-    LLVM_context_data *ctx_data = get_or_create_context_data(&lambda);
-    llvm::Function    *func     = ctx_data->get_function();
-    unsigned          flags     = ctx_data->get_function_flags();
-
-    m_exported_func_list.push_back(
-        Exported_function(
-            get_allocator(),
-            func,
-            IGenerated_code_executable::DK_NONE,
-            IGenerated_code_executable::FK_ENVIRONMENT,
-            ~0));
-
-    // ensure the function is finished by putting it into a block
-    {
-        // environment functions return color
-        Function_instance inst(alloc, &lambda);
-        Function_context context(alloc, *this, inst, func, flags);
-
-        llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
-
-        if (lambda.get_root_expr_count() > 0) {
-            // add result and proj parameters: these will never be written
-            llvm::Value *result = arg_it++;
-            context.create_context_data(size_t(0), result, /*by_reference=*/false);
-            llvm::Value *proj = arg_it++;
-            context.create_context_data(size_t(1), proj, /*by_reference=*/false);
-        }
-
-        // translate function body
-        Expression_result res = translate_node(context, lambda.get_body(), resolver);
-
-        context.create_return(res.as_value(context));
-    }
-
-    // we expect that every lambda is only compiled once, hence there is no use in conserving
-    // nodes for later usage.
-    // also we want to avoid reuse of the same pointers, when DAG nodes are deleted.
-    clear_dag_node_map();
-
-    // finalize the module and store it
-    if (finalize_module() != NULL) {
-        return func;
-    }
-    return NULL;
-}
-
 // Compile an constant lambda function into an LLVM Module and return the LLVM function.
 llvm::Function  *LLVM_code_generator::compile_const_lambda(
     Lambda_function const      &lambda,
@@ -2412,8 +2330,9 @@ llvm::Function *LLVM_code_generator::compile_switch_lambda(
     return func;
 }
 
-// Compile a generic lambda function into an LLVM Module and return the LLVM function.
-llvm::Function *LLVM_code_generator::compile_generic_lambda(
+// Compile a generic or environment lambda function into an LLVM Module and return the
+// LLVM function.
+llvm::Function *LLVM_code_generator::compile_lambda(
     bool                      incremental,
     Lambda_function const     &lambda,
     ICall_name_resolver const *resolver,
@@ -2472,7 +2391,9 @@ llvm::Function *LLVM_code_generator::compile_generic_lambda(
             get_allocator(),
             func,
             IGenerated_code_executable::DK_NONE,
-            IGenerated_code_executable::FK_LAMBDA,
+            lambda.get_execution_context() == ILambda_function::LEC_ENVIRONMENT
+                ? IGenerated_code_executable::FK_ENVIRONMENT
+                : IGenerated_code_executable::FK_LAMBDA,
             m_captured_args_type != NULL ? next_arg_block_index : ~0));
 
     // ensure the function is finished by putting it into a block
@@ -2490,7 +2411,9 @@ llvm::Function *LLVM_code_generator::compile_generic_lambda(
             context.create_context_data(size_t(1), proj, /*by_reference=*/false);
         }
 
-        if (m_texruntime_with_derivs)
+        // no derivatives available for any state field in environment mode
+        if (m_texruntime_with_derivs &&
+                lambda.get_execution_context() != ILambda_function::LEC_ENVIRONMENT)
             m_deriv_infos = lambda.get_derivative_infos();
 
         // translate function body

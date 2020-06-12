@@ -2745,22 +2745,34 @@ void Module_serializer::write_pos(Position const *pos)
 // Write all initializer expressions unreferenced so far.
 void Module_serializer::write_unreferenced_init_expressions()
 {
-    // copy them into vector because write_expt will delete them from the pointer map
-    vector<IExpression const *>::Type inits(m_alloc);
-    for (Pointer_serializer<IExpression const>::const_iterator
-            it(m_init_exprs.begin()), end(m_init_exprs.end());
-         it != end;
-         ++it)
-    {
-        inits.push_back((IExpression const *)it->first);
-    }
+    typedef Pointer_serializer<IExpression> PS;
+
+    struct Entry {
+        Entry(PS::value_type v) : expr((IExpression const *)v.first), tag(v.second) {}
+
+        IExpression const *expr;
+        Tag_t             tag;
+    };
+
+    // sort value types by tags.
+    struct Tag_comparator {
+        bool operator()(Entry const &a, Entry const &b) {
+            return a.tag < b.tag;
+        }
+    };
+
+    // copy them into vector because we need to sort them and write_expr() will
+    // delete them from the pointer map
+    vector<Entry>::Type inits(m_init_exprs.begin(), m_init_exprs.end(), m_alloc);
+
+    std::sort(inits.begin(), inits.end(), Tag_comparator());
 
     size_t count = inits.size();
     write_encoded_tag(count);
     DOUT(("#unref expr %u\n", unsigned(count)));
 
     for (size_t i = 0; i < count; ++i) {
-        write_expr(inits[i]);
+        write_expr(inits[i].expr);
     }
 
     MDL_ASSERT(m_init_exprs.empty() && "init expressions still not empty");

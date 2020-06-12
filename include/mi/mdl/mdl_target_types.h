@@ -170,6 +170,21 @@ struct Shading_state_environment {
     /// The result of state::direction().
     /// It represents the lookup direction for the environment lookup.
     tct_float3            direction;
+
+    /// A pointer to a read-only data segment.
+    /// For "PTX", "LLVM-IR" and "native" JIT backend:
+    /// - If the MDL code contains large data arrays, compilation time may increase noticeably,
+    ///   as a lot of source code will be generated for the arrays.
+    ///   To avoid this, you can set the \c "jit_enable_ro_segment" option to \c "true" via the
+    ///   #mi::mdl::ICode_generator::access_options() method. Then, data of arrays larger than 1024
+    ///   bytes will be stored in a read-only data segment, which is accessible as the first
+    ///   segment (index 0) returned by #mi::mdl::IGenerated_code_executable::get_ro_data_segment().
+    ///   The generated code will expect, that you make this data available via the
+    ///   \c ro_data_segment field of the MDL material state. Depending on the target platform
+    ///   this may require copying the data to the GPU.
+    ///
+    /// For other backends, this should be NULL.
+    char const           *ro_data_segment;
 };
 
 
@@ -245,7 +260,7 @@ struct Shading_state_material_impl {
     tct_float4           *text_results;
 
     /// A pointer to a read-only data segment.
-    /// For "PTX" and "native" JIT backend:
+    /// For "PTX", "LLVM-IR" and "native" JIT backend:
     /// - If the MDL code contains large data arrays, compilation time may increase noticeably,
     ///   as a lot of source code will be generated for the arrays.
     ///   To avoid this, you can set the \c "jit_enable_ro_segment" option to \c "true" via the

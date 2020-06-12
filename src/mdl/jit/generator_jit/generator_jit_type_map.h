@@ -121,6 +121,7 @@ public:
     enum State_field {
         // Environment context
         STATE_ENV_DIRECTION,            ///< Result of state::direction().
+        STATE_ENV_RO_DATA_SEG,          ///< Pointer to the read only data segment.
 
         // Core context
         STATE_CORE_NORMAL,              ///< Result of state::normal().

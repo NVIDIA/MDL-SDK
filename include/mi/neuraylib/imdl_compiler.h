@@ -1690,6 +1690,30 @@ public:
     /// \return           The distribution function data kind of the texture resource of the given
     ///                   index, or \c DFK_INVALID if \p index is out of range.
     virtual Df_data_kind get_texture_df_data_kind(Size index) const = 0;
+
+    /// Returns the number of texture resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid texture).
+    ///
+    /// \return           The body texture count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    virtual Size get_body_texture_count() const = 0;
+
+    /// Returns the number of light profile resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid light profile).
+    ///
+    /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    virtual Size get_body_light_profile_count() const = 0;
+
+    /// Returns the number of BSDF measurement resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid BSDF measurement).
+    ///
+    /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due
+    ///                   to more than one call to a link unit add function.
+    virtual Size get_body_bsdf_measurement_count() const = 0;
 };
 
 /// Represents a link-unit of an MDL backend.

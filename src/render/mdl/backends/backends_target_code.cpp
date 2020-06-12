@@ -115,8 +115,11 @@ Target_code::Target_code(
     m_code_segment_descriptions(),
     m_callable_function_infos(),
     m_texture_table(),
+    m_body_texture_count(0),
     m_light_profile_table(),
+    m_body_light_profile_count(0),
     m_bsdf_measurement_table(),
+    m_body_bsdf_measurement_count(0),
     m_string_constant_table(),
     m_data_segments(),
     m_data(),
@@ -151,8 +154,11 @@ Target_code::Target_code(
     m_code_segment_descriptions(),
     m_callable_function_infos(),
     m_texture_table(),
+    m_body_texture_count(0),
     m_light_profile_table(),
+    m_body_light_profile_count(0),
     m_bsdf_measurement_table(),
+    m_body_bsdf_measurement_count(0),
     m_string_constant_table(),
     m_data_segments(),
     m_data(),
@@ -314,6 +320,11 @@ mi::Size Target_code::get_texture_count() const
     return m_texture_table.size();
 }
 
+mi::Size Target_code::get_body_texture_count() const
+{
+    return m_body_texture_count;
+}
+
 const char* Target_code::get_texture( mi::Size index) const
 {
     if( index < m_texture_table.size()) {
@@ -416,6 +427,11 @@ mi::Size Target_code::get_light_profile_count() const
     return m_light_profile_table.size();
 }
 
+mi::Size Target_code::get_body_light_profile_count() const
+{
+    return m_body_light_profile_count;
+}
+
 const char* Target_code::get_light_profile( mi::Size index) const
 {
     if( index < m_light_profile_table.size()) {
@@ -427,6 +443,11 @@ const char* Target_code::get_light_profile( mi::Size index) const
 Size Target_code::get_bsdf_measurement_count() const
 {
     return m_bsdf_measurement_table.size();
+}
+
+Size Target_code::get_body_bsdf_measurement_count() const
+{
+    return m_body_bsdf_measurement_count;
 }
 
 const char* Target_code::get_bsdf_measurement(mi::Size index) const
@@ -781,6 +802,17 @@ void Target_code::add_string_constant_index(size_t index, const std::string& sco
     m_string_constant_table[index] = scons;
 }
 
+// Set the body resource counts.
+void Target_code::set_body_resource_counts(
+    mi::Size body_texture_counts,
+    mi::Size body_light_profile_counts,
+    mi::Size body_bsdf_measurement_counts)
+{
+    m_body_texture_count = body_texture_counts;
+    m_body_light_profile_count = body_light_profile_counts;
+    m_body_bsdf_measurement_count = body_bsdf_measurement_counts;
+}
+
 void Target_code::add_ro_segment( const char* name, const unsigned char* data, mi::Size size)
 {
     unsigned char* segment = NULL;
@@ -854,7 +886,7 @@ mi::neuraylib::ITarget_argument_block *Target_code::create_argument_block(
     const mi::neuraylib::ICompiled_material* material,
     mi::neuraylib::ITarget_resource_callback *resource_callback) const
 {
-    if ( !material || index >= m_cap_arg_layouts.size())
+    if ( material == NULL || resource_callback == NULL || index >= m_cap_arg_layouts.size())
         return NULL;
 
     mi::neuraylib::ITarget_value_layout const *layout = m_cap_arg_layouts[index].get();

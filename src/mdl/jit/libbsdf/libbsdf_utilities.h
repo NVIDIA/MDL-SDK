@@ -921,7 +921,7 @@ BSDF_INLINE float microfacet_mask_smith_beckmann(
 BSDF_INLINE float clamp_roughness(
     const float roughness)
 {
-    return math::max(roughness, 0.001f); // magic.
+    return math::max(roughness, 0.0000001f); // magic.
 }
 
 // convert roughness values to a similar Phong-style distribution exponent

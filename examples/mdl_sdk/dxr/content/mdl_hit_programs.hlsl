@@ -126,7 +126,11 @@ float3 sample_lights(
             pdf = DIRAC; // infinity
 
             // compute light direction and distance
-            to_light = point_light_position - state.position;
+            #ifdef USE_DERIVS
+                to_light = point_light_position - state.position.val;
+            #else
+                to_light = point_light_position - state.position;
+            #endif
             const float inv_distance2 = 1.0f / dot(to_light, to_light);
             to_light *= sqrt(inv_distance2);
 
@@ -244,13 +248,20 @@ void setup_mdl_shading_state(
     // fill the actual state fields used by MD
     mdl_state.normal = world_normal;
     mdl_state.geom_normal = world_geom_normal;
-    mdl_state.position = hit_position;
+    #ifdef USE_DERIVS
+        // currently not supported
+        mdl_state.position.val = hit_position;
+        mdl_state.position.dx = float3(0, 0, 0);
+        mdl_state.position.dy = float3(0, 0, 0);
+    #else
+        mdl_state.position = hit_position;
+    #endif
     mdl_state.animation_time = 0.0f;
     mdl_state.tangent_u[0] = world_tangent;
     mdl_state.tangent_v[0] = world_binormal;
-#ifdef USE_TEXTURE_RESULTS
-    mdl_state.text_results = (float4[MDL_NUM_TEXTURE_RESULTS]) 0;
-#endif
+    #ifdef USE_TEXTURE_RESULTS
+        mdl_state.text_results = (float4[MDL_NUM_TEXTURE_RESULTS]) 0;
+    #endif
     mdl_state.ro_data_segment_offset = 0;
     mdl_state.world_to_object = world_to_object;
     mdl_state.object_to_world = object_to_world;
@@ -461,12 +472,20 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         {
             toggle_flag(payload.flags, FLAG_INSIDE);
             // continue on the opposite side
-            payload.ray_origin_next = offset_ray(mdl_state.position, -mdl_state.geom_normal);
+            #ifdef USE_DERIVS
+                payload.ray_origin_next = offset_ray(mdl_state.position.val, -mdl_state.geom_normal);
+            #else
+                payload.ray_origin_next = offset_ray(mdl_state.position, -mdl_state.geom_normal);
+            #endif
         }
         else
         {
             // continue on the current side
-            payload.ray_origin_next = offset_ray(mdl_state.position, mdl_state.geom_normal);
+            #ifdef USE_DERIVS
+                payload.ray_origin_next = offset_ray(mdl_state.position.val, mdl_state.geom_normal);
+            #else
+                payload.ray_origin_next = offset_ray(mdl_state.position, mdl_state.geom_normal);
+            #endif
         }
 
         if ((sample_data.event_type & BSDF_EVENT_SPECULAR) != 0)
@@ -480,7 +499,11 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // cast a shadow ray; assuming light is always outside
     RayDesc ray;
-    ray.Origin = offset_ray(mdl_state.position, mdl_state.geom_normal * (inside ? -1.0f : 1.0f));
+    #ifdef USE_DERIVS
+        ray.Origin = offset_ray(mdl_state.position.val, mdl_state.geom_normal * (inside ? -1.0f : 1.0f));
+    #else
+        ray.Origin = offset_ray(mdl_state.position, mdl_state.geom_normal * (inside ? -1.0f : 1.0f));
+    #endif
     ray.Direction = to_light;
     ray.TMin = 0.0f;
     ray.TMax = 10000.0f;

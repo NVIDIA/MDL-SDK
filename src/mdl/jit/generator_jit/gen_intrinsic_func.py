@@ -2882,8 +2882,9 @@ class SignatureParser:
 			self.format_code(f, code % params)
 
 		elif mode == "state::core_set":
-			code = """
-			llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
+			self.format_code(f,
+			"""
+			llvm::Type *ret_tp = %s;
 			if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
 				llvm::Value *state = ctx.get_state_parameter();
 				llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
@@ -2893,11 +2894,26 @@ class SignatureParser:
 				// zero in all other contexts
 				res = llvm::Constant::getNullValue(ret_tp);
 			}
-			if (inst.get_return_derivs()) { // expand to dual
-				res = ctx.get_dual(res);
-			}
-			"""
-			self.format_code(f, code % intrinsic.upper())
+			""" % (
+				"ctx.get_return_type()" if intrinsic == "position" else "ctx.get_non_deriv_return_type()",
+				intrinsic.upper()
+			))
+
+			if intrinsic == "position":
+				self.format_code(f,
+				"""
+				// no derivatives requested? -> get value component
+				if (!inst.get_return_derivs() && m_code_gen.m_type_mapper.use_derivatives()) {
+					res = ctx.get_dual_val(res);
+				}
+				""")
+			else:
+				self.format_code(f,
+				"""
+				if (inst.get_return_derivs()) { // expand to dual
+					res = ctx.get_dual(res);
+				}
+				""")
 
 		elif mode == "state::rounded_corner_normal":
 			code = """

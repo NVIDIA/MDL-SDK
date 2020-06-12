@@ -27,7 +27,7 @@
  *****************************************************************************/
 mdl 1.6;
 
-export float3 position() varying [[ intrinsic() ]];
+export float3 [[ derivable() ]] position() varying [[ intrinsic() ]];
 
 export float3 normal() varying [[ intrinsic() ]];
 

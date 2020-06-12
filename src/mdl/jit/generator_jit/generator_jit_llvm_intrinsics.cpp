@@ -3346,17 +3346,14 @@ llvm::Function *MDL_runtime_creator::create_state_get_ro_data_segment(
     llvm::Value *res;
 
     llvm::Type *ret_tp = ctx_data->get_return_type();
-    if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
-        llvm::Value *state = ctx.get_state_parameter();
-        res = ctx.create_simple_gep_in_bounds(
-            state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(
-                Type_mapper::STATE_CORE_RO_DATA_SEG)));
-        res = ctx->CreateLoad(res);
-        res = ctx->CreatePointerCast(res, ret_tp);
-    } else {
-        // zero in all other contexts
-        res = llvm::Constant::getNullValue(ret_tp);
-    }
+    llvm::Value *state = ctx.get_state_parameter();
+    res = ctx.create_simple_gep_in_bounds(
+        state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(
+            m_code_gen.m_state_mode & Type_mapper::SSM_CORE
+                ? Type_mapper::STATE_CORE_RO_DATA_SEG
+                : Type_mapper::STATE_ENV_RO_DATA_SEG)));
+    res = ctx->CreateLoad(res);
+    res = ctx->CreatePointerCast(res, ret_tp);
     ctx.create_return(res);
     return func;
 }

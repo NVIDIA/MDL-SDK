@@ -283,7 +283,12 @@ mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
     mi::neuraylib::Shading_state_material_with_derivs mdl_state = {
         /*normal=*/           { 0.0f, 0.0f, 1.0f },
         /*geom_normal=*/      { 0.0f, 0.0f, 1.0f },
-        /*position=*/         { 0.0f, 0.0f, 0.0f },
+        /*position=*/
+        {
+            { 0.0f, 0.0f, 0.0f },         // value component
+            { 2 * step_x, 0.0f, 0.0f },   // dx component
+            { 0.0f, 2 * step_y, 0.0f }    // dy component
+        },
         /*animation_time=*/   0.0f,
         /*texture_coords=*/   texture_coords,
         /*tangent_u=*/        texture_tangent_u,
@@ -319,10 +324,10 @@ mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
             // Update state for the current pixel
             float rel_x = x * step_x;
             float rel_y = y * step_y;
-            mdl_state.position.x    = 2.0f * rel_x - 1;  // [-1, 1)
-            mdl_state.position.y    = 2.0f * rel_y - 1;  // [-1, 1)
-            texture_coords[0].val.x = rel_x;             // [0, 1)
-            texture_coords[0].val.y = rel_y;             // [0, 1)
+            mdl_state.position.val.x = 2.0f * rel_x - 1;  // [-1, 1)
+            mdl_state.position.val.y = 2.0f * rel_y - 1;  // [-1, 1)
+            texture_coords[0].val.x  = rel_x;             // [0, 1)
+            texture_coords[0].val.y  = rel_y;             // [0, 1)
 
             // Evaluate sub-expression
             check_success(code_native->execute(

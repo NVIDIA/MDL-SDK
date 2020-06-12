@@ -167,6 +167,21 @@ struct Shading_state_environment {
     /// The result of state::direction().
     /// It represents the lookup direction for the environment lookup.
     tct_float3            direction;
+
+    /// A pointer to a read-only data segment.
+    /// For "PTX", "LLVM-IR" and "native" JIT backend:
+    /// - If the MDL code contains large data arrays, compilation time may increase noticeably,
+    ///   as a lot of source code will be generated for the arrays.
+    ///   To avoid this, you can set the \c "enable_ro_segment" option to \c "on" via the
+    ///   #mi::neuraylib::IMdl_backend::set_option() method. Then, data of arrays larger than 1024
+    ///   bytes will be stored in a read-only data segment, which is accessible as the first
+    ///   segment (index 0) returned by #mi::neuraylib::ITarget_code::get_ro_data_segment_data().
+    ///   The generated code will expect, that you make this data available via the
+    ///   \c ro_data_segment field of the MDL material state. Depending on the target platform
+    ///   this may require copying the data to the GPU.
+    ///
+    /// For other backends, this should be NULL.
+    char const           *ro_data_segment;
 };
 
 
@@ -213,7 +228,7 @@ struct Shading_state_material_impl {
 
     /// The result of state::position().
     /// It represents the position where the material should be evaluated.
-    tct_float3            position;
+    typename traits::tct_derivable_float3 position;
 
     /// The result of state::animation_time().
     /// It represents the time of the current sample in seconds.
@@ -247,7 +262,7 @@ struct Shading_state_material_impl {
     tct_float4           *text_results;
 
     /// A pointer to a read-only data segment.
-    /// For "PTX" and "LLVM-IR" backend:
+    /// For "PTX", "LLVM-IR" and "native" JIT backend:
     /// - If the MDL code contains large data arrays, compilation time may increase noticeably,
     ///   as a lot of source code will be generated for the arrays.
     ///   To avoid this, you can set the \c "enable_ro_segment" option to \c "on" via the

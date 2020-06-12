@@ -684,8 +684,7 @@ public:
     ///
     /// \param type      the type defined by this scope
     /// \param type_def  the definition of the type
-    /// \param name      the name of the type
-    Scope *enter_scope(IType const *type, Definition const *type_def, ISymbol const *name);
+    Scope *enter_scope(IType const *type, Definition const *type_def);
 
     /// Enter a named scope (module or package import).
     ///
@@ -1004,17 +1003,21 @@ public:
         /// \param def         the (function) definition that "owns" the newly created scope
         Scope_enter(Definition_table &def_tab, Definition *def)
         : m_def_tab(def_tab)
+        , m_scope(NULL)
         {
             Scope *scope = m_def_tab.enter_scope(def);
-            if (def != NULL && def->get_kind() != IDefinition::DK_ERROR)
+            if (def->get_kind() != IDefinition::DK_ERROR) {
                 def->set_own_scope(scope);
+            }
         }
 
         /// Reopen given scope.
         ///
         /// \param def_table   the definition table
         /// \param scope       the scope that will be reopened
-        Scope_enter(Definition_table &def_tab, Scope *scope) : m_def_tab(def_tab)
+        Scope_enter(Definition_table &def_tab, Scope *scope)
+        : m_def_tab(def_tab)
+        , m_scope(NULL)
         {
             m_def_tab.reopen_scope(scope);
         }
@@ -1024,25 +1027,43 @@ public:
         /// \param def_table   the definition table
         /// \param type        the type that "owns" the new scope
         /// \param type_def    the definition of the type
-        /// \param name        the name of the scope (and of the type)
         Scope_enter(
             Definition_table &def_tab,
             IType const      *type,
-            Definition       *type_def,
-            ISymbol const    *name)
+            Definition       *type_def)
         : m_def_tab(def_tab)
+        , m_scope(NULL)
         {
-            Scope *scope = m_def_tab.enter_scope(type, type_def, name);
+            Scope *scope = m_def_tab.enter_scope(type, type_def);
             if (type_def->get_kind() != IDefinition::DK_ERROR)
                 type_def->set_own_scope(scope);
         }
 
+        /// Enter a new (compound statement) scope.
+        ///
+        /// \param def_table   the definition table
+        Scope_enter(Definition_table &def_tab)
+        : m_def_tab(def_tab)
+        , m_scope(def_tab.enter_scope(/*def=*/NULL))
+        {
+        }
+
         /// Leave current scope.
-        ~Scope_enter() { m_def_tab.leave_scope(); }
+        ~Scope_enter()
+        {
+            m_def_tab.leave_scope();
+            if (m_scope != NULL && m_scope->is_empty()) {
+                // drop it to save some space
+                m_def_tab.remove_empty_scope(m_scope);
+            }
+        }
 
     private:
         /// The definition table.
         Definition_table &m_def_tab;
+
+        /// If non-NULL, remove this scope if empty.
+        Scope *m_scope;
     };
 
     /// Helper class for scope entering using RAII.

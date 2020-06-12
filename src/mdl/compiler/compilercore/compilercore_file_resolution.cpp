@@ -1596,8 +1596,16 @@ static bool is_url_absolute(char const *url)
         return true;
 
 #ifdef MI_PLATFORM_WINDOWS
-    if (strlen(url) > 1 && is_drive_letter(url[0]) && url[1] == ':')
-        return true;
+    if (strlen(url) > 1) {
+        // classic drive letter
+        if (is_drive_letter(url[0]) && url[1] == ':') {
+            return true;
+        }
+        // UNC
+        if (url[0] == os_separator() && url[1] == os_separator()) {
+            return true;
+        }
+    }
 #endif
 
     return false;

@@ -450,7 +450,11 @@ struct Ray_state
 struct Ray_hit_info
 {
     float distance;
-    float3 position;
+    #ifdef ENABLE_DERIVATIVES
+        tct_deriv_float3 position;
+    #else
+        float3 position;
+    #endif
     float3 normal;
     float3 tangent_u;
     float3 tangent_v;
@@ -486,8 +490,16 @@ __device__ inline bool intersect_sphere(
         return false;
 
     // compute geometry state
-    out_hit.position = ray_state.pos + ray_state.dir * out_hit.distance;
-    out_hit.normal = normalize(out_hit.position);
+    #ifdef ENABLE_DERIVATIVES
+        out_hit.position.val = ray_state.pos + ray_state.dir * out_hit.distance;
+        out_hit.position.dx = make_float3(0.0f, 0.0f, 0.0f);
+        out_hit.position.dy = make_float3(0.0f, 0.0f, 0.0f);
+        const float3 &posval = out_hit.position.val;
+    #else
+        out_hit.position = ray_state.pos + ray_state.dir * out_hit.distance;
+        const float3 &posval = out_hit.position;
+    #endif
+    out_hit.normal = normalize(posval);
 
     const float phi = atan2f(out_hit.normal.x, out_hit.normal.z);
     const float theta = acosf(out_hit.normal.y);
@@ -542,16 +554,24 @@ __device__ inline bool intersect_hair(
         return false;
 
     // compute geometry state
-    out_hit.position = ray_state.pos + ray_state.dir * out_hit.distance;
-    out_hit.normal = normalize(make_float3(out_hit.position.x, 0.0f, out_hit.position.z));
+    #ifdef ENABLE_DERIVATIVES
+        out_hit.position.val = ray_state.pos + ray_state.dir * out_hit.distance;
+        out_hit.position.dx = make_float3(0.0f, 0.0f, 0.0f);
+        out_hit.position.dy = make_float3(0.0f, 0.0f, 0.0f);
+        const float3 &posval = out_hit.position.val;
+    #else
+        out_hit.position = ray_state.pos + ray_state.dir * out_hit.distance;
+        const float3 &posval = out_hit.position;
+    #endif
+    out_hit.normal = normalize(make_float3(posval.x, 0.0f, posval.z));
 
-    if (fabsf(out_hit.position.y) > GT_HAIR_LENGTH * 0.5f)
+    if (fabsf(posval.y) > GT_HAIR_LENGTH * 0.5f)
         return false;
 
-    const float phi = atan2f(out_hit.position.z, out_hit.position.x);
+    const float phi = atan2f(posval.z, posval.x);
 
     const float3 uvw = make_float3(
-        (out_hit.position.y + GT_HAIR_LENGTH * 0.5f) / GT_HAIR_LENGTH, // position along the hair
+        (posval.y + GT_HAIR_LENGTH * 0.5f) / GT_HAIR_LENGTH, // position along the hair
         phi * (float) (0.5f / M_PI) + 0.5f, // position around the hair in the range [0, 1]
         2.0f * GT_HAIR_RADIUS); // thickness of the hair
 
@@ -589,10 +609,10 @@ __device__ inline bool intersect_geometry(
             return false;
     }
 
+    #ifndef ENABLE_DERIVATIVES
     ray_state.pos = out_hit.position;
-
-
-    #ifdef ENABLE_DERIVATIVES
+    #else
+    ray_state.pos = out_hit.position.val;
     if (params.use_derivatives && ray_state.intersection == 0)
     {
         // compute ray differential for one-pixel offset rays
@@ -602,6 +622,9 @@ __device__ inline bool intersect_geometry(
         const float ty = (d - dot(out_hit.normal, ray_state.pos_ry)) / dot(out_hit.normal, ray_state.dir_ry);
         ray_state.pos_rx += ray_state.dir_rx * tx;
         ray_state.pos_ry += ray_state.dir_ry * ty;
+
+        out_hit.position.dx = ray_state.pos_rx - ray_state.pos;
+        out_hit.position.dy = ray_state.pos_ry - ray_state.pos;
 
         float4 A;
         float2 B_x, B_y;

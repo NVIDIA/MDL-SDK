@@ -711,8 +711,8 @@ bool Util::is_valid_archive_name(const std::string & identifier)
 }
 
 //-----------------------------------------------------------------------------
-//
-//
+// 
+// 
 
 #ifdef _WIN32
 #include <Shlobj.h>

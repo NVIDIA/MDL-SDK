@@ -551,6 +551,11 @@ BSDF_INLINE void microfacet_sample(
 
     // sample half vector / microfacet normal
     const float3 h0 = ph.sample(data->xi, k10);
+    if (math::abs(h0.y) == 0.0f)
+    {
+        absorb(data);
+        return;
+    }
 
     // transform to world
     const float3 h = g.n.shading_normal * h0.y + g.x_axis * h0.x + g.z_axis * h0.z;
@@ -592,10 +597,6 @@ BSDF_INLINE void microfacet_sample(
             data->k2 = refract(data->k1, h, ior.x / ior.y, kh, tir);
         }
         data->event_type = tir ? BSDF_EVENT_GLOSSY_REFLECTION : BSDF_EVENT_GLOSSY_TRANSMISSION;
-        if (tir && (mode == scatter_transmit)) {
-            absorb(data);
-            return;
-        }
         data->xi.z = (data->xi.z - f_refl) / (1.0f - f_refl);
     }
 
@@ -658,8 +659,7 @@ BSDF_INLINE float microfacet_evaluate(
     const bool backside_eval = math::dot(data->k2, g.n.geometry_normal) < 0.0f;
 
     // nothing to evaluate for given directions?
-    if (( backside_eval && (mode == scatter_reflect )) ||
-        (!backside_eval && (mode == scatter_transmit)) ) {
+    if (backside_eval && (mode == scatter_reflect)) {
         absorb(data);
         return 0.0f;
     }
@@ -680,8 +680,15 @@ BSDF_INLINE float microfacet_evaluate(
         return 0.0f;
     }
 
-    // compute BSDF and pdf
     const float fresnel_refl = ior_fresnel(ior.y / ior.x, k1h);
+
+    // for scatter_transmit: only allow TIR (fresnel_refl == 1) with BRDF eval
+    if (!backside_eval && (mode == scatter_transmit) && (fresnel_refl < 1.0f)) {
+        absorb(data);
+        return 0.0f;
+    }
+
+    // compute BSDF and pdf
     const float weight = mode == scatter_reflect_transmit ?
                          (backside_eval ? (1.0f - fresnel_refl) : fresnel_refl) :
                          1.0f;
@@ -6418,6 +6425,7 @@ BSDF_API void spot_edf_evaluate(
     // normalization term
     float normalization;
     if (global_distribution) {
+        normalization = 1.0f;
     } else {
         //edf *= cos_theta; // projection
         normalization = (k*k + 3.0f*k + 2.0f) / (2.0f * (float) M_PI * (k + 1 - k * s - s * s));

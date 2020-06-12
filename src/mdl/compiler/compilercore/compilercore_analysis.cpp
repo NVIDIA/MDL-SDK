@@ -2060,9 +2060,17 @@ Definition *Analysis::find_definition_for_qualified_name(
     ISymbol const *sym = identifier->get_symbol();
     Definition *def = NULL;
 
-    def = bound_scope
-            ? bound_scope->find_definition_in_scope(sym)
-            : m_def_tab->get_definition(sym);
+    if (m_in_select != NULL) {
+        // if we are inside an select, we can only look up this select scope; there should
+        // also be no additional scope here
+        if (bound_scope == NULL) {
+            def = m_def_tab->get_curr_scope()->find_definition_in_scope(sym);
+        }
+    } else {
+        def = bound_scope
+                ? bound_scope->find_definition_in_scope(sym)
+                : m_def_tab->get_definition(sym);
+    }
     if (def == NULL) {
         if (is_syntax_error(sym)) {
             // parse errors on names are expressed by error symbols
@@ -3682,10 +3690,8 @@ void NT_analysis::import_type_scope(
 
     Scope const *orig_scope = from->get_definition_table().get_type_scope(orig_type);
     IType const *imp_type   = new_def->get_type();
-    ISymbol const *orig_sym = orig_scope->get_scope_name();
-    ISymbol const *imp_sym  = orig_sym != NULL ? m_module.import_symbol(orig_sym) : NULL;
     {
-        Definition_table::Scope_enter enter(*m_def_tab, imp_type, new_def, imp_sym);
+        Definition_table::Scope_enter enter(*m_def_tab, imp_type, new_def);
         import_scope_entities(
             orig_scope, from, from_idx, is_exported, /*forced=*/true, err_pos);
     }
@@ -10695,7 +10701,7 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
     }
 
     // create a type scope
-    Scope *type_scope = m_def_tab->enter_scope(e_type, type_def, sym);
+    Scope *type_scope = m_def_tab->enter_scope(e_type, type_def);
     if (!is_error(type_def)) {
         type_def->set_own_scope(type_scope);
 
@@ -10861,7 +10867,7 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
 
     // create a new type scope
     {
-        Definition_table::Scope_enter scope(*m_def_tab, s_type, type_def, sym);
+        Definition_table::Scope_enter scope(*m_def_tab, s_type, type_def);
 
         for (int i = 0, n = struct_decl->get_field_count(); i < n; ++i) {
             IType_name const *t_name = struct_decl->get_field_type_name(i);
@@ -12345,7 +12351,7 @@ bool NT_analysis::pre_visit(IExpression_let *let_expr)
     {
         // a let expression creates a scope for its declarations and there uses
         // inside the expression
-        Definition_table::Scope_enter scope(*m_def_tab, (Definition *)0);
+        Definition_table::Scope_enter scope(*m_def_tab);
         Flag_store                    inside_let_decl(m_inside_let_decls, true);
 
         for (size_t i = 0, n = let_expr->get_declaration_count(); i < n; ++i) {

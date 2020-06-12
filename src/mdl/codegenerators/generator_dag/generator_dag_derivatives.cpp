@@ -1056,7 +1056,10 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
 
             // function always returns derivatives, but we don't want them?
             if (!want_derivatives &&
-                sema == IDefinition::DS_INTRINSIC_STATE_TEXTURE_COORDINATE)
+                (
+                    sema == IDefinition::DS_INTRINSIC_STATE_TEXTURE_COORDINATE ||
+                    sema == IDefinition::DS_INTRINSIC_STATE_POSITION
+                ))
             {
                 // wrap it in a get_deriv_val() call
                 DAG_call::Call_argument wrap_args[1] = {

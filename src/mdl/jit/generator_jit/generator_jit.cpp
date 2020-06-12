@@ -187,65 +187,12 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_environment(
     ILambda_function const    *ilambda,
     ICall_name_resolver const *resolver)
 {
-    Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
-        return NULL;
-
-    if (lambda->get_body() == NULL || lambda->get_root_expr_count() != 0) {
-        // not a simple lambda
-        return NULL;
-    }
-
-    IAllocator        *alloc = get_allocator();
-    Allocator_builder builder(alloc);
-
-    Generated_code_lambda_function *code =
-        builder.create<Generated_code_lambda_function>(m_jitted_code.get());
-
-    Generated_code_lambda_function::Lambda_res_manag res_manag(*code, /*resource_map=*/NULL);
-
-    mi::base::Handle<MDL> compiler(lambda->get_compiler());
-
-    // environment is executed on CPU only
-    LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
-        LLVM_code_generator::TL_NATIVE,
-        Type_mapper::TM_NATIVE_X86,
-        /*sm_version=*/0,
-        /*has_texture_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
-        Type_mapper::SSM_ENVIRONMENT,
-        /*num_texture_spaces=*/0,
-        /*num_texture_results=*/0,
-        m_options,
-        /*incremental=*/false,
-        get_state_mapping(),
-        &res_manag, /*enable_debug=*/false);
-
-    llvm::Function *func = code_gen.compile_environment_lambda(
-        /*incremental=*/false, *lambda, resolver);
-    if (func != NULL) {
-        llvm::Module *module = func->getParent();
-
-        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
-        code->set_llvm_module(module_key, module);
-        code_gen.fill_function_info(code);
-
-        // gen the entry point
-        void *entry_point = code_gen.get_entry_point(module_key, func);
-        code->add_entry_point(entry_point);
-
-        // copy the render state usage
-        code->set_render_state_usage(code_gen.get_render_state_usage());
-
-        // copy the string constant table.
-        for (size_t i = 0, n = code_gen.get_string_constant_count(); i < n; ++i) {
-            code->add_mapped_string(code_gen.get_string_constant(i), i);
-        }
-    } else if (code->access_messages().get_error_message_count() == 0) {
-        // on failure, ensure that the code contains an error message
-        code_gen.error(INTERNAL_JIT_BACKEND_ERROR, "Compiling environment function failed");
-    }
-    return code;
+    return compile_into_generic_function(
+        ilambda,
+        resolver,
+        /*num_texture_spaces=*/ 0,
+        /*num_texture_results=*/ 0,
+        /*transformer=*/ NULL);
 }
 
 namespace {
@@ -529,6 +476,8 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
     // Enable the read-only data segment
     code_gen.enable_ro_data_segment();
 
+    code_gen.set_resource_tag_map(&lambda->get_resource_tag_map());
+
     llvm::Function *func = code_gen.compile_switch_lambda(
         /*incremental=*/false, *lambda, resolver, /*next_arg_block_index=*/0);
     if (func != NULL) {
@@ -748,7 +697,8 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
-        Type_mapper::SSM_CORE,
+        lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
+            Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
         m_options,
@@ -756,13 +706,23 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         get_state_mapping(),
         &res_manag, /*enable_debug=*/false);
 
-    llvm::Function *func = code_gen.compile_generic_lambda(
+    // Enable the read-only data segment
+    code_gen.enable_ro_data_segment();
+
+    code_gen.set_resource_tag_map(&lambda->get_resource_tag_map());
+
+    llvm::Function *func = code_gen.compile_lambda(
         /*incremental=*/false, *lambda, resolver, transformer, /*next_arg_block_index=*/0);
     if (func != NULL) {
         llvm::Module *module = func->getParent();
         MDL_JIT_module_key module_key = code_gen.jit_compile(module);
         code->set_llvm_module(module_key, module);
         code_gen.fill_function_info(code.get());
+
+        size_t data_size = 0;
+        char const *data = reinterpret_cast<char const *>(code_gen.get_ro_segment(data_size));
+
+        code->set_ro_segment(data, data_size);
 
         // gen the entry point
         void *entry_point = code_gen.get_entry_point(module_key, func);
@@ -784,7 +744,11 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         }
     } else if (code->access_messages().get_error_message_count() == 0) {
         // on failure, ensure that the code contains an error message
-        code_gen.error(INTERNAL_JIT_BACKEND_ERROR, "Compiling generic function failed");
+        code_gen.error(
+            INTERNAL_JIT_BACKEND_ERROR,
+            lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT
+                ? "Compiling environment function failed"
+                : "Compiling generic function failed");
     }
     code->retain();
     return code.get();
@@ -845,7 +809,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
 
     llvm::Function *func = NULL;
     if (body != NULL) {
-        func = code_gen.compile_generic_lambda(
+        func = code_gen.compile_lambda(
             /*incremental=*/false,
             *lambda,
             resolver,
@@ -1326,7 +1290,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
 
     llvm::Function *func = NULL;
     if (body != NULL) {
-        func = code_gen.compile_generic_lambda(
+        func = code_gen.compile_lambda(
             /*incremental=*/false,
             *lambda,
             resolver,
@@ -1891,7 +1855,7 @@ bool Link_unit_jit::add(
     size_t next_arg_block_index =
         *arg_block_index != ~0 ? *arg_block_index : m_arg_block_layouts.size();
     if (body != NULL) {
-        func = m_code_gen.compile_generic_lambda(
+        func = m_code_gen.compile_lambda(
             /*incremental=*/true, *lambda, resolver, /*transformer=*/NULL, next_arg_block_index);
     } else {
         func = m_code_gen.compile_switch_lambda(

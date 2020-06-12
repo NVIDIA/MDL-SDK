@@ -1147,18 +1147,6 @@ public:
         Function_vector             &llvm_funcs,
         size_t                      next_arg_block_index);
 
-    /// Compile an environment lambda function into an LLVM Module and return the LLVM function.
-    ///
-    /// \param incremental  if true, the module will not be finished
-    /// \param lambda       the lambda function
-    /// \param resolver     the call resolver interface to be used
-    ///
-    /// \returns The LLVM function for this lambda function or NULL on compilation errors.
-    llvm::Function *compile_environment_lambda(
-        bool                      incremental,
-        Lambda_function const     &lambda,
-        ICall_name_resolver const *resolver);
-
     /// Compile an constant lambda function into an LLVM Module and return the LLVM function.
     ///
     /// \param lambda           the lambda function
@@ -1192,7 +1180,8 @@ public:
         ICall_name_resolver const *resolver,
         size_t                    next_arg_block_index);
 
-    /// Compile a generic lambda function into an LLVM Module and return the LLVM function.
+    /// Compile a generic or environment lambda function into an LLVM Module and return the
+    /// LLVM function.
     ///
     /// \param incremental           if true, the module will not be finished
     /// \param lambda                the lambda function
@@ -1204,7 +1193,7 @@ public:
     /// \return the compiled function or NULL on compilation errors
     ///
     /// \note the lambda function must have only one root expression.
-    llvm::Function *compile_generic_lambda(
+    llvm::Function *compile_lambda(
         bool                      incremental,
         Lambda_function const     &lambda,
         ICall_name_resolver const *resolver,

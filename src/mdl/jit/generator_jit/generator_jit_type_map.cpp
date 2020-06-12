@@ -364,6 +364,9 @@ int Type_mapper::get_state_index(
     case STATE_ENV_DIRECTION:
         // always 0
         return 0;
+    case STATE_ENV_RO_DATA_SEG:
+        // always 1
+        return 1;
 
     // Core context
     case STATE_CORE_NORMAL:
@@ -1244,8 +1247,13 @@ llvm::StructType *Type_mapper::construct_state_environment_type(
     llvm::LLVMContext      &context,
     llvm::Type             *float3_type)
 {
+    llvm::Type *rodatasegment_type = target_supports_pointers()
+        ? m_type_cstring
+        : static_cast<llvm::Type *>(m_type_int);
+
     llvm::Type *members[] = {
-        float3_type,        // direction
+        float3_type,          // direction
+        rodatasegment_type,   // read-only data segment
     };
 
     llvm::StructType *res = llvm::StructType::create(
@@ -1284,6 +1292,11 @@ llvm::StructType *Type_mapper::construct_state_core_type(
 {
     llvm::StructType *res = NULL;
 
+    llvm::Type *pos_type = float3_type;
+    if (use_derivatives()) {
+        pos_type = deriv_float3_type;
+    }
+
     llvm::Type *coord_type = target_supports_pointers()
         ? get_ptr(float3_type)
         : static_cast<llvm::Type *>(llvm::ArrayType::get(float3_type, num_texture_spaces));
@@ -1307,7 +1320,7 @@ llvm::StructType *Type_mapper::construct_state_core_type(
     llvm::SmallVector<llvm::Type *, 13> members;
     members.push_back(float3_type);          // normal
     members.push_back(float3_type);          // geom_normal
-    members.push_back(float3_type);          // position
+    members.push_back(pos_type);             // position
     members.push_back(float_type);           // animation time
     members.push_back(tex_coord_type);       // texture_coordinate(index)
 
@@ -1336,7 +1349,7 @@ llvm::StructType *Type_mapper::construct_state_core_type(
 
 
 #if defined(DEBUG) || defined(ENABLE_ASSERT)
-    if (target_supports_pointers()) {
+    if (target_supports_pointers() && !use_derivatives()) {
         // check struct layout offsets and size
         // must match between LLVM layout and C++ layout from the native
         // compiler

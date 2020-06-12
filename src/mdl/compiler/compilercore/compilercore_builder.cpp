@@ -469,7 +469,7 @@ private:
         sym  = get_predef_symbol(#classname);               \
         def  = m_def_tab.enter_definition(Definition::DK_TYPE, sym, this_type, NULL); \
         def->set_flag(Definition::DEF_IS_PREDEFINED);       \
-        type_scope = m_def_tab.enter_scope(this_type, def, sym);    \
+        type_scope = m_def_tab.enter_scope(this_type, def); \
         def->set_own_scope(type_scope);                     \
         def->set_version_flags(VERSION(flags));
 

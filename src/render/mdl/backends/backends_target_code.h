@@ -149,6 +149,14 @@ public:
     /// Returns the number of texture resources used by the target code.
     Size get_texture_count() const override;
 
+    /// Returns the number of texture resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid texture).
+    ///
+    /// \return           The body texture count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    Size get_body_texture_count() const override;
+
     /// Returns the name of a texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
@@ -254,10 +262,10 @@ public:
     ///
     /// If the corresponding property bit is not set, it is guaranteed that the
     /// code does not use the associated render state property.
-    virtual State_usage get_render_state_usage() const override;
+    State_usage get_render_state_usage() const override;
 
     /// Returns the number of target argument blocks / block layouts.
-    virtual Size get_argument_block_count() const override;
+    Size get_argument_block_count() const override;
 
     /// Get a target argument block if available.
     ///
@@ -265,7 +273,7 @@ public:
     ///
     /// \returns the captured argument block or \c NULL if no arguments were captured or the
     ///          index was invalid.
-    virtual const mi::neuraylib::ITarget_argument_block *get_argument_block(
+    const mi::neuraylib::ITarget_argument_block *get_argument_block(
         Size index) const override;
 
     /// Create a new target argument block of the class-compiled material for this target code.
@@ -294,11 +302,27 @@ public:
     /// Returns the number of light profile resources used by the target code.
     Size get_light_profile_count() const override;
 
+    /// Returns the number of light profile resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid light profile).
+    ///
+    /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
+    ///                   more than one call to a link unit add function.
+    Size get_body_light_profile_count() const override;
+
     /// Returns the name of a light profile resource used by the target code.
     const char* get_light_profile(Size index) const override;
 
     /// Returns the number of bsdf measurement resources used by the target code.
     Size get_bsdf_measurement_count() const override;
+
+    /// Returns the number of BSDF measurement resources coming from the body of expressions
+    /// (not solely from material arguments). These will be necessary regardless of the chosen
+    /// material arguments and start at index \c 0 (including the invalid BSDF measurement).
+    ///
+    /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due
+    ///                   to more than one call to a link unit add function.
+    Size get_body_bsdf_measurement_count() const override;
 
     /// Returns the name of a bsdf measurement resource used by the target code.
     const char* get_bsdf_measurement(Size index) const override;
@@ -627,6 +651,12 @@ public:
     /// \param scons  the string constant this index refers to.
     void add_string_constant_index(size_t index, const std::string& scons);
 
+    /// Set the body resource counts.
+    void set_body_resource_counts(
+        mi::Size body_texture_counts,
+        mi::Size body_light_profile_counts,
+        mi::Size body_bsdf_measurement_counts);
+
     /// Add a new read-only data segment.
     ///
     /// \param name  the name of the segment
@@ -781,11 +811,23 @@ private:
     /// The texture resource table.
     std::vector<Texture_info> m_texture_table;
 
+    /// The number of textures coming from the body of expressions
+    /// (not only from material arguments). -1 if invalid.
+    mi::Size m_body_texture_count;
+
     /// The light profile resource table.
     std::vector<std::string> m_light_profile_table;
 
+    /// The number of light profiles coming from the body of expressions
+    /// (not only from material arguments). -1 if invalid.
+    mi::Size m_body_light_profile_count;
+
     /// The bsdf measurement resource table.
     std::vector<std::string> m_bsdf_measurement_table;
+
+    /// The number of BSDF measurements coming from the body of expressions
+    /// (not only from material arguments). -1 if invalid.
+    mi::Size m_body_bsdf_measurement_count;
 
     /// The string constant table.
     std::vector<std::string> m_string_constant_table;

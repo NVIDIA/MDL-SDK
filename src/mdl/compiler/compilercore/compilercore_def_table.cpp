@@ -1533,12 +1533,11 @@ Scope *Definition_table::enter_named_scope(ISymbol const *name)
 // Enter a new scope created by a type declaration.
 Scope *Definition_table::enter_scope(
     IType const      *type,
-    Definition const *type_def,
-    ISymbol const    *name)
+    Definition const *type_def)
 {
     // create a new scope
     Scope *scope = create_scope(
-        m_curr_scope, ++m_next_definition_id, type_def, type, name);
+        m_curr_scope, ++m_next_definition_id, type_def, type, type_def->get_symbol());
 
     // associate it with the given type
     m_type_scopes[type] = scope;
@@ -1837,6 +1836,7 @@ void Definition_table::walk(IDefinition_visitor const *visitor) const
 void Definition_table::clear()
 {
     m_curr_scope         = NULL;
+    m_free_scopes        = NULL;
     m_next_definition_id = 0;
     m_arena.drop(NULL);
     m_type_scopes.clear();

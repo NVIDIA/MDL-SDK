@@ -73,7 +73,11 @@ struct Shading_state_material
 
     /// The result of state::position().
     /// It represents the position where the material should be evaluated.
+#ifdef USE_DERIVS
+    Derived_float3    position;
+#else
     float3            position;
+#endif
 
     /// The result of state::animation_time().
     /// It represents the time of the current sample in seconds.

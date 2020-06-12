@@ -3543,7 +3543,9 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     if (s_type->hasName()) {
         llvm::StringRef name = s_type->getName();
         if (name == "State_core")
-            return create_state_struct_type(s_type);
+            return create_state_core_struct_type(s_type);
+        if (name == "State_environment")
+            return create_state_env_struct_type(s_type);
         if (name == "Res_data")
             return create_res_data_struct_type(s_type);
         if (name.startswith("struct.BSDF_")) {
@@ -3702,8 +3704,41 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     return res;
 }
 
-// Create the HLSL state struct for the corresponding LLVM struct type.
-hlsl::Type_struct *HLSLWriterPass::create_state_struct_type(
+// Create an HLSL struct with the given names for the given LLVM struct type.
+hlsl::Type_struct *HLSLWriterPass::create_struct_from_llvm(
+    llvm::StructType *type,
+    char const *type_name,
+    size_t num_field_names,
+    char const * const *field_names,
+    bool add_to_unit)
+{
+    if (num_field_names != type->getNumContainedTypes()) {
+        MDL_ASSERT(num_field_names == type->getNumContainedTypes());
+        return nullptr;
+    }
+
+    Small_VLA<hlsl::Type_struct::Field, 16> fields(m_alloc, num_field_names);
+    hlsl::Declaration_struct *s_decl = m_decl_factory.create_struct(zero_loc);
+    hlsl::Symbol             *s_sym  = m_symbol_table.get_symbol(type_name);
+    s_decl->set_name(get_name(zero_loc, s_sym));
+
+    for (size_t i = 0; i < num_field_names; ++i) {
+        hlsl::Type *f_tp = convert_type(type->getContainedType(unsigned(i)));
+
+        fields[i] = add_struct_field(s_decl, f_tp, field_names[i]);
+    }
+
+    hlsl::Type_struct *res = m_type_factory.get_struct(fields, s_sym);
+    m_type_cache[type] = res;
+
+    if (add_to_unit)
+        m_unit->add_decl(s_decl);
+
+    return res;
+}
+
+// Create the HLSL state core struct for the corresponding LLVM struct type.
+hlsl::Type_struct *HLSLWriterPass::create_state_core_struct_type(
     llvm::StructType *type)
 {
     static char const * const field_names[] = {
@@ -3722,27 +3757,23 @@ hlsl::Type_struct *HLSLWriterPass::create_state_struct_type(
         "arg_block_offset",
     };
 
-    hlsl::Type_struct::Field fields[llvm::array_lengthof(field_names)];
+    size_t n_fields = llvm::array_lengthof(field_names);
+    return create_struct_from_llvm(
+        type, "Shading_state_material", n_fields, field_names, /*add_to_unit=*/ false);
+}
 
-    unsigned n_fields = llvm::array_lengthof(field_names);
-    MDL_ASSERT(n_fields == type->getNumContainedTypes());
+// Create the HLSL state environment struct for the corresponding LLVM struct type.
+hlsl::Type_struct *HLSLWriterPass::create_state_env_struct_type(
+    llvm::StructType *type)
+{
+    static char const * const field_names[] = {
+        "direction",
+        "ro_data_segment_offset",
+    };
 
-    hlsl::Declaration_struct *s_decl = m_decl_factory.create_struct(zero_loc);
-    hlsl::Symbol             *s_sym  = m_symbol_table.get_symbol("Shading_state_material");
-    s_decl->set_name(get_name(zero_loc, s_sym));
-
-    for (unsigned i = 0; i < n_fields; ++i) {
-        hlsl::Type *f_tp = convert_type(type->getContainedType(i));
-
-        fields[i] = add_struct_field(s_decl, f_tp, field_names[i]);
-    }
-
-    hlsl::Type_struct *res = m_type_factory.get_struct(fields, s_sym);
-    m_type_cache[type] = res;
-
-    // so far do not add to the unit to avoid printing it
-
-    return res;
+    size_t n_fields = llvm::array_lengthof(field_names);
+    return create_struct_from_llvm(
+        type, "Shading_state_environment", n_fields, field_names, /*add_to_unit=*/ false);
 }
 
 // Create the HLSL resource data struct for the corresponding LLVM struct type.

@@ -88,6 +88,7 @@ static const Tag_t INVALID_TAG = Tag_t(0);
 class Base_pointer_serializer
 {
 public:
+    typedef ptr_hash_map<void, Tag_t>::Type::value_type     value_type;
     typedef ptr_hash_map<void, Tag_t>::Type::const_iterator const_iterator;
 
 public:
