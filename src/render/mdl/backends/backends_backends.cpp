@@ -1119,7 +1119,7 @@ public:
 
         // add all material parameters to the lambda function
         for (size_t i = 0, n = compiled_material->get_parameter_count(); i < n; ++i) {
-            MI::MDL::IValue const *value  = compiled_material->get_argument(i);
+            mi::base::Handle<const MI::MDL::IValue> value( compiled_material->get_argument(i));
             MI::MDL::IType const  *p_type = value->get_type();
 
             mi::mdl::IType const *tp = convert_type(main_df->get_type_factory(), p_type);

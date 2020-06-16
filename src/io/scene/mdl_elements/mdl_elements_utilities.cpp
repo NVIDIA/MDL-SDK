@@ -995,12 +995,12 @@ const IValue* lookup_sub_value(
             return 0;
         }
         ASSERT( M_SCENE, tail_type || !type);
-        const IValue* tail_value = value_struct->get_field( head.c_str());
-        if( !tail_value) {
+        mi::base::Handle<const IValue> tail_value(value_struct->get_field( head.c_str()));
+        if( !tail_value.is_valid_interface()) {
             if( sub_type) *sub_type = 0;
             return 0;
         }
-        return lookup_sub_value( tail_type, tail_value, tail.c_str(), sub_type);
+        return lookup_sub_value( tail_type, tail_value.get(), tail.c_str(), sub_type);
     }
 
     // handle other compounds via index
