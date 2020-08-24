@@ -97,7 +97,7 @@ public:
     bool is_absolute() const MDL_FINAL;
 
     /// Set the absolute flag of the qualified name.
-    void set_absolute() MDL_FINAL;
+    void set_absolute(bool flag = true) MDL_FINAL;
 
     /// Get the component count.
     int get_component_count() const MDL_FINAL;
@@ -107,6 +107,9 @@ public:
 
     /// Add a component.
     void add_component(ISimple_name const *name) MDL_FINAL;
+
+    /// Removes all componens.
+    void clear_components() MDL_FINAL;
 
     /// Get the definition for this name.
     IDefinition const *get_definition() const MDL_FINAL;
@@ -173,6 +176,9 @@ public:
 
     /// Get the qualified name.
     IQualified_name *get_qualified_name() const MDL_FINAL;
+
+    /// Set the qualified name.
+    void set_qualified_name(IQualified_name *name) MDL_FINAL;
 
     /// Check if this is an array.
     bool is_array() const MDL_FINAL;
@@ -305,9 +311,9 @@ bool Qualified_name::is_absolute() const
 }
 
 // Set the absolute flag of the qualified name.
-void Qualified_name::set_absolute()
+void Qualified_name::set_absolute(bool flag)
 {
-    m_is_absolute = true;
+    m_is_absolute = flag;
 }
 
 // Get the component count.
@@ -334,6 +340,12 @@ void Qualified_name::add_component(ISimple_name const *name)
     m_pos.set_end_column(pos.get_end_column());
 
     m_components.push_back(name);
+}
+
+// Removes all components.
+void Qualified_name::clear_components()
+{
+    m_components.clear();
 }
 
 // Get the definition for this name.
@@ -411,6 +423,12 @@ void Type_name::set_absolute()
 IQualified_name *Type_name::get_qualified_name() const
 {
     return m_qualified_name;
+}
+
+// Set the qualified name.
+void Type_name::set_qualified_name(IQualified_name *name)
+{
+    m_qualified_name = name;
 }
 
 // Check if this is an array.

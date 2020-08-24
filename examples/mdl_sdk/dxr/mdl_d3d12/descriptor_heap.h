@@ -35,12 +35,14 @@
 #include "base_application.h"
 #include "buffer.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
     class Raytracing_acceleration_structure;
     class Texture;
     enum class Texture_dimension;
+
+    // --------------------------------------------------------------------------------------------
 
     class Descriptor_heap
     {
@@ -69,9 +71,9 @@ namespace mdl_d3d12
         };
 
     public:
-        explicit Descriptor_heap(Base_application* app, 
-                                 D3D12_DESCRIPTOR_HEAP_TYPE type, 
-                                 size_t size, 
+        explicit Descriptor_heap(Base_application* app,
+                                 D3D12_DESCRIPTOR_HEAP_TYPE type,
+                                 size_t size,
                                  std::string debug_name);
         virtual ~Descriptor_heap();
 
@@ -79,27 +81,31 @@ namespace mdl_d3d12
         /// Used to create handles that then be used with the `create_*_view(...)` methods.
         Descriptor_heap_handle reserve_views(size_t count);
 
+        /// Allows the block that was reserved with the given handle to be reused later.
+        /// Note, all the handles of the block must not be used anymore.
+        void free_views(Descriptor_heap_handle& handle);
+
         /// Returns the size of the block a given handle belongs to.
         /// The block size corresponds to the 'count' that was passed to 'reserve_views'.
         size_t get_block_size(const Descriptor_heap_handle& handle);
 
-        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        /// Create a Shader Resource View (SRV) at a given position on the heap.
         bool create_shader_resource_view(
             Buffer* buffer, bool raw, const Descriptor_heap_handle& handle);
 
-        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        /// Create a Shader Resource View (SRV) at a given position on the heap.
         bool create_shader_resource_view(
-            Texture* texture, 
+            Texture* texture,
             Texture_dimension dimension,
             const Descriptor_heap_handle& handle);
 
-        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        /// Create a Shader Resource View (SRV) at a given position on the heap.
         bool create_shader_resource_view(
             Raytracing_acceleration_structure* tlas, const Descriptor_heap_handle& handle);
 
-        /// Create an Shader Resource View (SRV) at a given position on the heap.
+        /// Create a Shader Resource View (SRV) at a given position on the heap.
         template<typename T> bool create_shader_resource_view(
-            Structured_buffer<T>* buffer, 
+            Structured_buffer<T>* buffer,
             const Descriptor_heap_handle& handle)
         {
             if (!handle.is_valid()) {
@@ -128,7 +134,7 @@ namespace mdl_d3d12
         bool create_unordered_access_view(
             Texture* texture, const Descriptor_heap_handle& handle);
 
-        /// Create an Constant Buffer View (CBV) at a given position on the heap.
+        /// Create a Constant Buffer View (CBV) at a given position on the heap.
         bool create_constant_buffer_view(
             const Constant_buffer_base* constants, const Descriptor_heap_handle& handle);
 
@@ -152,10 +158,13 @@ namespace mdl_d3d12
         std::vector<Entry> m_entries;
         std::atomic<size_t> m_entry_alloc_block_counter;
 
+        std::map<size_t, std::stack<size_t>> m_unused_entries_by_size;
+
         ComPtr<ID3D12DescriptorHeap> m_heap;
         D3D12_CPU_DESCRIPTOR_HANDLE m_cpu_heap_start;
 
         D3D12_GPU_DESCRIPTOR_HANDLE m_gpu_heap_start;
     };
-}
+
+}}} // mi::examples::mdl_d3d12
 #endif

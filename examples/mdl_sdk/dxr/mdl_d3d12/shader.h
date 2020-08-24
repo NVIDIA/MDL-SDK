@@ -33,10 +33,12 @@
 
 #include "common.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
     class Raytracing_pipeline;
+
+    // --------------------------------------------------------------------------------------------
 
     class Shader_compiler
     {
@@ -46,10 +48,64 @@ namespace mdl_d3d12
             const std::map<std::string, std::string>* defines = nullptr);
 
         IDxcBlob* compile_shader_library_from_string(
-            const std::string& shader_source, 
+            const std::string& shader_source,
             const std::string& debug_name,
             const std::map<std::string, std::string>* defines = nullptr);
     };
+
+    // --------------------------------------------------------------------------------------------
+
+    struct DxcBlobFromMemory : public IDxcBlob
+    {
+        explicit DxcBlobFromMemory(
+            const char* blob_data,
+            size_t blob_data_size)
+            : m_buffer(blob_data, blob_data + blob_data_size)
+            , m_cRef(0)
+        {
+        }
+
+        LPVOID STDMETHODCALLTYPE GetBufferPointer(void) final { return m_buffer.data(); }
+        SIZE_T STDMETHODCALLTYPE GetBufferSize(void) final { return m_buffer.size(); }
+
+        // ---------------------------------------------------------------------------------------------
+
+        HRESULT QueryInterface(REFIID riid, LPVOID* ppvObj)
+        {
+            if (!ppvObj) return E_INVALIDARG;
+            *ppvObj = NULL;
+            if (riid == IID_IUnknown || riid == __uuidof(IDxcBlob))
+            {
+                *ppvObj = (LPVOID)this;
+                AddRef();
+                return NOERROR;
+            }
+            return E_NOINTERFACE;
+        }
+        // ----------------------------------------------------------------------------------------
+
+        ULONG AddRef()
+        {
+            InterlockedIncrement(&m_cRef);
+            return m_cRef;
+        }
+
+        // ----------------------------------------------------------------------------------------
+
+        ULONG Release()
+        {
+            ULONG ulRefCount = InterlockedDecrement(&m_cRef);
+            if (0 == m_cRef)
+                delete this;
+            return ulRefCount;
+        }
+
+    private:
+        std::vector<char> m_buffer;
+        LONG m_cRef;
+    };
+
+    // --------------------------------------------------------------------------------------------
 
     class Shader
     {
@@ -61,7 +117,7 @@ namespace mdl_d3d12
         Base_application* m_app;
     };
 
-    // ----------------------------------------------------------------------------------------------------------------
+    // --------------------------------------------------------------------------------------------
 
     class Descriptor_table
     {
@@ -74,7 +130,7 @@ namespace mdl_d3d12
         void register_cbv(size_t slot, size_t space, size_t heap_offset, size_t count = 1);
         void register_srv(size_t slot, size_t space, size_t heap_offset, size_t count = 1);
         void register_uav(size_t slot, size_t space, size_t heap_offset, size_t count = 1);
-        
+
         size_t get_size() const { return m_descriptor_ranges.size(); }
         void clear() { return m_descriptor_ranges.clear(); }
 
@@ -82,8 +138,12 @@ namespace mdl_d3d12
         std::vector<CD3DX12_DESCRIPTOR_RANGE1> m_descriptor_ranges;
     };
 
+    // --------------------------------------------------------------------------------------------
+
     class Root_signature
     {
+        // --------------------------------------------------------------------
+
         struct Element
         {
             explicit Element();
@@ -103,14 +163,19 @@ namespace mdl_d3d12
             size_t root_signature_index;
         };
 
+        // --------------------------------------------------------------------
+
     public:
+        /// Constructor.
         explicit Root_signature(Base_application* app, const std::string& debug_name);
+
+        /// Destructor.
         virtual ~Root_signature();
 
-        /// Initialize a root signature entry for a constant that is directly placed in the 
+        /// Initialize a root signature entry for a constant that is directly placed in the
         /// signature.
-        /// 
-        /// \param slot     The slot that the constant is bound to. 
+        ///
+        /// \param slot     The slot that the constant is bound to.
         ///                 Available in the shader as register(b<slot>).
         /// \return         True in case of success.
         template<typename T>
@@ -119,28 +184,28 @@ namespace mdl_d3d12
             return register_constants(slot, sizeof(T));
         }
         /// Initialize a root signature entry for a constant buffer view.
-        /// 
-        /// \param slot     The slot that the CBV is bound to. 
+        ///
+        /// \param slot     The slot that the CBV is bound to.
         ///                 Available in the shader as register(b<slot>).
         /// \return         True in case of success.
         bool register_cbv(size_t slot);
 
         /// Initialize a root signature entry for a unordered access view.
-        /// 
-        /// \param slot     The slot that the UAV is bound to. 
+        ///
+        /// \param slot     The slot that the UAV is bound to.
         ///                 Available in the shader as register(u<slot>).
         /// \return         True in case of success.
         bool register_uav(size_t slot);
 
         /// Initialize a root signature entry for a shader resource view.
-        /// 
-        /// \param slot     The slot that the SRV is bound to. 
+        ///
+        /// \param slot     The slot that the SRV is bound to.
         ///                 Available in the shader as register(t<slot>).
         /// \return         True in case of success.
         bool register_srv(size_t slot);
 
         /// Initialize a root signature entry for a descriptor table.
-        /// 
+        ///
         /// \param descriptor_table     The table to register.
         /// \return                     True in case of success.
         bool register_dt(const Descriptor_table& descriptor_table);
@@ -153,17 +218,17 @@ namespace mdl_d3d12
         /// \return         The resulting flag combination after adding.
         D3D12_ROOT_SIGNATURE_FLAGS add_flag(D3D12_ROOT_SIGNATURE_FLAGS flag);
 
-        /// When the setup is complete the object has to be finalized in order to be used for 
+        /// When the setup is complete the object has to be finalized in order to be used for
         /// rendering. Afterwards, no changes to the object are allowed anymore.
         bool finalize();
 
         /// Get the d3d root signature (available after finalize() has been called)
         ///
-        /// \return         The signature used for setting up the pipeline or 
+        /// \return         The signature used for setting up the pipeline or
         ///                 nullptr when called before finalize().
         ID3D12RootSignature* get_signature();
 
-        /// Get the number of root signature entries, 
+        /// Get the number of root signature entries,
         /// which is required for creating a corresponding
         size_t get_root_parameter_count() const { return m_root_parameters.size(); }
 
@@ -189,10 +254,12 @@ namespace mdl_d3d12
         ComPtr<ID3D12RootSignature> m_root_signature;
     };
 
-    // ----------------------------------------------------------------------------------------------------------------
+    // --------------------------------------------------------------------------------------------
 
     class Shader_binding_tables
     {
+        // --------------------------------------------------------------------
+
     private:
         struct Shader_record
         {
@@ -203,6 +270,8 @@ namespace mdl_d3d12
 
             uint8_t* m_mapped_table_pointer;                // used directly after finalize()
         };
+
+        // --------------------------------------------------------------------
 
     public:
         struct Shader_handle
@@ -232,12 +301,16 @@ namespace mdl_d3d12
             Kind m_kind;
         };
 
+        // --------------------------------------------------------------------
+
+        /// Constructor.
         explicit Shader_binding_tables(
-            Raytracing_pipeline* pipeline, 
-            size_t ray_type_count, 
-            size_t hit_record_count, 
+            Raytracing_pipeline* pipeline,
+            size_t ray_type_count,
+            size_t hit_record_count,
             const std::string& debug_name);
 
+        /// Destructor.
         virtual ~Shader_binding_tables();
 
         const Shader_handle add_ray_generation_program(const std::string& symbol_name);
@@ -246,13 +319,13 @@ namespace mdl_d3d12
 
         template<typename T>
         bool set_shader_record(
-            size_t index, 
-            const Shader_handle& shader_handle, 
+            size_t index,
+            const Shader_handle& shader_handle,
             const T* local_root_arguments)
         {
             return set_shader_record(
-                index, shader_handle, 
-                reinterpret_cast<const uint8_t*>(local_root_arguments), 
+                index, shader_handle,
+                reinterpret_cast<const uint8_t*>(local_root_arguments),
                 sizeof(T));
         }
 
@@ -266,9 +339,9 @@ namespace mdl_d3d12
 
         const Shader_handle add_shader(Shader_handle::Kind kind, const std::string& name);
         bool set_shader_record(
-            size_t index, 
-            const Shader_handle& shader_handle, 
-            const uint8_t* local_root_arguments, 
+            size_t index,
+            const Shader_handle& shader_handle,
+            const uint8_t* local_root_arguments,
             size_t size_in_byte);
 
         Base_application* m_app;
@@ -287,5 +360,6 @@ namespace mdl_d3d12
         uint8_t* m_mapped_binding_table;
         D3D12_DISPATCH_RAYS_DESC m_prefilled_dispatch_description;
     };
-}
+
+}}} // mi::examples::mdl_d3d12
 #endif

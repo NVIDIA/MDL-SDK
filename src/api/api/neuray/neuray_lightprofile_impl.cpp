@@ -47,9 +47,9 @@ DB::Element_base* Lightprofile_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new LIGHTPROFILE::Lightprofile;
 }
 
@@ -59,9 +59,9 @@ mi::base::IInterface* Lightprofile_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Lightprofile_impl())->cast_to_major();
 }
 
@@ -111,13 +111,13 @@ mi::Sint32 Lightprofile_impl::reset_reader(
 const char* Lightprofile_impl::get_filename() const
 {
     const std::string& filename = get_db_element()->get_filename();
-    return filename.empty() ? 0 : filename.c_str();
+    return filename.empty() ? nullptr : filename.c_str();
 }
 
 const char* Lightprofile_impl::get_original_filename() const
 {
     const std::string& filename = get_db_element()->get_original_filename();
-    return filename.empty() ? 0 : filename.c_str();
+    return filename.empty() ? nullptr : filename.c_str();
 }
 
 mi::Uint32 Lightprofile_impl::get_resolution_phi() const

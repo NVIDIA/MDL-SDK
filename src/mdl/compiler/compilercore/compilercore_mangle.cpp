@@ -1391,7 +1391,7 @@ bool DAG_mangler::need_signature_suffix(IDefinition const *def) const
 }
 
 // Convert a definition.
-string DAG_mangler::mangle(IDefinition const *idef, const char *module_name)
+string DAG_mangler::mangle(IDefinition const *idef, const char *module_name, bool with_signature_suffix)
 {
     Definition const *def = impl_cast<Definition>(idef);
 
@@ -1450,7 +1450,7 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name)
 
     if ((symbol_name == "operator.") || (symbol_name == "operator[]"))
         return result;
-    if (need_signature_suffix(def)) {
+    if (with_signature_suffix && need_signature_suffix(def)) {
         result += "(";
         IType_function const *fun_type = cast<IType_function>(def->get_type());
         int count = fun_type->get_parameter_count();
@@ -1460,26 +1460,9 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name)
 
             IType const   *p_type = NULL;
             ISymbol const *p_sym = NULL;
-
             fun_type->get_parameter(i, p_type, p_sym);
-            p_type = p_type->skip_type_alias();
 
-            if (IType_array const *a_tp = as<IType_array>(p_type)) {
-                IType const *e_tp = a_tp->get_element_type();
-                m_printer.print(e_tp->skip_type_alias());
-                m_printer.print("[");
-                if (a_tp->is_immediate_sized()) {
-                    size_t size = a_tp->get_size();
-                    m_printer.print(size);
-                } else {
-                    IType_array_size const *size = a_tp->get_deferred_size();
-                    m_printer.print(size->get_size_symbol());
-                }
-                m_printer.print("]");
-            } else {
-                m_printer.print(p_type);
-            }
-            result += m_printer.get_line();
+            result += mangle_parameter_type(p_type);
         }
         result += ")";
     }
@@ -1487,9 +1470,13 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name)
 }
 
 // Mangle a definition.
-string DAG_mangler::mangle(IDefinition const *def, IModule const *owner)
+string DAG_mangler::mangle(IDefinition const *def, IModule const *owner, bool with_signature_suffix)
 {
-    return mangle(def, owner->is_builtins() ? NULL : owner->get_name());
+    const char* module_name = NULL;
+    if (owner && !owner->is_builtins())
+        module_name = owner->get_name();
+
+    return mangle(def, module_name, with_signature_suffix);
 }
 
 // Mangle a type.
@@ -1516,6 +1503,30 @@ string DAG_mangler::mangle(IType const *type, char const *module_name)
 string DAG_mangler::mangle(IType const *type, IModule const *owner)
 {
     return mangle(type, owner->is_builtins() ? NULL : owner->get_name());
+}
+
+// Mangle a parameter type.
+string DAG_mangler::mangle_parameter_type(IType const *type)
+{
+    type = type->skip_type_alias();
+
+    if (IType_array const *a_tp = as<IType_array>(type)) {
+        IType const *e_tp = a_tp->get_element_type();
+        m_printer.print(e_tp->skip_type_alias());
+        m_printer.print("[");
+        if (a_tp->is_immediate_sized()) {
+            size_t size = a_tp->get_size();
+            m_printer.print(size);
+        } else {
+            IType_array_size const *size = a_tp->get_deferred_size();
+            m_printer.print(size->get_size_symbol());
+        }
+        m_printer.print("]");
+    } else {
+        m_printer.print(type);
+    }
+
+    return m_printer.get_line();
 }
 
 }  // mdl

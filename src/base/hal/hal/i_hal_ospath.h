@@ -32,6 +32,8 @@
 #ifndef BASE_HAL_HAL_I_HAL_OSPATH_H
 #define BASE_HAL_HAL_I_HAL_OSPATH_H
 
+#include <mi/base/config.h>
+
 #include <string>
 
 namespace MI {
@@ -49,14 +51,14 @@ class Ospath
     /// \param path incoming path
     /// \return the resulting string
     static std::string basename(
-	const std::string& path);
+        const std::string& path);
 
     /// Return the directory name of pathname path. This is the first half of
     /// the pair returned by split(path).
     /// \param path incoming path
     /// \return the resulting string
     static std::string dirname(
-	const std::string& path);
+        const std::string& path);
 
     /// Joins two path components intelligently. The return value is the concatenation of path1, and
     /// optionally path2, etc., with exactly one directory separator (os.sep) inserted between
@@ -65,8 +67,8 @@ class Ospath
     /// \param path2 incoming path
     /// \return the resulting string
     static std::string join(
-	const std::string& path1,
-	const std::string& path2);
+        const std::string& path1,
+        const std::string& path2);
 
     /// Joins two path names.
     ///
@@ -81,14 +83,14 @@ class Ospath
     /// \param path incoming path
     /// \return the resulting string
     static std::string normpath(
-	const std::string& path);
+        const std::string& path);
 
     /// Normalize a pathname. It does not normalize the case. On Windows, it converts forward
     /// slashes to backward slashes.
     /// \param path incoming path
     /// \return the resulting string
     static std::string normpath_only(
-	const std::string& path);
+        const std::string& path);
 
     /// Normalizes a path name.
     ///
@@ -119,9 +121,9 @@ class Ospath
     /// \param[out] head the head part
     /// \param[out] tail the rest
     static void split(
-	const std::string& path,
-	std::string& head,
-	std::string& tail);
+        const std::string& path,
+        std::string& head,
+        std::string& tail);
 
     /// Split the pathname path into a pair, (head, tail) where tail is the
     /// last pathname component and head is everything leading up to that.
@@ -130,9 +132,9 @@ class Ospath
     /// \param[out] head the head part
     /// \param[out] tail the rest
     static void split_only(
-	const std::string& path,
-	std::string& head,
-	std::string& tail);
+        const std::string& path,
+        std::string& head,
+        std::string& tail);
 
     /// Split the pathname path into a pair (drive, tail) where drive is either
     /// a drive specification or the empty string. On systems which do not use
@@ -142,9 +144,9 @@ class Ospath
     /// \param[out] drive the drive part
     /// \param[out] tail the rest
     static void splitdrive(
-	const std::string& path,
-	std::string& drive,
-	std::string& tail);
+        const std::string& path,
+        std::string& drive,
+        std::string& tail);
 
     /// Split the pathname path into a pair (root, ext) such that root + ext == path, and \p ext
     /// is empty or begins with a period and contains at most one period.
@@ -152,16 +154,16 @@ class Ospath
     /// \param[out] root the root part
     /// \param[out] ext the extension
     static void splitext(
-	const std::string& path,
-	std::string& root,
-	std::string& ext);
+        const std::string& path,
+        std::string& root,
+        std::string& ext);
 
     /// Retrieve the extension from a given \p path such that the returned result is empty or begins
     /// with a period.
     /// \param path incoming path
     /// \return the extension string, or the empty string else
     static std::string get_ext(
-	const std::string& path);
+        const std::string& path);
 
     /// Return the OS-dependent path separator. This is the character separating the single
     /// directories from each other. E.g.  "\\" or "/".
@@ -177,17 +179,25 @@ class Ospath
     /// \param path incoming path
     /// \return the resulting string
     static std::string convert_to_forward_slashes(
-	const std::string& path);
+        const std::string& path);
     /// Convert all separators to backward slashes.
     /// \param path incoming path
     /// \return the resulting string
     static std::string convert_to_backward_slashes(
-	const std::string& path);
+        const std::string& path);
     /// Convert all separators to the current platform's separators.
     /// \param path incoming path
     /// \return the resulting string
     static std::string convert_to_platform_specific_path(
-	const std::string& path);
+        const std::string& path);
+
+#ifdef MI_PLATFORM_WINDOWS
+    /// Returns the Windows "known folder" identified by FOLDERID_ProgramData (defaults to %ALLUSERSPROFILE%).
+    static std::string get_windows_folder_programdata();
+
+    /// Returns the Windows "known folder" identified by FOLDERID_Documents (defaults to %USERPROFILE%\Documents).
+    static std::string get_windows_folder_documents();
+#endif
 };
 
 }

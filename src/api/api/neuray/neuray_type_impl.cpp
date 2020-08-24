@@ -194,21 +194,21 @@ MDL::IType_texture::Shape ext_shape_to_int_shape( mi::neuraylib::IType_texture::
 const MDL::IType* get_internal_type( const mi::neuraylib::IType* type)
 {
     if( !type)
-        return 0;
+        return nullptr;
     mi::base::Handle<const IType_wrapper> type_wrapper( type->get_interface<IType_wrapper>());
     if( !type_wrapper)
-        return 0;
+        return nullptr;
     return type_wrapper->get_internal_type();
 }
 
 const MDL::IType_list* get_internal_type_list( const mi::neuraylib::IType_list* type_list)
 {
     if( !type_list)
-        return 0;
+        return nullptr;
     mi::base::Handle<const IType_list_wrapper> type_list_wrapper(
         type_list->get_interface<IType_list_wrapper>());
     if( !type_list_wrapper)
-        return 0;
+        return nullptr;
     return type_list_wrapper->get_internal_type_list();
 }
 
@@ -390,43 +390,43 @@ const mi::neuraylib::IType_alias* Type_factory::create_alias(
     mi::Uint32 modifiers_int = ext_modifiers_to_int_modifiers( modifiers);
     mi::base::Handle<const MDL::IType_alias> result_int(
         m_tf->create_alias( type_int.get(), modifiers_int, symbol));
-    return create<mi::neuraylib::IType_alias>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_alias>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_bool* Type_factory::create_bool() const
 {
     mi::base::Handle<const MDL::IType_bool> result_int( m_tf->create_bool());
-    return create<mi::neuraylib::IType_bool>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_bool>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_int* Type_factory::create_int() const
 {
     mi::base::Handle<const MDL::IType_int> result_int( m_tf->create_int());
-    return create<mi::neuraylib::IType_int>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_int>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_enum* Type_factory::create_enum( const char* symbol) const
 {
     mi::base::Handle<const MDL::IType_enum> result_int( m_tf->create_enum( symbol));
-    return create<mi::neuraylib::IType_enum>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_enum>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_float* Type_factory::create_float() const
 {
     mi::base::Handle<const MDL::IType_float> result_int( m_tf->create_float());
-    return create<mi::neuraylib::IType_float>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_float>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_double* Type_factory::create_double() const
 {
     mi::base::Handle<const MDL::IType_double> result_int( m_tf->create_double());
-    return create<mi::neuraylib::IType_double>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_double>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_string* Type_factory::create_string() const
 {
     mi::base::Handle<const MDL::IType_string> result_int( m_tf->create_string());
-    return create<mi::neuraylib::IType_string>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_string>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_vector* Type_factory::create_vector(
@@ -436,7 +436,7 @@ const mi::neuraylib::IType_vector* Type_factory::create_vector(
         get_internal_type<MDL::IType_atomic>( element_type));
     mi::base::Handle<const MDL::IType_vector> result_int(
         m_tf->create_vector( element_type_int.get(), size));
-    return create<mi::neuraylib::IType_vector>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_vector>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_matrix* Type_factory::create_matrix(
@@ -446,13 +446,13 @@ const mi::neuraylib::IType_matrix* Type_factory::create_matrix(
         get_internal_type<MDL::IType_vector>( column_type));
     mi::base::Handle<const MDL::IType_matrix> result_int(
         m_tf->create_matrix( column_type_int.get(), columns));
-    return create<mi::neuraylib::IType_matrix>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_matrix>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_color* Type_factory::create_color() const
 {
     mi::base::Handle<const MDL::IType_color> result_int( m_tf->create_color());
-    return create<mi::neuraylib::IType_color>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_color>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_array* Type_factory::create_immediate_sized_array(
@@ -461,7 +461,7 @@ const mi::neuraylib::IType_array* Type_factory::create_immediate_sized_array(
     mi::base::Handle<const MDL::IType> element_type_int( get_internal_type( element_type));
     mi::base::Handle<const MDL::IType_array> result_int(
         m_tf->create_immediate_sized_array( element_type_int.get(), size));
-    return create<mi::neuraylib::IType_array>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_array>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_array* Type_factory::create_deferred_sized_array(
@@ -470,13 +470,13 @@ const mi::neuraylib::IType_array* Type_factory::create_deferred_sized_array(
     mi::base::Handle<const MDL::IType> element_type_int( get_internal_type( element_type));
     mi::base::Handle<const MDL::IType_array> result_int(
         m_tf->create_deferred_sized_array( element_type_int.get(), size));
-    return create<mi::neuraylib::IType_array>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_array>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_struct* Type_factory::create_struct( const char* symbol) const
 {
     mi::base::Handle<const MDL::IType_struct> result_int( m_tf->create_struct( symbol));
-    return create<mi::neuraylib::IType_struct>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_struct>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_texture* Type_factory::create_texture(
@@ -484,50 +484,50 @@ const mi::neuraylib::IType_texture* Type_factory::create_texture(
 {
     MDL::IType_texture::Shape shape_int = ext_shape_to_int_shape( shape);
     mi::base::Handle<const MDL::IType_texture> result_int( m_tf->create_texture( shape_int));
-    return create<mi::neuraylib::IType_texture>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_texture>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_light_profile* Type_factory::create_light_profile() const
 {
     mi::base::Handle<const MDL::IType_light_profile> result_int( m_tf->create_light_profile());
-    return create<mi::neuraylib::IType_light_profile>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_light_profile>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_bsdf_measurement* Type_factory::create_bsdf_measurement() const
 {
     mi::base::Handle<const MDL::IType_bsdf_measurement> result_int(
         m_tf->create_bsdf_measurement());
-    return create<mi::neuraylib::IType_bsdf_measurement>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_bsdf_measurement>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_bsdf* Type_factory::create_bsdf() const
 {
     mi::base::Handle<const MDL::IType_bsdf> result_int( m_tf->create_bsdf());
-    return create<mi::neuraylib::IType_bsdf>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_bsdf>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_hair_bsdf* Type_factory::create_hair_bsdf() const
 {
     mi::base::Handle<const MDL::IType_hair_bsdf> result_int( m_tf->create_hair_bsdf());
-    return create<mi::neuraylib::IType_hair_bsdf>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_hair_bsdf>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_edf* Type_factory::create_edf() const
 {
     mi::base::Handle<const MDL::IType_edf> result_int( m_tf->create_edf());
-    return create<mi::neuraylib::IType_edf>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_edf>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_vdf* Type_factory::create_vdf() const
 {
     mi::base::Handle<const MDL::IType_vdf> result_int( m_tf->create_vdf());
-    return create<mi::neuraylib::IType_vdf>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_vdf>( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IType_list* Type_factory::create_type_list() const
 {
     mi::base::Handle<MDL::IType_list> result_int( m_tf->create_type_list());
-    return create_type_list( result_int.get(), /*owner*/ 0);
+    return create_type_list( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_enum* Type_factory::get_predefined_enum(
@@ -535,7 +535,7 @@ const mi::neuraylib::IType_enum* Type_factory::get_predefined_enum(
 {
     MDL::IType_enum::Predefined_id id_int = ext_enum_id_to_int_enum_id( id);
     mi::base::Handle<const MDL::IType_enum> result_int( m_tf->get_predefined_enum( id_int));
-    return create<mi::neuraylib::IType_enum>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_enum>( result_int.get(), /*owner*/ nullptr);
 }
 
 const mi::neuraylib::IType_struct* Type_factory::get_predefined_struct(
@@ -543,7 +543,7 @@ const mi::neuraylib::IType_struct* Type_factory::get_predefined_struct(
 {
     MDL::IType_struct::Predefined_id id_int = ext_struct_id_to_int_struct_id( id);
     mi::base::Handle<const MDL::IType_struct> result_int( m_tf->get_predefined_struct( id_int));
-    return create<mi::neuraylib::IType_struct>( result_int.get(), /*owner*/ 0);
+    return create<mi::neuraylib::IType_struct>( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::Sint32 Type_factory::compare(
@@ -586,7 +586,7 @@ const mi::neuraylib::IType* Type_factory::create(
     const MDL::IType* type, const mi::base::IInterface* owner) const
 {
     if( !type)
-        return 0;
+        return nullptr;
 
     MDL::IType::Kind kind = type->get_kind();
 
@@ -673,18 +673,18 @@ const mi::neuraylib::IType* Type_factory::create(
         }
         case MDL::IType::TK_FORCE_32_BIT:
             ASSERT( M_SCENE, false);
-            return 0;
+            return nullptr;
     };
 
    ASSERT( M_SCENE, false);
-   return 0;
+   return nullptr;
 }
 
 mi::neuraylib::IType_list* Type_factory::create_type_list(
     MDL::IType_list* type_list, const mi::base::IInterface* owner) const
 {
     if( !type_list)
-        return 0;
+        return nullptr;
     return new Type_list( this, type_list, owner);
 }
 

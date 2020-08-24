@@ -78,7 +78,7 @@ class Directory
 
     /// Restart reading at the first file
     /// \return success
-    bool rewind();			// true=ok, false=fail (see error())
+    bool rewind();                      // true=ok, false=fail (see error())
 
     /// Read the next filename from the directory. Names are unsorted.
     /// \param nodot ignore files beginning with '.'
@@ -107,13 +107,13 @@ class Directory
     int error() const;
 
   private:
-    std::string	m_path;			///< last path passed to open()
-    int			m_error;		///< last error, 0 if none
-    bool		m_eof;			///< hit EOF while reading?
+    std::string m_path;                 ///< last path passed to open()
+    int                 m_error;                ///< last error, 0 if none
+    bool                m_eof;                  ///< hit EOF while reading?
 #ifndef WIN_NT
-    Hal_dir*		m_dp_wrapper;		///< open directory, 0 if not open
+    Hal_dir*            m_dp_wrapper;           ///< open directory, 0 if not open
 #else
-    Hal_dir*		m_dir;			///< information for windows-based dir searching
+    Hal_dir*            m_dir;                  ///< information for windows-based dir searching
 
     /// An internal, windows-specific helper method to encapsulate
     /// the directory reading code.
@@ -135,15 +135,15 @@ class Directory
 /// this is used to hold information gathered by the stat method
 struct Stat
 {
-    Sint64	m_size;			///< size in bytes of the file
-    TIME::Time	m_modification_time;	///< time of last data modification
-    TIME::Time	m_access_time;		///< time of last access
-    TIME::Time	m_change_time;		///< time of last file status change
-    bool	m_is_dir;		///< is the file a directory?
-    bool	m_is_file;		///< is the file a regular file or a symlink?
-    bool	m_is_writable;		///< is the file writable?
-    bool	m_is_readable;		///< is the file readable?
-    bool	m_is_executable;	///< is the file executable?
+    Sint64      m_size;                 ///< size in bytes of the file
+    TIME::Time  m_modification_time;    ///< time of last data modification
+    TIME::Time  m_access_time;          ///< time of last access
+    TIME::Time  m_change_time;          ///< time of last file status change
+    bool        m_is_dir;               ///< is the file a directory?
+    bool        m_is_file;              ///< is the file a regular file or a symlink?
+    bool        m_is_writable;          ///< is the file writable?
+    bool        m_is_readable;          ///< is the file readable?
+    bool        m_is_executable;        ///< is the file executable?
 };
 
 
@@ -175,7 +175,7 @@ bool is_file(
 /// \return success
 bool access(
     const char* path,
-    bool	write = false);		// have permission to read or write?
+    bool        write = false);         // have permission to read or write?
 
 /// Opens a file and returns a pointer to the opened file. This is a wrapper around the C lib
 /// function. Under Windows, it handles UTF-8 strings and validates its parameters. In addition
@@ -304,6 +304,6 @@ std::string find_file_on_paths(
 }
 }
 
-#include "disk_inline.h"		// the really trivial bits
+#include "disk_inline.h"                // the really trivial bits
 
 #endif

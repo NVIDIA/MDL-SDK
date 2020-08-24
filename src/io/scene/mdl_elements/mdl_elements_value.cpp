@@ -139,7 +139,7 @@ Value_vector::Value_vector( const Type* type, const IValue_factory* value_factor
 const IValue_atomic* Value_vector::get_value( mi::Size index) const
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -148,7 +148,7 @@ const IValue_atomic* Value_vector::get_value( mi::Size index) const
 IValue_atomic* Value_vector::get_value( mi::Size index)
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -193,7 +193,7 @@ Value_matrix::Value_matrix( const Type* type, const IValue_factory* value_factor
 const IValue_vector* Value_matrix::get_value( mi::Size index) const
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -202,7 +202,7 @@ const IValue_vector* Value_matrix::get_value( mi::Size index) const
 IValue_vector* Value_matrix::get_value( mi::Size index)
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -248,7 +248,7 @@ Value_color::Value_color(
 const IValue_float* Value_color::get_value( mi::Size index) const
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -257,7 +257,7 @@ const IValue_float* Value_color::get_value( mi::Size index) const
 IValue_float* Value_color::get_value( mi::Size index)
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -313,7 +313,7 @@ Value_array::Value_array( const Type* type, const IValue_factory* value_factory)
 const IValue* Value_array::get_value( mi::Size index) const
 {
     if( index >= m_values.size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -322,7 +322,7 @@ const IValue* Value_array::get_value( mi::Size index) const
 IValue* Value_array::get_value( mi::Size index)
 {
     if( index >= m_values.size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -383,7 +383,7 @@ Value_struct::Value_struct( const Type* type, const IValue_factory* value_factor
 const IValue* Value_struct::get_value( mi::Size index) const
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -392,7 +392,7 @@ const IValue* Value_struct::get_value( mi::Size index) const
 IValue* Value_struct::get_value( mi::Size index)
 {
     if( index >= get_size())
-        return 0;
+        return nullptr;
 
     m_values[index]->retain();
     return m_values[index].get();
@@ -416,13 +416,13 @@ mi::Sint32 Value_struct::set_value( mi::Size index, IValue* value)
 const IValue* Value_struct::get_field( const char* name) const
 {
     mi::Size index = m_type->find_field( name);
-    return index != static_cast<mi::Size>( -1) ? get_value( index) : 0;
+    return index != static_cast<mi::Size>( -1) ? get_value( index) : nullptr;
 }
 
 IValue* Value_struct::get_field( const char* name)
 {
     mi::Size index = m_type->find_field( name);
-    return index != static_cast<mi::Size>( -1) ? get_value( index) : 0;
+    return index != static_cast<mi::Size>( -1) ? get_value( index) : nullptr;
 }
 
 mi::Sint32 Value_struct::set_field( const char* name, IValue* value)
@@ -446,14 +446,14 @@ const char* Value_texture::get_file_path( DB::Transaction* transaction) const
         return m_unresolved_mdl_url.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != TEXTURE::ID_TEXTURE)
-        return 0;
+        return nullptr;
     DB::Access<TEXTURE::Texture> texture( m_value, transaction);
     DB::Tag image_tag = texture->get_image();
     if( !image_tag || transaction->get_class_id( image_tag) != DBIMAGE::ID_IMAGE)
-        return 0;
+        return nullptr;
     DB::Access<DBIMAGE::Image> image( image_tag, transaction);
     m_cached_file_path = image->get_mdl_file_path();
-    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : 0;
+    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : nullptr;
 }
 
 mi::Size Value_texture::get_memory_consumption() const
@@ -468,10 +468,10 @@ const char* Value_light_profile::get_file_path( DB::Transaction* transaction) co
         return m_unresolved_mdl_url.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != LIGHTPROFILE::ID_LIGHTPROFILE)
-        return 0;
+        return nullptr;
     DB::Access<LIGHTPROFILE::Lightprofile> light_profile( m_value, transaction);
     m_cached_file_path = light_profile->get_mdl_file_path();
-    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : 0;
+    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : nullptr;
 }
 
 mi::Size Value_light_profile::get_memory_consumption() const
@@ -486,10 +486,10 @@ const char* Value_bsdf_measurement::get_file_path( DB::Transaction* transaction)
         return m_unresolved_mdl_url.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != BSDFM::ID_BSDF_MEASUREMENT)
-        return 0;
+        return nullptr;
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( m_value, transaction);
     m_cached_file_path = bsdf_measurement->get_mdl_file_path();
-    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : 0;
+    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : nullptr;
 }
 
 mi::Size Value_bsdf_measurement::get_memory_consumption() const
@@ -522,14 +522,14 @@ mi::Size Value_list::get_index( const char* name) const
 const char* Value_list::get_name( mi::Size index) const
 {
     if( index >= m_index_name.size())
-        return 0;
+        return nullptr;
     return m_index_name[index].c_str();
 }
 
 const IValue* Value_list::get_value( mi::Size index) const
 {
     if( index >= m_values.size())
-        return 0;
+        return nullptr;
     m_values[index]->retain();
     return m_values[index].get();
 }
@@ -538,7 +538,7 @@ const IValue* Value_list::get_value( const char* name) const
 {
     mi::Size index = get_index( name);
     if( index == static_cast<mi::Size>( -1))
-        return 0;
+        return nullptr;
     return get_value( index);
 }
 
@@ -610,7 +610,7 @@ IValue_int* Value_factory::create_int( mi::Sint32 value) const
 IValue_enum* Value_factory::create_enum(
     const IType_enum* type, mi::Size index) const
 {
-    return type ? new Value_enum( type, index) : 0;
+    return type ? new Value_enum( type, index) : nullptr;
 }
 
 IValue_float* Value_factory::create_float( mi::Float32 value) const
@@ -639,12 +639,12 @@ IValue_string_localized* Value_factory::create_string_localized( const char* val
 
 IValue_vector* Value_factory::create_vector( const IType_vector* type) const
 {
-    return type ? new Value_vector( type, this) : 0;
+    return type ? new Value_vector( type, this) : nullptr;
 }
 
 IValue_matrix* Value_factory::create_matrix( const IType_matrix* type) const
 {
-    return type ? new Value_matrix( type, this) : 0;
+    return type ? new Value_matrix( type, this) : nullptr;
 }
 
 IValue_color* Value_factory::create_color(
@@ -656,17 +656,17 @@ IValue_color* Value_factory::create_color(
 
 IValue_array* Value_factory::create_array( const IType_array* type) const
 {
-    return type ? new Value_array( type, this) : 0;
+    return type ? new Value_array( type, this) : nullptr;
 }
 
 IValue_struct* Value_factory::create_struct( const IType_struct* type) const
 {
-    return type ? new Value_struct( type, this) : 0;
+    return type ? new Value_struct( type, this) : nullptr;
 }
 
 IValue_texture* Value_factory::create_texture( const IType_texture* type, DB::Tag value) const
 {
-    return type ? new Value_texture( type, value) : 0;
+    return type ? new Value_texture( type, value) : nullptr;
 }
 
 IValue_texture* Value_factory::create_texture(
@@ -677,7 +677,7 @@ IValue_texture* Value_factory::create_texture(
     mi::Float32 gamma) const
 {
     if (!type)
-        return 0;
+        return nullptr;
 
     Value_texture *tex = new Value_texture(type, value, unresolved_mdl_url, owner_module, gamma);
     return tex;
@@ -716,17 +716,17 @@ IValue_bsdf_measurement* Value_factory::create_bsdf_measurement(
 IValue_invalid_df* Value_factory::create_invalid_df( const IType_reference* type) const
 {
     if( !type)
-        return 0;
+        return nullptr;
     mi::base::Handle<const IType_resource> type_resource( type->get_interface<IType_resource>());
     if( type_resource)
-        return 0;
+        return nullptr;
     return new Value_invalid_df( type);
 }
 
 IValue* Value_factory::create( const IType* type) const
 {
     if( !type)
-        return 0;
+        return nullptr;
 
     // Explicit cast to make the default arguments defined in the interface available.
     const IValue_factory* value_factory = this;
@@ -796,11 +796,11 @@ IValue* Value_factory::create( const IType* type) const
         }
         case IType::TK_FORCE_32_BIT:
             ASSERT( M_SCENE, false);
-            return 0;
+            return nullptr;
     }
 
     ASSERT( M_SCENE, false);
-    return 0;
+    return nullptr;
 }
 
 IValue_list* Value_factory::create_value_list() const
@@ -811,7 +811,7 @@ IValue_list* Value_factory::create_value_list() const
 IValue* Value_factory::clone( const IValue* value) const
 {
     if( !value)
-        return 0;
+        return nullptr;
 
     IValue::Kind kind = value->get_kind();
 
@@ -912,17 +912,17 @@ IValue* Value_factory::clone( const IValue* value) const
         }
         case IValue::VK_FORCE_32_BIT:
             ASSERT( M_SCENE, false);
-            return 0;
+            return nullptr;
     }
 
     ASSERT( M_SCENE, false);
-    return 0;
+    return nullptr;
 }
 
 IValue_list* Value_factory::clone( const IValue_list* list) const
 {
     if( !list)
-        return 0;
+        return nullptr;
 
     IValue_list* result = create_value_list();
     mi::Size n = list->get_size();
@@ -940,7 +940,7 @@ namespace {
 class String : public mi::base::Interface_implement<mi::IString>
 {
 public:
-    String( const char* str = 0) : m_string( str ? str : "") { }
+    String( const char* str = nullptr) : m_string( str ? str : "") { }
     const char* get_type_name() const { return "String"; }
     const char* get_c_str() const { return m_string.c_str(); }
     void set_c_str( const char* str) { m_string = str ? str : ""; }
@@ -987,8 +987,8 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs)
     if(  lhs && !rhs) return +1;
     ASSERT( M_SCENE, lhs && rhs);
 
-    mi::base::Handle<const IType> lhs_type( lhs->get_type());
-    mi::base::Handle<const IType> rhs_type( rhs->get_type());
+    mi::base::Handle<const IType> lhs_type( lhs->get_type()); //-V522 PVS
+    mi::base::Handle<const IType> rhs_type( rhs->get_type()); //-V522 PVS
     mi::Sint32 type_cmp = Type_factory::compare_static( lhs_type.get(), rhs_type.get());
     if( type_cmp != 0)
         return type_cmp;
@@ -1136,8 +1136,8 @@ mi::Sint32 Value_factory::compare_static( const IValue_list* lhs, const IValue_l
     if(  lhs && !rhs) return +1;
     ASSERT( M_SCENE, lhs && rhs);
 
-    mi::Size lhs_n = lhs->get_size();
-    mi::Size rhs_n = rhs->get_size();
+    mi::Size lhs_n = lhs->get_size(); //-V522 PVS
+    mi::Size rhs_n = rhs->get_size(); //-V522 PVS
     if( lhs_n < rhs_n) return -1;
     if( lhs_n > rhs_n) return +1;
 
@@ -1234,7 +1234,7 @@ void Value_factory::dump_static(
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<const IValue> element(
                     value_compound->get_value( i));
-                dump_static(  transaction, element.get(), 0, 0, s);
+                dump_static(  transaction, element.get(), nullptr, 0, s);
                 if( i < n-1)
                     s << ", ";
             }
@@ -1253,7 +1253,7 @@ void Value_factory::dump_static(
                 mi::Size rows = column->get_size();
                 for( mi::Size j = 0; j < rows; ++j) {
                     mi::base::Handle<const IValue> element( column->get_value( j));
-                    dump_static( transaction, element.get(), 0, 0, s);
+                    dump_static( transaction, element.get(), nullptr, 0, s);
                     if( i < columns-1 || j < rows-1)
                         s << ", ";
                 }
@@ -1569,7 +1569,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             mi::Size n = type->get_size();
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<IValue> element( deserialize( deserializer));
-                result->set_value( i, element.get());
+                result->set_value( i, element.get()); //-V522 PVS
             }
             return result;
         }
@@ -1580,7 +1580,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             mi::Size n = type->get_size();
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<IValue> element( deserialize( deserializer));
-                result->set_value( i, element.get());
+                result->set_value( i, element.get()); //-V522 PVS
             }
             return result;
         }
@@ -1591,7 +1591,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             mi::Size n = type->get_size();
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<IValue_float> element( deserialize<IValue_float>( deserializer));
-                result->set_value( i, element.get());
+                result->set_value( i, element.get()); //-V522 PVS
             }
             return result;
         }
@@ -1601,10 +1601,10 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             IValue_array* result = create_array( type.get());
             mi::Size n;
             deserializer->read( &n);
-            result->set_size( n);
+            result->set_size( n); //-V522 PVS
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<IValue> element( deserialize( deserializer));
-                result->set_value( i, element.get());
+                result->set_value( i, element.get()); //-V522 PVS
             }
             return result;
         }
@@ -1615,7 +1615,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             mi::Size n = type->get_size();
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<IValue> element( deserialize( deserializer));
-                result->set_value( i, element.get());
+                result->set_value( i, element.get()); //-V522 PVS
             }
             return result;
         }
@@ -1666,7 +1666,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
     }
 
     ASSERT( M_SCENE, false);
-    return 0;
+    return nullptr;
 }
 
 void Value_factory::serialize_list(

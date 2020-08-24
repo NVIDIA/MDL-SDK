@@ -614,9 +614,11 @@ BSDF_API void chiang_hair_bsdf_auxiliary(
     const float ior,
     const int handle)
 {
-    elemental_bsdf_auxiliary(
-        data, state, inherited_normal, inherited_weight, 
-        diffuse_reflection_weight * diffuse_reflection_tint, handle);
+    add_elemental_bsdf_auxiliary_contribution(
+        data,
+        handle,
+        inherited_weight * diffuse_reflection_weight * diffuse_reflection_tint,
+        math::average(inherited_weight) * inherited_normal);
 }
 
 

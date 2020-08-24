@@ -134,10 +134,18 @@ libraries. These additional libraries are:
 
 -   **DirectX Raytracing support**  
     Building the DXR example requires:  
+
     - Windows 10 version 1809 and the corresponding SDK 10.0.17763.0 or
     - Windows 10 version 1909 and the corresponding SDK 10.0.18362.0
 
     Additionally the optional *Graphic Tools* feature has to be installed.
+
+-   **Arnold SDK** *(6.0.0.0)*
+    Please follow the instructions on the [Arnold Website](https://www.arnoldrenderer.com/arnold/download/) to download the Arnold SDK.
+
+-   **MaterialX** *(github repository, branch: v1.38, soon master)*  
+    Please checkout the repository from [github](https://github.com/materialx/MaterialX)
+    and build the libraries using CMake for Debug, Release and RelWithDebInfo.  
 
 <a name="doc-build-tools"></a>
 Required tools to build the documentation:
@@ -209,6 +217,15 @@ Required tools to build the documentation:
 
     -   **Qt5_DIR** in Ungrouped Entries,  
         for example: *C:/Qt/5.10.1/msvc2015_64*
+
+    -   **ARNOLD_SDK_DIR** in Ungrouped Entries,
+        for example: *C:/projects/thirdparty/Arnold-6.0.3.0-windows*
+
+    -   **MATERIALX_REPOSITORY** and **MATERIALX_BUILD**,
+        for example: *C:/projects/thirdparty/git/MaterialX*
+        and *C:/projects/thirdparty/git/MaterialX/build* respectively.
+        Here, *MATERIALX_BUILD*  has to point to the build directory selected while building the MaterialX libraries using CMake.
+        For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
 
     Note: when you installed a new Visual Studio version after installing CUDA,
     you may have to reinstall CUDA to register it correctly with Visual Studio.
@@ -471,8 +488,17 @@ select particular logging information:
 -   **MDL_ENABLE_OPENGL_EXAMPLES**  
     [ON/OFF] enable/disable examples that require OpenGL.
 
+-   **MDL_ENABLE_OPTIX7_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require OptiX 7 (Linux and Windows only).
+
 -   **MDL_ENABLE_QT_EXAMPLES**  
     [ON/OFF] enable/disable examples that require Qt.
+
+-   **MDL_BUILD_ARNOLD_PLUGIN**  
+    [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
+
+-   **MDL_ENABLE_MATERIALX**  
+    [ON/OFF] enable/disable MaterialX in examples that support it.
 
 -   **MDL_LOG_PLATFORM_INFOS**  
     [ON/OFF] enable/disable the logging of platform and CMake settings.
@@ -482,6 +508,10 @@ select particular logging information:
 
 -   **MDL_LOG_FILE_DEPENDENCIES**  
     [ON/OFF] enable/disable the logging of files that are copied to the output folder.
+
+-   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES**  
+    [ON/OFF] links the MSCV dynamic runtime (\\MD) instead of static (\\MT) when
+    creating the example executables.
 
 By default, all options are set to ON. For any help request, please attach 
 the log messages generated when the log options are enabled.

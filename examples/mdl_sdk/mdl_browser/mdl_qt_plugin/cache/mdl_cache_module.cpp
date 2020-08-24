@@ -68,20 +68,20 @@ bool Mdl_cache_module::update(mi::neuraylib::INeuray* neuray,
         {
             /*
             std::cerr << "[Mdl_cache_module] update: skipped unchanged module: "
-                      << get_simple_name() << "\n";
+                      << get_entity_name() << "\n";
             */
             return true;
         }
     }
 
     // load the selected module
-    mi::base::Handle<mi::neuraylib::IMdl_compiler> compiler(
-        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+    mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+        neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
 
-    if (!compiler || 0 > compiler->load_module(transaction, module_info->get_qualified_name()))
+    if (!mdl_impexp_api || mdl_impexp_api->load_module(transaction, module_info->get_qualified_name()) < 0)
     {
         std::cerr << "[Mdl_cache_module] update: Failed to load module: " 
-                  << get_simple_name() << "\n";
+                  << get_entity_name() << "\n";
         return false;
     }
 
@@ -92,7 +92,7 @@ bool Mdl_cache_module::update(mi::neuraylib::INeuray* neuray,
     if (!mdl_module)
     {
         std::cerr << "[Mdl_cache_module] update: Failed to load module: " 
-                  << get_simple_name() << "\n";
+                  << get_entity_name() << "\n";
         return false;
     }
 
@@ -119,8 +119,10 @@ bool Mdl_cache_module::update(mi::neuraylib::INeuray* neuray,
     // Iterate over all materials exported by the module.
     for (mi::Size i = 0, n = mdl_module->get_material_count(); i < n; ++i)
     {
-        std::string qualified_name = mdl_module->get_material(i) + 3; // ignore the leading "mdl"
-        const std::string simple_name = Mdl_helper::qualified_to_simple_name(qualified_name);
+        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
+            transaction->access<mi::neuraylib::IMaterial_definition>(mdl_module->get_material(i)));
+        std::string simple_name = material_definition->get_mdl_simple_name();
+        std::string qualified_name = material_definition->get_mdl_name();
         const Child_map_key key{IMdl_cache_item::CK_MATERIAL, simple_name};
 
         // "mark" as present by removing from not_present_children
@@ -132,7 +134,8 @@ bool Mdl_cache_module::update(mi::neuraylib::INeuray* neuray,
         IMdl_cache_item* child = get_child(key);
         if (!child)
         {
-            child = get_cache()->create(CK_MATERIAL, qualified_name.c_str());
+            child = get_cache()->create(
+                CK_MATERIAL, simple_name.c_str(), simple_name.c_str(), qualified_name.c_str());
             add_child(child);
         }
 
@@ -153,9 +156,24 @@ bool Mdl_cache_module::update(mi::neuraylib::INeuray* neuray,
     // Iterate over all materials exported by the module.
     for (mi::Size i = 0, n = mdl_module->get_function_count(); i < n; ++i)
     {
-        std::string qualified_name = mdl_module->get_function(i) + 3; // ignore the leading "mdl"
-        const std::string simple_name = Mdl_helper::qualified_to_simple_name(qualified_name);
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> function_definition(
+            transaction->access<mi::neuraylib::IFunction_definition>(mdl_module->get_function(i)));
+        std::string simple_name = function_definition->get_mdl_simple_name();
+        std::string qualified_name = function_definition->get_mdl_name();
         const Child_map_key key{IMdl_cache_item::CK_FUNCTION, simple_name};
+
+        // compute entity name by adding the parameter types
+        std::string entity_name = simple_name + '(';
+        mi::Size j = 0;
+        while (true) {
+            const char* type_name = function_definition->get_mdl_parameter_type_name(j++);
+            if (!type_name)
+                break;
+            if (j > 1)
+                entity_name += ',';
+            entity_name += type_name;
+        }
+        entity_name += ')';
 
         // "mark" as present by removing from not_present_children
         const auto& pos = not_present_children.find(key);
@@ -166,7 +184,8 @@ bool Mdl_cache_module::update(mi::neuraylib::INeuray* neuray,
         IMdl_cache_item* child = get_child(key);
         if (!child)
         {
-            child = get_cache()->create(CK_FUNCTION, qualified_name.c_str());
+            child = get_cache()->create(
+                CK_FUNCTION, entity_name.c_str(), simple_name.c_str(), qualified_name.c_str());
             add_child(child);
         }
 

@@ -1,10 +1,13 @@
 
-Changes from NVIDIA compared to original zlib 1.2.8
----------------------------------------------------
+Changes from NVIDIA compared to original zlib 1.2.11
+----------------------------------------------------
 
 i_zlib.h
 zlib_wrapper.cpp
     New files. They integrate the zlib functionality in the neuray module system.
+
+CMakeLists.txt
+    Replaced to integrate the zlib functionality with the build system.
 
 ChangeLog:
     Reformatted $ Id $ to avoid expansion in repository checkouts.
@@ -12,5 +15,11 @@ ChangeLog:
 gzguts.h
     Added include of unistd.h.
 
+zlib.h
+    Defined ZLIB_DEBUG if DEBUG is defined.
+
 zutil.c
     Set verbose to -1 instead of 0 to avoid messages in DEBUG builds.
+
+zutil.h
+    Added #ifdef __cplusplus extern "C" { ... }

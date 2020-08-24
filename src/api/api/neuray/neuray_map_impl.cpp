@@ -55,15 +55,15 @@ mi::base::IInterface* Map_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 1)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> istring( argv[0]->get_interface<mi::IString>());
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* value_type_name = istring->get_c_str();
     Map_impl* map = new Map_impl( transaction, value_type_name);
     if( !map->successfully_constructed()) {
         map->release();
-        return 0;
+        return nullptr;
     } else
         return map;
 }
@@ -81,7 +81,7 @@ Map_impl::Map_impl( mi::neuraylib::ITransaction* transaction, const char* value_
     std::string mangled_value_type_name
         = (m_value_type_name == "Interface") ? "Void" : m_value_type_name;
     mi::base::Handle<mi::base::IInterface> element( s_class_factory->create_type_instance(
-        static_cast<Transaction_impl*>( transaction), mangled_value_type_name.c_str(), 0, 0));
+        static_cast<Transaction_impl*>( transaction), mangled_value_type_name.c_str(), 0, nullptr));
     m_successfully_constructed = element.is_valid_interface();
 
     m_cache_valid = false;
@@ -107,7 +107,7 @@ const char* Map_impl::get_key( mi::Size index) const
 {
     std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     m_cached_key = key;
     return m_cached_key.c_str();
@@ -116,7 +116,7 @@ const char* Map_impl::get_key( mi::Size index) const
 bool Map_impl::has_key( const char* key) const
 {
     if( !key)
-        return 0;
+        return false;
 
     m_map_type::const_iterator it = m_map.find( key);
     return it != m_map.end();
@@ -125,11 +125,11 @@ bool Map_impl::has_key( const char* key) const
 const mi::base::IInterface* Map_impl::get_value( const char* key) const
 {
     if( !key)
-        return 0;
+        return nullptr;
 
     m_map_type::const_iterator it = m_map.find( key);
     if( it == m_map.end())
-        return 0;
+        return nullptr;
 
     it->second->retain();
     return it->second;
@@ -138,11 +138,11 @@ const mi::base::IInterface* Map_impl::get_value( const char* key) const
 mi::base::IInterface* Map_impl::get_value( const char* key)
 {
     if( !key)
-        return 0;
+        return nullptr;
 
     m_map_type::iterator it = m_map.find( key);
     if( it == m_map.end())
-        return 0;
+        return nullptr;
 
     it->second->retain();
     return it->second;
@@ -152,7 +152,7 @@ const mi::base::IInterface* Map_impl::get_value( mi::Size index) const
 {
    std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     return get_value( key.c_str());
 }
@@ -161,7 +161,7 @@ mi::base::IInterface* Map_impl::get_value( mi::Size index)
 {
    std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     return get_value( key.c_str());
 }

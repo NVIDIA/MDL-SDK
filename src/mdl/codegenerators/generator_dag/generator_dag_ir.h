@@ -249,7 +249,7 @@ public:
     /// \param ret_type            The return type of the constructor.
     /// \param arguments           The arguments of the constructor call.
     /// \returns                   The value created by the constructor or NULL.
-    static IValue const *evaluate_constructor(
+    IValue const *evaluate_constructor(
         IValue_factory         &value_factory,
         IDefinition::Semantics sema,
         IType const            *ret_type,
@@ -304,10 +304,14 @@ public:
     const Definition_temporary_name_map& get_temp_name_map() const { return m_temp_name_map; }
 
     /// Return true iff all arguments are without name.
-    bool all_args_without_name(DAG_node const *args[], int n_args) const;
+    bool all_args_without_name(
+        DAG_node const *args[],
+        size_t         n_args) const;
 
     /// Return true iff all arguments are without name.
-    bool all_args_without_name(DAG_call::Call_argument const args[], int n_args) const;
+    bool all_args_without_name(
+        DAG_call::Call_argument const args[],
+        size_t                        n_args) const;
 
     /// Return the next unique ID that will be assigned.
     ///

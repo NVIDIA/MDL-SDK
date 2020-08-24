@@ -46,7 +46,7 @@ create_from_base_preset(
     NAMESPACE mdl_core
     OUTPUT_NAME "df_cuda"
     SOURCES ${PROJECT_SOURCES}
-    WINDOWS_UNICODE
+    EXAMPLE
 )
 
 # add dependencies

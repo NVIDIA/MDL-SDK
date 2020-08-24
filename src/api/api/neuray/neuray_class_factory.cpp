@@ -223,7 +223,7 @@ mi::Sint32 Class_factory::register_structure_decl(
         return -5;
 
     // Clone the declaration such that modifications after registration have no effect.
-    mi::IStructure_decl* copy = create_class_instance<mi::IStructure_decl>( 0, "Structure_decl");
+    mi::IStructure_decl* copy = create_class_instance<mi::IStructure_decl>( nullptr, "Structure_decl");
     mi::Size n = decl->get_length();
     for( mi::Size i = 0; i < n; ++i) {
         mi::Sint32 result
@@ -266,7 +266,7 @@ const mi::IStructure_decl* Class_factory::get_structure_decl( const char* struct
     std::map<std::string, const mi::IStructure_decl*>::const_iterator it
         = m_map_name_structure_decl.find( structure_name);
     if( it == m_map_name_structure_decl.end())
-        return 0;
+        return nullptr;
 
     it->second->retain();
     return it->second;
@@ -297,7 +297,7 @@ mi::Sint32 Class_factory::register_enum_decl(
         return -6;
 
     // Clone the declaration such that modifications after registration have no effect.
-    mi::IEnum_decl* copy = create_class_instance<mi::IEnum_decl>( 0, "Enum_decl");
+    mi::IEnum_decl* copy = create_class_instance<mi::IEnum_decl>( nullptr, "Enum_decl");
     for( mi::Size i = 0; i < n; ++i) {
         mi::Sint32 result = copy->add_enumerator( decl->get_name( i), decl->get_value( i));
         ASSERT( M_NEURAY_API, result == 0);
@@ -338,7 +338,7 @@ const mi::IEnum_decl* Class_factory::get_enum_decl( const char* enum_name) const
     std::map<std::string, const mi::IEnum_decl*>::const_iterator it
         = m_map_name_enum_decl.find( enum_name);
     if( it == m_map_name_enum_decl.end())
-        return 0;
+        return nullptr;
 
     it->second->retain();
     return it->second;
@@ -412,7 +412,7 @@ mi::base::IInterface* Class_factory::create_class_instance(
 {
     ASSERT( M_NEURAY_API, transaction);
     if( !tag)
-        return 0;
+        return nullptr;
 
     SERIAL::Class_id class_id = get_class_id( transaction, tag);
 
@@ -420,7 +420,7 @@ mi::base::IInterface* Class_factory::create_class_instance(
     mi::base::Handle<mi::base::IInterface> interface(
         invoke_api_class_factory( transaction, class_id));
     if( !interface.is_valid_interface())
-        return 0;
+        return nullptr;
 
     // connect DB element and API class
     IDb_element* idb_element = interface->get_interface<IDb_element>();
@@ -440,7 +440,7 @@ mi::base::IInterface* Class_factory::create_type_instance(
     const mi::base::IInterface* argv[]) const
 {
     if( !type_name)
-        return 0;
+        return nullptr;
     std::string type_name_string( type_name);
     mi::Size length = type_name_string.size();
 
@@ -525,7 +525,7 @@ mi::base::IInterface* Class_factory::create_class_instance(
     mi::base::Handle<mi::base::IInterface> interface(
         invoke_api_or_user_class_factory( transaction, class_name, argc, argv));
     if( !interface.is_valid_interface())
-        return 0;
+        return nullptr;
 
     // if it is a user class instance, we are done
     mi::base::Handle<mi::neuraylib::IUser_class> user_class(
@@ -550,7 +550,7 @@ mi::base::IInterface* Class_factory::create_class_instance(
         DB::Element_base* db_element
             = invoke_db_element_factory( transaction, class_name, argc, argv);
         if( !db_element)
-            return 0;
+            return nullptr;
 
         // connect DB element and API class
         IDb_element* idb_element = interface->get_interface<IDb_element>();
@@ -572,17 +572,17 @@ mi::base::IInterface* Class_factory::create_array_instance(
     ASSERT( M_NEURAY_API, type_name_str[type_name_str.size()-1] == ']');
 
     if( argc != 0)
-        return 0;
+        return nullptr;
 
     const mi::base::IInterface* new_argv[2];
 
     // extract delimiters
     mi::Size left_bracket = type_name_str.rfind( '[');
     if( left_bracket == std::string::npos)
-        return 0;
+        return nullptr;
     mi::Size right_bracket = type_name_str.rfind( ']');
     if( right_bracket != type_name_str.length() - 1)
-        return 0;
+        return nullptr;
 
     // extract element type name
     std::string element_type_name = type_name_str.substr( 0, left_bracket);
@@ -602,8 +602,8 @@ mi::base::IInterface* Class_factory::create_array_instance(
     STLEXT::Likely<mi::Size> length_likely
         = STRING::lexicographic_cast_s<mi::Size>( length_str);
     if( !length_likely.get_status())
-        return 0;
-    mi::Size length = *length_likely.get_ptr();
+        return nullptr;
+    mi::Size length = *length_likely.get_ptr(); //-V522 PVS
     mi::base::Handle<mi::ISize> length_value(
         create_class_instance<mi::ISize>( transaction, "Size"));
     length_value->set_value( length);
@@ -624,7 +624,7 @@ mi::base::IInterface* Class_factory::create_map_instance(
     ASSERT( M_NEURAY_API, type_name_str.substr( 0, 4) == "Map<");
 
     if( argc != 0)
-        return 0;
+        return nullptr;
 
     const mi::base::IInterface* new_argv[1];
 
@@ -632,9 +632,9 @@ mi::base::IInterface* Class_factory::create_map_instance(
     mi::Size left_angle_bracket = type_name_str.find( '<');
     mi::Size right_angle_bracket = type_name_str.rfind( '>');
     if( left_angle_bracket != 3)
-        return 0;
+        return nullptr;
     if( right_angle_bracket != type_name_str.length() - 1)
-        return 0;
+        return nullptr;
 
     // extract value type name
     std::string value_type_name
@@ -661,17 +661,17 @@ mi::base::IInterface* Class_factory::create_pointer_instance(
     bool is_const = type_name_str.substr( 0, 14) == "Const_pointer<";
 
     if( argc != 0)
-        return 0;
+        return nullptr;
 
     const mi::base::IInterface* new_argv[1];
 
     // extract delimiters
     mi::Size left_angle_bracket = type_name_str.find( '<');
     if( !is_const && left_angle_bracket != 7)
-        return 0;
+        return nullptr;
     mi::Size right_angle_bracket = type_name_str.rfind( '>');
     if( right_angle_bracket != type_name_str.length() - 1)
-        return 0;
+        return nullptr;
 
     // extract value type name
     std::string value_type_name
@@ -696,7 +696,7 @@ mi::base::IInterface* Class_factory::create_structure_instance(
     ASSERT( M_NEURAY_API, type_name);
 
     if( argc != 0)
-        return 0;
+        return nullptr;
 
     if( strcmp( type_name, "Preset_data") == 0)
         LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
@@ -726,7 +726,7 @@ mi::base::IInterface* Class_factory::create_enum_instance(
     ASSERT( M_NEURAY_API, type_name);
 
     if( argc != 0)
-        return 0;
+        return nullptr;
 
     const mi::base::IInterface* new_argv[2];
     new_argv[0] = decl;
@@ -746,7 +746,7 @@ mi::base::IInterface* Class_factory::extract_user_class(
     bool is_edit) const
 {
     ASSERT( M_NEURAY_API, false);
-    return 0;
+    return nullptr;
 }
 
 mi::base::IInterface* Class_factory::extract_element(
@@ -765,11 +765,11 @@ mi::base::IInterface* Class_factory::invoke_api_class_factory(
     std::map<SERIAL::Class_id, Api_class_factory>::const_iterator it
         = m_map_id_api_class_factory.find( class_id);
     if( it == m_map_id_api_class_factory.end())
-        return 0;
+        return nullptr;
 
     // create API class instance
     Api_class_factory api_class_factory = it->second;
-    return api_class_factory( transaction, 0, 0);
+    return api_class_factory( transaction, 0, nullptr);
 }
 
 mi::base::IInterface* Class_factory::invoke_api_or_user_class_factory(
@@ -792,7 +792,7 @@ mi::base::IInterface* Class_factory::invoke_api_or_user_class_factory(
     std::map<std::string, mi::neuraylib::IUser_class_factory*>::const_iterator it_user
         = m_map_name_user_class_factory.find( class_name);
     if( it_user == m_map_name_user_class_factory.end())
-        return 0;
+        return nullptr;
 
     // create user class instance
     mi::neuraylib::IUser_class_factory* user_class_factory = it_user->second;
@@ -809,7 +809,7 @@ DB::Element_base* Class_factory::invoke_db_element_factory(
     std::map<std::string, Db_element_factory>::const_iterator it
         = m_map_name_db_element_factory.find( class_name);
     if( it == m_map_name_db_element_factory.end())
-        return 0;
+        return nullptr;
 
     // create DB element instance
     Db_element_factory db_element_factory = it->second;
@@ -822,11 +822,11 @@ mi::base::IInterface* Class_factory::invoke_user_class_factory( const mi::base::
     std::map<mi::base::Uuid, mi::neuraylib::IUser_class_factory*>::const_iterator it
         = m_map_uuid_user_class_factory.find( uuid);
     if( it == m_map_uuid_user_class_factory.end())
-        return 0;
+        return nullptr;
 
     // create user class instance
     mi::neuraylib::IUser_class_factory* user_class_factory = it->second;
-    return user_class_factory->create( 0, 0, 0);
+    return user_class_factory->create( nullptr, 0, nullptr);
 }
 
 bool Class_factory::contains_blacklisted_type_names(

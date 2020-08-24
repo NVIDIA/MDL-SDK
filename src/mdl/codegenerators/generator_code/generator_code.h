@@ -70,6 +70,29 @@ protected:
             MDL_CG_OPTION_INTERNAL_SPACE,
             "coordinate_world",
             "The internal space for which we compile");
+
+        m_options.add_option(
+            MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT,
+            "true",
+            "Whether occurrences of state::meters_per_scene_unit() and "
+            "state::scene_units_per_meter() should be folded using the value of the "
+            "meters_per_scene_unit option");
+
+        m_options.add_option(
+            MDL_CG_OPTION_METERS_PER_SCENE_UNIT,
+            "1",
+            "The value used for folding state::meters_per_scene_unit() and "
+            "state::scene_units_per_meter() if enabled");
+
+        m_options.add_option(
+            MDL_CG_OPTION_WAVELENGTH_MIN,
+            "380",
+            "The smallest supported wavelength");
+
+        m_options.add_option(
+            MDL_CG_OPTION_WAVELENGTH_MAX,
+            "780",
+            "The largest supported wavelength");
     }
 
 protected:

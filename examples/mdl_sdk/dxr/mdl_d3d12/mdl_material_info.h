@@ -34,7 +34,7 @@
 #include <memory>
 #include <vector>
 
-#include <mi/mdl_sdk.h>
+#include "example_shared.h"
 
 namespace mdl_d3d12
 {

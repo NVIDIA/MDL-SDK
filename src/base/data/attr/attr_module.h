@@ -34,6 +34,8 @@
 
 #include "attr.h"
 #include <boost/unordered_map.hpp>
+#include <string>
+#include <vector>
 
 namespace MI {
 namespace ATTR {
@@ -116,16 +118,35 @@ class Attr_module_impl : public Attr_module
     ATTR::Type_code get_type_code(
         const std::string& type_name) const;
 
+    const Custom_attr_filters& get_custom_attr_filters() const;
+
+    bool add_custom_attr_filter(const std::string& filter);
+
+    bool remove_custom_attr_filter(const std::string& filter);
+
+    void clear_custom_attr_filters();
+
+    const std::wregex& get_custom_attr_filter() const;
+
   private:
     static Attr_module_impl* s_attr_module;	///< internal pointer to the module
     Attribute_registry m_registry;		///< internal registry for "built-in" types
     DB::Journal_type m_user_attr_journal_flags;	///< the default journal-flags for all user attrs
-    /// Build the type name to type code map.
-    void build_name_to_code_map();
 
     /// Mapping from type name to type code, used in \c get_type_code.
     typedef boost::unordered_map<std::string, ATTR::Type_code> Map_name_to_code;
     Map_name_to_code m_map_name_to_code;
+
+    /// List of installed attribute filters.
+    Custom_attr_filters m_custom_attr_filters;
+
+    /// Regex string assembled from filters above.
+    std::string m_custom_attr_filter;
+   /// Regex object assembled from filters above.
+    std::wregex m_custom_attr_regex;
+   
+    /// Build the type name to type code map.
+    void build_name_to_code_map();
 
     friend class Attribute;
 };

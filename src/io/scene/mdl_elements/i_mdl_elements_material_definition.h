@@ -30,6 +30,9 @@
 #define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_MATERIAL_DEFINITION_H
 
 #include <mi/base/handle.h>
+#include <mi/mdl/mdl_mdl.h>
+#include <mi/neuraylib/imodule.h> // for mi::neuraylib::Mdl_version
+
 #include <io/scene/scene/i_scene_scene_element.h>
 
 #include "i_mdl_elements_expression.h" // needed by Visual Studio
@@ -74,7 +77,8 @@ public:
     /// \param material_ident         The identifier of this definition will be used to check if it
     ///                               is still valid and has not been removed/altered due to a module
     ///                               reload.
-    /// \param code_dag               The DAG representation of \p module_tag.
+    /// \param module                 The MDL module of this material definition.
+    /// \param code_dag               The DAG representation of the MDL module.
     /// \param material_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
     /// \param module_name            The fully-qualified MDL module name.
@@ -83,19 +87,29 @@ public:
         DB::Transaction* transaction,
         DB::Tag material_tag,
         Mdl_ident material_ident,
+        const mi::mdl::IModule* module,
         const mi::mdl::IGenerated_code_dag* code_dag,
-        mi::Uint32 material_index,
+        mi::Size material_index,
         const char* module_filename,
         const char* module_name,
         bool load_resources);
 
+    Mdl_material_definition& operator=( const Mdl_material_definition&) = delete;
+
     // methods corresponding to mi::neuraylib::IMaterial_definition
 
-    DB::Tag get_module(DB::Transaction* transaction) const;
+    DB::Tag get_module( DB::Transaction* transaction) const;
 
     const char* get_mdl_name() const;
 
+    const char* get_mdl_module_name() const;
+
+    const char* get_mdl_simple_name() const;
+
     DB::Tag get_prototype() const;
+
+    void get_mdl_version(
+        mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const;
 
     bool is_exported() const;
 
@@ -132,7 +146,7 @@ public:
     Mdl_material_instance* create_material_instance(
         DB::Transaction* transaction,
         const IExpression_list* arguments,
-        mi::Sint32* errors = 0) const;
+        mi::Sint32* errors = nullptr) const;
 
     // internal methods
 
@@ -148,7 +162,7 @@ public:
         const IExpression_list* arguments,
         bool allow_ek_parameter,
         bool immutable,
-        mi::Sint32* errors = 0) const;
+        mi::Sint32* errors = nullptr) const;
 
     /// Returns the MDL type of an parameter.
     ///
@@ -159,11 +173,15 @@ public:
     const mi::mdl::IType* get_mdl_parameter_type(
         DB::Transaction* transaction, mi::Uint32 index) const;
 
+    /// Returns the MDL name without parameter types, i.e.,, the MDL module name plus "::" plus the
+    /// simple name.
+    ///
+    /// For materials, this is identical to the MDL name itself. This function exists only to
+    /// simplify template code.
+    std::string get_mdl_name_without_parameter_types() const { return get_mdl_name(); }
+
     /// Returns the original material name (or \c NULL if this definition is not re-exported).
     const char* get_mdl_original_name() const;
-
-    /// Returns the name of the module this definition belongs to.
-    const char* get_module_name() const;
 
     /// Returns the database name of the module this definition belongs to.
     const char* get_module_db_name() const;
@@ -177,6 +195,17 @@ public:
     /// Returns the identifier of this material definition.
     Mdl_ident get_ident() const;
 
+    /// Returns the MDL version when this material definition was added and removed.
+    ///
+    /// \param[out] since     The MDL version in which this material definition was added. Since
+    ///                       there are no material definitions in the standard library, the
+    ///                       MDL version of the corresponding module is returned.
+    /// \param[out] removed   The MDL version in which this material definition was removed. Since
+    ///                       there are no material definitions in the standard library,
+    ///                       mi_mdl_IMDL_MDL_VERSION_INVALID is always returned.
+    void get_mdl_version(
+        mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const;
+
     /// Improved version of SERIAL::Serializable::dump().
     ///
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
@@ -188,7 +217,7 @@ public:
 
     SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
 
-    void dump() const { dump( /*transaction*/ 0); }
+    void dump() const { dump( /*transaction*/ nullptr); }
 
     // methods of DB::Element_base
 
@@ -214,15 +243,19 @@ private:
     mi::base::Handle<IValue_factory> m_vf;       ///< The value factory.
     mi::base::Handle<IExpression_factory> m_ef;  ///< The expression factory.
 
+    std::string m_module_mdl_name;               ///< The MDL name of the corresponding module.
     std::string m_module_db_name;                ///< The DB name of the corresponding module.
     DB::Tag m_material_tag;                      ///< The tag of this material definition.
     Mdl_ident m_material_ident;                  ///< The identifier of this material definition.
     std::string m_name;                          ///< The MDL name of the material definition.
+    std::string m_simple_name;                   ///< The simple MDL name of this material definition.
     std::string m_db_name;                       ///< The DB name of the material definition.
     std::string m_original_name;                 ///< The original MDL function name (or empty).
     std::string m_thumbnail;                     ///< The thumbnail image for this definition.
     DB::Tag m_prototype_tag;                     ///< The prototype of this mat. def. (or inv. tag).
     bool m_is_exported;                          ///< The export flag.
+    mi::mdl::IMDL::MDL_version m_since_version;   ///< The version when this def. was added.
+    mi::mdl::IMDL::MDL_version m_removed_version; ///< The version when this def. was removed.
 
     mi::base::Handle<IType_list> m_parameter_types;
     mi::base::Handle<IExpression_list> m_defaults;

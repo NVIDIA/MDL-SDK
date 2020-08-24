@@ -857,28 +857,28 @@ inline bool isnan MI_PREVENT_MACRO_EXPAND (const Spectrum& c)
 }
 
 /// Encodes a spectrum into RGBE representation.
-inline void to_rgbe( const Spectrum& c, Uint32& rgbe)
+MI_HOST_DEVICE_INLINE void to_rgbe( const Spectrum& c, Uint32& rgbe)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     to_rgbe( &c[0], rgbe);
 }
 
 /// Encodes a spectrum into RGBE representation.
-inline void to_rgbe( const Spectrum& c, Uint8 rgbe[4])
+MI_HOST_DEVICE_INLINE void to_rgbe( const Spectrum& c, Uint8 rgbe[4])
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     to_rgbe( &c[0], rgbe);
 }
 
 /// Decodes a color from RGBE representation.
-inline void from_rgbe( const Uint8 rgbe[4], Spectrum& c)
+MI_HOST_DEVICE_INLINE void from_rgbe( const Uint8 rgbe[4], Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     from_rgbe( rgbe, &c[0]);
 }
 
 /// Decodes a color from RGBE representation.
-inline void from_rgbe( const Uint32 rgbe, Spectrum& c)
+MI_HOST_DEVICE_INLINE void from_rgbe( const Uint32 rgbe, Spectrum& c)
 {
     mi_math_assert_msg( c.size() == 3, "precondition");
     from_rgbe( rgbe, &c[0]);

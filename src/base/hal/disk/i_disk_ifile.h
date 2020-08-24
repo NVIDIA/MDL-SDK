@@ -51,12 +51,12 @@ class IFile : public MEM::Allocatable
   public:
     /// Defining opening modes. All of these in binary mode actually.
     enum Mode {
-	M_READ,                // rb
-	M_WRITE,               // wb
-	M_READWRITE,           // w+b
-	M_APPEND,              // ab
-	M_READWRITE_NOTRUNC,   // r+b
-	M_NONE};
+        M_READ,                // rb
+        M_WRITE,               // wb
+        M_READWRITE,           // w+b
+        M_APPEND,              // ab
+        M_READWRITE_NOTRUNC,   // r+b
+        M_NONE};
 
     /// Destructor.
     virtual ~IFile() {}
@@ -67,16 +67,16 @@ class IFile : public MEM::Allocatable
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     virtual bool open(
-	const char* path,
-	Mode mode = M_READ) = 0;
+        const char* path,
+        Mode mode = M_READ) = 0;
     /// Open a file by path. To open stdin/stdout, set path to empty string and pass the
     /// corresponding mode, ie M_READ for stdin and M_WRITE for stdout.
     /// \param path (already substituted) path to file
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     virtual bool open(
-	const std::string& path,
-	Mode mode = M_READ) = 0;
+        const std::string& path,
+        Mode mode = M_READ) = 0;
 
     /// Close the file.
     /// \return success, ie false if internal close failed.
@@ -92,8 +92,8 @@ class IFile : public MEM::Allocatable
     /// \param num copy this many bytes (63 valid bits)
     /// \return # chars read, -1 = error
     virtual Sint64 read(
-	char* buf,
-	Uint64 num) = 0;
+        char* buf,
+        Uint64 num) = 0;
 
     /// Read a line ending with a newline or EOF from the open file. Leave
     /// newlines in the returned buffer.
@@ -101,16 +101,16 @@ class IFile : public MEM::Allocatable
     /// \param num copy this many bytes or until \n\0
     /// \return true=ok, false=fail (see error())
     virtual bool readline(
-	char* line,
-	int num) = 0;
+        char* line,
+        int num) = 0;
     /// Read a line ending with an EOL or EOF from the open file. Note that the line will be
     /// stripped of whitespaces, if not told otherwise.
     /// \param line copy data here
     /// \param strip strip whitespaces?
     /// \return true=ok, false=fail (see error())
     virtual bool read_line(
-	std::string& line,
-	bool strip=true) = 0;
+        std::string& line,
+        bool strip=true) = 0;
 
     /// Write raw data to a file
     /// 64 bit platform:
@@ -122,28 +122,28 @@ class IFile : public MEM::Allocatable
     /// \param num write this many bytes(63 valid bits)
     /// \return # chars written, -1 = error
     virtual Sint64 write(
-	const char* buf,
-	Uint64 num) = 0;
+        const char* buf,
+        Uint64 num) = 0;
 
     /// Write a line to open file. Any newlines must be in <line>, writeline
     /// doesn't add one.
     /// \param line write this string
     /// \return true=ok, false=fail (see error())
     virtual bool writeline(
-	const char* line) = 0;
+        const char* line) = 0;
 
     /// Write a formatted string to an open file.
     /// \param fmt format string with %X
     virtual int printf(
-	const char* fmt,
-	...) PRINTFLIKE2 = 0;
+        const char* fmt,
+        ...) PRINTFLIKE2 = 0;
 
     /// Write a formatted string to an open file.
     /// \param fmt format string with %X
     /// \param args arguments for %X
     virtual int vprintf(
-	const char* fmt,
-	va_list args) = 0;
+        const char* fmt,
+        va_list args) = 0;
 
     /// Flush buffered output data to the file.
     /// \return success
@@ -162,8 +162,8 @@ class IFile : public MEM::Allocatable
     /// \param whence 0=absolute, 1=relative, 2=rel to eof
     /// \return success
     virtual bool seek(
-	Sint64 offset,
-	int whence=0) = 0;
+        Sint64 offset,
+        int whence=0) = 0;
 
     /// Retrieve the current absolute position in the file where the next byte
     /// would be read or written. This is 0 after opening except in append mode.
@@ -211,7 +211,7 @@ class IFile : public MEM::Allocatable
     /// Retrieve the actual clib mode string representing the given mode. This is a utility used
     /// when actually calling the underlying file opening functionality.
     static const char* get_mode_string(
-	Mode mode);
+        Mode mode);
 };
 
 

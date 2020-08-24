@@ -48,14 +48,14 @@ mi::base::IInterface* Enum_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 2)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IEnum_decl> ienum_decl(
         argv[0]->get_interface<mi::IEnum_decl>());
     if( !ienum_decl.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> itype_name( argv[1]->get_interface<mi::IString>());
     if( !itype_name.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* type_name = itype_name->get_c_str();
 
     return new Enum_impl( ienum_decl.get(), type_name);
@@ -70,7 +70,7 @@ Enum_impl::Enum_impl( const mi::IEnum_decl* enum_decl, const char* type_name)
 
 Enum_impl::~Enum_impl()
 {
-    m_enum_decl = 0;
+    m_enum_decl = nullptr;
 }
 
 const char* Enum_impl::get_type_name() const
@@ -121,14 +121,14 @@ mi::base::IInterface* Enum_impl_proxy::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 2)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IEnum_decl> ienum_decl(
         argv[0]->get_interface<mi::IEnum_decl>());
     if( !ienum_decl.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> itype_name( argv[1]->get_interface<mi::IString>());
     if( !itype_name.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* type_name = itype_name->get_c_str();
     return (new Enum_impl_proxy( ienum_decl.get(), type_name))->cast_to_major();
 }
@@ -137,12 +137,12 @@ Enum_impl_proxy::Enum_impl_proxy( const mi::IEnum_decl* enum_decl, const char* t
 {
     m_enum_decl = mi::base::Handle<const mi::IEnum_decl>( enum_decl, mi::base::DUP_INTERFACE);
     m_type_name = type_name;
-    m_pointer = 0;
+    m_pointer = nullptr;
 }
 
 Enum_impl_proxy::~Enum_impl_proxy()
 {
-    m_enum_decl = 0;
+    m_enum_decl = nullptr;
 }
 
 const char* Enum_impl_proxy::get_type_name() const

@@ -34,7 +34,6 @@ using namespace i18n;
 using mi::base::Handle;
 using mi::neuraylib::INeuray;
 using mi::neuraylib::IModule;
-using mi::neuraylib::IMdl_compiler;
 using mi::neuraylib::IAnnotation;
 using mi::neuraylib::IAnnotation_list;
 using mi::neuraylib::IAnnotation_block;

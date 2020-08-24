@@ -34,7 +34,11 @@ namespace neuraylib {
 <div align="right">
     [\link mi_neuray_example_df_cuda Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_user_state_module Next\endlink]
+\if MDL_BIN_RELEASE
+    [\link mi_neuray_example_distilling Next\endlink]
+\else
+    [\link mi_neuray_example_traversal Next\endlink]
+\endif
 </div>
 
 This example shows how to enable and use automatic derivatives for texture filtering.
@@ -171,7 +175,11 @@ For detailed instructions, please refer to the \link mi_neuray_getting_started G
 <div align="right">
     [\link mi_neuray_example_df_cuda Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_user_state_module Next\endlink]
+\if MDL_BIN_RELEASE
+    [\link mi_neuray_example_distilling Next\endlink]
+\else
+    [\link mi_neuray_example_traversal Next\endlink]
+\endif
 </div>
 
 */

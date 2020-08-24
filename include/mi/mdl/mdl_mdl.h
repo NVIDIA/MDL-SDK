@@ -61,6 +61,7 @@ class ISerializer;
 class IDeserializer;
 class IMDL_comparator;
 class IMDL_exporter;
+class IMDL_foreign_module_translator;
 class IMDL_module_transformer;
 
 /// An interface handling MDL search paths.
@@ -164,6 +165,9 @@ public:
     /// The value of \c state::WAVELENGTH_BASE_MAX.
     #define MDL_OPTION_STATE_WAVELENGTH_BASE_MAX "state::WAVELENGTH_BASE_MAX"
 
+
+    /// The name of the option to keep resource file paths as is.
+    #define MDL_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS "keep_original_resource_file_paths"
 
 public:
     /// Get the type factory of the compiler.
@@ -469,6 +473,13 @@ public:
     virtual IEntity_resolver *create_entity_resolver(
         IModule_cache *module_cache) const = 0;
 
+    /// Return the current MDL entity resolver.
+    ///
+    /// If an external resolver is installed, it is returned. Otherwise, a newly created instance
+    /// of the built-in resolver using the provided module cache is returned.
+    virtual IEntity_resolver *get_entity_resolver(
+        IModule_cache *module_cache) const = 0;
+
     /// Create an MDL archive tool using this compiler.
     ///
     /// The archive tool is used to create and unpack MDL archives.
@@ -492,10 +503,28 @@ public:
 
     /// Sets a resolver interface that will be used to lookup MDL modules and resources.
     ///
-    /// \param resolver  the resolver
+    /// \param resolver  The new resolver. Pass NULL to disable a previously installed resolver and
+    ///                  to continue to use the built-in resolver.
     ///
-    /// \note This disables the built-it resolver currently.
+    /// \note An external resolver disables the built-in resolver.
     virtual void set_external_entity_resolver(IEntity_resolver *resolver) = 0;
+
+    /// Check if an external entity resolver is installed.
+    virtual bool uses_external_entity_resolver() const = 0;
+
+    /// Add a foreign module translator.
+    ///
+    /// \param translator  the translator
+    virtual void add_foreign_module_translator(
+        IMDL_foreign_module_translator *translator) = 0;
+
+    /// Remove a foreign module translator.
+    ///
+    /// \param translator  the translator
+    ///
+    /// \return true on success, false if the given translator was not found
+    virtual bool remove_foreign_module_translator(
+        IMDL_foreign_module_translator *translator) = 0;
 };
 
 

@@ -133,7 +133,7 @@ bool Image::load_header(
                 pixel_type = IMAGE::PT_FLOAT32;
                 return true;
             case DDSF_A32B32G32R32F:
-                pixel_type = IMAGE::PT_COLOR;
+                pixel_type = IMAGE::PT_COLOR; //-V1037 PVS
                 return true;
             case DDSF_A16B16G16R16F:
                 pixel_type = IMAGE::PT_COLOR; // Note: the half data needs to be converted
@@ -171,19 +171,19 @@ bool Image::load_header(
 
         // Supported unsigned byte formats
         case DDSF_R8G8B8:
-            assert( !"Support for this pixel format is experimental.");
+            assert( !"Support for this pixel format is experimental."); //-V547 PVS
             pixel_type = IMAGE::PT_RGB;
             return true;
         case DDSF_X8R8G8B8:
         case DDSF_A8R8G8B8:
         case DDSF_X8B8G8R8:
         case DDSF_A8B8G8R8:
-            assert( !"Support for this pixel format is experimental.");
+            assert( !"Support for this pixel format is experimental."); //-V547 PVS
             pixel_type = IMAGE::PT_RGBA;
             return true;
         case DDSF_A8:
         case DDSF_L8:
-            assert( !"Support for this pixel format is experimental.");
+            assert( !"Support for this pixel format is experimental."); //-V547 PVS
             pixel_type = IMAGE::PT_SINT8;
             return true;
 
@@ -674,7 +674,8 @@ void Image::reorder_rgb_or_rgba( Header& header)
 
                     // Get color pixel
                     mi::Uint32 color = 0;
-                    memcpy( &color, &top[x * bytes_per_pixel], bytes_per_pixel);
+                    assert( bytes_per_pixel <= sizeof( mi::Uint32));
+                    memcpy( &color, &top[x * bytes_per_pixel], bytes_per_pixel); //-V512 PVS
 
                     for( mi::Uint32 c = 0; c < components_per_pixel; ++c) {
 

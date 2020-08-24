@@ -42,6 +42,7 @@ namespace neuraylib {
 
 class IExpression_factory;
 class IMdl_execution_context;
+class IMdl_module_transformer;
 class ITransaction;
 class IType_factory;
 class IValue_bsdf_measurement;
@@ -137,7 +138,7 @@ public:
         ITransaction* transaction,
         const char* module_name,
         const IArray* mdl_data,
-        IMdl_execution_context *context) = 0;
+        IMdl_execution_context* context) = 0;
 
     /// Creates a value referencing a texture identified by an MDL file path.
     ///
@@ -219,6 +220,52 @@ public:
     
     /// Creates an execution context.
     virtual IMdl_execution_context* create_execution_context() = 0;
+
+    /// Returns the DB name for the MDL name of an MDL module.
+    ///
+    /// For example, given \c "::state", the method returns \c "mdl::state".
+    ///
+    /// \note This method does not check for existence of the corresponding DB element, nor does it
+    ///       check that the input is a valid MDL module name.
+    ///
+    /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
+    ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
+    ///       the mapping might change in the future.
+    ///
+    /// \param mdl_name      The fully-qualified MDL name of the MDL module (including package
+    ///                      names, starting with "::") or an MDLE filepath (absolute or relative
+    ///                      to the current working directory).
+    /// \return              The DB name of that module, or \c NULL if \p mdl_name is invalid.
+    virtual const IString* get_db_module_name( const char* mdl_name) = 0;
+
+    /// Returns the DB name for the MDL name of an MDL material or function definition.
+    ///
+    /// For example, given \c "::state::normal()", the method returns \c "mdl::state::normal()".
+    ///
+    /// \note This method does not check for existence of the corresponding DB element, nor does it
+    ///       check that the input is a valid MDL material or definition name.
+    ///
+    /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
+    ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
+    ///       the mapping might change in the future.
+    ///
+    /// \param mdl_name      The fully-qualified MDL name of the MDL material or function definition
+    ///                      (starts with the fully-qualified MDL name of the coresponding module).
+    /// \return              The DB name of that material or function definition, or \c NULL if
+    ///                      \p mdl_name is invalid.
+    virtual const IString* get_db_definition_name( const char* mdl_name) = 0;
+    
+    /// Creates a module transformer for a given module.
+    ///
+    /// \param transaction   The transaction to be used.
+    /// \param module_name   The DB name of the MDL module to transform. Builtin modules cannot be
+    ///                      transformed.
+    /// \param context       An execution context which can be queried for detailed error messages
+    ///                      after the operation has finished. Can be \c NULL.
+    /// \return              The module transformer for the given module, or \c NULL in case of
+    ///                      errors.
+    virtual IMdl_module_transformer* create_module_transformer(
+        ITransaction* transaction, const char* module_name, IMdl_execution_context* context) = 0;
 };
 
 /// Options for repairing material instances and function calls.

@@ -47,6 +47,7 @@
 #include "mdl/compiler/compilercore/compilercore_messages.h"
 #include "mdl/compiler/compilercore/compilercore_mangle.h"
 #include "mdl/compiler/compilercore/compilercore_mdl.h"
+#include "mdl/compiler/compilercore/compilercore_array_ref.h"
 
 #include "generator_dag_ir.h"
 
@@ -143,7 +144,7 @@ public:
     typedef vector<DAG_node const *>::Type Dag_vector;
 
     /// The type of vectors of parameter indexes.
-    typedef vector<int>::Type Index_vector;
+    typedef vector<size_t>::Type Index_vector;
 
     /// The type of vectors of ITypes.
     typedef vector<IType const *>::Type Type_vector;
@@ -159,17 +160,20 @@ public:
     public:
         /// Constructor.
         ///
-        /// \param alloc  The allocator.
-        /// \param type   The type.
-        /// \param name   The parameter name.
+        /// \param alloc     The allocator.
+        /// \param type      The type.
+        /// \param name      The parameter name.
+        /// \param type_name The type name (as it appear in the signature).
         Parameter_info(
             IAllocator  *alloc,
             IType const *type,
-            char const  *name)
+            char const  *name,
+            char const  *type_name)
             : m_type(type)
             , m_default(NULL)
             , m_enable_if_cond(NULL)
             , m_name(name, alloc)
+            , m_type_name(type_name, alloc)
             , m_annotations(alloc)
             , m_users(alloc)
         {
@@ -190,6 +194,9 @@ public:
         /// Get the name.
         char const *get_name() const { return m_name.c_str(); }
 
+        /// Get the type name.
+        char const *get_type_name() const { return m_type_name.c_str(); }
+
         /// Get the annotation count.
         size_t get_annotation_count() const { return m_annotations.size(); }
 
@@ -209,13 +216,14 @@ public:
         Index_vector const &get_users() const { return m_users; }
 
         /// Add a new user.
-        void add_user(int param_index) { m_users.push_back(param_index); }
+        void add_user(size_t param_index) { m_users.push_back(param_index); }
 
     private:
         IType const    *m_type;           ///< The parameter type;
         DAG_node const *m_default;        ///< The default argument for this parameter.
         DAG_node const *m_enable_if_cond; ///< The enable_if condition if any.
         string         m_name;            ///< The name of the parameter.
+        string         m_type_name;       ///< The type name of the parameter.
         Dag_vector     m_annotations;     ///< The annotations of this parameter.
         Index_vector   m_users;           ///< Contains the indexes of other parameters whose
                                           ///< enable_if condition depends on this.
@@ -233,14 +241,17 @@ public:
     public:
         /// Constructor.
         ///
-        /// \param alloc      The allocator.
-        /// \param name       The name of the material.
-        /// \param orig_name  The original name of the material if this is an alias, "" else.
+        /// \param alloc         The allocator.
+        /// \param name          The name of the material.
+        /// \param simple_name   The simple name of the function.
+        /// \param orig_name     The original name of the material if this is an alias, "" else.
         Material_info(
             IAllocator *alloc,
             char const *name,
+            char const *simple_name,
             char const *orig_name)
         : m_name(name, alloc)
+        , m_simple_name(simple_name, alloc)
         , m_original_name(orig_name, alloc)
         , m_cloned(alloc)
         , m_parameters(alloc)
@@ -272,6 +283,9 @@ public:
 
         /// Get the name.
         char const *get_name() const { return m_name.c_str(); }
+
+        /// Get the simple name.
+        char const *get_simple_name() const { return m_simple_name.c_str(); }
 
         /// Get the original name if any.
         char const *get_original_name() const {
@@ -311,6 +325,7 @@ public:
 
     private:
         string         m_name;            ///< The name of the material.
+        string         m_simple_name;     ///< The simple name of the material.
         string         m_original_name;   ///< If this is an alias name, the original name, else "".
         string         m_cloned;          ///< The name of the cloned material or "".
         Param_vector   m_parameters;      ///< The material parameters.
@@ -332,24 +347,28 @@ public:
     public:
         /// Constructor.
         ///
-        /// \param alloc      The allocator.
-        /// \param sema       The semantics of the function.
-        /// \param ret_tp     The return type of the function
-        /// \param name       The name of the function.
-        /// \param orig_name  The original name of the function if this is an alias, "" else.
-        /// \param cloned     The name of the cloned function or "".
-        /// \param hash       The function hash if available.
+        /// \param alloc       The allocator.
+        /// \param sema        The semantics of the function.
+        /// \param ret_tp      The return type of the function
+        /// \param name        The name of the function.
+        /// \param simple_name The simple name of the function.
+        /// \param orig_name   The original name of the function if this is an alias,
+        ///                    "" else.
+        /// \param cloned      The name of the cloned function or "".
+        /// \param hash        The function hash if available.
         Function_info(
             IAllocator            *alloc,
             Definition::Semantics sema,
             IType const           *ret_tp,
             char const            *name,
+            char const            *simple_name,
             char const            *orig_name,
             char const            *cloned,
             DAG_hash const        *hash)
         : m_semantics(sema)
         , m_return_type(ret_tp)
         , m_name(name, alloc)
+        , m_simple_name(simple_name, alloc)
         , m_original_name(orig_name == NULL ? "" : orig_name, alloc)
         , m_cloned(cloned == NULL ? "" : cloned, alloc)
         , m_parameters(alloc)
@@ -398,6 +417,9 @@ public:
 
         /// Get the name.
         char const *get_name() const { return m_name.c_str(); }
+
+        /// Get the simple name.
+        char const *get_simple_name() const { return m_simple_name.c_str(); }
 
         /// Get the original name if any.
         char const *get_original_name() const {
@@ -458,6 +480,7 @@ public:
         Definition::Semantics m_semantics;       ///< The function semantics.
         IType const           *m_return_type;    ///< The function return type.
         string                m_name;            ///< The name of the function.
+        string                m_simple_name;     ///< The simple name of the function.
         string                m_original_name;   ///< If this is an alias, the original name, else "".
         string                m_cloned;          ///< The name of the cloned function or "".
         Param_vector          m_parameters;      ///< The material parameters.
@@ -486,15 +509,18 @@ public:
         ///
         /// \param alloc      The allocator.
         /// \param sema       The semantics of the annotation.
-        /// \param name       The name of the function.
+        /// \param name       The name of the annotation.
+        /// \param name       The simple name of the annotation.
         /// \param orig_name  The original name of the annotation if this is an alias, "" else.
         Annotation_info(
             IAllocator            *alloc,
             Definition::Semantics sema,
             char const            *name,
+            char const            *simple_name,
             char const            *orig_name)
         : m_semantics(sema)
         , m_name(name, alloc)
+        , m_simple_name(simple_name, alloc)
         , m_original_name(orig_name == NULL ? "" : orig_name, alloc)
         , m_parameters(alloc)
         , m_annotations(alloc)
@@ -516,6 +542,9 @@ public:
 
         /// Get the name.
         char const *get_name() const { return m_name.c_str(); }
+
+        /// Get the simple name.
+        char const *get_simple_name() const { return m_simple_name.c_str(); }
 
         /// Get the original name if any.
         char const *get_original_name() const {
@@ -542,11 +571,12 @@ public:
 
     private:
         Definition::Semantics m_semantics;     ///< The function semantics.
-        string                m_name;          ///< The name of the function.
+        string                m_name;          ///< The name of the annotation.
+        string                m_simple_name;   ///< The simple name of the annotation.
         string                m_original_name; ///< If this is an alias, the original name, else "".
-        Param_vector          m_parameters;    ///< The material parameters.
+        Param_vector          m_parameters;    ///< The annotation parameters.
         Dag_vector            m_annotations;   ///< The annotations of the annotation.
-        unsigned              m_properties;    ///< The property flags of this function.
+        unsigned              m_properties;    ///< The property flags of this annotation.
     };
 
     typedef vector<Annotation_info>::Type Annotation_vector;
@@ -724,7 +754,7 @@ public:
     typedef hash_set<string, string_hash<string> >::Type String_set;
 
     /// A material instance
-    class Material_instance MDL_FINAL : public Allocator_interface_implement<IMaterial_instance>
+    class Material_instance : public Allocator_interface_implement<IMaterial_instance>
     {
         typedef Allocator_interface_implement<IMaterial_instance> Base;
         friend class Allocator_builder;
@@ -740,10 +770,12 @@ public:
                 bool        depends_on_transform,
                 bool        depends_on_object_id,
                 bool        edf_global_distribution,
+                bool        depends_on_uniform_scene_data,
                 String_set  referenced_scene_data)
             : m_depends_on_transform(depends_on_transform)
             , m_depends_on_object_id(depends_on_object_id)
             , m_edf_global_distribution(edf_global_distribution)
+            , m_depends_on_uniform_scene_data(depends_on_uniform_scene_data)
             , m_referenced_scene_data(referenced_scene_data)
             {
             }
@@ -756,6 +788,9 @@ public:
 
             /// True, if this instance depends on global distribution (edf).
             bool m_edf_global_distribution;
+
+            /// True, if this instance depends on uniform scene data.
+            bool m_depends_on_uniform_scene_data;
 
             /// Set of scene data names referenced by this instance.
             String_set m_referenced_scene_data;
@@ -813,9 +848,18 @@ public:
         /// \param flags                      Instantiation flags.
         /// \param evaluator                  If non-NULL, use this evaluator additionally to fold
         ///                                   intrinsic functions first.
-        /// \param mdl_meters_per_scene_unit  The value for the meter/scene unit conversion.
+        /// \param fold_meters_per_scene_unit
+        ///                                   If true, occurrences of the functions
+        ///                                   state::meters_per_scene_unit() and
+        ///                                   state::scene_units_per_meter() will be folded
+        ///                                   using the \c mdl_meters_per_scene_unit parameter.
+        /// \param mdl_meters_per_scene_unit  The value for the meter/scene unit conversion
+        ///                                   only used when folding is enabled.
         /// \param wavelength_min             The value for the state::wavelength_min() function.
         /// \param wavelength_max             The value for the state::wavelength_max() function.
+        /// \param fold_params                Names of parameters to be folded in class-compilation
+        ///                                   mode (in addition to flags).
+        /// \param num_fold_params            The number of parameter names to be folded.
         ///
         /// \returns                The error code of the initialization.
         /// Arguments are always given by position.
@@ -824,14 +868,17 @@ public:
             ICall_name_resolver       *resolver,
             IResource_modifier        *resource_modifier,
             IGenerated_code_dag const *code_dag,
-            int                       argc,
+            size_t                    argc,
             DAG_node const            *argv[],
             bool                      use_temporaries,
             unsigned                  flags,
             ICall_evaluator           *evaluator,
+            bool                      fold_meters_per_scene_unit,
             float                     mdl_meters_per_scene_unit,
             float                     wavelength_min,
-            float                     wavelength_max) MDL_FINAL;
+            float                     wavelength_max,
+            char const * const        fold_params[],
+            size_t                    num_fold_params) MDL_FINAL;
 
         /// Return the material constructor.
         DAG_call const *get_constructor() const MDL_FINAL;
@@ -875,6 +922,9 @@ public:
 
         /// Returns true if this instance depends on the global distribution (edf).
         bool depends_on_global_distribution() const MDL_FINAL;
+
+        /// Returns true if this instance depends on uniform scene data.
+        bool depends_on_uniform_scene_data() const MDL_FINAL;
 
         /// Returns the number of scene data attributes referenced by this instance.
         size_t get_referenced_scene_data_count() const MDL_FINAL;
@@ -1002,7 +1052,7 @@ public:
         Material_instance(
             IMDL        *mdl,
             IAllocator  *alloc,
-            int          material_index,
+            size_t      material_index,
             char const  *internal_space,
             bool        unsafe_math_optimizations);
 
@@ -1071,6 +1121,8 @@ public:
         /// \param msg   the error message
         void warning(int code, Err_location const &loc, char const *msg);
 
+        friend class Transparent_layers;
+        
     private:
         friend class Instantiate_helper;
 
@@ -1079,6 +1131,10 @@ public:
             typedef Arena_ptr_hash_map<
                 DAG_node const,
                 DAG_node const *>::Type Visit_map;
+
+            typedef Arena_ptr_hash_map<
+                DAG_node const,
+                DAG_node const *>::Type Replacement_map;
 
             typedef Arena_ptr_hash_map<
                 IValue_resource const,
@@ -1108,6 +1164,8 @@ public:
             };
 
         public:
+            friend class Transparent_layers;
+
             typedef vector<IValue const *>::Type    Value_vec;
             typedef vector<string>::Type            Name_vec;
 
@@ -1127,9 +1185,18 @@ public:
             ///                                   to fold intrinsic functions first.
             /// \param argc                       The number of arguments of the instance.
             /// \param argv                       An array of pointers to the argument values.
-            /// \param mdl_meters_per_scene_unit  The value for the meter/scene unit conversion.
+            /// \param fold_meters_per_scene_unit
+            ///                                   If true, occurrences of the functions
+            ///                                   state::meters_per_scene_unit() and
+            ///                                   state::scene_units_per_meter() will be folded
+            ///                                   using the \c mdl_meters_per_scene_unit parameter.
+            /// \param mdl_meters_per_scene_unit  The value for the meter/scene unit conversion
+            ///                                   only used when folding is enabled.
             /// \param wavelength_min             The value for state::wavelength_min().
             /// \param wavelength_max             The value for state::wavelength_max().
+            /// \param fold_params                Names of parameters to be folded in
+            ///                                   class-compilation mode (in addition to flags).
+            /// \param num_fold_params            The number of parameter names to be folded.
             Instantiate_helper(
                 ICall_name_resolver      &resolver,
                 IResource_modifier       &resource_modifier,
@@ -1138,11 +1205,14 @@ public:
                 int                      material_index,
                 unsigned                 flags,
                 ICall_evaluator          *evaluator,
-                int                      argc,
+                size_t                   argc,
                 DAG_node const           *argv[],
+                bool                     fold_meters_per_scene_unit,
                 float                    mdl_meters_per_scene_unit,
                 float                    wavelength_min,
-                float                    wavelength_max);
+                float                    wavelength_max,
+                char const * const       fold_params[],
+                size_t                   num_fold_params);
 
             /// Destructor.
             ~Instantiate_helper();
@@ -1240,6 +1310,64 @@ public:
                 else
                     m_properties &= ~prop;
             }
+
+            /// Skip temporaries.
+            ///
+            /// \param expr  the DAG node
+            ///
+            /// \return expr if the node is not a temporary, its argument otherwise
+            DAG_node const *skip_temporaries(DAG_node const *expr);
+
+            /// Get a DAG node from a value by an absolute path.
+            ///
+            /// \param value  a value
+            /// \param path   the path
+            DAG_node const *get_value(IValue const *value, Array_ref<char const *> const &path);
+
+            /// Get a DAG node from an expression by absolute path.
+            ///
+            /// \param expr  a DAG expression
+            /// \param path  the path
+            DAG_node const *get_value(DAG_node const *expr, Array_ref<char const *> const &path);
+
+            /// Fold geometry.cutout_opacity if in class-compilation mode, requested via flags,
+            /// and evaluates to 0.0f or 1.0f.
+            ///
+            /// Folding is done by putting the replacement node in m_visits_map. Similar for
+            /// parameters that affect the value of this node.
+            void handle_cutout_opacity();
+
+            /// Eliminate transparent layers if in class-compilation mode and requested via flags.
+            ///
+            /// Elimination is done by putting the replacement node in m_replacement_map. Parameters
+            /// that affect the decision are put into m_visits_map.
+            void handle_transparent_layers();
+
+            /// Eliminate transparent layers if in class-compilation mode and requested via flags.
+            ///
+            /// Elimination occurs if
+            /// - the call is {weighted,fresnel,custom_curve,measured_curve}_layer() (or one of
+            ///   their color weight variants),
+            /// - the weight evaluates to constant 0.0f, and
+            /// - #is_layer_qualified() returns \c true for the layer argument.
+            ///
+            /// Elimination is done by putting the replacement node in m_replacement_map. Parameters
+            /// that affect the decision are put into m_visits_map.
+            void handle_transparent_layers(DAG_call const *call);
+            
+            /// Return whether the expression qualifies for elimination by
+            /// #handle_transparent_layers().
+            ///
+            /// An expression qualifies if
+            /// - the call is diffuse_transmission_bsdf(), specular_bsdf(), simple_glossy_bsdf(), or
+            ///   microfacet_*_bsdf(), and
+            /// - the scatter_mode argument (if present) is scatter_transmit or
+            ///   scatter_reflect_transmit.
+            ///
+            /// In addition, the ternary operators is qualified if both true and false expression are
+            /// qualified.
+            bool is_layer_qualified(DAG_node const *expr);
+
         private:
             /// The call name resolver to be used.
             ICall_name_resolver &m_resolver;
@@ -1272,7 +1400,7 @@ public:
             unsigned m_flags;
 
             /// The number of instance arguments.
-            int m_argc;
+            size_t m_argc;
 
             /// The instance arguments;
             DAG_node const **m_argv;
@@ -1283,8 +1411,13 @@ public:
             /// Number of created parameters.
             int m_params;
 
-            /// Map for visiting DAGs.
+            /// Map for visiting DAGs (maps input to output for instantiate_dag() and
+            /// instantiate_dag_arguments()).
             Visit_map m_visit_map;
+
+            /// Map for visiting DAGs (maps input to input for instantiate_dag() and
+            /// instantiate_dag_arguments()). Populated by handle_transparent_layers().
+            Replacement_map m_replacement_map;
 
             /// Map for handling resource parameters.
             Resource_param_map m_resource_param_map;
@@ -1309,6 +1442,9 @@ public:
 
             /// If true, instantiate arguments.
             bool m_instantiate_args;
+
+            /// Names of parameters to fold in class-compilation mode.
+            String_set m_fold_params;
         };
 
         /// A builder, used for generating printer.
@@ -1336,7 +1472,7 @@ public:
         Messages_impl m_messages;
 
         /// The index of the material definition this instance is based on.
-        int m_material_index;
+        size_t m_material_index;
 
         /// An IR node of type call representing the call to the material constructor.
         DAG_call const *m_constructor;
@@ -1403,40 +1539,46 @@ public:
 
     /// Get the number of modules directly imported by the module
     /// from which this code was generated.
-    int get_import_count() const MDL_FINAL;
+    size_t get_import_count() const MDL_FINAL;
 
     /// Get the module at index imported from the module
     /// from which this code was generated.
-    char const *get_import(int index) const MDL_FINAL;
+    char const *get_import(
+        size_t index) const MDL_FINAL;
 
     /// Get the number of functions in the generated code.
     /// \returns    The number of functions in this generated code.
-    int get_function_count() const MDL_FINAL;
+    size_t get_function_count() const MDL_FINAL;
 
     /// Get the return type of the function at function_index.
     /// \param      function_index  The index of the function.
     /// \returns                    The return type of the function.
-    IType const *get_function_return_type(int function_index) const MDL_FINAL;
+    IType const *get_function_return_type(size_t function_index) const MDL_FINAL;
 
     /// Get the semantics of the function at function_index.
     /// \param      function_index  The index of the function.
     /// \returns                    The semantics of the function.
-    IDefinition::Semantics get_function_semantics(int function_index) const MDL_FINAL;
+    IDefinition::Semantics get_function_semantics(size_t function_index) const MDL_FINAL;
 
     /// Get the name of the function at function_index.
     /// \param      function_index  The index of the function.
     /// \returns                    The name of the function.
-    char const *get_function_name(int function_index) const MDL_FINAL;
+    char const *get_function_name(size_t function_index) const MDL_FINAL;
+
+    /// Get the simple name of the function at function_index.
+    /// \param      function_index  The index of the function.
+    /// \returns                    The simple name of the function.
+    char const *get_simple_function_name(size_t function_index) const MDL_FINAL;
 
     /// Get the original name of the function at function_index if the function name is an alias.
     /// \param      function_index  The index of the function.
     /// \returns                    The original name of the function or NULL.
-    char const *get_original_function_name(int function_index) const MDL_FINAL;
+    char const *get_original_function_name(size_t function_index) const MDL_FINAL;
 
     /// Get the parameter count of the function at function_index.
     /// \param      function_index  The index of the function.
     /// \returns                    The number of parameters of the function.
-    int get_function_parameter_count(int function_index) const MDL_FINAL;
+    size_t get_function_parameter_count(size_t function_index) const MDL_FINAL;
 
     /// Get the parameter type of the parameter at parameter_index
     /// of the function at function_index.
@@ -1444,8 +1586,17 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \returns                    The type of the parameter.
     IType const *get_function_parameter_type(
-        int function_index,
-        int parameter_index) const MDL_FINAL;
+        size_t function_index,
+        size_t parameter_index) const MDL_FINAL;
+
+    /// Get the parameter type name of the parameter at parameter_index
+    /// of the function at function_index.
+    /// \param      function_index  The index of the function.
+    /// \param      parameter_index The index of the parameter.
+    /// \returns                    The type name of the parameter.
+    char const *get_function_parameter_type_name(
+        size_t function_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the parameter name of the parameter at parameter_index
     /// of the function at function_index.
@@ -1453,15 +1604,15 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \returns                    The name of the parameter.
     char const *get_function_parameter_name(
-        int function_index,
-        int parameter_index) const MDL_FINAL;
+        size_t function_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the index of the parameter parameter_name.
     /// \param      function_index  The index of the function.
     /// \param      parameter_name  The name of the parameter.
     /// \returns                    The index of the parameter, or -1 if it does not exist.
-    int get_function_parameter_index(
-        int function_index,
+    size_t get_function_parameter_index(
+        size_t     function_index,
         const char *parameter_name) const MDL_FINAL;
 
     /// Get the enable_if condition for the given function parameter if one was specified.
@@ -1470,8 +1621,8 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \returns                    The enable_if condition for this parameter or NULL.
     DAG_node const *get_function_parameter_enable_if_condition(
-        int function_index,
-        int parameter_index) const MDL_FINAL;
+        size_t function_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the number of parameters whose enable_if condition depends on this parameter.
     ///
@@ -1479,8 +1630,8 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \returns                    Number of depended parameter conditions.
     size_t get_function_parameter_enable_if_condition_users(
-        int function_index,
-        int parameter_index) const MDL_FINAL;
+        size_t function_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get a parameter index whose enable_if condition depends on this parameter.
     ///
@@ -1488,10 +1639,10 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \param      user_index      The index of the user.
     /// \returns                    The index of the depended parameter.
-    int get_function_parameter_enable_if_condition_user(
-        int function_index,
-        int parameter_index,
-        int user_index) const MDL_FINAL;
+    size_t get_function_parameter_enable_if_condition_user(
+        size_t function_index,
+        size_t parameter_index,
+        size_t user_index) const MDL_FINAL;
 
     /// Get the function hash value for the given function index if available.
     ///
@@ -1499,7 +1650,7 @@ public:
     /// \returns               The function hash of the function or NULL if no hash
     ///                        value is available or the index is out of bounds.
     DAG_hash const *get_function_hash(
-        int function_index) const MDL_FINAL;
+        size_t function_index) const MDL_FINAL;
 
     /// Check if the code contents are valid.
     bool is_valid() const MDL_FINAL;
@@ -1510,25 +1661,30 @@ public:
     /// Get the number of materials in the generated code.
     ///
     /// \returns    The number of materials in this generated code.
-    int get_material_count() const MDL_FINAL;
+    size_t get_material_count() const MDL_FINAL;
 
     /// Get the name of the material at material_index.
     ///
     /// \param material_index  The index of the material.
     /// \returns               The name of the material.
-    char const *get_material_name(int material_index) const MDL_FINAL;
+    char const *get_material_name(size_t material_index) const MDL_FINAL;
+
+    /// Get the simple name of the material at material_index.
+    /// \param      material_index  The index of the material.
+    /// \returns                    The simple name of the material.
+    char const *get_simple_material_name(size_t material_index) const MDL_FINAL;
 
     /// Get the original name of the material at material_index if the material name is an alias.
     ///
     /// \param      material_index  The index of the material.
     /// \returns                    The name of the material or NULL.
-    char const *get_original_material_name(int material_index) const MDL_FINAL;
+    char const *get_original_material_name(size_t material_index) const MDL_FINAL;
 
     /// Get the parameter count of the material at material_index.
     ///
     /// \param material_index  The index of the material.
     /// \returns               The number of parameters of the material.
-    int get_material_parameter_count(int material_index) const MDL_FINAL;
+    size_t get_material_parameter_count(size_t material_index) const MDL_FINAL;
 
     /// Get the parameter type of the parameter at parameter_index
     /// of the material at material_index.
@@ -1537,8 +1693,8 @@ public:
     /// \param parameter_index  The index of the parameter.
     /// \returns                The type of the parameter.
     IType const *get_material_parameter_type(
-        int material_index,
-        int parameter_index) const MDL_FINAL;
+        size_t material_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the parameter name of the parameter at parameter_index
     /// of the material at material_index.
@@ -1547,16 +1703,16 @@ public:
     /// \param parameter_index  The index of the parameter.
     /// \returns                The name of the parameter.
     char const *get_material_parameter_name(
-        int material_index,
-        int parameter_index) const MDL_FINAL;
+        size_t material_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the index of the parameter parameter_name.
     ///
     /// \param material_index  The index of the material.
     /// \param parameter_name  The name of the parameter.
     /// \returns               The index of the parameter, or -1 if it does not exist.
-    int get_material_parameter_index(
-        int        material_index,
+    size_t get_material_parameter_index(
+        size_t     material_index,
         char const *parameter_name) const MDL_FINAL;
 
     /// Get the enable_if condition for the given material parameter if one was specified.
@@ -1565,8 +1721,8 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \returns                    The enable_if condition for this parameter or NULL.
     DAG_node const *get_material_parameter_enable_if_condition(
-        int material_index,
-        int parameter_index) const MDL_FINAL;
+        size_t material_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the number of parameters whose enable_if condition depends on this parameter.
     ///
@@ -1574,8 +1730,8 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \returns                    Number of depended parameter conditions.
     size_t get_material_parameter_enable_if_condition_users(
-        int material_index,
-        int parameter_index) const MDL_FINAL;
+        size_t material_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get a parameter index whose enable_if condition depends on this parameter.
     ///
@@ -1583,10 +1739,10 @@ public:
     /// \param      parameter_index The index of the parameter.
     /// \param      user_index      The index of the user.
     /// \returns                    The index of the depended parameter.
-    int get_material_parameter_enable_if_condition_user(
-        int material_index,
-        int parameter_index,
-        int user_index) const MDL_FINAL;
+    size_t get_material_parameter_enable_if_condition_user(
+        size_t material_index,
+        size_t parameter_index,
+        size_t user_index) const MDL_FINAL;
 
     /// Acquires a const interface.
     ///
@@ -1607,30 +1763,30 @@ public:
     /// Get the number of annotations of the function at function_index.
     /// \param function_index      The index of the function.
     /// \returns                   The number of annotations.
-    int get_function_annotation_count(
-        int function_index) const MDL_FINAL;
+    size_t get_function_annotation_count(
+        size_t function_index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the function at function_index.
     /// \param function_index      The index of the function.
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_function_annotation(
-        int function_index,
-        int annotation_index) const MDL_FINAL;
+        size_t function_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the number of annotations of the function return type at function_index.
     /// \param function_index      The index of the function.
     /// \returns                   The number of annotations.
-    int get_function_return_annotation_count(
-        int function_index) const MDL_FINAL;
+    size_t get_function_return_annotation_count(
+        size_t function_index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the function return type at function_index.
     /// \param function_index      The index of the function.
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_function_return_annotation(
-        int function_index,
-        int annotation_index) const MDL_FINAL;
+        size_t function_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the default initializer of the parameter at parameter_index
     /// of the function at function_index.
@@ -1638,17 +1794,17 @@ public:
     /// \param parameter_index  The index of the parameter.
     /// \returns                The type of the parameter.
     DAG_node const *get_function_parameter_default(
-        int function_index,
-        int parameter_index) const MDL_FINAL;
+        size_t function_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the number of annotations of the parameter at parameter_index
     /// of the function at function_index.
     /// \param function_index      The index of the function.
     /// \param parameter_index     The index of the parameter.
     /// \returns                   The number of annotations.
-    int get_function_parameter_annotation_count(
-        int function_index,
-        int parameter_index) const MDL_FINAL;
+    size_t get_function_parameter_annotation_count(
+        size_t function_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the parameter at parameter_index
     /// of the function at function_index.
@@ -1657,16 +1813,16 @@ public:
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_function_parameter_annotation(
-        int function_index,
-        int parameter_index,
-        int annotation_index) const MDL_FINAL;
+        size_t function_index,
+        size_t parameter_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the number of temporaries used by the function at function_index.
     ///
     /// \param function_index      The index of the function.
     /// \returns                   The number of temporaries used by material.
-    int get_function_temporary_count(
-        int function_index) const MDL_FINAL;
+    size_t get_function_temporary_count(
+        size_t function_index) const MDL_FINAL;
 
     /// Get the temporary at temporary_index used by the function at function_index.
     ///
@@ -1674,8 +1830,8 @@ public:
     /// \param temporary_index     The index of the temporary variable.
     /// \returns                   The value of the temporary variable.
     DAG_node const *get_function_temporary(
-        int function_index,
-        int temporary_index) const MDL_FINAL;
+        size_t function_index,
+        size_t temporary_index) const MDL_FINAL;
 
     /// Get the temporary name at temporary_index used by the function at function_index.
     ///
@@ -1683,29 +1839,29 @@ public:
     /// \param temporary_index     The index of the temporary variable.
     /// \returns                   The name of the temporary variable.
     char const *get_function_temporary_name(
-        int function_index,
-        int temporary_index) const MDL_FINAL;
+        size_t function_index,
+        size_t temporary_index) const MDL_FINAL;
 
     /// Get the body of the function at function_index.
     ///
     /// \param function_index      The index of the function.
     /// \returns                   The body of the function.
     DAG_node const *get_function_body(
-        int function_index) const MDL_FINAL;
+        size_t function_index) const MDL_FINAL;
 
     /// Get the number of annotations of the material at material_index.
     /// \param material_index      The index of the material.
     /// \returns                   The number of annotations.
-    int get_material_annotation_count(
-        int material_index) const MDL_FINAL;
+    size_t get_material_annotation_count(
+        size_t material_index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the material at material_index.
     /// \param material_index      The index of the material.
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_material_annotation(
-        int material_index,
-        int annotation_index) const MDL_FINAL;
+        size_t material_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the default initializer of the parameter at parameter_index
     /// of the material at material_index.
@@ -1713,17 +1869,17 @@ public:
     /// \param parameter_index  The index of the parameter.
     /// \returns                The type of the parameter.
     DAG_node const *get_material_parameter_default(
-        int material_index,
-        int parameter_index) const MDL_FINAL;
+        size_t material_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the number of annotations of the parameter at parameter_index
     /// of the material at material_index.
     /// \param material_index      The index of the material.
     /// \param parameter_index     The index of the parameter.
     /// \returns                   The number of annotations.
-    int get_material_parameter_annotation_count(
-        int material_index,
-        int parameter_index) const MDL_FINAL;
+    size_t get_material_parameter_annotation_count(
+        size_t material_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the parameter at parameter_index
     /// of the material at material_index.
@@ -1732,43 +1888,43 @@ public:
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_material_parameter_annotation(
-        int material_index,
-        int parameter_index,
-        int annotation_index) const MDL_FINAL;
+        size_t material_index,
+        size_t parameter_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the number of temporaries used by the material at material_index.
     /// \param material_index  The index of the material.
     /// \returns               The number of temporaries used by material.
-    int get_material_temporary_count(
-        int material_index) const MDL_FINAL;
+    size_t get_material_temporary_count(
+        size_t material_index) const MDL_FINAL;
 
     /// Get the temporary at temporary_index used by the material at material_index.
     /// \param material_index   The index of the material.
     /// \param temporary_index  The index of the temporary variable.
     /// \returns                The value of the temporary variable.
     DAG_node const *get_material_temporary(
-        int material_index,
-        int temporary_index) const MDL_FINAL;
+        size_t material_index,
+        size_t temporary_index) const MDL_FINAL;
 
     /// Get the temporary name at temporary_index used by the material at material_index.
     /// \param material_index   The index of the material.
     /// \param temporary_index  The index of the temporary variable.
     /// \returns                The name of the temporary variable.
     char const *get_material_temporary_name(
-        int material_index,
-        int temporary_index) const MDL_FINAL;
+        size_t material_index,
+        size_t temporary_index) const MDL_FINAL;
 
     /// Get the value of the material at material_index.
     /// \param material_index  The index of the material.
     /// \returns               The value of the material.
     DAG_node const *get_material_value(
-        int material_index) const MDL_FINAL;
+        size_t material_index) const MDL_FINAL;
 
     /// Get the export flags of the material at material_index.
     ///
     /// \param      material_index  The index of the material.
     /// \returns                    True if this is an exported material, false if it is local.
-    bool get_material_exported(int material_index) const MDL_FINAL;
+    bool get_material_exported(size_t material_index) const MDL_FINAL;
 
     /// Return the original material name of a cloned material or NULL if the material
     /// is not a clone.
@@ -1776,7 +1932,7 @@ public:
     /// \param material_index   The index of the material.
     /// \returns                The absolute name of the original material or NULL.
     char const *get_cloned_material_name(
-        int material_index) const MDL_FINAL;
+        size_t material_index) const MDL_FINAL;
 
     /// Create a material instance.
     ///
@@ -1785,46 +1941,46 @@ public:
     /// \returns           The material instance.
     ///
     IMaterial_instance *create_material_instance(
-        int        index,
+        size_t     index,
         Error_code *error_code = 0) const MDL_FINAL;
 
     /// Get the number of exported user types.
-    int get_type_count() const MDL_FINAL;
+    size_t get_type_count() const MDL_FINAL;
 
     /// Get the name of the type at index.
     ///
     /// \param      index  The index of the type.
     /// \returns           The name of the type.
     char const *get_type_name(
-        int index) const MDL_FINAL;
+        size_t index) const MDL_FINAL;
 
     /// Get the original name of the type at index if the type is an alias.
     ///
     /// \param      index  The index of the type.
     /// \returns           The original name of the type or NULL.
     char const *get_original_type_name(
-        int index) const MDL_FINAL;
+        size_t index) const MDL_FINAL;
 
     /// Get the user type at index.
     ///
     /// \param      index  The index of the type.
     /// \returns           The type.
     IType const *get_type(
-        int index) const MDL_FINAL;
+        size_t index) const MDL_FINAL;
 
     /// Returns true if the type at index is exported.
     ///
     /// \param index  The index of the type.
     /// \returns      true for exported types.
     bool is_type_exported(
-        int index) const MDL_FINAL;
+        size_t index) const MDL_FINAL;
 
     /// Get the number of annotations of the type at index.
     ///
     /// \param      index  The index of the type.
     /// \return            The number of annotations of the type.
-    int get_type_annotation_count(
-        int index) const MDL_FINAL;
+    size_t get_type_annotation_count(
+        size_t index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the type at type_index.
     ///
@@ -1832,15 +1988,15 @@ public:
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_type_annotation(
-        int type_index,
-        int annotation_index) const MDL_FINAL;
+        size_t type_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the number of type sub-entities (fields or enum constants).
     ///
     /// \param type_index          The index of the type.
     /// \returns                   The number of sub entities.
-    int get_type_sub_entity_count(
-        int type_index) const MDL_FINAL;
+    size_t get_type_sub_entity_count(
+        size_t type_index) const MDL_FINAL;
 
     /// Get the name of a type sub-entity (field or enum constant).
     ///
@@ -1848,8 +2004,8 @@ public:
     /// \param entity_index        The index of the sub entity.
     /// \returns                   The name of a sub-entity.
     char const *get_type_sub_entity_name(
-        int type_index,
-        int entity_index) const MDL_FINAL;
+        size_t type_index,
+        size_t entity_index) const MDL_FINAL;
 
     /// Get the type of a type sub-entity (field or enum constant).
     ///
@@ -1857,17 +2013,17 @@ public:
     /// \param entity_index        The index of the sub entity.
     /// \returns                   The type of sub-entity.
     IType const *get_type_sub_entity_type(
-        int type_index,
-        int entity_index) const MDL_FINAL;
+        size_t type_index,
+        size_t entity_index) const MDL_FINAL;
 
     /// Get the number of annotations of a type sub-entity (field or enum constant) at index.
     ///
     /// \param type_index          The index of the type.
     /// \param entity_index        The index of the sub entity.
     /// \returns                   The number of annotations of the type sub-entity.
-    int get_type_sub_entity_annotation_count(
-        int type_index,
-        int entity_index) const MDL_FINAL;
+    size_t get_type_sub_entity_annotation_count(
+        size_t type_index,
+        size_t entity_index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the type sub-entity at (type_index, entity_index).
     ///
@@ -1876,32 +2032,32 @@ public:
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_type_sub_entity_annotation(
-        int type_index,
-        int entity_index,
-        int annotation_index) const MDL_FINAL;
+        size_t type_index,
+        size_t entity_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the number of exported constants.
-    int get_constant_count() const MDL_FINAL;
+    size_t get_constant_count() const MDL_FINAL;
 
     /// Get the name of the constant at index.
     ///
     /// \param      index  The index of the constant.
     /// \returns           The name of the constant.
     char const *get_constant_name(
-        int index) const MDL_FINAL;
+        size_t index) const MDL_FINAL;
 
     /// Get the value of the constant at index.
     ///
     /// \param      index  The index of the constant.
     /// \returns           The value of the constant.
     DAG_constant const *get_constant_value(
-        int index) const MDL_FINAL;
+        size_t index) const MDL_FINAL;
 
     /// Get the number of annotations of the constant at index.
     ///
     /// \param      index  The index of the constant.
-    int get_constant_annotation_count(
-        int index) const MDL_FINAL;
+    size_t get_constant_annotation_count(
+        size_t index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the constant at constant_index.
     ///
@@ -1909,8 +2065,8 @@ public:
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_constant_annotation(
-        int constant_index,
-        int annotation_index) const MDL_FINAL;
+        size_t constant_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Access messages (writable).
     Messages &access_messages() MDL_FINAL;
@@ -1923,21 +2079,21 @@ public:
     /// \param      fp              The property.
     /// \returns                    True if this function has the property, false if not.
     bool get_function_property(
-        int               function_index,
+        size_t            function_index,
         Function_property fp) const MDL_FINAL;
 
     /// Get the number of entities referenced by a function.
     /// \param      function_index  The index of the function.
     /// \returns                    Number of function that might be called by this function
-    int get_function_references_count(int function_index) const MDL_FINAL;
+    size_t get_function_references_count(size_t function_index) const MDL_FINAL;
 
     /// Get the signature of the i'th reference of a function
     /// \param      function_index  The index of the function.
     /// \param      callee_index    The index of the callee.
     /// \returns                    Number of function that might be called by this function
     char const *get_function_reference(
-        int function_index,
-        int callee_index) const MDL_FINAL;
+        size_t function_index,
+        size_t callee_index) const MDL_FINAL;
 
     /// Return the original function name of a cloned function or NULL if the function
     /// is not a clone.
@@ -1945,17 +2101,17 @@ public:
     /// \param function_index   The index of the function.
     /// \returns                The absolute name of the original function or NULL.
     char const *get_cloned_function_name(
-        int function_index) const MDL_FINAL;
+        size_t function_index) const MDL_FINAL;
 
     /// Get the number of annotations of the module.
     /// \returns                    The number of annotations.
-    int get_module_annotation_count() const MDL_FINAL;
+    size_t get_module_annotation_count() const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the module.
     /// \param      annotation_index    The index of the annotation.
     /// \returns                        The annotation.
     DAG_node const *get_module_annotation(
-        int annotation_index) const MDL_FINAL;
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the internal space
     char const *get_internal_space() const MDL_FINAL;
@@ -1963,32 +2119,43 @@ public:
     /// Get the number of annotations in the generated code.
     ///
     /// \returns    The number of annotations in this generated code.
-    int get_annotation_count() const MDL_FINAL;
+    size_t get_annotation_count() const MDL_FINAL;
 
     /// Get the semantics of the annotation at annotation_index.
     ///
     /// \param annotation_index  The index of the annotation.
     /// \returns                 The semantics of the annotation.
-    IDefinition::Semantics get_annotation_semantics(int annotation_index) const MDL_FINAL;
+    IDefinition::Semantics get_annotation_semantics(
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the name of the annotation at annotation_index.
     ///
     /// \param annotation_index  The index of the annotation.
     /// \returns                 The name of the annotation.
-    char const *get_annotation_name(int annotation_index) const MDL_FINAL;
+    char const *get_annotation_name(
+        size_t annotation_index) const MDL_FINAL;
+
+    /// Get the simple name of the annotation at annotation_index.
+    ///
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The simple name of the annotation.
+    char const *get_simple_annotation_name(
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the original name of the annotation at annotation_index if the annotation name is
     /// an alias, i.e. re-exported from a module.
     ///
     /// \param annotation_index  The index of the annotation.
     /// \returns                 The original name of the annotation or NULL.
-    char const *get_original_annotation_name(int annotation_index) const MDL_FINAL;
+    char const *get_original_annotation_name(
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the parameter count of the annotation at annotation_index.
     ///
     /// \param annotation_index  The index of the annotation.
     /// \returns                 The number of parameters of the annotation.
-    int get_annotation_parameter_count(int annotation_index) const MDL_FINAL;
+    size_t get_annotation_parameter_count(
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the parameter type of the parameter at parameter_index
     /// of the annotation at annotation_index.
@@ -1997,26 +2164,35 @@ public:
     /// \param parameter_index   The index of the parameter.
     /// \returns                 The type of the parameter.
     IType const *get_annotation_parameter_type(
-        int annotation_index,
-        int parameter_index) const MDL_FINAL;
+        size_t annotation_index,
+        size_t parameter_index) const MDL_FINAL;
 
-    /// Get the parameter name of the parameter at parameter_index
+    /// Get the parameter type name of the parameter at parameter_index
+    /// of the annotation at annotation_index.
+    /// \param annotation_index  The index of the annotation.
+    /// \param parameter_index   The index of the parameter.
+    /// \returns                 The type of the parameter.
+    char const *get_annotation_parameter_type_name(
+        size_t annotation_index,
+        size_t parameter_index) const MDL_FINAL;
+
+        /// Get the parameter name of the parameter at parameter_index
     /// of the annotation at annotation_index.
     ///
     /// \param annotation_index  The index of the annotation.
     /// \param parameter_index   The index of the parameter.
     /// \returns                 The name of the parameter.
     char const *get_annotation_parameter_name(
-        int annotation_index,
-        int parameter_index) const MDL_FINAL;
+        size_t annotation_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the index of the parameter parameter_name.
     ///
     /// \param annotation_index  The index of the annotation.
     /// \param parameter_name    The name of the parameter.
     /// \returns                 The index of the parameter, or -1 if it does not exist.
-    int get_annotation_parameter_index(
-        int        annotation_index,
+    size_t get_annotation_parameter_index(
+        size_t     annotation_index,
         char const *parameter_name) const MDL_FINAL;
 
     /// Get the default initializer of the parameter at parameter_index
@@ -2026,8 +2202,8 @@ public:
     /// \param parameter_index    The index of the parameter.
     /// \returns                  The default initializer or NULL if not available.
     DAG_node const *get_annotation_parameter_default(
-        int annotation_index,
-        int parameter_index) const MDL_FINAL;
+        size_t annotation_index,
+        size_t parameter_index) const MDL_FINAL;
 
     /// Get the property flag of the annotation at annotation_index.
     ///
@@ -2035,15 +2211,15 @@ public:
     /// \param ap                The requested annotation property.
     /// \returns                 True if this annotation has the property, false if not.
     bool get_annotation_property(
-        int                 annotation_index,
+        size_t              annotation_index,
         Annotation_property ap) const MDL_FINAL;
 
     /// Get the number of annotations of the annotation at annotation_index.
     ///
     /// \param annotation_index  The index of the annotation.
     /// \returns               The number of annotations.
-    int get_annotation_annotation_count(
-        int annotation_index) const MDL_FINAL;
+    size_t get_annotation_annotation_count(
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get the annotation at annotation_index of the annotation (declaration) at anno_decl_index.
     ///
@@ -2051,8 +2227,8 @@ public:
     /// \param annotation_index   The index of the annotation.
     /// \returns                  The annotation.
     DAG_node const *get_annotation_annotation(
-        int anno_decl_index,
-        int annotation_index) const MDL_FINAL;
+        size_t anno_decl_index,
+        size_t annotation_index) const MDL_FINAL;
 
     /// Get a tag,for a resource constant that might be reachable from this DAG.
     ///
@@ -2126,9 +2302,9 @@ public:
     /// \param argc    number of arguments
     /// \param argv    arguments
     void dump_material_dag(
-        int            index,
+        size_t         index,
         char const     *suffix,
-        int            argc = 0,
+        size_t         argc = 0,
         DAG_node const *argv[] = NULL) const;
 
     /// Get the type factory of this generated code.
@@ -2145,13 +2321,13 @@ private:
     ///
     /// \param material_index  the material index
     Material_info *get_material_info(
-        int material_index);
+        size_t material_index);
 
     /// Get the material info for a given material index or NULL if the index is out of range.
     ///
     /// \param material_index  the material index
     Material_info const *get_material_info(
-        int material_index) const;
+        size_t material_index) const;
 
     /// Get the parameter info for a given material and parameter index pair or NULL if
     /// one index is out of range.
@@ -2159,14 +2335,14 @@ private:
     /// \param material_index   the material index
     /// \param parameter_index  the parameter index
     Parameter_info const *get_mat_param_info(
-        int material_index,
-        int parameter_index) const;
+        size_t material_index,
+        size_t parameter_index) const;
 
     /// Get the function info for a given function index or NULL if the index is out of range.
     ///
     /// \param function_index  the function index
     Function_info const *get_function_info(
-        int function_index) const;
+        size_t function_index) const;
 
     /// Get the parameter info for a given function and parameter index pair or NULL if
     /// one index is out of range.
@@ -2174,14 +2350,14 @@ private:
     /// \param function_index   the function index
     /// \param parameter_index  the parameter index
     Parameter_info const *get_func_param_info(
-        int function_index,
-        int parameter_index) const;
+        size_t function_index,
+        size_t parameter_index) const;
 
     /// Get the annotation info for a given annotation index or NULL if the index is out of range.
     ///
     /// \param annotation_index  the annotation index
     Annotation_info const *get_annotation_info(
-        int annotation_index) const;
+        size_t annotation_index) const;
 
     /// Get the parameter info for a given annotation and parameter index pair or NULL if
     /// one index is out of range.
@@ -2189,20 +2365,20 @@ private:
     /// \param annotation_index   the annotation index
     /// \param parameter_index  the parameter index
     Parameter_info const *get_anno_param_info(
-        int annotation_index,
-        int parameter_index) const;
+        size_t annotation_index,
+        size_t parameter_index) const;
 
     /// Get the user type info for a given type index or NULL if the index is out of range.
     ///
     /// \param type_index  the type index
     User_type_info const *get_type_info(
-        int type_index) const;
+        size_t type_index) const;
 
     /// Get the user constant info for a given constant index or NULL if the index is out of range.
     ///
     /// \param constant_index  the constant index
     Constant_info const *get_constant_info(
-        int constant_index) const;
+        size_t constant_index) const;
 
     /// Add an import if not already there.
     ///

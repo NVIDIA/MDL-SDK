@@ -63,29 +63,29 @@ public:
     // public API methods
 
     mi::neuraylib::IType_factory* create_type_factory(
-        mi::neuraylib::ITransaction* transaction);
+        mi::neuraylib::ITransaction* transaction) final;
 
     mi::neuraylib::IValue_factory* create_value_factory(
-        mi::neuraylib::ITransaction* transaction);
+        mi::neuraylib::ITransaction* transaction) final;
 
     mi::neuraylib::IExpression_factory* create_expression_factory(
-        mi::neuraylib::ITransaction* transaction);
+        mi::neuraylib::ITransaction* transaction) final;
 
     mi::Sint32 create_variants(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
-        const mi::IArray* variant_data);
+        const mi::IArray* variant_data) final;
 
     mi::Sint32 create_materials(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
-        const mi::IArray* material_data);
+        const mi::IArray* material_data) final;
 
     mi::Sint32 create_materials(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         const mi::IArray* mdl_data,
-        mi::neuraylib::IMdl_execution_context *context);
+        mi::neuraylib::IMdl_execution_context *context) final;
 
     mi::neuraylib::IValue_texture* create_texture(
         mi::neuraylib::ITransaction* transaction,
@@ -93,22 +93,31 @@ public:
         mi::neuraylib::IType_texture::Shape shape,
         mi::Float32 gamma,
         bool shared,
-        mi::Sint32* errors);
+        mi::Sint32* errors) final;
 
     mi::neuraylib::IValue_light_profile* create_light_profile(
         mi::neuraylib::ITransaction* transaction,
         const char* file_path,
         bool shared,
-        mi::Sint32* errors);
+        mi::Sint32* errors) final;
 
     mi::neuraylib::IValue_bsdf_measurement* create_bsdf_measurement(
         mi::neuraylib::ITransaction* transaction,
         const char* file_path,
         bool shared,
-        mi::Sint32* errors);
+        mi::Sint32* errors) final;
 
-    mi::neuraylib::IMdl_execution_context* create_execution_context();
+    mi::neuraylib::IMdl_execution_context* create_execution_context() final;
     
+    mi::neuraylib::IMdl_module_transformer* create_module_transformer(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        mi::neuraylib::IMdl_execution_context* context) final;
+    
+    const mi::IString* get_db_module_name( const char* mdl_name) final;
+
+    const mi::IString* get_db_definition_name( const char* mdl_name) final;
+
     // internal methods
 
 private:

@@ -37,7 +37,6 @@
 #include <mi/neuraylib/ifunction_call.h>
 #include <mi/neuraylib/imaterial_instance.h>
 #include <mi/neuraylib/imdl_factory.h>
-#include <mi/neuraylib/imdl_execution_context.h>
 #include <mi/neuraylib/imdl_evaluator_api.h>
 #include <mi/neuraylib/itransaction.h>
 #include <mi/neuraylib/itype.h>
@@ -48,6 +47,8 @@
 namespace mi {
 
 namespace neuraylib {
+
+class IMdl_execution_context;
 
 /** \addtogroup mi_neuray_mdl_elements
 @{
@@ -103,7 +104,7 @@ public:
     ///
     /// \return \c True, if the instance is valid, \c false otherwise.
     bool is_valid_instance(IMdl_execution_context* context) const;
-    
+
     /// Attempts to repair an invalid material instance or function call.
     ///
     /// \param flags    Repair options, see #mi::neuraylib::Mdl_repair_options.
@@ -519,7 +520,7 @@ public:
     const IScene_element* get_scene_element() const;
 
     /// Get the MDL function call or material instance.
-    IScene_element* get_scene_element(); 
+    IScene_element* get_scene_element();
 
     /// Get the element type.
     Element_type get_element_type() const;
@@ -638,7 +639,7 @@ inline const char* Argument_editor::get_mdl_definition() const
 }
 
 inline bool Argument_editor::is_array_constructor() const
-{ 
+{
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         return false;
@@ -1814,7 +1815,7 @@ inline const IScene_element* Argument_editor::get_scene_element() const
     return m_access.get();
 }
 
-inline IScene_element* Argument_editor::get_scene_element()
+inline IScene_element* Argument_editor::get_scene_element() //-V659 PVS
 {
     promote_to_edit_if_needed();
 

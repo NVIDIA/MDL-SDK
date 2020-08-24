@@ -60,20 +60,20 @@ mi::base::IInterface* Structure_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 2)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IStructure_decl> istructure_decl(
         argv[0]->get_interface<mi::IStructure_decl>());
     if( !istructure_decl.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> itype_name( argv[1]->get_interface<mi::IString>());
     if( !itype_name.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* type_name = itype_name->get_c_str();
 
     Structure_impl* structure = new Structure_impl( transaction, istructure_decl.get(), type_name);
     if( !structure->successfully_constructed()) {
         structure->release();
-        return 0;
+        return nullptr;
     } else
         return structure;
 }
@@ -137,7 +137,7 @@ const char* Structure_impl::get_key( mi::Size index) const
 {
     std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     m_cached_key = key;
     return m_cached_key.c_str();
@@ -153,7 +153,7 @@ const mi::base::IInterface* Structure_impl::get_value( const char* key) const
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_value( index);
 }
@@ -162,7 +162,7 @@ mi::base::IInterface* Structure_impl::get_value( const char* key)
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_value( index);
 }
@@ -170,7 +170,7 @@ mi::base::IInterface* Structure_impl::get_value( const char* key)
 const mi::base::IInterface* Structure_impl::get_value( mi::Size index) const
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     m_member[index]->retain();
     return m_member[index];
@@ -179,7 +179,7 @@ const mi::base::IInterface* Structure_impl::get_value( mi::Size index) const
 mi::base::IInterface* Structure_impl::get_value( mi::Size index)
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     m_member[index]->retain();
     return m_member[index];
@@ -278,20 +278,20 @@ mi::base::IInterface* Structure_impl_proxy::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 3)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IStructure_decl> istructure_decl(
         argv[0]->get_interface<mi::IStructure_decl>());
     if( !istructure_decl.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> itype_name( argv[1]->get_interface<mi::IString>());
     if( !itype_name.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* type_name = itype_name->get_c_str();
     mi::base::Handle<const mi::IString> iattribute_name( argv[2]->get_interface<mi::IString>());
     if( !iattribute_name.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* attribute_name = iattribute_name->get_c_str();
     return (new Structure_impl_proxy(
         transaction, istructure_decl.get(), type_name, attribute_name))->cast_to_major();
@@ -335,7 +335,7 @@ const char* Structure_impl_proxy::get_key( mi::Size index) const
 {
     std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     m_cached_key = key;
     return m_cached_key.c_str();
@@ -351,7 +351,7 @@ const mi::base::IInterface* Structure_impl_proxy::get_value( const char* key) co
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_value( index);
 }
@@ -360,7 +360,7 @@ mi::base::IInterface* Structure_impl_proxy::get_value( const char* key)
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_value( index);
 }
@@ -368,7 +368,7 @@ mi::base::IInterface* Structure_impl_proxy::get_value( const char* key)
 const mi::base::IInterface* Structure_impl_proxy::get_value( mi::Size index) const
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
     s << m_attribute_name << "." << m_structure_decl->get_member_name( index);
@@ -381,7 +381,7 @@ const mi::base::IInterface* Structure_impl_proxy::get_value( mi::Size index) con
 mi::base::IInterface* Structure_impl_proxy::get_value( mi::Size index)
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
     s << m_attribute_name << "." << m_structure_decl->get_member_name( index);

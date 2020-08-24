@@ -139,97 +139,97 @@ class Transaction : private STLEXT::Non_copyable
     /// Insert a new element into the database. the return value is the tag which will now identify
     /// the element.
     ///
-    /// \param element 			The element to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param store_level		Level of the scope the tag is stored in
-    /// \return				The assigned tag
+    /// \param element                  The element to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param store_level              Level of the scope the tag is stored in
+    /// \return                         The assigned tag
     virtual Tag store(
-	Element_base* element,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Privacy_level store_level = 255) = 0;
+        Element_base* element,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255) = 0;
 
     /// Insert a new element into the database reusing a tag.
     ///
-    /// \param tag 			The tag to recreate
-    /// \param element 			The element to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param journal_type 		Type for journal entries
-    /// \param store_level		Level of the scope the tag is stored in
+    /// \param tag                      The tag to recreate
+    /// \param element                  The element to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param journal_type             Type for journal entries
+    /// \param store_level              Level of the scope the tag is stored in
     virtual void store(
-	Tag tag,
-	Element_base* element,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Journal_type journal_type = JOURNAL_ALL,
-	Privacy_level store_level = 255) = 0;
+        Tag tag,
+        Element_base* element,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_ALL,
+        Privacy_level store_level = 255) = 0;
 
     /// Insert a new job into the database. The return value is the tag which will now identify the
     /// job.
     ///
-    /// \param job 			The job to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param store_level		Level of the scope the tag is stored in
-    /// \return				The assigned tag
+    /// \param job                      The job to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param store_level              Level of the scope the tag is stored in
+    /// \return                         The assigned tag
     virtual Tag store(
-	SCHED::Job* job,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Privacy_level store_level = 255) = 0;
+        SCHED::Job* job,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255) = 0;
 
     /// Insert a new job into the database reusing a tag.
     ///
-    /// \param tag 			The tag to recreate
-    /// \param job 			The job to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param journal_type 		Type for journal entries
-    /// \param store_level		Level of the scope the tag is stored in
+    /// \param tag                      The tag to recreate
+    /// \param job                      The job to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param journal_type             Type for journal entries
+    /// \param store_level              Level of the scope the tag is stored in
     virtual void store(
-	Tag tag,
-	SCHED::Job* job,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Journal_type journal_type = JOURNAL_NONE,
-	Privacy_level store_level = 255) = 0;
+        Tag tag,
+        SCHED::Job* job,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_NONE,
+        Privacy_level store_level = 255) = 0;
 
     /// Insert a new element into the database. The return value is the tag which will now identify
     /// the element. The tag will be removed immediately, automatically. So to prevent it from being
     /// deleted completely, one or more other database element need to list it in the list of
     /// references returned from get_references.
     ///
-    /// \param element 			The element to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param store_level		Level of the scope the tag is stored in
-    /// \return				The assigned tag
+    /// \param element                  The element to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param store_level              Level of the scope the tag is stored in
+    /// \return                         The assigned tag
     virtual Tag store_for_reference_counting(
-	Element_base* element,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Privacy_level store_level = 255) = 0;
+        Element_base* element,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255) = 0;
 
     /// Insert a new element into the database reusing a tag.
     /// The tag will be removed immediately, automatically. So to prevent it from being deleted
     /// completely, one or more other database element need to list it in the list of references
     /// returned from get_references.
     ///
-    /// \param tag 			The tag to recreate
-    /// \param element 			The element to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param journal_type 		Type for journal entries
-    /// \param store_level		Level of the scope the tag is stored in
+    /// \param tag                      The tag to recreate
+    /// \param element                  The element to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param journal_type             Type for journal entries
+    /// \param store_level              Level of the scope the tag is stored in
     virtual void store_for_reference_counting(
-	Tag tag,
-	Element_base* element,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Journal_type journal_type = JOURNAL_ALL,
-	Privacy_level store_level = 255) = 0;
+        Tag tag,
+        Element_base* element,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_ALL,
+        Privacy_level store_level = 255) = 0;
 
     /// Insert a new job into the database. The return value is the tag which will now identify the
     /// job.
@@ -237,96 +237,96 @@ class Transaction : private STLEXT::Non_copyable
     /// completely, one or more other database element need to list it in the list of references
     /// returned from get_references.
     ///
-    /// \param job 			The job to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param store_level		Level of the scope the tag is stored in
-    /// \return				The assigned tag
+    /// \param job                      The job to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param store_level              Level of the scope the tag is stored in
+    /// \return                         The assigned tag
     virtual Tag store_for_reference_counting(
-	SCHED::Job* job,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Privacy_level store_level = 255) = 0;
+        SCHED::Job* job,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255) = 0;
 
     /// Insert a new job into the database reusing a tag.
     /// The tag will be removed immediately, automatically. So to prevent it from being deleted
     /// completely, one or more other database element need to list it in the list of references
     /// returned from get_references.
     ///
-    /// \param tag 			The tag to recreate
-    /// \param job 			The job to insert
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param journal_type 		Type for journal entries
-    /// \param store_level		Level of the scope the tag is stored in
+    /// \param tag                      The tag to recreate
+    /// \param job                      The job to insert
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param journal_type             Type for journal entries
+    /// \param store_level              Level of the scope the tag is stored in
     virtual void store_for_reference_counting(
-	Tag tag,
-	SCHED::Job* job,
-	const char* name = NULL,
-	Privacy_level privacy_level = 0,
-	Journal_type journal_type = JOURNAL_NONE,
-	Privacy_level store_level = 255) = 0;
+        Tag tag,
+        SCHED::Job* job,
+        const char* name = NULL,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_NONE,
+        Privacy_level store_level = 255) = 0;
 
     /// Invalidate the results of a certain job for the current and all later transactions. this
     /// should be used when an application decides that the results are no longer valid because some
     /// other tag's data has been changed which directly or indirectly influences the job's results.
     ///
-    /// \param tag			The tag to invalidate
+    /// \param tag                      The tag to invalidate
     virtual void invalidate_job_results(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Remove a tag from the database. Return true, if succeeded, otherwise false.
     ///
-    /// \param tag			The tag to remove
-    /// \param remove_local_copy	If this is true, only the local copy in the scope of this
-    ///					transaction is checked for the existence of the tag. Only
-    ///					this copy is removed. This can be used to undo effects of
-    ///					a localize call.
+    /// \param tag                      The tag to remove
+    /// \param remove_local_copy        If this is true, only the local copy in the scope of this
+    ///                                 transaction is checked for the existence of the tag. Only
+    ///                                 this copy is removed. This can be used to undo effects of
+    ///                                 a localize call.
     virtual bool remove(
-	Tag tag,
-	bool remove_local_copy = false) = 0;
+        Tag tag,
+        bool remove_local_copy = false) = 0;
 
     /// Wrapper function for typed tags. Simply forwards to the untyped remove() method.
     ///
-    /// \param tag			The tag to remove
-    /// \param remove_local_copy	If this is true, only the local copy in the scope of this
-    ///					transaction is checked for the existence of the tag. Only
-    ///					this copy is removed. This can be used to undo effects of
-    ///					a localize call.
+    /// \param tag                      The tag to remove
+    /// \param remove_local_copy        If this is true, only the local copy in the scope of this
+    ///                                 transaction is checked for the existence of the tag. Only
+    ///                                 this copy is removed. This can be used to undo effects of
+    ///                                 a localize call.
     template <class T> bool remove(
-	const Typed_tag<T> &	tag,
-	bool			remove_local_copy = false)
+        const Typed_tag<T> &    tag,
+        bool                    remove_local_copy = false)
     {
-	return remove(tag.get_untyped(), remove_local_copy);
+        return remove(tag.get_untyped(), remove_local_copy);
     }
 
     /// Advise the database that a certain tag will be needed soon.
     ///
-    /// \param tag			The tag to advise
+    /// \param tag                      The tag to advise
     virtual void advise(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Localize a tag to the given scope level
     ///
-    /// \param tag			Localize this tag
-    /// \param privacy_level		Localize to this level
-    /// \param journal_type		Type for journal entries
+    /// \param tag                      Localize this tag
+    /// \param privacy_level            Localize to this level
+    /// \param journal_type             Type for journal entries
     virtual void localize(
-	Tag tag,
-	Privacy_level privacy_level,
-	Journal_type journal_type = JOURNAL_NONE) = 0;
+        Tag tag,
+        Privacy_level privacy_level,
+        Journal_type journal_type = JOURNAL_NONE) = 0;
 
     /// Lookup the name of a tag within the context of this transaction.
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				The name or NULL if the tag has no associated name.
+    /// \param tag                      The tag to lookup.
+    /// \return                         The name or NULL if the tag has no associated name.
     virtual const char* tag_to_name(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Lookup name of typed tag, forwards to raw tag name lookup.
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				The name or NULL if the tag has no associated name.
+    /// \param tag                      The tag to lookup.
+    /// \return                         The name or NULL if the tag has no associated name.
     template <typename T> const char* tag_to_name(
         const Typed_tag<T>& tag)
     {
@@ -335,10 +335,10 @@ class Transaction : private STLEXT::Non_copyable
 
     /// Lookup the tag for a name within the context of this transaction.
     ///
-    /// \param name			The name to lookup.
-    /// \return				The found tag or the 0 tag if the name was not found
+    /// \param name                     The name to lookup.
+    /// \return                         The found tag or the 0 tag if the name was not found
     virtual Tag name_to_tag(
-	const char* name) = 0;
+        const char* name) = 0;
 
     /// Get the class id of a tag. If the returned class id is class_id_unknown, then it means that
     /// the value could not be determined and must be ignored! This will happen when the element is
@@ -346,10 +346,10 @@ class Transaction : private STLEXT::Non_copyable
     /// execute the job to determine the class id. When the class id is really needed, then a caller
     /// must do an Access on the element.
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				The class id.
+    /// \param tag                      The tag to lookup.
+    /// \return                         The class id.
     virtual SERIAL::Class_id get_class_id(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Get the unique id of a certain tag version. The result of a database lookup on a certain tag
     /// depends on the asking transaction and may return different versions for different
@@ -358,10 +358,10 @@ class Transaction : private STLEXT::Non_copyable
     /// be used to identify this version. The database guarantees, that any legal change to the data
     /// (done through an edit) will also change this id.
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				The found tag version.
+    /// \param tag                      The tag to lookup.
+    /// \return                         The found tag version.
     virtual Tag_version get_tag_version(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Get the sequence number for the next update done on this host. This can be used as a
     /// timestamp in the transaction.
@@ -369,10 +369,10 @@ class Transaction : private STLEXT::Non_copyable
 
     /// Get reference count for a certain tag
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				The reference count.
+    /// \param tag                      The tag to lookup.
+    /// \return                         The reference count.
     virtual Uint32 get_tag_reference_count(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Checks whether another tag can be referenced from a given scope level.
     ///
@@ -400,37 +400,37 @@ class Transaction : private STLEXT::Non_copyable
     /// \param referenced_tag           The tag which is meant to be referenced by the other tag.
     /// \return                         \c true if the reference is valid.
     virtual bool can_reference_tag(
-	Tag referencing_tag,
-	Tag referenced_tag) = 0;
+        Tag referencing_tag,
+        Tag referenced_tag) = 0;
 
     /// Check, if Transaction::remove has already been called on the tag
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				True, if the tag was removed, false, otherwise.
+    /// \param tag                      The tag to lookup.
+    /// \return                         True, if the tag was removed, false, otherwise.
     virtual bool get_tag_is_removed(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Check, if a certain tag points to a job
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				True, if the tag is a job, false, otherwise.
+    /// \param tag                      The tag to lookup.
+    /// \return                         True, if the tag is a job, false, otherwise.
     virtual bool get_tag_is_job(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Return the privacy level of a tag
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				The privacy level
+    /// \param tag                      The tag to lookup.
+    /// \return                         The privacy level
     virtual Privacy_level get_tag_privacy_level(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Return the storage level of a tag. The storage level is the privacy level of the scope
     /// the tag belongs to
     ///
-    /// \param tag			The tag to lookup.
-    /// \return				The storage level
+    /// \param tag                      The tag to lookup.
+    /// \return                         The storage level
     virtual Privacy_level get_tag_storage_level(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Get the id of this transaction
     virtual Transaction_id get_id() const = 0;
@@ -444,22 +444,22 @@ class Transaction : private STLEXT::Non_copyable
     /// entries set the journal type by default to 0xffffffff. This will result in unknown changes
     /// appearing in every journal.
     ///
-    /// \param last_transaction_id	The id of the last transaction when the journal was checked.
+    /// \param last_transaction_id      The id of the last transaction when the journal was checked.
     /// \param last_transaction_change_version The version counter the transaction had at the last
-    ///					time it was checked.
-    /// \param journal_type		A filter for the journal type.
+    ///                                 time it was checked.
+    /// \param journal_type             A filter for the journal type.
     /// \param lookup_parents           Shall we lookup parents (aka parent scopes) too?
-    /// \return				A vector of tag/journal type pairs which needs to be
-    ///					released by the caller.
-    ///					NOTE: The returned value can be NULL. This means that the
-    ///					journal needed to be pruned because it exceeded the storage
-    ///					capacity of the database and would have been incomplete.
-    ///					In this case the caller has to assume that everything may
-    ///					have changed.
+    /// \return                         A vector of tag/journal type pairs which needs to be
+    ///                                 released by the caller.
+    ///                                 NOTE: The returned value can be NULL. This means that the
+    ///                                 journal needed to be pruned because it exceeded the storage
+    ///                                 capacity of the database and would have been incomplete.
+    ///                                 In this case the caller has to assume that everything may
+    ///                                 have changed.
     virtual std::vector<std::pair<Tag, Journal_type> >* get_journal(
-	Transaction_id last_transaction_id,
-	Uint32 last_transaction_change_version,
-	Journal_type journal_type,
+        Transaction_id last_transaction_id,
+        Uint32 last_transaction_change_version,
+        Journal_type journal_type,
         bool lookup_parents) = 0;
 
     /// Execute a job splitting it in a given number of fragments. This will not return before all
@@ -467,8 +467,8 @@ class Transaction : private STLEXT::Non_copyable
     /// NOTE: Currently this is restricted to local host only jobs! This restriction might be
     ///       lifted in the future.
     ///
-    /// \param job			The fragmented job to be executed.
-    /// \param count			The number of fragments this job should be split into. This
+    /// \param job                      The fragmented job to be executed.
+    /// \param count                    The number of fragments this job should be split into. This
     ///                                 number must be greater than zero unless the scheduling mode
     ///                                 of the job is ONCE_PER_HOST.
     ///                                 NOTE: If the job has a scheduling mode which defines the
@@ -484,8 +484,8 @@ class Transaction : private STLEXT::Non_copyable
     ///                                       asynchronous execution is retricted to local jobs).
     ///                                 - -3: Invalid job priority (negative value).
     virtual Sint32 execute_fragmented(
-	Fragmented_job* job,
-	size_t count) = 0;
+        Fragmented_job* job,
+        size_t count) = 0;
 
     /// Execute a job splitting it in a given number of fragments. This will return immediately,
     /// typically before all fragments have been executed. The fragments may be executed in any
@@ -493,10 +493,10 @@ class Transaction : private STLEXT::Non_copyable
     /// NOTE: Currently this is restricted to local host only jobs! This restriction might be
     ///       lifted in the future.
     ///
-    /// \param job			The fragmented job to be executed.
-    /// \param count			The number of fragments this job should be split into. This
+    /// \param job                      The fragmented job to be executed.
+    /// \param count                    The number of fragments this job should be split into. This
     ///                                 number must be greater than zero.
-    /// \param listener			Provides a callback to be called when the job is done.
+    /// \param listener                 Provides a callback to be called when the job is done.
     /// \return
     ///                                 -  0: Success.
     ///                                 - -1: Invalid parameters (\p job is \c NULL or \c count is
@@ -505,9 +505,9 @@ class Transaction : private STLEXT::Non_copyable
     ///                                       asynchronous execution is retricted to local jobs).
     ///                                 - -3: Invalid job priority (negative value).
     virtual Sint32 execute_fragmented_async(
-	Fragmented_job* job,
-	size_t count,
-	IExecution_listener* listener) = 0;
+        Fragmented_job* job,
+        size_t count,
+        IExecution_listener* listener) = 0;
 
     /// Cancel all fragmented jobs running in this transaction as soon as possible
     ///
@@ -526,13 +526,13 @@ class Transaction : private STLEXT::Non_copyable
     /// NOTE: This is only meant to be used in special cases, such as loading binary serialized
     /// files. Do not use in normal cases!
     ///
-    /// \param name			Optional name for tag
-    /// \param privacy_level		Privacy level of element
-    /// \param references 		The referenced tags (may be NULL)
+    /// \param name                     Optional name for tag
+    /// \param privacy_level            Privacy level of element
+    /// \param references               The referenced tags (may be NULL)
     virtual Tag store_deferred(
-	const char* name,
-	Privacy_level privacy_level,
-	Tag_set* references)
+        const char* name,
+        Privacy_level privacy_level,
+        Tag_set* references)
     { return Tag(); }
 
     /// Return the parent scope of this transaction
@@ -546,32 +546,32 @@ class Transaction : private STLEXT::Non_copyable
     /// available and return it. this may not be called from within the system thread because it is
     /// a blocking call.
     ///
-    /// \param				The tag of the job to be looked up.
-    /// \return				The job if it was found.
+    /// \param                          The tag of the job to be looked up.
+    /// \return                         The job if it was found.
     virtual Info* get_job(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// This is to be used by the sched module only. it will store the given element into the
     /// database. It should be used in the remote case only, because it requires a tag lookup which
     /// is expensive.
     ///
-    /// \param tag			The tag the element belongs to.
-    /// \param element			The new element.
+    /// \param tag                      The tag the element belongs to.
+    /// \param element                  The new element.
     virtual void store_job_result(
-	Tag tag,
-	Element_base* element) = 0;
+        Tag tag,
+        Element_base* element) = 0;
     /// This is to be used by the sched module only. It will store the given element into the
     /// database. It should be used in the remote case only, because it requires a tag lookup which
     /// is expensive.
     ///
-    /// \param tag			The tag the element belongs to.
-    /// \param host_id			The destination host.
+    /// \param tag                      The tag the element belongs to.
+    /// \param host_id                  The destination host.
     virtual void send_element_to_host(
-	Tag tag,
-	NET::Host_id host_id) = 0;
+        Tag tag,
+        NET::Host_id host_id) = 0;
     /// Get the list of updates received by the local node
     ///
-    /// \return				The list of updates.
+    /// \return                         The list of updates.
     virtual class Update_list* get_received_updates() = 0;
 
     /// Wait until the transaction is ready to be worked on. this means we must have seen the
@@ -579,26 +579,26 @@ class Transaction : private STLEXT::Non_copyable
     /// list. the list may be NULL, which means, that no further updates are needed. this may not be
     /// called from within the system thread, because it will block
     ///
-    /// \param needed_updates		The updates needed for this transaction to become ready.
+    /// \param needed_updates           The updates needed for this transaction to become ready.
     virtual void wait(
-	class Update_list* needed_updates) = 0;
+        class Update_list* needed_updates) = 0;
 
     /// Used for the intrusive pointer to Transaction
     ///
-    /// \param transaction		The transaction to pin
+    /// \param transaction              The transaction to pin
     friend inline void increment_ref_count(
-	Transaction* transaction)
+        Transaction* transaction)
     {
-	transaction->pin();
+        transaction->pin();
     }
 
     /// Used for the intrusive pointer to Transaction
     ///
-    /// \param transaction		The transaction to unpin
+    /// \param transaction              The transaction to unpin
     friend inline void decrement_ref_count_and_release(
-	Transaction* transaction)
+        Transaction* transaction)
     {
-	transaction->unpin();
+        transaction->unpin();
     }
 
     /// The destructor
@@ -606,36 +606,36 @@ class Transaction : private STLEXT::Non_copyable
 
     /// Do everything needed when editing an element.
     ///
-    /// \param tag			The tag which is being edited.
-    /// \return				The info object for the tag
+    /// \param tag                      The tag which is being edited.
+    /// \return                         The info object for the tag
     virtual Info* edit_element(
-	Tag tag) = 0;
+        Tag tag) = 0;
 
     /// Finish an edit and do what is necessary to commit and communicate the changes done during
     /// the edit. Note that this method (potentially asynchronously) unpins \p info.
     ///
-    /// \param info			The info for the edited tag.
-    /// \param journal_type		Final resulting journal type for all changes on the object.
+    /// \param info                     The info for the edited tag.
+    /// \param journal_type             Final resulting journal type for all changes on the object.
     virtual void finish_edit(
-	Info* info,
-	Journal_type journal_type) = 0;
+        Info* info,
+        Journal_type journal_type) = 0;
 
     /// Make sure that we have the element for the given tag, pin the info for the element and
     /// return the info.
-    /// \param tag			The tag to lookup.
-    /// \param do_wait			If true wait for the element, if not return with NULL if the
-    ///					element is not available locally.
+    /// \param tag                      The tag to lookup.
+    /// \param do_wait                  If true wait for the element, if not return with NULL if the
+    ///                                 element is not available locally.
     virtual Info* get_element(
-	Tag tag,
-	bool do_wait = true) = 0;
+        Tag tag,
+        bool do_wait = true) = 0;
 
     /// Construct an empty element of the given type. This is used in case there are lookup
     /// failures, to avoid getting stuck or crashing the process.
     ///
-    /// \param class_id			Construct an empty element of the given class id
-    /// \return				The new element.
+    /// \param class_id                 Construct an empty element of the given class id
+    /// \return                         The new element.
     virtual Element_base* construct_empty_element(
-	SERIAL::Class_id class_id) = 0;
+        SERIAL::Class_id class_id) = 0;
 
     /// There are a number of wrapper transactions which are given to job executors etc. In places,
     /// one might want to know the real transaction behind this. This is protected, because it is

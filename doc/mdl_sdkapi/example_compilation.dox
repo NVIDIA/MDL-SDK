@@ -26,12 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-/*! \page mi_neuray_example_compilation Example for Compilation of MDL materials
+/*! \page mi_neuray_example_compilation Example for Compilation of MDL Materials
 
 <div align="right">
     [\link mi_neuray_example_calls Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_execution_native Next\endlink]
+    [\link mi_neuray_example_code_gen Next\endlink]
 </div>
 
 This example introduces compiled materials and highlights differences between different compilation
@@ -80,7 +80,7 @@ modes.
     <dd><br>
         Compiler backends allow to generate code from the abstract representation of compiled
         materials. There are different backends, e.g., for LLVM IR or CUDA PTX code. These backends
-        can be obtained from #mi::neuraylib::IMdl_compiler::get_backend().
+        can be obtained from #mi::neuraylib::IMdl_backend_api::get_backend().
 
         Backends support general and backend-specific options to influence the code generation. See
         #mi::neuraylib::IMdl_backend for details.
@@ -101,7 +101,7 @@ modes.
 <div align="right">
     [\link mi_neuray_example_calls Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_execution_native Next\endlink]
+    [\link mi_neuray_example_code_gen Next\endlink]
 </div>
 
 */

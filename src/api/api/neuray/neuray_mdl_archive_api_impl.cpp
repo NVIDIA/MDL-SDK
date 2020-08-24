@@ -63,7 +63,7 @@ Mdl_archive_api_impl::Mdl_archive_api_impl( mi::neuraylib::INeuray* neuray)
 
 Mdl_archive_api_impl::~Mdl_archive_api_impl()
 {
-    m_neuray = 0;
+    m_neuray = nullptr;
 }
 
 mi::Sint32 Mdl_archive_api_impl::create_archive(
@@ -75,6 +75,10 @@ mi::Sint32 Mdl_archive_api_impl::create_archive(
     std::string archive_str( archive);
     if( archive_str.size() < 5 || archive_str.substr( archive_str.size()-4) != ".mdr")
         return -2;
+
+    mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
+    if( mdl->uses_external_entity_resolver())
+        return -5;
 
     // split archive into output_directory and package_name
     std::string output_directory;
@@ -121,7 +125,6 @@ mi::Sint32 Mdl_archive_api_impl::create_archive(
         }
     }
 
-    mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IArchive_tool> archive_tool( mdl->create_archive_tool());
     mi::mdl::Options& options = archive_tool->access_options();
     options.set_option( MDL_ARC_OPTION_OVERWRITE, "true");
@@ -132,11 +135,11 @@ mi::Sint32 Mdl_archive_api_impl::create_archive(
             directory,
             package_name.c_str(),
             output_directory.c_str(),
-            manifest_entries_count > 0 ? manifest_entries.get() : 0,
+            manifest_entries_count > 0 ? manifest_entries.get() : nullptr,
             manifest_entries_count));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ 0);
+    MDL::report_messages( messages, /*out_messages*/ nullptr);
     if( messages.get_error_message_count() > 0)
         return -4;
 
@@ -156,7 +159,7 @@ mi::Sint32 Mdl_archive_api_impl::extract_archive( const char* archive, const cha
     archive_tool->extract_archive( archive, directory);
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ 0);
+    MDL::report_messages( messages, /*out_messages*/ nullptr);
     if( messages.get_error_message_count() > 0)
         return -2;
 
@@ -166,7 +169,7 @@ mi::Sint32 Mdl_archive_api_impl::extract_archive( const char* archive, const cha
 const mi::neuraylib::IManifest* Mdl_archive_api_impl::get_manifest( const char* archive)
 {
     if( !archive)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IArchive_tool> archive_tool( mdl->create_archive_tool());
@@ -174,9 +177,9 @@ const mi::neuraylib::IManifest* Mdl_archive_api_impl::get_manifest( const char* 
         archive_tool->get_manifest( archive));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ 0);
+    MDL::report_messages( messages, /*out_messages*/ nullptr);
     if( !manifest || messages.get_error_message_count() > 0)
-        return 0;
+        return nullptr;
 
     return new Manifest_impl( manifest.get());
 }
@@ -184,7 +187,7 @@ const mi::neuraylib::IManifest* Mdl_archive_api_impl::get_manifest( const char* 
 mi::neuraylib::IReader* Mdl_archive_api_impl::get_file( const char* archive, const char* filename)
 {
     if( !archive || !filename)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IArchive_tool> archive_tool( mdl->create_archive_tool());
@@ -192,9 +195,9 @@ mi::neuraylib::IReader* Mdl_archive_api_impl::get_file( const char* archive, con
         archive_tool->get_file_content( archive, filename));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ 0);
+    MDL::report_messages( messages, /*out_messages*/ nullptr);
     if( !file || messages.get_error_message_count() > 0)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<mi::mdl::IMDL_resource_reader> file_random_access(
         file->get_interface<mi::mdl::IMDL_resource_reader>());
@@ -205,7 +208,7 @@ mi::neuraylib::IReader* Mdl_archive_api_impl::get_file( const char* archive, con
 mi::neuraylib::IReader* Mdl_archive_api_impl::get_file(const char* filename)
 {
     if (!filename)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<mi::mdl::IMDL> mdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IArchive_tool> archive_tool(mdl->create_archive_tool());
@@ -213,15 +216,15 @@ mi::neuraylib::IReader* Mdl_archive_api_impl::get_file(const char* filename)
     std::string fn(filename);
     auto p = fn.find(".mdr:");
     if (p == std::string::npos || p == fn.size() - 5)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<mi::mdl::IInput_stream> file(
         archive_tool->get_file_content(fn.substr(0, p + 4).c_str(), fn.substr(p + 5).c_str()));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages(messages, /*out_messages*/ 0);
+    MDL::report_messages(messages, /*out_messages*/ nullptr);
     if (!file || messages.get_error_message_count() > 0)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<mi::mdl::IMDL_resource_reader> file_random_access(
         file->get_interface<mi::mdl::IMDL_resource_reader>());
@@ -267,9 +270,9 @@ mi::Sint32 Mdl_archive_api_impl::shutdown()
 Manifest_impl::Manifest_impl( const mi::mdl::IArchive_manifest* manifest)
 {
     mi::Size first_index = 0;
-    const char* key = 0;
-    const char* value = 0;
-    const mi::mdl::IArchive_manifest_value* multi_value = 0;
+    const char* key = nullptr;
+    const char* value = nullptr;
+    const mi::mdl::IArchive_manifest_value* multi_value = nullptr;
 
     // mdl
     key = manifest->get_key( mi::mdl::IArchive_manifest::PK_MDL);
@@ -392,12 +395,12 @@ mi::Size Manifest_impl::get_number_of_fields() const
 
 const char* Manifest_impl::get_key( mi::Size index) const
 {
-    return index < m_fields.size() ? m_fields[index].first.c_str() : 0;
+    return index < m_fields.size() ? m_fields[index].first.c_str() : nullptr;
 }
 
 const char* Manifest_impl::get_value( mi::Size index) const
 {
-    return index < m_fields.size() ? m_fields[index].second.c_str() : 0;
+    return index < m_fields.size() ? m_fields[index].second.c_str() : nullptr;
 }
 
 mi::Size Manifest_impl::get_number_of_fields( const char* key) const
@@ -412,13 +415,13 @@ mi::Size Manifest_impl::get_number_of_fields( const char* key) const
 const char* Manifest_impl::get_value( const char* key, mi::Size index) const
 {
     if( !key)
-        return 0;
+        return nullptr;
 
     Index_count_map::const_iterator it = m_index_count.find( key);
     if( it == m_index_count.end())
-        return 0;
+        return nullptr;
     if( index >= it->second.second)
-        return 0;
+        return nullptr;
 
     return m_fields[it->second.first + index].second.c_str();
 }

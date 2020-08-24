@@ -806,7 +806,7 @@ public:
     char const *get_file_name() const MDL_FINAL;
 
     /// Return an input stream to the given entity if found, NULL otherwise.
-    IInput_stream *open(Thread_context &ctx) const MDL_FINAL;
+    IInput_stream *open(IThread_context *ctx) const MDL_FINAL;
 
 private:
     /// Constructor.
@@ -992,7 +992,11 @@ public:
     /// Resolve a resource file name.
     /// If \p owner_name and \p owner_file_path are not provided, no relative paths can be resolved.
     ///
-    /// \param file_path         the MDL file path to resolve
+    /// \param file_path         The MDL file path of the resource to resolve. In addition, for
+    ///                          resources from MDLE files, it is also possible to provide the
+    ///                          absolute OS file system path to the MDLE file (with slashes instead
+    ///                          of backslashes on Windows), followed by a colon, followed by the
+    ///                          relative path inside the MDLE container.
     /// \param owner_file_path   if non-NULL, the file path of the owner
     /// \param owner_name        if non-NULL, the absolute name of the owner
     /// \param pos               if non-NULL, the position of the import statement for error
@@ -1000,22 +1004,6 @@ public:
     ///
     /// \return the set of resolved resources or NULL if this name could not be resolved
     IMDL_resource_set *resolve_resource_file_name(
-        char const     *file_path,
-        char const     *owner_file_path,
-        char const     *owner_name,
-        Position const *pos) MDL_FINAL;
-
-    /// Opens a resource.
-    /// If \p owner_name and \p owner_file_path are not provided, no relative paths can be resolved.
-    ///
-    /// \param file_path         the MDL file path to resolve
-    /// \param owner_file_path   if non-NULL, the file path of the owner
-    /// \param owner_name        if non-NULL, the absolute name of the owner
-    /// \param pos               if non-NULL, the position of the import statement for error
-    ///                          messages
-    ///
-    /// \return a resource reader for the requested resource or NULL if it could not be resolved
-    IMDL_resource_reader *open_resource(
         char const     *file_path,
         char const     *owner_file_path,
         char const     *owner_name,

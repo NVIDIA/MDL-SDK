@@ -45,10 +45,13 @@
 
 #include <sstream>
 #include <boost/core/ignore_unused.hpp>
+#include <base/util/string_utils/i_string_utils.h>
 #include <base/system/main/access_module.h>
 #include <base/lib/log/i_log_logger.h>
+
 #include <base/data/attr/attr.h>
 #include <base/data/db/i_db_transaction.h>
+#include <base/data/attr/i_attr_utilities.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/scene/i_scene_attr_resv_id.h>
 #include <io/scene/mdl_elements/i_mdl_elements_type.h>
@@ -110,7 +113,7 @@ public:
         const ATTR::Type* member_type = attribute_type.lookup(
             attribute_name, base_address, &address);
         if( !member_type)
-            return 0;
+            return nullptr;
 
         return address;
     }
@@ -130,7 +133,7 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
     bool skip_type_check)
 {
     if( !name || !type_name)
-        return 0;
+        return nullptr;
     ASSERT( M_NEURAY_API, attribute_set);
 
     if(    strcmp( type_name, "Ref<Texture>") == 0
@@ -139,7 +142,7 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "Using attributes of type \"%s\" is no longer supported. Use type \"Ref\" instead.",
             type_name);
-        return 0;
+        return nullptr;
     }
 
     std::string name_str( name);
@@ -147,22 +150,22 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
 
     // Reject invalid attribute names.
     if( name_str.find_first_of( ".[]") != std::string::npos)
-         return 0;
+         return nullptr;
 
     // Check that the attribute does not exist yet.
     ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( name);
     ATTR::Attribute* attribute_exists = attribute_set->lookup( attribute_id);
     if( attribute_exists)
-        return 0;
+        return nullptr;
 
     // Enforce types for reserved attributes.
     if( !skip_type_check && !is_correct_type_for_attribute( name_str, attribute_id, type_name_str))
-        return 0;
+        return nullptr;
 
     // Compute the ATTR::Type for the attribute.
     const ATTR::Type& attribute_type = get_attribute_type( type_name, name);
     if( attribute_type.get_typecode() == ATTR::TYPE_UNDEF)
-        return 0;
+        return nullptr;
 
     // Create the attribute.
     ATTR::Attribute_id id = ATTR::Attribute::id_create( name);
@@ -171,7 +174,7 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
     attribute->set_global( true);
     ASSERT( M_NEURAY_API, attribute);
     if( !attribute)
-        return 0;
+        return nullptr;
 
     // Attach the attribute.
     bool result = attribute_set->attach( attribute);
@@ -196,8 +199,7 @@ bool Attribute_set_impl_helper::destroy_attribute(
         return false;
 
     attribute_set->detach( attribute_id);
-    db_element->add_journal_flag( compute_journal_flags( attribute_id));
-
+    db_element->add_journal_flag( compute_journal_flags( attribute, attribute_id));
     return true;
 }
 
@@ -207,14 +209,14 @@ const mi::IData* Attribute_set_impl_helper::access_attribute(
     const char* name)
 {
     if( !name)
-        return 0;
+        return nullptr;
     ASSERT( M_NEURAY_API, attribute_set);
 
     std::string top_level_name = get_top_level_name( name);
     ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( top_level_name.c_str());
     boost::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
     if( !attribute)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<IAttribute_context> owner( new Attribute_context( db_element, attribute));
     return get_attribute( owner.get(), name);
@@ -226,16 +228,16 @@ mi::IData* Attribute_set_impl_helper::edit_attribute(
     const char* name)
 {
     if( !name)
-        return 0;
+        return nullptr;
     ASSERT( M_NEURAY_API, attribute_set);
 
     std::string top_level_name = get_top_level_name( name);
     ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( top_level_name.c_str());
     boost::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
     if( !attribute)
-        return 0;
+        return nullptr;
 
-    db_element->add_journal_flag( compute_journal_flags( attribute_id));
+    db_element->add_journal_flag( compute_journal_flags( attribute.get(), attribute_id));
 
     mi::base::Handle<IAttribute_context> owner( new Attribute_context( db_element, attribute));
     return get_attribute( owner.get(), name);
@@ -247,7 +249,7 @@ bool Attribute_set_impl_helper::is_attribute(
     const char* name)
 {
     if( !name)
-        return 0;
+        return false;
     ASSERT( M_NEURAY_API, attribute_set);
 
     std::string top_level_name = get_top_level_name( name);
@@ -258,7 +260,7 @@ bool Attribute_set_impl_helper::is_attribute(
 
     Attribute_context owner( db_element, attribute);
     const ATTR::Type* attribute_type = owner.get_type( name);
-    return attribute_type != 0;
+    return attribute_type != nullptr;
 }
 
 std::string Attribute_set_impl_helper::get_attribute_type_name(
@@ -313,8 +315,8 @@ mi::Sint32 Attribute_set_impl_helper::set_attribute_propagation(
         return 0;
 
     attribute->set_override( new_value);
-
-    db_element->add_journal_flag( compute_journal_flags( attribute_id));
+    db_element->add_journal_flag( compute_journal_flags( attribute, attribute_id));
+   
     return 0;
 }
 
@@ -345,7 +347,7 @@ const char* Attribute_set_impl_helper::enumerate_attributes(
     mi::Sint32 index)
 {
     if( index < 0)
-        return 0;
+        return nullptr;
     ASSERT( M_NEURAY_API, attribute_set);
 
     const ATTR::Attributes& attributes = attribute_set->get_attributes();
@@ -360,7 +362,7 @@ const char* Attribute_set_impl_helper::enumerate_attributes(
 
     // failure: index was too large
     if( it == it_end)
-        return 0;
+        return nullptr;
     // success
     return it->second->get_name();
 }
@@ -374,7 +376,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
     mi::neuraylib::ITransaction* transaction = db_element->get_transaction();
     const ATTR::Type* attribute_type = owner->get_type( attribute_name.c_str());
     if( !attribute_type)
-        return 0;
+        return nullptr;
 
     void* pointer = owner->get_address( attribute_name.c_str());
     return get_attribute( transaction, owner, attribute_name, attribute_type, pointer);
@@ -395,7 +397,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
     /// ATTR::Type::lookup() returns a pointer to a subtree of the type tree of the attribute
     /// itself. (*)
     if( !attribute_type)
-        return 0;
+        return nullptr;
     bool ignore_array_size = attribute_name[attribute_name.size()-1] == ']';
 
     register_decls( *attribute_type);
@@ -403,7 +405,7 @@ mi::IData* Attribute_set_impl_helper::get_attribute(
     std::string attribute_type_name
         = get_attribute_type_name( *attribute_type, ignore_array_size);
     if( attribute_type_name.empty())
-        return 0;
+        return nullptr;
 
     ATTR::Type_code attribute_type_code = attribute_type->get_typecode();
     mi::base::Handle<IProxy> attribute_proxy;
@@ -540,7 +542,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
             attribute_type_name += " ";
             attribute_type_name += member_type_name;
             attribute_type_name += " ";
-            attribute_type_name += member_type->get_name();
+            attribute_type_name += member_type->get_name(); //-V769 PVS
             attribute_type_name += ";";
             member_type = member_type->get_next();
         }
@@ -594,14 +596,14 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
             = Type_utilities::get_attribute_array_element_type_name( type_name);
         ATTR::Type element_type = get_attribute_type( element_type_name, name); // name important!
         if( element_type.get_typecode() == ATTR::TYPE_UNDEF)
-            return ATTR::Type( ATTR::TYPE_UNDEF, 0, 1);
+            return ATTR::Type( ATTR::TYPE_UNDEF, nullptr, 1);
         // set the array length
         mi::Size array_length = Type_utilities::get_attribute_array_length( type_name);
         element_type = ATTR::Type( element_type, static_cast<mi::Sint32>( array_length));
         if( array_length == 0)
             return element_type;
         // create ATTR::Type for the static array in array_type
-        ATTR::Type array_type( ATTR::TYPE_ARRAY, 0, 0);               // name does not matter here
+        ATTR::Type array_type( ATTR::TYPE_ARRAY, nullptr, 0);               // name does not matter here
         array_type.set_child( element_type);
         return array_type;
 
@@ -610,7 +612,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
         mi::base::Handle<const mi::IStructure_decl> decl(
             s_class_factory->get_structure_decl( type_name.c_str()));
         if( !decl.is_valid_interface())
-            return ATTR::Type( ATTR::TYPE_UNDEF, 0, 1);
+            return ATTR::Type( ATTR::TYPE_UNDEF, nullptr, 1);
         // create ATTR::Type
         ATTR::Type structure_type( ATTR::TYPE_STRUCT, name.c_str(), 1);
         structure_type.set_type_name( type_name);
@@ -621,7 +623,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
             const char* member_name = decl->get_member_name( i);
             ATTR::Type member_type = get_attribute_type( member_type_name, member_name);
             if( member_type.get_typecode() == ATTR::TYPE_UNDEF)
-                return ATTR::Type( ATTR::TYPE_UNDEF, 0, 1);
+                return ATTR::Type( ATTR::TYPE_UNDEF, nullptr, 1);
             // attach ATTR::Type for the i-the member to structure_type
             if( i == 0) {
                 structure_type.set_child( member_type);
@@ -639,7 +641,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
         mi::base::Handle<const mi::IEnum_decl> decl(
             s_class_factory->get_enum_decl( type_name.c_str()));
         if( !decl.is_valid_interface())
-            return ATTR::Type( ATTR::TYPE_UNDEF, 0, 1);
+            return ATTR::Type( ATTR::TYPE_UNDEF, nullptr, 1);
         // create ATTR::Type
         ATTR::Type enum_type( ATTR::TYPE_ENUM, name.c_str(), 1);
         enum_type.set_type_name( type_name);
@@ -678,7 +680,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
     ASSERT( M_NEURAY_API, type.get_typecode() == ATTR::TYPE_STRUCT);
 
     mi::base::Handle<mi::IStructure_decl> decl(
-        s_class_factory->create_type_instance<mi::IStructure_decl>( 0, "Structure_decl", 0, 0));
+        s_class_factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr));
 
     const ATTR::Type* member_type = type.get_child();
     while( member_type) {
@@ -691,7 +693,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
                     ? member_type->get_child() : member_type;
             std::string element_type_name = get_attribute_type_name( *element_type, true);
             if( element_type_name.empty())
-                return 0;
+                return nullptr;
             std::ostringstream member_type_name;
             member_type_name << element_type_name << "[";
             mi::Size length = element_type->get_arraysize();
@@ -706,7 +708,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
             mi::base::Handle<const mi::IStructure_decl> member_decl(
                 get_structure_decl( *member_type));
             if( !member_decl.is_valid_interface())
-                return 0;
+                return nullptr;
             decl->add_member( member_decl->get_structure_type_name(), member_type->get_name());
             member_type = member_type->get_next();
 
@@ -715,7 +717,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
             mi::base::Handle<const mi::IEnum_decl> member_decl(
                 get_enum_decl( *member_type));
             if( !member_decl.is_valid_interface())
-                return 0;
+                return nullptr;
             decl->add_member( member_decl->get_enum_type_name(), member_type->get_name());
             member_type = member_type->get_next();
 
@@ -724,7 +726,7 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
             const char* member_type_name
                 = Type_utilities::convert_type_code_to_attribute_type_name( member_type_code);
             if( !member_type_name)
-                return 0;
+                return nullptr;
             decl->add_member( member_type_name, member_type->get_name());
             member_type = member_type->get_next();
         }
@@ -739,7 +741,7 @@ const mi::IEnum_decl* Attribute_set_impl_helper::create_enum_decl( const ATTR::T
     ASSERT( M_NEURAY_API, type.get_typecode() == ATTR::TYPE_ENUM);
 
     mi::base::Handle<mi::IEnum_decl> decl(
-        s_class_factory->create_type_instance<mi::IEnum_decl>( 0, "Enum_decl", 0, 0));
+        s_class_factory->create_type_instance<mi::IEnum_decl>( nullptr, "Enum_decl", 0, nullptr));
 
     const Enum_collection* enum_collection = type.get_enum();
     mi::Size n = enum_collection->size();
@@ -926,7 +928,7 @@ bool Attribute_set_impl_helper::type_matches_structure_decl(
             return false;
 
         // compare member names
-        std::string attr_member_name = attr_member_type->get_name();
+        std::string attr_member_name = attr_member_type->get_name(); //-V522 PVS
         if( attr_member_name != decl->get_member_name( i))
             return false;
     }
@@ -977,7 +979,9 @@ bool Attribute_set_impl_helper::has_valid_api_type( const ATTR::Attribute* attri
         || (attribute_id == SCENE::OBJ_DERIVS)
         || (attribute_id == SCENE::OBJ_PRIM_LABEL)
         || (attribute_id >= SCENE::OBJ_TEXTURE
-            && attribute_id < SCENE::OBJ_TEXTURE + SCENE::OBJ_TEXTURE_NUM))
+            && attribute_id < SCENE::OBJ_TEXTURE + SCENE::OBJ_TEXTURE_NUM)
+        || (attribute_id >= SCENE::OBJ_USER
+            && attribute_id < SCENE::OBJ_USER + SCENE::OBJ_USER_NUM))
         return false;
 
     return !get_attribute_type_name( attribute->get_type()).empty();
@@ -1018,7 +1022,7 @@ bool Attribute_set_impl_helper::is_correct_type_for_attribute(
     if( !attribute_spec)
         return true;
 
-    // Checkt the type code for remaining attributes with attribute spec.
+    // Checks the type code for remaining attributes with attribute spec.
     ATTR::Type_code attribute_type_code
         = Type_utilities::convert_attribute_type_name_to_type_code( type_name);
     if( attribute_type_code == ATTR::TYPE_UNDEF)
@@ -1038,6 +1042,7 @@ std::string Attribute_set_impl_helper::get_top_level_name( const char* name)
 }
 
 DB::Journal_type Attribute_set_impl_helper::compute_journal_flags(
+    const ATTR::Attribute* attr,
     ATTR::Attribute_id attribute_id)
 {
     DB::Journal_type result = DB::JOURNAL_NONE;
@@ -1045,8 +1050,28 @@ DB::Journal_type Attribute_set_impl_helper::compute_journal_flags(
     SYSTEM::Access_module<ATTR::Attr_module> attr_module( false);
     const ATTR::Attribute_spec* attribute_spec
         = attr_module->get_reserved_attr_spec( attribute_id);
-    if( attribute_spec)
+    if( attribute_spec) {
         result.add_journal( attribute_spec->get_journal_flags());
+         return result;
+    }
+    // also consider userdata attribute types
+    const ATTR::Type& attr_type = attr->get_type();
+    const ATTR::Type_code tc = attr_type.get_typecode();
+    if (tc == ATTR::TYPE_COLOR ||
+        tc == ATTR::TYPE_SCALAR ||
+        tc == ATTR::TYPE_VECTOR2 ||
+        tc == ATTR::TYPE_VECTOR3 ||
+        tc == ATTR::TYPE_VECTOR4 ||
+        tc == ATTR::TYPE_INT32) {
+
+        // check filter
+        std::wstring name_wstr = STRING::utf8_to_wchar( attr->get_name());
+        const std::wregex& name_regex = attr_module->get_custom_attr_filter();
+        if( !std::regex_search( name_wstr, name_regex)) {
+            // no match
+            result.add_journal( SCENE::JOURNAL_CHANGE_NON_SHADER_ATTRIBUTE);
+        }
+    }
 
     return result;
 }

@@ -149,6 +149,15 @@ typedef tct_traits<true>::tct_derivable_float3 tct_deriv_float3;
 /// A float4 with derivatives.
 typedef tct_traits<true>::tct_derivable_float4 tct_deriv_float4;
 
+/// A float[2] with derivatives (needed to avoid problems with wrong alignment).
+typedef tct_deriv<float[2]> tct_deriv_arr_float_2;
+
+/// A float[3] with derivatives (needed to avoid problems with wrong alignment).
+typedef tct_deriv<float[3]> tct_deriv_arr_float_3;
+
+/// A float[4] with derivatives (needed to avoid problems with wrong alignment).
+typedef tct_deriv<float[4]> tct_deriv_arr_float_4;
+
 
 /// The MDL environment state structure inside the MDL SDK is a representation of the renderer
 /// state in the context of an environment lookup as defined in section 19 "Renderer state" in the
@@ -295,6 +304,11 @@ struct Shading_state_material_impl {
     /// It can be used to make instanced objects look different in spite of the same used material.
     /// This field is only used if the uniform state is included.
     tct_int               object_id;
+
+    /// The result of state::meters_per_scene_unit().
+    /// The field is only used if the \c "fold_meters_per_scene_unit" option is set to false.
+    /// Otherwise, the value of the \c "meters_per_scene_unit" option will be used in the code.
+    tct_float             meters_per_scene_unit;
 };
 
 /// The MDL material state structure.
@@ -532,13 +546,148 @@ struct Texture_handler_vtable_impl {
         Texture_handler_base const  *self,
         tct_uint                    bsdf_measurement_index,
         tct_float const             theta_phi[2]);      //!< theta in [0, pi/2] and phi in [-pi, pi]
+
+    /// Implementation of \c scene_data_isvalid().
+    tct_bool (*m_scene_data_isvalid)(
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id);
+
+    /// Implementation of \c scene_data_lookup_float().
+    tct_float (*m_scene_data_lookup_float)(
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_float                              default_value,
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_float2().
+    void (*m_scene_data_lookup_float2)(
+        tct_float                              result[2],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_float const                        default_value[2],
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_float3().
+    void (*m_scene_data_lookup_float3)(
+        tct_float                              result[3],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_float const                        default_value[3],
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_float4().
+    void (*m_scene_data_lookup_float4)(
+        tct_float                              result[4],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_float const                        default_value[4],
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of \c scene_data_lookup_int().
+    tct_int (*m_scene_data_lookup_int)(
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_int                                default_value,
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_int2().
+    void (*m_scene_data_lookup_int2)(
+        tct_int                                result[2],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_int const                          default_value[2],
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_int3().
+    void (*m_scene_data_lookup_int3)(
+        tct_int                                result[3],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_int const                          default_value[3],
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_int4().
+    void (*m_scene_data_lookup_int4)(
+        tct_int                                result[4],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_int const                          default_value[4],
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_color().
+    void (*m_scene_data_lookup_color)(
+        tct_float                              result[3],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_float const                        default_value[3],
+        tct_bool                               uniform_lookup);
+
+    //
+    // The following functions are only used in the derivative variant,
+    // and can be nullptr in the non-derivative variant
+    //
+
+    /// Implementation of \c scene_data_lookup_float() with derivatives.
+    void (*m_scene_data_lookup_deriv_float)(
+        tct_deriv_float                       *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_with_derivs     *state,
+        tct_uint                               scene_data_id,
+        tct_deriv_float const                 *default_value,
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_float2() with derivatives.
+    void (*m_scene_data_lookup_deriv_float2)(
+        tct_deriv_arr_float_2                 *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_with_derivs    *state,
+        tct_uint                               scene_data_id,
+        tct_deriv_arr_float_2 const           *default_value,
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_float3() with derivatives.
+    void (*m_scene_data_lookup_deriv_float3)(
+        tct_deriv_arr_float_3                 *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_with_derivs    *state,
+        tct_uint                               scene_data_id,
+        tct_deriv_arr_float_3 const           *default_value,
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_float4() with derivatives.
+    void (*m_scene_data_lookup_deriv_float4)(
+        tct_deriv_arr_float_4                 *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_with_derivs    *state,
+        tct_uint                               scene_data_id,
+        tct_deriv_arr_float_4 const           *default_value,
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_color() with derivatives.
+    void (*m_scene_data_lookup_deriv_color)(
+        tct_deriv_arr_float_3                 *result,
+        Texture_handler_base const            *self_base,
+        Shading_state_material_with_derivs    *state,
+        tct_uint                               scene_data_id,
+        tct_deriv_arr_float_3 const           *default_value,
+        tct_bool                               uniform_lookup);
 };
 
 /// The texture handler vtable struct.
 typedef Texture_handler_vtable_impl<false> Texture_handler_vtable;
 
 /// The texture handler vtable struct with derivatives for the texture coordinates.
-typedef Texture_handler_vtable_impl<true>  Texture_handler_deriv_vtable;
+typedef Texture_handler_vtable_impl<true> Texture_handler_deriv_vtable;
 
 /// The texture handler structure that is passed to the texturing functions.
 /// A user can derive from this structure and add custom fields as required by the texturing

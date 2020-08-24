@@ -33,8 +33,6 @@
 #include <iostream>
 #include <string>
 
-#include <mi/mdl_sdk.h>
-
 #include "example_shared.h"
 
 // Utility function to dump the arguments of a material instance or function call.
@@ -66,8 +64,8 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
     mi::base::Handle<mi::neuraylib::IScope> scope( database->get_global_scope());
     mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
 
-    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+    mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+        neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
 
     mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
         neuray->get_api_component<mi::neuraylib::IMdl_factory>());
@@ -83,8 +81,6 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
         // Create a DB element for the image and the texture referencing it.
         mi::base::Handle<mi::neuraylib::IImage> image(
             transaction->create<mi::neuraylib::IImage>( "Image"));
-        // Configure a resource search root relative to which we load the texture
-        check_success( mdl_compiler->add_resource_path( get_samples_mdl_root().c_str()) == 0);
         check_success( image->reset_file( "nvidia/sdk_examples/resources/example.png") == 0);
         transaction->store( image.get(), "nvidia_image");
         mi::base::Handle<mi::neuraylib::ITexture> texture(
@@ -93,13 +89,14 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
         transaction->store( texture.get(), "nvidia_texture");
     }
     {
-        // Import the "::nvidia::sdk_examples::tutorials" and "base" module. 
+        // Import the "::nvidia::sdk_examples::tutorials" and "base" module.
         // The "::nvidia::sdk_examples::tutorials" module is found via the
         // configured module search path.
-        check_success( mdl_compiler->load_module( transaction.get(), 
-            "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
+        check_success( mdl_impexp_api->load_module(
+            transaction.get(), "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
         check_success( print_messages( context.get()));
-        check_success( mdl_compiler->load_module( transaction.get(), "::base", context.get()) >= 0);
+        check_success( mdl_impexp_api->load_module(
+            transaction.get(), "::base", context.get()) >= 0);
         check_success( print_messages( context.get()));
     }
     {
@@ -161,7 +158,8 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
         transaction->store( function_call.get(), "call of texture_return.tint");
     }
     {
-        // Prepare the arguments of the material instance for "mdl::nvidia::sdk_examples::tutorials::example_material":
+        // Prepare the arguments of the material instance for 
+        // "mdl::nvidia::sdk_examples::tutorials::example_material":
         // set the "tint" argument to the "call of texture_return.tint" function call.
         mi::base::Handle<mi::neuraylib::IExpression> arg_expr(
             expression_factory->create_call( "call of texture_return.tint"));
@@ -170,7 +168,8 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
             expression_factory->create_expression_list());
         arguments->add_expression( "tint", arg_expr.get());
 
-        // Create a material instance from the material definition "mdl::nvidia::sdk_examples::tutorials::example_material"
+        // Create a material instance from the material definition 
+        // "mdl::nvidia::sdk_examples::tutorials::example_material"
         // with the just prepared arguments.
         mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
             transaction->access<mi::neuraylib::IMaterial_definition>(
@@ -206,30 +205,33 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
 
 int MAIN_UTF8( int argc, char* argv[])
 {
-
     // Access the MDL SDK
-    mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    check_success( neuray.is_valid_interface());
+    mi::base::Handle<mi::neuraylib::INeuray> neuray(mi::examples::mdl::load_and_get_ineuray());
+    if (!neuray.is_valid_interface())
+        exit_failure("Failed to load the SDK.");
 
     // Configure the MDL SDK
-    configure( neuray.get());
+    if (!mi::examples::mdl::configure(neuray.get()))
+        exit_failure("Failed to initialize the SDK.");
 
     // Start the MDL SDK
-    mi::Sint32 result = neuray->start();
-    check_start_success( result);
+    mi::Sint32 ret = neuray->start();
+    if (ret != 0)
+        exit_failure("Failed to initialize the SDK. Result code: %d", ret);
 
     // Create a textured material
     create_textured_material( neuray.get());
 
     // Shut down the MDL SDK
-    check_success( neuray->shutdown() == 0);
-    neuray = 0;
+    if (neuray->shutdown() != 0)
+        exit_failure("Failed to shutdown the SDK.");
 
     // Unload the MDL SDK
-    check_success( unload());
+    neuray = nullptr;
+    if (!mi::examples::mdl::unload())
+        exit_failure("Failed to unload the SDK.");
 
-    keep_console_open();
-    return EXIT_SUCCESS;
+    exit_success();
 }
 
 // Convert command line arguments to UTF8 on Windows

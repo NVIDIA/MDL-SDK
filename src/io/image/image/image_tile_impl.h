@@ -36,6 +36,9 @@
 
 #include <boost/core/noncopyable.hpp>
 
+#include <vector>
+
+
 namespace MI {
 
 namespace IMAGE {
@@ -72,9 +75,6 @@ public:
     /// Creates a tile of the given width and height.
     Tile_impl( mi::Uint32 width, mi::Uint32 height);
 
-    /// Destructor
-    ~Tile_impl() { delete[] m_data; }
-
     // methods of mi::neuraylib::ITile
 
     void set_pixel( mi::Uint32 x_offset, mi::Uint32 y_offset, const mi::Float32* floats);
@@ -87,9 +87,9 @@ public:
 
     mi::Uint32 get_resolution_y() const { return m_height; }
 
-    const void* get_data() const { return m_data; }
+    const void* get_data() const { return m_data.data(); }
 
-    void* get_data() { return m_data; }
+    void* get_data() { return m_data.data(); }
 
     // own methods
 
@@ -108,7 +108,7 @@ private:
     /// Height of the tile
     mi::Uint32 m_height;
     /// The data of this tile
-    typename Pixel_type_traits<T>::Base_type* m_data;
+    std::vector<typename Pixel_type_traits<T>::Base_type> m_data;
 };
 
 } // namespace IMAGE

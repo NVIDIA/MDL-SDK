@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-/*! \page mi_neuray_example_discovery Example for Discovery of MDL modules
+/*! \page mi_neuray_example_discovery Example for the Discovery of MDL Modules
 
 <div align="right">
     [\link mi_neuray_example_traversal Previous\endlink]

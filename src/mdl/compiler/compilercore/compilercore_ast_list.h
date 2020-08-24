@@ -122,6 +122,14 @@ public:
         return l;
     }
 
+    /// Return true if there is exactly one element in the list.
+    bool single_element() const {
+        size_t l = 0;
+        for (const_iterator it(this->begin()), end(this->end()); it != end && l < 2; ++it)
+            ++l;
+        return l == 1;
+    }
+
     /// Access first element.
     T *front() { return m_first; }
 
@@ -140,11 +148,11 @@ public:
             T *e = m_first;
             m_first = e->m_next;
 
-            if (m_first != NULL)
+            if (m_first != NULL) {
                 m_first->m_prev = NULL;
-            else
+            } else {
                 m_last = NULL;
-
+            }
             e->m_next = e->m_prev = NULL;
         }
     }
@@ -155,13 +163,39 @@ public:
             T *e   = m_last;
             m_last = e->m_prev;
 
-            if (m_last != NULL)
+            if (m_last != NULL) {
                 m_last->m_next = NULL;
-            else
+            } else {
                 m_first = NULL;
-
+            }
             e->m_next = e->m_prev = NULL;
         }
+    }
+
+    /// Removes from the list a single element.
+    iterator erase(iterator pos) {
+        iterator res = pos;
+
+        if (m_first == pos) {
+            m_first = pos->m_next;
+            if (m_first == NULL) {
+                m_last = NULL;
+            }
+        } else {
+            pos->m_prev->m_next = pos->m_next;
+        }
+
+        if (m_last == pos) {
+            m_last = pos->m_prev;
+            if (m_last == NULL) {
+                m_first = NULL;
+            }
+        } else {
+            pos->m_next->m_prev = pos->m_prev;
+        }
+        pos->m_prev= pos->m_next= NULL;
+
+        return ++res;
     }
 
 public:

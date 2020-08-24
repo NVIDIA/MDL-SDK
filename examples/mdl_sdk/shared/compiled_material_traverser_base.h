@@ -34,7 +34,7 @@
 #ifndef COMPILED_MATERIAL_TRAVERSER_BASE_H
 #define COMPILED_MATERIAL_TRAVERSER_BASE_H
 
-#include <mi/mdl_sdk.h>
+#include "example_shared.h"
 
 #include <string>
 #include <vector>

@@ -54,8 +54,20 @@ class ICode_generator : public
 {
 public:
 
-    /// The name of the option to set the internal space of a code generator.
+    /// The name of the code generator option to set the internal space.
     #define MDL_CG_OPTION_INTERNAL_SPACE "internal_space"
+
+    /// The name of the code generator option to enable or disable folding of meters_per_scene_unit.
+    #define MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT "fold_meters_per_scene_unit"
+
+    /// The name of the code generator option to set meters_per_scene_unit.
+    #define MDL_CG_OPTION_METERS_PER_SCENE_UNIT "meters_per_scene_unit"
+
+    /// The name of the code generator option to set wavelength_min.
+    #define MDL_CG_OPTION_WAVELENGTH_MIN "wavelength_min"
+
+    /// The name of the code generator option to set wavelength_max.
+    #define MDL_CG_OPTION_WAVELENGTH_MAX "wavelength_max"
 
     /// Get the name of the target language.
     virtual char const *get_target_language() const = 0;
@@ -83,6 +95,7 @@ public:
             size_t arg_block_index;
             size_t num_df_handles;
             char const **df_handles;
+            IGenerated_code_executable::State_usage state_usage;
         };
 
         /// Constructor.
@@ -231,10 +244,33 @@ public:
 class ILambda_resource_enumerator
 {
 public:
+    /// The potential texture usage properties (maybe-analysis).
+    enum Texture_usage_property {
+        TU_NONE            = 0u,
+        TU_HEIGHT          = 1u <<  0,     ///< uses tex::height()
+        TU_WIDTH           = 1u <<  1,     ///< uses tex::width()
+        TU_DEPTH           = 1u <<  2,     ///< uses tex::depth()
+        TU_LOOKUP_FLOAT    = 1u <<  3,     ///< uses tex::lookup_float()
+        TU_LOOKUP_FLOAT2   = 1u <<  4,     ///< uses tex::lookup_float2()
+        TU_LOOKUP_FLOAT3   = 1u <<  5,     ///< uses tex::lookup_float3()
+        TU_LOOKUP_FLOAT4   = 1u <<  6,     ///< uses tex::lookup_float4()
+        TU_LOOKUP_COLOR    = 1u <<  7,     ///< uses tex::lookup_color()
+        TU_TEXEL_FLOAT     = 1u <<  8,     ///< uses tex::texel_float()
+        TU_TEXEL_FLOAT2    = 1u <<  9,     ///< uses tex::texel_float2()
+        TU_TEXEL_FLOAT3    = 1u << 10,     ///< uses tex::texel_float3()
+        TU_TEXEL_FLOAT4    = 1u << 11,     ///< uses tex::texel_float4()
+        TU_TEXEL_COLOR     = 1u << 12,     ///< uses tex::texel_color()
+        TU_TEXTURE_ISVALID = 1u << 13,     ///< uses tex::texture_isvalid()
+    }; // can be or'ed
+
+    /// The usage of a texture resource.
+    typedef unsigned Texture_usage;
+
     /// Called for a texture resource.
     ///
-    /// \param t  the texture resource or an invalid_ref
-    virtual void texture(IValue const *t) = 0;
+    /// \param t          the texture resource or an invalid_ref
+    /// \param tex_usage  the potential usage of the texture
+    virtual void texture(IValue const *t, Texture_usage tex_usage) = 0;
 
     /// Called for a light profile resource.
     ///
@@ -950,6 +986,9 @@ class ICode_generator_jit : public
     /// The name of the option to set the optimization level of the JIT code generator.
     #define MDL_JIT_OPTION_OPT_LEVEL "jit_opt_level"
 
+    /// The name of the option to inline functions aggressively.
+    #define MDL_JIT_OPTION_INLINE_AGGRESSIVELY "jit_inline_aggressively"
+
     /// The name of the option that steers the call mode for the GPU texture lookup.
     #define MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE "jit_tex_lookup_call_mode"
 
@@ -963,11 +1002,8 @@ class ICode_generator_jit : public
     #define MDL_JIT_OPTION_ENABLE_AUXILIARY "jit_enable_auxiliary"
 
     /// The name of the option to let the the JIT code generator create a LLVM bitcode
-    /// instead of LLVM IR (ascii) code
+    /// instead of LLVM IR (ascii) code.
     #define MDL_JIT_OPTION_WRITE_BITCODE "jit_write_bitcode"
-
-    /// The name of the option to set a user-specified LLVM implementation for the state module.
-    #define MDL_JIT_BINOPTION_LLVM_STATE_MODULE "jit_llvm_state_module"
 
     /// The name of the option to enable/disable the builtin texture runtime of the native backend
     #define MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU "jit_use_builtin_resource_handler_cpu"
@@ -981,6 +1017,18 @@ class ICode_generator_jit : public
     /// the scene::data_lookup_* functions will always return the provided default value.
     /// Use "*" to specify that scene data for any name may be available.
     #define MDL_JIT_OPTION_SCENE_DATA_NAMES "jit_scene_data_names"
+
+    /// The name of the option specifying a comma-separated list of names of functions which will be
+    /// visible in the generated code (empty string means no special restriction).
+    /// Can especially be used in combination with \c "jit_llvm_renderer_module" to limit
+    /// the number of functions for which target code will be generated.
+    #define MDL_JIT_OPTION_VISIBLE_FUNCTIONS "jit_visible_functions"
+
+    /// The name of the option to set a user-specified LLVM implementation for the state module.
+    #define MDL_JIT_BINOPTION_LLVM_STATE_MODULE "jit_llvm_state_module"
+
+    /// The name of the option to set a user-specified LLVM renderer module.
+    #define MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE "jit_llvm_renderer_module"
 
 public:
     /// The compilation mode for whole module compilation.
@@ -1257,6 +1305,9 @@ public:
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_unit(
         ILink_unit const *unit) = 0;
+
+    /// Create a blank layout used for deserialization of target codes.
+    virtual IGenerated_code_value_layout *create_value_layout() const = 0;
 };
 
 /*!
@@ -1283,8 +1334,10 @@ These options are specific to the MDL JIT code generator:
 - \ref mdl_option_jit_enable_ro_segment       "jit_enable_ro_segment"
 - \ref mdl_option_jit_fast_math               "jit_fast_math"
 - \ref mdl_option_jit_include_uniform_state   "jit_include_uniform_state"
+- \ref mdl_option_jit_inline_aggressively     "jit_inline_aggressively"
 - \ref mdl_option_jit_link_libdevice          "jit_link_libdevice"
 - \ref mdl_option_jit_llvm_state_module       "jit_llvm_state_module"
+- \ref mdl_option_jit_llvm_renderer_module    "jit_llvm_renderer_module"
 - \ref mdl_option_jit_map_strings_to_ids      "jit_map_strings_to_ids"
 - \ref mdl_option_jit_opt_level               "jit_opt_level"
 - \ref mdl_option_jit_tex_lookup_call_mode    "jit_tex_lookup_call_mode"
@@ -1292,6 +1345,7 @@ These options are specific to the MDL JIT code generator:
 - \ref mdl_option_jit_use_bitangent           "jit_use_bitangent"*/
 /*!
 - \ref mdl_option_jit_use_builtin_res_h       "jit_use_builtin_resource_handler_cpu"
+- \ref mdl_option_jit_visible_functions       "jit_visible_functions"
 
 \section mdl_cg_options Generic MDL code generator options
 
@@ -1349,6 +1403,11 @@ These options are specific to the MDL JIT code generator:
   math optimizations (this corresponds to the \c -ffast-math option of the GCC compiler).
   Default: \c "true"
 
+\anchor mdl_option_jit_inline_aggressively
+- <b>jit_inline_aggressively</b>: If set to \c "true", the JIT code generator will add the LLVM
+  AlwaysInline attribute to most generated functions to force aggressive inlining.
+  Default: \c "false"
+
 \anchor mdl_option_jit_include_uniform_state
 - <b>jit_include_uniform_state</b>: If set to \c "true", the uniform state (the world-to-object and
   object-to-world transforms and the object ID) are expected to be part of the renderer provided
@@ -1361,8 +1420,12 @@ These options are specific to the MDL JIT code generator:
   linked before generating PTX code.
   Default: \c "true"
 
+\anchor mdl_option_jit_llvm_renderer_module
+- <b>jit_llvm_renderer_module</b>: A binary option which allows you to set a user-defined LLVM
+  renderer module which will be linked and optimized together with the generated code.
+
 \anchor mdl_option_jit_llvm_state_module
-- <b>jit_llvm_state_module</b>: A binary option which allows you to set a user-specified LLVM
+- <b>jit_llvm_state_module</b>: A binary option which allows you to set a user-defined LLVM
   implementation for the state module.
 
 \anchor mdl_option_jit_map_strings_to_ids
@@ -1400,9 +1463,16 @@ These options are specific to the MDL JIT code generator:
 
 \anchor mdl_option_jit_use_builtin_res_h
 - <b>jit_use_builtin_resource_handler_cpu</b>: If set to \c "false", the built-in texture handler
-  is not used when running cpu code. Instead, the user needs to provide a vtable of texture
+  is not used when running CPU code. Instead, the user needs to provide a vtable of texture
   functions via the tex_data parameter.
   Default: \c "false"
+
+\anchor mdl_option_jit_visible_functions
+- <b>jit_visible_functions</b>: Specifies a comma-separated list of names of functions which will be
+  visible in the generated code (empty string means no special restriction).
+  Can especially be used in combination with \ref mdl_option_jit_llvm_renderer_module to limit
+  the number of functions for which target code will be generated.
+  Default: \c ""
 */
 
 

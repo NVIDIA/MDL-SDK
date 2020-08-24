@@ -32,4 +32,5 @@ Changes:
    fixes translation of "%2 = extractelement <2 x i32> %param_a, i32 %1"
  - disable multithreaded symbol lookup in ExecutionEngine/Orc/Core.cpp if std::call_once is disabled
  - set cmake policy CMP0075 to NEW in top-level CMakeLists.txt
+ - added sm_80, sm_86, ptx64, and ptx65
 

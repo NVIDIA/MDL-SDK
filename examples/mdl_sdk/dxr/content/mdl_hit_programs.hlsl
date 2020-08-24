@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#ifndef TARGET_CODE_ID
+#if !defined(TARGET_CODE_ID)
     #define TARGET_CODE_ID 0
 #endif
 
@@ -41,12 +41,19 @@
 #define MDL_RADIANCE_CLOSEST_HIT_PROGRAM    export_name(MdlRadianceClosestHitProgram)
 #define MDL_SHADOW_ANY_HIT_PROGRAM          export_name(MdlShadowAnyHitProgram)
 
-enum MaterialFlags
-{
-    MATERIAL_FLAG_NONE          = 0,
-    MATERIAL_FLAG_OPAQUE        = 1 << 0, // allows to skip opacity evaluation
-    MATERIAL_FLAG_SINGLE_SIDED  = 1 << 1  // geometry is only visible from the front side
-};
+#if defined(WITH_ENUM_SUPPORT)
+    enum MaterialFlags
+    {
+        MATERIAL_FLAG_NONE          = 0,
+        MATERIAL_FLAG_OPAQUE        = 1 << 0, // allows to skip opacity evaluation
+        MATERIAL_FLAG_SINGLE_SIDED  = 1 << 1  // geometry is only visible from the front side
+    };
+#else
+    #define MaterialFlags uint
+    #define MATERIAL_FLAG_NONE          0
+    #define MATERIAL_FLAG_OPAQUE        (1 << 0)
+    #define MATERIAL_FLAG_SINGLE_SIDED  (1 << 1)
+#endif
 
 // ------------------------------------------------------------------------------------------------
 // defined in the global root signature
@@ -54,7 +61,7 @@ enum MaterialFlags
 
 // for some post processing effects or for AI denoising, auxiliary outputs are required.
 // from the MDL material perspective albedo (approximation) and normals can be generated.
-#ifdef ENABLE_AUXILIARY
+#if defined(ENABLE_AUXILIARY)
     // in order to limit the payload size, this data is written directly from the hit programs
     RWTexture2D<float4> AlbedoBuffer : register(u2, space0);
     RWTexture2D<float4> NormalBuffer : register(u3, space0);
@@ -107,7 +114,7 @@ cbuffer Material_constants : register(b0, MDL_MATERIAL_REGISTER_SPACE)
 
 // selects one light source randomly
 float3 sample_lights(
-    Shading_state_material state, out float3 to_light, out float pdf, inout uint seed)
+    Shading_state_material state, out float3 to_light, out float light_pdf, inout uint seed)
 {
     float p_select_light = 1.0f;
     if (point_light_enabled != 0)
@@ -115,7 +122,7 @@ float3 sample_lights(
         // keep it simple and use either point light or environment light, each with the same
         // probability. If the environment factor is zero, we always use the point light
         // Note: see also miss shader
-        float p_select_light = environment_intensity_factor > 0.0f ? 0.5f : 1.0f;
+        p_select_light = environment_intensity_factor > 0.0f ? 0.5f : 1.0f;
 
         // in general, you would select the light depending on the importance of it
         // e.g. by incorporating their luminance
@@ -123,10 +130,10 @@ float3 sample_lights(
         // randomly select one of the lights
         if (rnd(seed) <= p_select_light)
         {
-            pdf = DIRAC; // infinity
+            light_pdf = DIRAC; // infinity
 
             // compute light direction and distance
-            #ifdef USE_DERIVS
+            #if defined(USE_DERIVS)
                 to_light = point_light_position - state.position.val;
             #else
                 to_light = point_light_position - state.position;
@@ -147,17 +154,18 @@ float3 sample_lights(
         environment_sample_buffer,          // importance sampling data of the environment map
         seed,
         to_light,
-        pdf);
+        light_pdf);
 
-    pdf *= p_select_light;
-    return radiance / pdf;
+    // return radiance over pdf
+    light_pdf *= p_select_light;
+    return radiance / light_pdf;
 }
 
 
 // fetch vertex data with known layout
 float3 fetch_vertex_data_float3(const uint index, const uint byte_offset)
 {
-    const uint address = 
+    const uint address =
         geometry_vertex_buffer_byte_offset + // base address for this part of the mesh
         geometry_vertex_stride * index +     // offset to the selected vertex
         byte_offset;                         // offset within the vertex
@@ -207,8 +215,8 @@ void setup_mdl_shading_state(
         1.0f - attrib.bary.x - attrib.bary.y, attrib.bary.x, attrib.bary.y);
 
     // mesh transformations
-    const float4x4 object_to_world = float4x4(ObjectToWorld(), 0.0f, 0.0f, 0.0f, 1.0f);
-    const float4x4 world_to_object = float4x4(WorldToObject(), 0.0f, 0.0f, 0.0f, 1.0f);
+    const float4x4 object_to_world = to4x4(ObjectToWorld());
+    const float4x4 world_to_object = to4x4(WorldToObject());
 
     // get position of the hit point
     const float3 pos0 = fetch_vertex_data_float3(vertex_indices.x, VERT_BYTEOFFSET_POSITION);
@@ -224,19 +232,15 @@ void setup_mdl_shading_state(
         fetch_vertex_data_float3(vertex_indices.y, VERT_BYTEOFFSET_NORMAL) * barycentric.y +
         fetch_vertex_data_float3(vertex_indices.z, VERT_BYTEOFFSET_NORMAL) * barycentric.z);
 
-    // transform normals using inverse transpose 
+    // transform normals using inverse transpose
     // -  world_to_object = object_to_world^-1
     // -  mul(v, world_to_object) = mul(object_to_world^-T, v)
     float3 world_geom_normal = normalize(mul(float4(geom_normal, 0), world_to_object).xyz);
-    const float3 world_normal = normalize(mul(float4(normal, 0), world_to_object).xyz);
-
-    // flip geometry normal to the side of the incident ray
-    if (dot(world_geom_normal, WorldRayDirection()) > 0.0)
-        world_geom_normal *= -1.0f;
+    float3 world_normal = normalize(mul(float4(normal, 0), world_to_object).xyz);
 
     // reconstruct tangent frame from vertex data
     float3 world_tangent, world_binormal;
-    float4 tangent0 = 
+    float4 tangent0 =
         fetch_vertex_data_float4(vertex_indices.x, VERT_BYTEOFFSET_TANGENT) * barycentric.x +
         fetch_vertex_data_float4(vertex_indices.y, VERT_BYTEOFFSET_TANGENT) * barycentric.y +
         fetch_vertex_data_float4(vertex_indices.z, VERT_BYTEOFFSET_TANGENT) * barycentric.z;
@@ -245,10 +249,22 @@ void setup_mdl_shading_state(
     world_tangent = normalize(world_tangent - dot(world_tangent, world_normal) * world_normal);
     world_binormal = cross(world_normal, world_tangent) * tangent0.w;
 
+    // flip normals to the side of the incident ray
+    if (dot(world_geom_normal, WorldRayDirection()) > 0.0)
+        world_geom_normal *= -1.0f;
+
+    if (dot(world_normal, WorldRayDirection()) > 0.0)
+        world_normal *= -1.0f;
+
+    // handle low tessellated meshes with smooth normals
+    float3 k2 = reflect(WorldRayDirection(), world_normal);
+    if (dot(world_geom_normal, k2) < 0.0f)
+        world_normal = world_geom_normal;
+
     // fill the actual state fields used by MD
     mdl_state.normal = world_normal;
     mdl_state.geom_normal = world_geom_normal;
-    #ifdef USE_DERIVS
+    #if defined(USE_DERIVS)
         // currently not supported
         mdl_state.position.val = hit_position;
         mdl_state.position.dx = float3(0, 0, 0);
@@ -259,13 +275,15 @@ void setup_mdl_shading_state(
     mdl_state.animation_time = 0.0f;
     mdl_state.tangent_u[0] = world_tangent;
     mdl_state.tangent_v[0] = world_binormal;
-    #ifdef USE_TEXTURE_RESULTS
-        mdl_state.text_results = (float4[MDL_NUM_TEXTURE_RESULTS]) 0;
-    #endif
+    // #if defined(USE_TEXTURE_RESULTS)
+    // filling the buffer with zeros not required
+    //     mdl_state.text_results = (float4[MDL_NUM_TEXTURE_RESULTS]) 0;
+    // #endif
     mdl_state.ro_data_segment_offset = 0;
     mdl_state.world_to_object = world_to_object;
     mdl_state.object_to_world = object_to_world;
     mdl_state.object_id = 0;
+    mdl_state.meters_per_scene_unit = 1.0f;
     mdl_state.arg_block_offset = 0;
 
     // fill the renderer state information
@@ -278,15 +296,15 @@ void setup_mdl_shading_state(
     mdl_state.renderer_state.barycentric = barycentric;
 
     // get texture coordinates using a manually added scene data element with the scene data id
-    // defined as `SCENE_DATA_ID_TEXCOORD_0` 
-    // (see end of target code generation on application side) 
+    // defined as `SCENE_DATA_ID_TEXCOORD_0`
+    // (see end of target code generation on application side)
     float2 texcoord0 = scene_data_lookup_float2(
         mdl_state, SCENE_DATA_ID_TEXCOORD_0, float2(0.0f, 1.0f), false);
 
     // flip v-coordinate without compromising the UDIM tile mapping
     texcoord0 = float2(texcoord0.x, floor(texcoord0.y) + 1.0f - frac(texcoord0.y));
 
-    #ifdef USE_DERIVS 
+    #if defined(USE_DERIVS)
         // would make sense in a rasterizer. for a ray tracers this is not straight forward
         mdl_state.text_coords[0].val = float3(texcoord0, 0);
         mdl_state.text_coords[0].dx = float3(0, 0, 0); // float3(ddx(texcoord0), 0);
@@ -305,10 +323,11 @@ void setup_mdl_shading_state(
 void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attrib)
 {
     // back face culling
-    if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED) && is_back_face())
-    {
-        IgnoreHit();
-        return;
+    if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED)) {
+        if (is_back_face()) {
+            IgnoreHit();
+            return;
+        }
     }
 
     // early out if there is no opacity function
@@ -318,7 +337,6 @@ void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attr
     // setup MDL state
     Shading_state_material mdl_state;
     setup_mdl_shading_state(mdl_state, attrib);
-
 
     // evaluate the cutout opacity
     const float opacity = mdl_geometry_cutout_opacity(opacity_function_index, mdl_state);
@@ -330,7 +348,7 @@ void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attr
     IgnoreHit();
 }
 
-[shader("closesthit")] 
+[shader("closesthit")]
 void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attrib)
 {
     // setup MDL state
@@ -380,7 +398,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // Write Auxiliary Buffers
     //---------------------------------------------------------------------------------------------
-    #ifdef ENABLE_AUXILIARY
+    #if defined(ENABLE_AUXILIARY)
     if (has_flag(payload.flags, FLAG_FIRST_PATH_SEGMENT))
     {
         Bsdf_auxiliary_data aux_data = (Bsdf_auxiliary_data) 0;
@@ -407,12 +425,12 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     //---------------------------------------------------------------------------------------------
 
     float3 to_light;
-    float pdf;
-    float3 radiance_over_pdf = sample_lights(mdl_state, to_light, pdf, payload.seed);
+    float light_pdf;
+    float3 radiance_over_pdf = sample_lights(mdl_state, to_light, light_pdf, payload.seed);
 
     // do not next event estimation (but delay the adding of contribution)
     float3 contribution = float3(0.0f, 0.0f, 0.0f);
-    const bool next_event_valid = ((dot(to_light, mdl_state.geom_normal) > 0.0f) != inside) && pdf != 0.0f;
+    const bool next_event_valid = ((dot(to_light, mdl_state.geom_normal) > 0.0f) != inside) && light_pdf != 0.0f;
     if (next_event_valid)
     {
         // call generated mdl function to evaluate the scattering BSDF
@@ -429,9 +447,9 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         // compute lighting for this light
         if(eval_data.pdf > 0.0f)
         {
-            const float mis_weight = (pdf == DIRAC)
-                ? 1.0f 
-                : pdf / (pdf + eval_data.pdf);
+            const float mis_weight = (light_pdf == DIRAC)
+                ? 1.0f
+                : light_pdf / (light_pdf + eval_data.pdf);
 
             // sample weight
             const float3 w = payload.weight * radiance_over_pdf * mis_weight;
@@ -472,7 +490,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         {
             toggle_flag(payload.flags, FLAG_INSIDE);
             // continue on the opposite side
-            #ifdef USE_DERIVS
+            #if defined(USE_DERIVS)
                 payload.ray_origin_next = offset_ray(mdl_state.position.val, -mdl_state.geom_normal);
             #else
                 payload.ray_origin_next = offset_ray(mdl_state.position, -mdl_state.geom_normal);
@@ -481,7 +499,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         else
         {
             // continue on the current side
-            #ifdef USE_DERIVS
+            #if defined(USE_DERIVS)
                 payload.ray_origin_next = offset_ray(mdl_state.position.val, mdl_state.geom_normal);
             #else
                 payload.ray_origin_next = offset_ray(mdl_state.position, mdl_state.geom_normal);
@@ -489,9 +507,9 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         }
 
         if ((sample_data.event_type & BSDF_EVENT_SPECULAR) != 0)
-            payload.last_pdf = -1.0f;
+            payload.last_bsdf_pdf = DIRAC;
         else
-            payload.last_pdf = sample_data.pdf;
+            payload.last_bsdf_pdf = sample_data.pdf;
     }
 
     // Add contribution from next event estimation if not shadowed
@@ -499,7 +517,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // cast a shadow ray; assuming light is always outside
     RayDesc ray;
-    #ifdef USE_DERIVS
+    #if defined(USE_DERIVS)
         ray.Origin = offset_ray(mdl_state.position.val, mdl_state.geom_normal * (inside ? -1.0f : 1.0f));
     #else
         ray.Origin = offset_ray(mdl_state.position, mdl_state.geom_normal * (inside ? -1.0f : 1.0f));
@@ -516,7 +534,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     TraceRay(
         SceneBVH,               // AccelerationStructure
-        RAY_FLAG_NONE,          // RayFlags 
+        RAY_FLAG_NONE,          // RayFlags
         0xFF /* allow all */,   // InstanceInclusionMask
         RAY_TYPE_SHADOW,        // RayContributionToHitGroupIndex
         RAY_TYPE_COUNT,         // MultiplierForGeometryContributionToHitGroupIndex
@@ -524,8 +542,8 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         ray,
         shadow_payload);
 
-    // add to ray contribution from next event estiation
-    if (any(contribution) && !shadow_payload.isHit)
+    // add to ray contribution from next event estimation
+    if (!shadow_payload.isHit)
         payload.contribution += contribution;
 }
 
@@ -537,10 +555,11 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 void MDL_SHADOW_ANY_HIT_PROGRAM(inout ShadowHitInfo payload, Attributes attrib)
 {
     // back face culling
-    if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED) && is_back_face())
-    {
-        IgnoreHit();
-        return;
+    if (has_flag(material_flags, MATERIAL_FLAG_SINGLE_SIDED)) {
+        if (is_back_face()) {
+            IgnoreHit();
+            return;
+        }
     }
 
     // early out if there is no opacity function

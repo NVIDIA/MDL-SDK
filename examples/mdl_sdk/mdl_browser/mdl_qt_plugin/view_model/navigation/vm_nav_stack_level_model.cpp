@@ -57,7 +57,7 @@ VM_nav_stack_level_model::VM_nav_stack_level_model(QObject* parent, Mdl_browser_
         std::cerr << "[VM_nav_stack_level] Constructor: " 
                   <<" it is not allowed to create new levels for modules " 
                   << "(as they do not have children): " 
-                  << node->get_simple_name() << ".\n";
+                  << node->get_entity_name() << ".\n";
         return;
     }
 

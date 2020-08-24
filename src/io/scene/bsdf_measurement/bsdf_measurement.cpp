@@ -166,38 +166,10 @@ mi::Sint32 Bsdf_measurement::reset_reader(
     return 0;
 }
 
-mi::Sint32 Bsdf_measurement::reset_file_mdl(
-    DB::Transaction* transaction,
-    const std::string& resolved_filename,
-    const std::string& mdl_file_path,
-    const mi::base::Uuid& impl_hash)
-{
-    mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> reflection;
-    mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> transmission;
-    bool success = import_from_file( resolved_filename, reflection, transmission);
-    if( !success)
-        return -3;
-
-    reset_shared( transaction, reflection.get(), transmission.get(), impl_hash);
-
-    m_original_filename.clear();
-    m_resolved_filename = resolved_filename;
-    m_resolved_container_filename.clear();
-    m_resolved_container_membername.clear();
-    m_mdl_file_path = mdl_file_path;
-
-    std::ostringstream s;
-    s << "Loading BSDF measurement \"" << m_resolved_filename.c_str()
-      << "\", reflection: " << dump_data( reflection.get())
-      << ", transmission: " << dump_data( transmission.get());
-    LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO, "%s", s.str().c_str());
-
-    return 0;
-}
-
-mi::Sint32 Bsdf_measurement::reset_container_mdl(
+mi::Sint32 Bsdf_measurement::reset_mdl(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
+    const std::string& filename,
     const std::string& container_filename,
     const std::string& container_membername,
     const std::string& mdl_file_path,
@@ -205,24 +177,29 @@ mi::Sint32 Bsdf_measurement::reset_container_mdl(
 {
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> reflection;
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> transmission;
-    bool success = import_from_reader(
-        reader, container_filename, container_membername, reflection, transmission);
+    bool success = import_from_reader( reader, reflection, transmission);
     if( !success)
         return -3;
 
     reset_shared( transaction, reflection.get(), transmission.get(), impl_hash);
 
     m_original_filename.clear();
-    m_resolved_filename.clear();
+    m_resolved_filename = filename;
     m_resolved_container_filename = container_filename;
     m_resolved_container_membername = container_membername;
     m_mdl_file_path = mdl_file_path;
 
     std::ostringstream s;
-    s << "Loading BSDF measurement \"" << container_membername
-      << "\" in \"" << container_filename
-      << "\", reflection: " << dump_data( reflection.get())
-      << ", transmission: " << dump_data( transmission.get());
+    s << "Loading BSDF measurement ";
+    if( !m_resolved_filename.empty())
+        s << "\"" << m_resolved_filename << "\"";
+    else if( !m_resolved_container_filename.empty())
+        s << "\"" << m_resolved_container_membername << "\" in \""
+          << m_resolved_container_filename << "\"";
+    else
+        s << "from MDL file path \"" << m_mdl_file_path << "\"";
+    s << ", reflection: " << dump_data( reflection.get());
+    s << ", transmission: " << dump_data( transmission.get());
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO, "%s", s.str().c_str());
 
     return 0;
@@ -696,7 +673,6 @@ bool import_measurement_from_reader(
         }
         if( reader->eof())
             return true;
-        buffer_str = buffer;
     }
 
     return false;
@@ -728,23 +704,6 @@ bool import_from_reader(
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission)
 {
-    return import_measurement_from_reader( reader, reflection, transmission);
-}
-
-bool import_from_reader(
-    mi::neuraylib::IReader* reader,
-    const std::string& container_filename,
-    const std::string& container_membername,
-    mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
-    mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission)
-{
-    std::string root, extension;
-    HAL::Ospath::splitext( container_membername, root, extension);
-    if( !extension.empty() && extension[0] == '.' )
-        extension = extension.substr( 1);
-    if( extension != "mbsdf")
-        return false;
-
     return import_measurement_from_reader( reader, reflection, transmission);
 }
 
@@ -828,37 +787,8 @@ bool export_to_file(
 
 DB::Tag load_mdl_bsdf_measurement(
     DB::Transaction* transaction,
-    const std::string& resolved_filename,
-    const std::string& mdl_file_path,
-    const mi::base::Uuid& impl_hash,
-    bool shared_proxy)
-{
-    std::string db_name = shared_proxy ? "MI_default_" : "";
-    db_name += "bsdf_measurement_" + resolved_filename;
-    if( !shared_proxy)
-        db_name = MDL::DETAIL::generate_unique_db_name( transaction, db_name.c_str());
-
-    DB::Tag tag = transaction->name_to_tag( db_name.c_str());
-    if( tag)
-        return tag;
-
-    Bsdf_measurement* bsdfm = new Bsdf_measurement();
-    mi::Sint32 result = bsdfm->reset_file_mdl(
-        transaction, resolved_filename, mdl_file_path, impl_hash);
-    ASSERT( M_BSDF_MEASUREMENT, result == 0 || result == -3);
-    if( result == -3)
-        LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_IO,
-            "File format error or invalid filename extension in default BSDF measurement \"%s\".",
-            resolved_filename.c_str());
-
-    tag = transaction->store_for_reference_counting(
-        bsdfm, db_name.c_str(), transaction->get_scope()->get_level());
-    return tag;
-}
-
-DB::Tag load_mdl_bsdf_measurement(
-    DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
+    const std::string& filename,
     const std::string& container_filename,
     const std::string& container_membername,
     const std::string& mdl_file_path,
@@ -868,8 +798,19 @@ DB::Tag load_mdl_bsdf_measurement(
     if( !reader)
         return DB::Tag( 0);
 
+    std::string identifier;
+    if( !filename.empty())
+        identifier = filename;
+    else if( !container_filename.empty())
+        identifier = container_filename + "_" + container_membername;
+    else {
+        identifier = "without_name";
+        // Never share the proxy for memory-based resources.
+        shared_proxy = false;
+    }
+
     std::string db_name = shared_proxy ? "MI_default_" : "";
-    db_name += "bsdf_measurement_" + container_filename + "_" + container_membername;
+    db_name += "bsdf_measurement_" + identifier;
     if( !shared_proxy)
         db_name = MDL::DETAIL::generate_unique_db_name( transaction, db_name.c_str());
 
@@ -878,8 +819,8 @@ DB::Tag load_mdl_bsdf_measurement(
         return tag;
 
     Bsdf_measurement* bsdfm = new Bsdf_measurement();
-    mi::Sint32 result = bsdfm->reset_container_mdl(
-        transaction, reader, container_filename, container_membername, mdl_file_path, impl_hash);
+    mi::Sint32 result = bsdfm->reset_mdl( transaction,
+        reader, filename, container_filename, container_membername, mdl_file_path, impl_hash);
     ASSERT( M_BSDF_MEASUREMENT, result == 0 || result == -3);
     if( result == -3)
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_IO,

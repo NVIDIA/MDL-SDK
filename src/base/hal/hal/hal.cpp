@@ -31,9 +31,9 @@
 
 #include "pch.h"
 #include "hal.h"
-#include <cerrno>		// for errno
-#include <cstdio>		// for fflush/stderr
-#include <cstring>		// for strerror.h
+#include <cerrno>               // for errno
+#include <cstdio>               // for fflush/stderr
+#include <cstring>              // for strerror.h
 #include <cstdlib>
 
 #ifndef WIN_NT
@@ -45,7 +45,7 @@
 #include <wincon.h>
 // define non existing errno code (must be mapped to what is being set in msg_socket.cpp)
 #ifndef EADDRINUSE
-#define	EADDRINUSE WSAEADDRINUSE
+#define EADDRINUSE WSAEADDRINUSE
 #endif
 #ifndef ECONNREFUSED
 #define ECONNREFUSED WSAENOTCONN
@@ -75,7 +75,7 @@ int get_errno()
 //
 
 std::string strerror(
-    int		err)			// system error code
+    int         err)                    // system error code
 {
     char buffer[1024];
 #ifdef WIN_NT
@@ -94,7 +94,7 @@ std::string strerror(
     // will return a pointer to an internal static buffer.
     char *p = ::strerror_r(err, buffer, sizeof(buffer));
     if(p)
-	return p;
+        return p;
 #else
     ::strerror_r(err, buffer, sizeof(buffer));
 #endif
@@ -123,9 +123,9 @@ bool has_stderr()
     // similar
     int fd = _fileno(stderr);
     if (fd == -1 || fd == -2)
-	return false;
+        return false;
     else
-	return true;
+        return true;
 #else
     // It is possible that a non-windows client would have closed stderr, but
     // for now we're not going to worry about this case
@@ -141,14 +141,14 @@ bool has_stderr()
 //
 
 void fatal_exit(
-    int exit_code)			// exit code to return
+    int exit_code)                      // exit code to return
 {
     // There might be important information in stderr that we want to see
     // and since stderr is line buffered on Windows we want to flush it.
     // POSIX only says that stderr is not _fully_ buffered so we flush
     // on all platforms.
     if (has_stderr())
-	fflush(stderr);
+        fflush(stderr);
 
     ::_exit(exit_code);
 }
@@ -160,8 +160,8 @@ void fatal_exit(
 //
 
 void message_box(
-    const char *caption,		// the caption for the box
-    const char *msg)			// the message to display
+    const char *caption,                // the caption for the box
+    const char *msg)                    // the message to display
 {
 #ifdef WIN_NT
     ::MessageBox(0, msg, caption, MB_OK);
@@ -181,13 +181,13 @@ std::string get_tmpdir()
 #ifndef WIN_NT
     std::string env = get_env("TMPDIR");
     if (!env.empty())
-	return env;
+        return env;
     env = get_env("TMP");
     if (!env.empty())
-	return env;
+        return env;
     env = get_env("TEMP");
     if (!env.empty())
-	return env;
+        return env;
     return std::string("/tmp");
 #else
     const DWORD bufsize = 4096;
@@ -195,7 +195,7 @@ std::string get_tmpdir()
     DWORD len = ::GetTempPath(bufsize, buf);
 
     if (len <= 0 || len > bufsize)
-	return std::string(".");
+        return std::string(".");
 
     // remove trailing '\' since _stat() gets confused
     std::string dir(buf, (buf[len-1] == '\\' || buf[len-1] == '/')? len-1 : len);
@@ -217,20 +217,20 @@ std::string get_userdata_dir()
 #else
     char sz_path[MAX_PATH];
     HRESULT hresult = ::SHGetFolderPath(NULL,
-	CSIDL_APPDATA,
-	NULL,
-	SHGFP_TYPE_CURRENT,
-	sz_path);
+        CSIDL_APPDATA,
+        NULL,
+        SHGFP_TYPE_CURRENT,
+        sz_path);
 
     if (hresult == S_OK) {
-	// convert to forward slashes
-	for (char *p=sz_path; *p; p++)
-	    if (*p == '\\')
-		*p = '/';
-	return std::string(sz_path);
+        // convert to forward slashes
+        for (char *p=sz_path; *p; p++)
+            if (*p == '\\')
+                *p = '/';
+        return std::string(sz_path);
     }
     else
-	return std::string(".");
+        return std::string(".");
 #endif
 }
 
@@ -240,11 +240,11 @@ std::string get_userdata_dir()
 //
 
 std::string get_env(
-    const std::string& name)		// name of variable
+    const std::string& name)            // name of variable
 {
     char* value = getenv(name.c_str());
     if (!value)
-	return std::string();
+        return std::string();
     std::string result = value;
 
     // if the getenv'ed value is wrapped with a leading and a trailing "
@@ -253,7 +253,7 @@ std::string get_env(
     char first = *result.begin();
     char last = *result.rbegin();
     if (first == '\"' && last == '\"')
-	result = result.substr(1, result.size()-2);
+        result = result.substr(1, result.size()-2);
 
     return result;
 }

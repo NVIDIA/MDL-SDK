@@ -236,7 +236,7 @@ bool Archive::is_valid_archive_name() const
         return false;
     }
     std::vector<std::string> vec = Util::split(stem(), '.');
-    for (auto& elem : vec)
+    for (const std::string & elem : vec)
     {
         if (!Util::is_valid_archive_name(elem))
         {

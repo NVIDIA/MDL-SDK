@@ -994,6 +994,55 @@ struct ptr_hash_map {
 };
 #endif
 
+/// A hash functor for handles.
+template <typename T>
+class Hash_handle {
+public:
+    size_t operator()(base::Handle<T> const &p) const {
+        size_t t = p.get() - (T const *)0;
+        return ((t) / (sizeof(size_t) * 2)) ^ (t >> 16);
+    }
+};
+
+/// An Equal functor for pointers.
+template <typename T>
+struct Equal_handle {
+    inline unsigned operator()(base::Handle<T> const &a, base::Handle<T> const &b) const {
+        return a == b;
+    }
+};
+
+/// A hashmap from base::Handle<Key> to Tp, using a IAllocator.
+#if MDL_STD_HAS_UNORDERED
+template <
+    typename Key,
+    typename Tp,
+    typename HashFcn = Hash_handle<Key>,
+    typename EqualKey = Equal_handle<Key>
+>
+struct handle_hash_map {
+    typedef std::unordered_map<
+        base::Handle<Key>, Tp, HashFcn, EqualKey,
+        Mi_allocator<
+            typename std::unordered_map<base::Handle<Key>, Tp, HashFcn, EqualKey>::value_type>
+    > Type;
+};
+#else
+template <
+    typename Key,
+    typename Tp,
+    typename HashFcn = Hash_handle<Key>,
+    typename EqualKey = Equal_handle<Key>
+>
+struct handle_hash_map {
+    typedef boost::unordered_map<
+        base::Handle<Key>, Tp, HashFcn, EqualKey,
+        Mi_allocator<
+            typename boost::unordered_map<base::Handle<Key>, Tp, HashFcn, EqualKey>::value_type>
+    > Type;
+};
+#endif
+
 /// A hashmap using a IAllocator.
 #if MDL_STD_HAS_UNORDERED
 template <
@@ -1066,6 +1115,29 @@ template <
 struct ptr_hash_set {
     typedef boost::unordered_set<
         Key *, HashFcn, EqualKey, Mi_allocator<Key *> > Type;
+};
+#endif
+
+/// A hash set of base::Handle<Key> using a IAllocator.
+#if MDL_STD_HAS_UNORDERED
+template <
+    typename Key,
+    typename HashFcn = Hash_handle<Key>,
+    typename EqualKey = Equal_handle<Key>
+>
+struct handle_hash_set {
+    typedef std::unordered_set<
+        base::Handle<Key>, HashFcn, EqualKey, Mi_allocator<base::Handle<Key> > > Type;
+};
+#else
+template <
+    typename Key,
+    typename HashFcn = Hash_handle<Key>,
+    typename EqualKey = Equal_handle<Key>
+>
+struct handle_hash_set {
+    typedef boost::unordered_set<
+        base::Handle<Key>, HashFcn, EqualKey, Mi_allocator<base::Handle<Key> > > Type;
 };
 #endif
 

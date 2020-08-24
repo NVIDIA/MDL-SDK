@@ -138,11 +138,11 @@ public:
 
     /// Get the UTF8 encoded name of the resource on which this reader operates.
     /// \returns    The name of the resource or NULL.
-    char const *get_filename() const final { return NULL; }
+    char const *get_filename() const final { return nullptr; }
 
     /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
     /// \returns    The absolute MDL url of the resource or NULL.
-    char const *get_mdl_url() const final { return NULL; }
+    char const *get_mdl_url() const final { return nullptr; }
 
     /// Returns the associated hash of this resource.
     ///
@@ -157,7 +157,7 @@ public:
     explicit Buffer_resource_reader(
         mi::neuraylib::IBuffer* buffer)
     : Base()
-    , m_buffer_reader(new MI::DISK::Memory_reader_impl(buffer))
+    , m_buffer_reader(new DISK::Memory_reader_impl(buffer))
     {
     }
 
@@ -176,46 +176,6 @@ private:
     mi::base::Handle<mi::neuraylib::IReader> m_buffer_reader;
 };
 
-
-/// Unwraps a transaction.
-static DB::Transaction *unwrap(mi::neuraylib::ITransaction *transaction)
-{
-    NEURAY::Transaction_impl *transaction_impl =
-        static_cast<NEURAY::Transaction_impl *>(transaction);
-    return transaction_impl->get_db_transaction();
-}
-
-/// Unwrap execution context.
-MDL::Execution_context* unwrap_and_clear(
-    mi::neuraylib::IMdl_execution_context* context,
-    MDL::Execution_context& default_context) 
-{
-    if (context)
-    {
-        NEURAY::Mdl_execution_context_impl* context_impl =
-            static_cast<NEURAY::Mdl_execution_context_impl*>(context);
-        if (context_impl) {
-            MDL::Execution_context& wrapped_context = context_impl->get_context();
-            wrapped_context.clear_messages();
-            return &wrapped_context;
-        }
-    }
-    return &default_context;
-}
-
-/// Add message to context
-void add_error_message(
-    MDL::Execution_context* context, 
-    const std::string& message,
-    mi::Sint32 result)
-{
-    if (!context)
-        return;
-    MDL::Message err(mi::base::MESSAGE_SEVERITY_ERROR, message);
-    context->add_error_message(err);
-    context->add_message(err);
-    context->set_result(result);
-}
 
 mi::mdl::UDIM_mode get_uvtile_marker(const std::string& str)
 {
@@ -290,10 +250,9 @@ Mdle_resource_mapper::Mdle_resource_mapper(
     mi::mdl::IMDL* mdl,
     DB::Transaction* transaction,
     MI::MDL::Execution_context* context)
-    : Base(transaction, "mdl::main", "main.mdl", /*bundle_resources=*/false,
-        /*result=*/NULL)
+    : Base(transaction, /*module*/ nullptr, "mdl::main", "main.mdl", context, /*result*/ nullptr)
     , m_mdl(mi::base::make_handle_dup(mdl))
-    , m_resolver(m_mdl->create_entity_resolver(/*module_cache=*/ NULL))
+    , m_resolver(m_mdl->get_entity_resolver(/*module_cache*/ nullptr))
     , m_context(context)
 {
 }
@@ -306,7 +265,7 @@ char const *Mdle_resource_mapper::get_resource_name(
     // handle resources that have to be exported or copied here,
     // basically all resources that are not on disk and in a valid search path
     std::unordered_map<std::string, mi::base::Handle<mi::neuraylib::IBuffer>> in_memory_resources;
-    MI::NEURAY::Resource_callback::BufferCallback callback = [&](
+    Resource_callback::BufferCallback callback = [&](
         mi::neuraylib::IBuffer* buffer,
         const char* suggested_file_name)
     {
@@ -371,9 +330,9 @@ char const *Mdle_resource_mapper::get_resource_name(
         // use the entity resolved to get the file path on disk
         mi::base::Handle<mi::mdl::IMDL_resource_set> res_set(m_resolver->resolve_resource_file_name(
             resolved_name.c_str(),
-            /*owner_file_path*/ NULL,
-            /*owner_name*/ NULL,
-            /*pos*/ 0));
+            /*owner_file_path*/ nullptr,
+            /*owner_name*/ nullptr,
+            /*pos*/ nullptr));
 
         for (size_t fi = 0, fi_n = res_set->get_count(); fi < fi_n; ++fi)
         {
@@ -440,7 +399,7 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_resource_reader(size_t 
         const mi::mdl::Messages& messages = archive_tool->access_messages();
         MDL::report_messages(messages, /*context*/ nullptr);
         if (!input_stream || messages.get_error_message_count() > 0)
-            return 0;
+            return nullptr;
 
         file_random_access = input_stream->get_interface<mi::mdl::IMDL_resource_reader>();
     }
@@ -454,7 +413,7 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_resource_reader(size_t 
         const mi::mdl::Messages& messages = mdle_tool->access_messages();
         MDL::report_messages(messages, /*context*/ nullptr);
         if (!input_stream || messages.get_error_message_count() > 0)
-            return 0;
+            return nullptr;
 
         file_random_access = input_stream->get_interface<mi::mdl::IMDL_resource_reader>();
     }
@@ -493,7 +452,7 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_additional_data_reader(
     } else {
         // try to resolve from mdl search paths next
         mi::base::Handle<mi::mdl::IMDL_resource_set> res_set(m_resolver->resolve_resource_file_name(
-            path, /*owner_file_path*/ NULL, /*owner_name*/ NULL, /*pos*/ 0));
+            path, /*owner_file_path*/ nullptr, /*owner_name*/ nullptr, /*pos*/ nullptr));
 
         if (res_set && res_set->get_count() > 0)
             absolute_path = res_set->get_filename(0);
@@ -559,7 +518,7 @@ Mdle_api_impl::Mdle_api_impl(mi::neuraylib::INeuray *neuray)
 
 Mdle_api_impl::~Mdle_api_impl()
 {
-    m_neuray = NULL;
+    m_neuray = nullptr;
 }
 
 namespace {
@@ -588,14 +547,15 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear(context, default_context);
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
 
     if (!file_name || !mdle_data || !transaction) {
         add_error_message(mdl_context, "Invalid parameters (NULL pointer).", -1);
         return -1;
     }
 
-    DB::Transaction* db_transaction = unwrap(transaction);
+    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>(transaction);
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     MI::MDL::Type_factory tf;
     MI::MDL::Value_factory vf(&tf);
     MI::MDL::Expression_factory ef(&vf);
@@ -892,7 +852,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     mi::mdl::IEncapsulate_tool::Mdle_export_description desc;
 
     // resource handler
-    MI::NEURAY::Mdle_resource_mapper resource_collector(imdl.get(), db_transaction, mdl_context);
+    Mdle_resource_mapper resource_collector(imdl.get(), db_transaction, mdl_context);
     desc.resource_callback = &resource_collector;
     desc.resource_collector = &resource_collector; // implements both interfaces
     desc.additional_file_source_paths = additional_file_source_paths.data();
@@ -905,11 +865,11 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     std::string author("MDL SDK ");
     author.append(MI_NEURAYLIB_PRODUCT_VERSION_STRING);
     author.append(" (build ");
-    author.append(MI::VERSION::get_platform_version());
+    author.append(VERSION::get_platform_version());
     author.append(", ");
-    author.append(MI::VERSION::get_platform_date());
+    author.append(VERSION::get_platform_date());
     author.append(", ");
-    author.append(MI::VERSION::get_platform_os());
+    author.append(VERSION::get_platform_os());
     author.append(")");
     desc.authoring_tool_name_and_version = author.c_str();
 
@@ -934,7 +894,7 @@ mi::Sint32 Mdle_api_impl::validate_mdle(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear(context, default_context);
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
 
     mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());
@@ -951,7 +911,7 @@ mi::neuraylib::IReader* Mdle_api_impl::get_user_file(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear(context, default_context);
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
 
     if (!mlde_file_name || !user_file_name)
     {
@@ -985,11 +945,11 @@ mi::Sint32 Mdle_api_impl::compare_mdle(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear(context, default_context);
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
     mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());
-    mi::mdl::MDL_zip_container_mdle* mdle_a = NULL;
-    mi::mdl::MDL_zip_container_mdle* mdle_b = NULL;
+    mi::mdl::MDL_zip_container_mdle* mdle_a = nullptr;
+    mi::mdl::MDL_zip_container_mdle* mdle_b = nullptr;
 
     auto after_cleanup = [&](bool result) 
     {
@@ -1053,11 +1013,11 @@ mi::Sint32 Mdle_api_impl::get_hash(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear(context, default_context);
+    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
 
     mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());
-    mi::mdl::MDL_zip_container_mdle* mdle = NULL;
+    mi::mdl::MDL_zip_container_mdle* mdle = nullptr;
 
     // reset
     hash.m_id1 = 0;

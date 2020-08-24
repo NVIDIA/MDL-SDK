@@ -53,9 +53,12 @@ public:
     virtual ~Mdl_qt_plugin() = default;
     void registerTypes(const char *uri);
     void initializeEngine(QQmlEngine *engine, const char *uri) override;
-    bool set_context(QQmlApplicationEngine* engine, Mdl_qt_plugin_context* context) final override;
-    void show_select_material_dialog(Mdl_qt_plugin_context* context, 
-                                     Mdl_qt_plguin_browser_handle& out_handle) final override;
+    bool set_context(
+        QQmlApplicationEngine* engine,
+        Mdl_qt_plugin_context* context) final override;
+    void show_select_material_dialog(
+        Mdl_qt_plugin_context* context,
+        Mdl_qt_plguin_browser_handle* out_handle) final override;
     void unload() final override;
 
 protected:

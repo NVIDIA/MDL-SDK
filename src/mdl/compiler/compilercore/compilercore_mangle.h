@@ -277,15 +277,17 @@ public:
 
     /// Mangle a definition.
     ///
-    /// \param def          the definition to mangle
-    /// \param module_name  the absolute module name of this definition
-    string mangle(IDefinition const *def, char const *module_name);
+    /// \param def                     the definition to mangle
+    /// \param module_name             the absolute module name of this definition
+    /// \param with_signature_suffix   indicates whether to include the signature suffix
+    string mangle(IDefinition const *def, char const *module_name, bool with_signature_suffix = true);
 
     /// Mangle a definition.
     ///
-    /// \param def          the definition to mangle
-    /// \param owner        the owner module of this definition
-    string mangle(IDefinition const *def, IModule const *owner);
+    /// \param def                     the definition to mangle
+    /// \param owner                   the owner module of this definition
+    /// \param with_signature_suffix   indicates whether to include the signature suffix
+    string mangle(IDefinition const *def, IModule const *owner, bool with_signature_suffix = true);
 
     /// Mangle a struct type.
     ///
@@ -298,6 +300,11 @@ public:
     /// \param type         the type to mangle
     /// \param owner        the owner module of this type
     string mangle(IType const *type, IModule const *owner);
+
+    /// Mangle a paramater type.
+    ///
+    /// \param type         the type to mangle
+    string mangle_parameter_type(IType const *type);
 
     /// Get the name printer.
     Name_printer &get_printer() { return m_printer; }

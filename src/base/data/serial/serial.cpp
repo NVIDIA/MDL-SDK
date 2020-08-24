@@ -503,12 +503,11 @@ void Deserialization_manager_impl::register_class(
     Class_id class_identifier,			// class id to be registered
     Factory_function* factory)			// factory for this class id
 {
-    if (class_identifier == 0)
-        ASSERT(M_DB, !"Registering serialization class with null ID");
+    ASSERT(M_DB, class_identifier || !"Registering serialization class with null ID");
     mi::base::Lock::Block block(&m_lock);
     Deserialization_class pattern(class_identifier);
-    if (m_classes.find(pattern) != m_classes.end())
-        ASSERT(M_DB, !"Duplicate registration of serialization class");
+    ASSERT(M_DB, m_classes.find(pattern) == m_classes.end()
+             || !"Duplicate registration of serialization class");
 
     m_classes.insert(Deserialization_class(class_identifier, factory));
 }
@@ -520,12 +519,11 @@ void Deserialization_manager_impl::register_class(
     Class_id class_identifier,			// class id to be registered
     IDeserialization_factory* factory)		// factory class for this class id
 {
-    if (class_identifier == 0)
-        ASSERT(M_DB, !"Registering serialization class with null ID");
+    ASSERT(M_DB, class_identifier || !"Registering serialization class with null ID");
     mi::base::Lock::Block block(&m_lock);
     Deserialization_class pattern(class_identifier);
-    if (m_classes.find(pattern) != m_classes.end())
-        ASSERT(M_DB, !"Duplicate registration of serialization class");
+    ASSERT(M_DB, m_classes.find(pattern) == m_classes.end()
+             || !"Duplicate registration of serialization class");
 
     m_classes.insert(Deserialization_class(class_identifier, factory));
 }
@@ -567,13 +565,6 @@ bool Deserializer_impl::check_extension()
 void Deserializer_impl::set_error_handler(IDeserializer_error_handler<>* handler)
 {
     m_error_handler = mi::base::make_handle_dup< IDeserializer_error_handler<> >(handler);
-}
-
-void Deserializer_impl::read_direct(Deserializer* deserializer, char* buffer, size_t size)
-{
-    Deserializer_impl* di(reinterpret_cast<Deserializer_impl*>(deserializer));
-    ASSERT(M_DB, di);
-    di->read_impl(buffer, size);
 }
 
 } // namespace DB

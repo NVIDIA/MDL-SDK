@@ -68,8 +68,8 @@ Scope_impl::Scope_impl( DB::Scope* scope, const Class_factory* class_factory)
     if (m_id.empty())
     {
         ASSERT( M_NEURAY_API, false);
-        MI::LOG::mod_log->fatal( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "String stream returned empty string when converting scope id %d. "
+        LOG::mod_log->fatal( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+            "String stream returned empty string when converting scope id %u. "
             "Please use static build of "
             "libneuray"
             ".",
@@ -82,14 +82,14 @@ Scope_impl::Scope_impl( DB::Scope* scope, const Class_factory* class_factory)
 Scope_impl::~Scope_impl()
 {
     m_scope->unpin();
-    m_class_factory = 0;
+    m_class_factory = nullptr;
 }
 
 mi::neuraylib::ITransaction* Scope_impl::create_transaction()
 {
     DB::Transaction* db_transaction = m_scope->start_transaction();
     if( !db_transaction)
-        return 0;
+        return nullptr;
 
     return new Transaction_impl( db_transaction, m_class_factory);
 }
@@ -111,14 +111,14 @@ DB::Scope* Scope_impl::get_scope() const
 
 const char* Scope_impl::get_name() const
 {
-    return m_name.empty() ? 0 : m_name.c_str();
+    return m_name.empty() ? nullptr : m_name.c_str();
 }
 
 mi::neuraylib::IScope* Scope_impl::get_parent() const
 {
     DB::Scope* parent_db_scope = m_scope->get_parent();
     if( !parent_db_scope)
-        return 0;
+        return nullptr;
 
     return new Scope_impl( parent_db_scope, m_class_factory);
 }

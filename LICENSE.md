@@ -71,7 +71,7 @@ licenses, and/or restrictions:
 * D3DX12 Helper Library: [examples/thirdparty/d3dx12/license.txt](examples/thirdparty/d3dx12/license.txt) (2)
 * fx-gltf: [examples/thirdparty/gltf/fx/license.txt](examples/thirdparty/gltf/fx/license.txt) (2)
 * nlohmann/json: [examples/thirdparty/gltf/nlohmann/license.txt](examples/thirdparty/gltf/nlohmann/license.txt) (2)
-
+* Google Noto Fonts: [examples/thirdparty/content/fonts/LICENSE.txt](examples/thirdparty/content/fonts/LICENSE.txt) (2)
 
 The documentation uses the following web fonts, CSS, and JavaScript frameworks with 
 additional or alternate copyrights, licenses, and/or restrictions:
@@ -90,5 +90,5 @@ additional or alternate copyrights, licenses, and/or restrictions:
 (1) Coco/R is only used for code generation in the build process and is not
     integrated by itself in the MDL SDK binaries.
 
-(2) Dear ImgUi, stb, D3DX12, fx-gltf, and nlohmann/json are only used in the examples 
+(2) Dear ImGui, stb, D3DX12, fx-gltf, nlohmann/json, and the Google Noto Fonts are only used in the examples 
     and are not integrated by themselves in the MDL SDK binaries.

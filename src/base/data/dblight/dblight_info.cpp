@@ -56,11 +56,11 @@ int Info_base::compare(Info_base* first, Info_base* second)
     return 0;
 }
 
-Cacheable::Cacheable(DBNR::Cache* cache) { }
+Cacheable::Cacheable(DBNR::Cache* cache) { } //-V730 PVS
 
-Cacheable::~Cacheable() { }
+Cacheable::~Cacheable() { } //-V730 PVS
 
-Info::Info(
+Info::Info( //-V730 PVS
     DBNR::Info_container* container,
     Tag tag,
     DBNR::Transaction_impl* transaction,
@@ -74,7 +74,7 @@ Info::Info(
     MI_ASSERT(false);
 }
 
-Info::Info(
+Info::Info( //-V730 PVS
     DBNR::Info_container* container,
     Tag tag,
     DBNR::Transaction_impl* transaction,
@@ -97,14 +97,36 @@ Info::Info(
     DB::Element_base* element)
   : DB::Info_base(scope_id, transaction->get_id(), version),
     DB::Cacheable(NULL),
+    // unused
+    m_container(NULL),               
+    // used
     m_database(database),
     m_tag(tag),
     m_element(element),
     m_element_messages(NULL),
     m_job(NULL),
     m_job_messages(NULL),
-    m_pin_count_dblight(1)
+    // unused    
+    m_element_size(0),                           
+    m_element_messages_size(0),                  
+    m_job_size(0),                               
+    m_job_messages_size(0),                      
+    m_privacy_level(0),                   
+    m_is_temporary(false),                             
+    m_is_creation(false),                              
+    m_is_deletion(false),                              
+    m_is_job(false),                                   
+    m_is_scope_deleted(false),                         
+    m_offload_to_disk(false),                          
+    // used
+    m_pin_count_dblight(1),
+    // unused
+    m_named_tag_list(NULL),          
+    m_creator_transaction(NULL),
+    m_references_added(false)                        
 {
+    for(size_t i = 0; i < MAX_REDUNDANCY_LEVEL; ++i)
+        m_owners[i] = 0;
 }
 
 Info::~Info()

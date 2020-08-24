@@ -193,6 +193,9 @@ public:
     /// Get the DAG name of this node.
     char const *get_dag_name() const { return m_dag_name; }
 
+    /// Get the DAG simple name of this node.
+    char const *get_dag_simple_name() const { return m_dag_simple_name; }
+
     /// Get the DAG alias name of this node if any.
     char const *get_dag_alias_name() const { return m_dag_alias_name; }
 
@@ -231,6 +234,7 @@ private:
     /// \param id              the id of this node
     /// \param def             the definition
     /// \param dag_name        the DAG (mangled) name of this node
+    /// \param dag_simple_name the DAG simple name of this node
     /// \param dag_alias_name  the DAG (mangled) alias name of this node
     /// \param dag_preset_name the DAG (mangled) preset name of this node
     /// \param flags           node flags for this node
@@ -240,6 +244,7 @@ private:
         size_t            id,
         IDefinition const *def,
         char const        *dag_name,
+        char const        *dag_simple_name,
         char const        *dag_alias_name,
         char const        *dag_preset_name,
         unsigned          flags,
@@ -253,6 +258,7 @@ private:
     /// \param ret_type        the return type of this node
     /// \param params          the parameters of this node
     /// \param dag_name        the DAG (mangled) name of this node
+    /// \param dag_simple_name the DAG simple name of this node
     /// \param dag_alias_name  the DAG (mangled) alias name of this node
     /// \param dag_preset_name the DAG (mangled) preset name of this node
     /// \param flags           node flags for this node
@@ -264,6 +270,7 @@ private:
         IType const                *ret_type,
         Array_ref<Parameter> const &params,
         char const                 *dag_name,
+        char const                 *dag_simple_name,
         char const                 *dag_alias_name,
         char const                 *dag_preset_name,
         unsigned                   flags,
@@ -290,6 +297,9 @@ private:
 
     /// The DAG name of this node.
     char const *m_dag_name;
+
+    /// The DAG simple name of this node.
+    char const *m_dag_simple_name;
 
     /// The DAG alias name of this node.
     char const *m_dag_alias_name;
@@ -371,6 +381,7 @@ public:
     /// Get the DAG dependency node for the given entity.
     ///
     /// \param dag_name        the DAG name of this node
+    /// \param dag_simple_name the DAG simple name of this node
     /// \param dag_alias_name  the DAG alias name of this node
     /// \param dag_preset_name the DAG preset name of this node
     /// \param sema            the semantics of the node
@@ -379,6 +390,7 @@ public:
     /// \param flags           the node flags
     Dependence_node *get_node(
         char const                                  *dag_name,
+        char const                                  *dag_simple_name,
         char const                                  *dag_alias_name,
         char const                                  *dag_preset_name,
         IDefinition::Semantics                      sema,
@@ -446,13 +458,13 @@ private:
 
     /// Create the one-and-only array constructor node.
     ///
-    /// \param int_type  the integer type
-    void create_dag_array_constructor(IType const *int_type);
+    /// \param int_type  the any type
+    void create_dag_array_constructor(IType const *any_type);
 
     /// Create the one-and-only cast operator.
     ///
-    /// \param int_type  the integer type
-    void create_dag_cast_operator(IType const *int_type);
+    /// \param int_type  the any type
+    void create_dag_cast_operator(IType const *any_type);
 
 private:
     /// The memory arena for all dependency nodes.

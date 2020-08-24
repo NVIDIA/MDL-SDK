@@ -321,14 +321,14 @@ Attribute_id Attribute::id_lookup(
     if (!name)
         return null_index;
 
-    Uint id = Attr_module_impl::s_attr_module->m_registry.get_id(name);
-    if (id == null_index) {
-        id = ZLIB::crc32(name, strlen(name));
-        if (id < reserved_ids)
-            id = ~id;
+    Uint attr_id = Attr_module_impl::s_attr_module->m_registry.get_id(name);
+    if (attr_id == null_index) {
+        attr_id = ZLIB::crc32(name, strlen(name));
+        if (attr_id < reserved_ids)
+            attr_id = ~attr_id;
     }
 
-    return id;
+    return attr_id;
 }
 
 
@@ -463,7 +463,7 @@ void Attribute::dump() const
     head += std::to_string(m_id);
     if(m_global)
         head += " global";
-    if(m_override)
+    if(m_override == PROPAGATION_OVERRIDE)
         head += " override";
     mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE, "%s", head.c_str());
     dump_attr_values(get_type(),get_name(),get_values(),1);
@@ -654,7 +654,7 @@ void copy_constructor(
                       case 't':
                           memcpy(out_value, in_value, size);
                           break;
-                      default:  ASSERT(M_ATTR, 0);
+                      default:  ASSERT(M_ATTR, 0); break;
                     }
                     out_value += size;
                     in_value += size;
@@ -733,7 +733,7 @@ void destructor(Type_iterator& iter)
                       case 'd':
                       case 't':
                           break;
-                      default:  ASSERT(M_ATTR, 0);
+                      default:  ASSERT(M_ATTR, 0); break;
                     }
                     values += size;
                 }
@@ -784,7 +784,11 @@ Attribute::Attribute(
     const Type		&type,		// data type, may be list or tree
     Uint		list_size,	// if attribute list, list size > 1
     Attribute_propagation override)	// inheritance: parent overrides child
-  : m_type(type)
+: m_id(~0u)
+, m_override(PROPAGATION_UNDEF)
+, m_type(type)
+, m_values(nullptr)
+, m_global(false)
 {
     if (!m_type.get_name()) {
         SYSTEM::Access_module<ATTR::Attr_module> attr_module(false);
@@ -804,7 +808,11 @@ Attribute::Attribute(
     Attribute_propagation override,	// inheritance: parent overrides child
     bool		global,		// not inheritable, nailed to element
     bool		is_const)	// is value immutable?
-  : m_type(type, name, type_asize)
+: m_id(~0u)
+, m_override(PROPAGATION_UNDEF)
+, m_type(type, name, type_asize)
+, m_values(nullptr)
+, m_global(false)
 {
     ASSERT(M_ATTR, // that's most probably an error
         type != TYPE_STRUCT && type != TYPE_ARRAY && type != TYPE_ATTACHABLE && type != TYPE_CALL);
@@ -827,7 +835,11 @@ Attribute::Attribute(
     Attribute_propagation override,	// inheritance: parent overrides child
     bool		global,		// not inheritable, nailed to element
     bool		is_const)	// is value immutable?
-  : m_type(type, 0, type_asize)
+: m_id(~0u)
+, m_override(PROPAGATION_UNDEF)
+, m_type(type, 0, type_asize)
+, m_values(nullptr)
+, m_global(false)
 {
     SYSTEM::Access_module<ATTR::Attr_module> attr_module(false);
     m_type.set_name(attr_module->get_reserved_attr(id));
@@ -894,7 +906,7 @@ size_t calculate_size(Type_iterator& iter)
             Type_code type_code = iter->get_typecode();
             eval_typecode(type_code, &type, &count, &size);
             if (type != '*')
-                res += static_cast<size_t>(size*count*arraysize);
+                res += size*static_cast<size_t>(count)*arraysize;
             else {
                 ASSERT(M_ATTR, count == 1);
                 res += arraysize * sizeof(char**);

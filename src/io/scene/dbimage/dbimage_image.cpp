@@ -88,6 +88,7 @@ IMAGE::IMipmap* Image_set::create_mipmap( mi::Size i) const
         ASSERT( M_SCENE, get_container_filename());
         ASSERT( M_SCENE, get_container_membername(i));
         return image_module->create_mipmap(
+            IMAGE::Container_based(),
             reader.get(),
             container_filename,
             container_membername,
@@ -117,8 +118,10 @@ IMAGE::IMipmap* Image_set::create_mipmap( mi::Size i) const
         const char* image_format = get_image_format();
         ASSERT( M_SCENE, image_format);
         return image_module->create_mipmap(
+            IMAGE::Memory_based(),
             reader.get(),
             image_format,
+            get_mdl_file_path(),
             /*tile_width*/ 0, /*tile_height*/ 0, /*only_first_level*/ true);
     }
 
@@ -364,8 +367,15 @@ mi::Sint32 Image::reset_reader(
 {
     mi::Sint32 result = 0;
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
-    mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap( reader, image_format,
-        /*tile_width*/ 0, /*tile_height*/ 0, /*only_first_level*/ true, &result));
+    mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap(
+        IMAGE::Memory_based(),
+        reader,
+        image_format,
+        /*mdl_file_path*/ nullptr,
+        /*tile_width*/ 0,
+        /*tile_height*/ 0,
+        /*only_first_level*/ true,
+        &result));
     if( result < 0)
         return result;
 

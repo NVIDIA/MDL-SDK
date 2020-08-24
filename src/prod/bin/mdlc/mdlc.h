@@ -88,7 +88,7 @@ private:
     /// \param      errors          The number of errors detected during compilation.
     /// \returns                    NULL: Some serious error occurred and no modules was created.
     ///                             The created module.
-    mi::mdl::IModule const *compile(char const *module_name, unsigned &errors);
+    mi::mdl::IModule const *compile(char const *module_name, size_t &errors);
 
     // Apply backend options.
     void apply_backend_options(mi::mdl::Options &opts);
@@ -109,7 +109,9 @@ private:
     /// \param      errors          The number of errors detected during compilation.
     /// \returns                    NULL: Some serious error occurred and no modules was created.
     ///                             The created module.
-    mi::mdl::IModule const *load_binary(char const *filename, unsigned &errors);
+    mi::mdl::IModule const *load_binary(
+        char const *filename,
+        size_t     &errors);
 
     /// Prints colorized code to stdout.
     void print_generated_code(mi::mdl::IModule const *mod);
@@ -137,7 +139,7 @@ private:
     /// True if position should be printed.
     bool m_show_positions;
 
-    /// The MDL interface.
+    /// The MDL compiler interface.
     mi::base::Handle<mi::mdl::IMDL> m_imdl;
 
     /// If non empty, a library root to check

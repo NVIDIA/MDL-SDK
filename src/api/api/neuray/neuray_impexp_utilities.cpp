@@ -175,7 +175,7 @@ mi::neuraylib::IReader* Impexp_utilities::create_reader(
 {
     path = convert_uri_to_filename( uri);
     if( path.empty())
-        return 0;
+        return nullptr;
 
     DISK::File_reader_impl* file_reader_impl = new DISK::File_reader_impl();
 
@@ -194,13 +194,13 @@ mi::neuraylib::IReader* Impexp_utilities::create_reader(
         }
 
         file_reader_impl->release();
-        return 0;
+        return nullptr;
     }
 
     // handle non-${shader} paths
     if( !file_reader_impl->open( path.c_str())) {
         file_reader_impl->release();
-        return 0;
+        return nullptr;
     }
 
     return file_reader_impl;
@@ -211,12 +211,12 @@ mi::neuraylib::IWriter* Impexp_utilities::create_writer(
 {
     path = convert_uri_to_filename( uri);
     if( path.empty())
-        return 0;
+        return nullptr;
 
     DISK::File_writer_impl* file_writer_impl = new DISK::File_writer_impl();
     if( !file_writer_impl->open( path.c_str())) {
         file_writer_impl->release();
-        return 0;
+        return nullptr;
     }
 
     return file_writer_impl;
@@ -556,89 +556,6 @@ void Impexp_utilities::get_export_elements_internal(
 bool Impexp_utilities::is_drive_letter( char c)
 {
     return ((c >= 'A') && (c <= 'Z')) || ((c >= 'a') && (c <= 'z'));
-}
-
-mi::IString*  Impexp_utilities::uvtile_marker_to_string(
-    const char* marker, mi::Sint32 u, mi::Sint32 v)
-{
-    if( !marker)
-        return NULL;
-
-    std::stringstream uvstr;
-    std::string filename( marker);
-    
-    size_t p1 = filename.find( "<UVTILE0>");
-    if( p1 == std::string::npos)
-    {
-        p1 = filename.find("<UVTILE1>");
-        if( p1 != std::string::npos)
-        {
-            u ++;
-            v ++;
-        }
-    }
-    size_t p2;
-    if( p1 != std::string::npos)
-    {
-        uvstr << "_u" << u << "_v" << v; 
-        p2 = p1 + 9;
-    }
-    else
-    {
-        p1 = filename.find( "<UDIM>");
-        if( p1 != std::string::npos)
-        {
-            if(u < 0 || v < 0)
-                return NULL;
-            int uv = 1000 + v * 10 + u + 1;
-            uvstr << uv;
-            p2 = p1 + 6;
-        }
-        else
-            return NULL; // no valid match
-    }
-    std::string postfix = filename.substr( p2);
-
-    std::stringstream result;
-    result << filename.substr( 0, p1) << uvstr.str() << postfix;
-
-    mi::IString* istring = new String_impl();
-    istring->set_c_str( result.str().c_str());
-    return istring;
-}
-
-mi::IString*  Impexp_utilities::uvtile_string_to_marker(
-    const std::string& str, const std::string& marker)
-{
-    if (str.empty() || marker.empty())
-        return NULL;
-
-    std::regex regex;
-    if(marker == "<UVTILE0>" || marker == "<UVTILE1>")
-    {
-        regex = ".*(_u-?[0-9]+_v-?[0-9]+)(.*)";
-    }
-    else if(marker == "<UDIM>")
-    {
-        regex = ".*([1-9][0-9][0-9][0-9])(.*)";
-    }
-    else 
-        return NULL;
-
-    std::smatch matches;
-    if ( !regex_match(str, matches, regex))
-        return NULL;
-
-    ASSERT(M_NEURAY_API, matches.size() == 3);
-    auto p0 = matches.position(1);
-    auto p1 = matches.position(2);
-
-    std::string result(str);
-    result.replace(p0, p1-p0, marker);
-
-    mi::IString* istring = new String_impl();
-    istring->set_c_str( result.c_str());
-    return istring;
 }
 
 } // namespace NEURAY

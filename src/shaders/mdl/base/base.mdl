@@ -853,7 +853,7 @@ export texture_return file_texture(
         float4 result = tex::lookup_float4(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v) *
             float4(float3_scale.x,float3_scale.y,float3_scale.z,1) + float4(float3_offset.x,float3_offset.y,float3_offset.z,0);
         color_result = color(result.x,result.y, result.z);
-        mono_result=result.w;
+        mono_result= math::average(float3_offset + float3_scale * result.w);
         break;
     case mono_average:
         color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v)*color_scale + color_offset;
@@ -2315,7 +2315,7 @@ export float3 file_bump_texture(
         [[ anno::description("Wrapping mode in the v direction") ]],
     float3  normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]],
     uniform bool clip = false
         [[
@@ -2956,7 +2956,7 @@ export float3 gradient3_bump_texture(
         ]],
     float3  normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]]
 )
 [[
@@ -3116,7 +3116,7 @@ export float3 checker_bump_texture(
         ]],
     float3  normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]]
 )
 [[
@@ -3740,7 +3740,7 @@ export float3 perlin_noise_bump_texture(
         ]],
     float3 normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]]
 )
 [[
@@ -3800,12 +3800,13 @@ struct worley_return {
     float2 val;
 };
 
-worley_return worley_noise(float3 pos, float jitter, int metric)
+worley_return worley_noise(float3 pos, float jitter, int metric, float edge)
 {
     worley_return ret;
     float3 cell = float3(math::floor(pos.x),math::floor(pos.y),math::floor(pos.z));
-    float2 f1f2 = float2(limits::FLOAT_MAX,limits::FLOAT_MAX);
-    jitter *= (1.0/255.0);
+    edge = (edge < 1.0f) ? (1.0f + 63.0f*(edge*edge)*(edge*edge)) : 0.0f;
+    float2 f1f2 = (edge != 0.0f) ? float2(0.0f,0.0f) : float2(limits::FLOAT_MAX,limits::FLOAT_MAX);
+    jitter *= float(1.0/255.0);
 
     for (int i = -1; i <= 1; ++i) {
         float localcellx = cell.x + float(i);
@@ -3823,25 +3824,42 @@ worley_return worley_noise(float3 pos, float jitter, int metric)
                 float3 localpos = float3(localcellx,localcelly,localcellz) + float3(float(rnd4[RNDXYZ]),float(rnd1[RNDXYZ]),float(rnd2[RNDXYZ]))*jitter;
                 float3 diff = localpos-pos;
                 float dist = (metric == 0/*TextureNoise_WorleyMetric_Euclidean*/) ? sqrlength(diff) : ((metric == 1/*TextureNoise_WorleyMetric_Manhattan*/) ? length_manhattan(diff) : length_chebyshev(diff));
-                if (dist < f1f2.x) {
-                    f1f2.y = f1f2.x;
-                    ret.nearest_pos_1 = ret.nearest_pos_0;
-                    f1f2.x = dist;
-                    ret.nearest_pos_0 = localpos;
-                } else if(dist < f1f2.y) {
-                    f1f2.y = dist;
-                    ret.nearest_pos_1 = localpos;
+
+                if(edge == 0.0f) {
+                    if (dist < f1f2.x) {
+                        f1f2.y = f1f2.x;
+                        ret.nearest_pos_1 = ret.nearest_pos_0;
+                        f1f2.x = dist;
+                        ret.nearest_pos_0 = localpos;
+                    } else if(dist < f1f2.y) {
+                        f1f2.y = dist;
+                        ret.nearest_pos_1 = localpos;
+                    }
+                } else if (dist < 1.5f) {
+                    float w = math::pow(1.0f-dist*(1.5f-math::sqrt(dist*0.5f)), edge);
+                    f1f2.x += w*float(rnd5[RNDXYZ])*float(1.0/255.0);
+                    f1f2.y += w;
                 }
             }
         }
     }
-    ret.val = (metric == 0/*TextureNoise_WorleyMetric_Euclidean*/) ? float2(math::sqrt(f1f2.x), math::sqrt(f1f2.y)) : f1f2;
+
+    if(edge != 0.0f)
+    {
+        float t = f1f2.x/f1f2.y;
+        if(metric != 0)
+            t *= t; //!! meh
+        ret.val = float2(t,t);
+    }
+    else
+        ret.val = (metric == 0) ? float2(math::sqrt(f1f2.x), math::sqrt(f1f2.y)) : f1f2;
+
     return ret;
 }
 
-float worley_noise(float3 pos, float3 turbulence_weight, float step_threshold, int mode, int metric, float jitter = 1.0f)
+float worley_noise(float3 pos, float3 turbulence_weight, float step_threshold, int mode, int metric, float edge, float jitter = 1.0f)
 {
-    worley_return worley = worley_noise(pos, jitter, metric);
+    worley_return worley = worley_noise(pos, jitter, metric, edge);
     float2 f1f2 = worley.val;
     float result;
 
@@ -3953,8 +3971,7 @@ export texture_return worley_noise_texture(
         uniform float edge = 1.0
         [[
             anno::description("Smoothness of noise"),
-            anno::hard_range(0.0, 1.0),
-            anno::unused()
+            anno::hard_range(0.0, 1.0)
         ]]
 )
 [[
@@ -3972,7 +3989,8 @@ export texture_return worley_noise_texture(
                 noise_distortion,
                 step_threshold,
                 mode,
-                metric),
+                metric,
+                edge),
             scaled_pos.x,
             apply_marble,
             apply_dent,
@@ -4041,12 +4059,11 @@ export float3 worley_noise_bump_texture(
     uniform float edge = 1.0
         [[
             anno::description("Smoothness of noise"),
-            anno::hard_range(0.0, 1.0),
-            anno::unused()
-        ]],
+            anno::hard_range(0.0, 1.0)
+         ]],
     float3 normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]]
 )
 [[
@@ -4074,7 +4091,8 @@ export float3 worley_noise_bump_texture(
                 noise_distortion,
                 step_threshold,
                 mode,
-                metric),
+                metric,
+                edge),
             scaled_position.x,
             apply_marble,
             apply_dent,
@@ -4294,7 +4312,7 @@ export float3 flow_noise_bump_texture(
         ]],
     float3  normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]]
 )
 [[
@@ -4342,9 +4360,6 @@ export texture_return flake_noise_texture(
         [[
             anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
         ]],
-
-
-
     uniform float  intensity = 1.0
         [[
             anno::description("Specifies the maximum reflectivity of any flake"),
@@ -4386,7 +4401,7 @@ export texture_return flake_noise_texture(
     float reflectivity;
     float cell_distance = 0.0f;
     if (noise_type == 1) {
-        worley_return ret = worley_noise(pos, 1.0f, metric);
+        worley_return ret = worley_noise(pos, 1.0f, metric, 1.0f);
         cell_distance = ret.val.x; //!! configurable jitter? //!! use other output as "distance"?
         pos = ret.nearest_pos_0; //!! use other output as "uvw"?
     }
@@ -4444,7 +4459,7 @@ export float3 flake_noise_bump_texture(
         ]],
     float3  normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]]
 )
 [[
@@ -4457,7 +4472,7 @@ export float3 flake_noise_bump_texture(
     float3 pos = uvw.position / scale;
     float cell_distance = 0.0f;
     if (noise_type == 1) {
-        worley_return ret = worley_noise(pos, 1.0f, metric);
+        worley_return ret = worley_noise(pos, 1.0f, metric, 1.0f);
         cell_distance = ret.val.x; //!! configurable jitter? //!! use other output as "distance"?
         pos = ret.nearest_pos_0; //!! use other output as "uvw"?
     }
@@ -4812,7 +4827,7 @@ export float3 tile_bump_texture(
         ]],
     float3  normal = state::normal()
         [[
-            anno::description("Base normal for the bump mapping. Note, apart from the default, only state::rounded_corners is supported here and only in the material.geometry.normal slot.")
+            anno::description("Base normal for the bump mapping.")
         ]]
 )
 [[
@@ -4959,4 +4974,57 @@ export color volume_coefficient(
 ) [[ anno::description("Compute a volume coefficient based on distance and value") ]]
 {
     return distance <= 0 ? color(0): -1.* math::log(tint) / distance;
+}
+
+// blend two normals, similar to
+// http://blog.selfshadow.com/publications/blending-in-detail/
+export float3 blend_normals(
+    float3 base_normal = state::normal()
+        [[
+            anno::description("The base normal")
+        ]],
+    float base_normal_weight = 1.0f
+        [[
+            anno::description("Specifies the strength of the base normal using a linear blend between state::normal and \"base_normal\"")
+        ]],
+    float3 detail_normal = state::normal()
+        [[
+            anno::description("The detail normal")
+        ]],
+    float detail_normal_weight = 1.0f
+        [[
+            anno::description("Specifies the strength of the detail normal using a linear blend between state::normal and \"detail_normal\"")
+        ]]
+)
+[[
+    anno::description("Blend two normals for sticker-like situations where a detail normal map is applied to a base normal map"),
+    anno::noinline()
+]]
+{
+    float3 tu = state::texture_tangent_u(0);
+    float3 tv = state::texture_tangent_v(0);
+    float3 n = state::normal();
+
+    float w1 = math::saturate(base_normal_weight);
+    float w2 = math::saturate(detail_normal_weight);
+
+    float3 n1_t = math::normalize(
+        float3(math::dot(tu, base_normal) * w1,
+               math::dot(tv, base_normal) * w1,
+               math::dot(n, base_normal) * w1 + 1.0f - w1));
+    float3 n2_t = math::normalize(
+        float3(math::dot(tu, detail_normal) * w2,
+               math::dot(tv, detail_normal) * w2,
+               math::dot(n, detail_normal) * w2 + 1.0f - w2));
+
+    n1_t.z += 1.0f;
+    n2_t.x = -n2_t.x;
+    n2_t.y = -n2_t.z;
+
+    float3 n_t = n1_t * math::dot(n1_t, n2_t) / n1_t.z - n2_t;
+
+    return math::normalize(
+        tu * n_t.x +
+        tv * n_t.y +
+        n * n_t.z);
 }

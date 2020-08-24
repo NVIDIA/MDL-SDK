@@ -72,9 +72,6 @@ bool is_math_deriv_args_supported(IDefinition::Semantics math_sema)
     case IDefinition::DS_INTRINSIC_MATH_EMISSION_COLOR:
         // derivative arguments not supported
         return false;
-    case IDefinition::DS_INTRINSIC_MATH_TRANSPOSE:
-        // derivative arguments not supported, yet
-        return false;
     case IDefinition::DS_INTRINSIC_MATH_STEP:
         // don't provide derivatives, as the derivatives don't depend on the arguments
         return false;
@@ -241,16 +238,9 @@ public:
     /// Fallback pre_visit function for non implemented expression types.
     bool pre_visit(IExpression *expr) MDL_OVERRIDE
     {
-        if (is<IType_matrix>(expr->get_type()->skip_type_alias())) {
-            // No derivatives for matrices and their arguments
-            Flag_scope flag_scope(m_want_derivatives, false);
-            for (int i = 0, n = expr->get_sub_expression_count(); i < n; ++i) {
-                visit(expr->get_sub_expression(i));
-            }
-            return false;
-        }
-        if (m_want_derivatives)
+        if (m_want_derivatives) {
             m_exprs_want_derivatives->insert(expr);
+        }
         return true;
     }
 
@@ -317,52 +307,58 @@ public:
 
     /// Post-visitor for a binary expression.
     /// Collects assignment expressions.
-    void post_visit(IExpression_binary *expr) MDL_OVERRIDE
+    IExpression *post_visit(IExpression_binary *expr) MDL_OVERRIDE
     {
         // not an assignment operator?
-        if (!is_binary_assign_operator(IExpression::Operator(expr->get_operator())))
-            return;
+        if (!is_binary_assign_operator(IExpression::Operator(expr->get_operator()))) {
+            return expr;
+        }
 
         IExpression const *l = expr->get_left_argument();
         if (IDefinition const *def = Analysis::get_lvalue_base(l)) {
             // add whole assignment expression, as the operator also needs to be handled
             add_assign_expr(def, expr);
         }
+        return expr;
     }
 
     /// Post-visitor for a reference expression.
     /// Collects variables and parameters.
-    void post_visit(IExpression_reference *ref) MDL_OVERRIDE
+    IExpression *post_visit(IExpression_reference *ref) MDL_OVERRIDE
     {
-        if (!m_want_derivatives || is<IType_matrix>(ref->get_type()->skip_type_alias()))
-            return;
+        if (!m_want_derivatives) {
+            return ref;
+        }
 
-        if (ref->is_array_constructor())
-            return;  // nothing to do
+        if (ref->is_array_constructor()) {
+            return ref;  // nothing to do
+        }
 
         IDefinition const *def = ref->get_definition();
         if (m_visited_defs_set.insert(def).second) {
             // variable not processed, yet, so mark as want-derivatives
-            if (def->get_kind() == IDefinition::DK_VARIABLE)
+            if (def->get_kind() == IDefinition::DK_VARIABLE) {
                 m_want_derivs_vars->insert(def);
-            else if (def->get_kind() == IDefinition::DK_PARAMETER) {
+            } else if (def->get_kind() == IDefinition::DK_PARAMETER) {
                 m_want_derivs_vars->insert(def);
                 m_want_derivs_params.insert(def);
+            } else {
+                return ref;  // nothing to do
             }
-            else
-                return;  // nothing to do
 
             // add to work list for further processing
             m_var_worklist.push_back(def);
         }
+        return ref;
     }
 
     /// Pre-visitor for call expressions.
     /// Handles some known function calls and adds unknown functions to a worklist.
     bool pre_visit(IExpression_call *call) MDL_OVERRIDE
     {
-        if (m_want_derivatives)
+        if (m_want_derivatives) {
             m_exprs_want_derivatives->insert(call);
+        }
 
         IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
         if (ref->is_array_constructor()) {
@@ -382,26 +378,31 @@ public:
                 }
                 return false;
 
-            case IDefinition::DS_COPY_CONSTRUCTOR:
             case IDefinition::DS_CONV_CONSTRUCTOR:
-            case IDefinition::DS_ELEM_CONSTRUCTOR:
-            case IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
             case IDefinition::DS_CONV_OPERATOR:
-                // want-derivatives also applies to all arguments, if set
-                return true;
+                // only calculate argument derivatives for conversion from float-based
+                // to float-based, otherwise they will be zero anyways
+                if (is_floating_point_based_type(call->get_type()) &&
+                        is_floating_point_based_type(
+                            call->get_argument(0)->get_argument_expr()->get_type()))
+                    return true;
 
-            case IDefinition::DS_MATRIX_ELEM_CONSTRUCTOR:
-            case IDefinition::DS_MATRIX_DIAG_CONSTRUCTOR:
                 {
-                    // no derivatives for matrices supported, yet
+                    // no derivatives for the arguments
                     Flag_scope flag_scope(m_want_derivatives, false);
-                    for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
-                        visit(call->get_argument(i));
-                    }
+                    visit(call->get_argument(0));
                 }
 
                 // all arguments already visited
                 return false;
+
+            case IDefinition::DS_COPY_CONSTRUCTOR:
+            case IDefinition::DS_ELEM_CONSTRUCTOR:
+            case IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
+            case IDefinition::DS_MATRIX_ELEM_CONSTRUCTOR:
+            case IDefinition::DS_MATRIX_DIAG_CONSTRUCTOR:
+                // want-derivatives also applies to all arguments, if set
+                return true;
 
             case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
             case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
@@ -452,6 +453,16 @@ public:
             case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_VECTOR:
             case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_NORMAL:
             case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_SCALE:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
                 // want-derivatives also applies to all (derivable) arguments, if set
                 return true;
 
@@ -595,18 +606,32 @@ void set_known_function_argument_derivs(
     IDefinition::Semantics sema = def->get_semantics();
 
     switch (sema) {
-    case IDefinition::DS_COPY_CONSTRUCTOR:
     case IDefinition::DS_CONV_CONSTRUCTOR:
+    case IDefinition::DS_CONV_OPERATOR:
+        {
+            mi::mdl::IType_function const *f_tp   = cast<mi::mdl::IType_function>(def->get_type());
+            mi::mdl::IType const          *ret_tp = f_tp->get_return_type();
+            mi::mdl::IType const          *arg_tp;
+            mi::mdl::ISymbol const        *sym;
+            f_tp->get_parameter(0, arg_tp, sym);
+
+            // only calculate argument derivatives for conversion from float-based
+            // to float-based, otherwise they will be zero anyways
+            if (is_floating_point_based_type(ret_tp) && is_floating_point_based_type(arg_tp)) {
+                arg_derivs.set_bits();
+                return;
+            }
+
+            return;
+        }
+
+    case IDefinition::DS_COPY_CONSTRUCTOR:
     case IDefinition::DS_ELEM_CONSTRUCTOR:
     case IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
-    case IDefinition::DS_CONV_OPERATOR:
-        // when derivatives should be returned, all arguments should provide them
-        arg_derivs.set_bits();
-        return;
-
     case IDefinition::DS_MATRIX_ELEM_CONSTRUCTOR:
     case IDefinition::DS_MATRIX_DIAG_CONSTRUCTOR:
-        // no derivatives for matrices supported, yet
+        // when derivatives should be returned, all arguments should provide them
+        arg_derivs.set_bits();
         return;
 
     case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_POINT:
@@ -617,6 +642,21 @@ void set_known_function_argument_derivs(
         // should provide them
         arg_derivs.set_bit(0);  // mark as any derivatives requested
         arg_derivs.set_bit(3);
+        return;
+
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+        // when derivatives should be returned, the default value should provide them, too
+        arg_derivs.set_bit(0);  // mark as any derivatives requested
+        arg_derivs.set_bit(2);
         return;
 
     case IDefinition::DS_UNKNOWN:
@@ -658,37 +698,6 @@ void set_known_function_argument_derivs(
                 arg_derivs.set_bit(0);  // mark as any derivatives requested
                 arg_derivs.set_bit(1);
                 return;
-
-            case IExpression::OK_MULTIPLY:
-            {
-                mi::mdl::IType const *lhs_tp, *rhs_tp;
-                mi::mdl::ISymbol const *sym;
-                f_tp->get_parameter(0, lhs_tp, sym);
-                f_tp->get_parameter(1, rhs_tp, sym);
-                bool lhs_is_mat = is<IType_matrix>(lhs_tp->skip_type_alias());
-                bool rhs_is_mat = is<IType_matrix>(rhs_tp->skip_type_alias());
-
-                if (lhs_is_mat && !rhs_is_mat) {
-                    // matrix * vector
-                    // return_derivs only supported for the vector
-                    arg_derivs.set_bit(0);  // mark as any derivatives requested
-                    arg_derivs.set_bit(2);
-                    return;
-                } else if (!lhs_is_mat && rhs_is_mat) {
-                    // vector * matrix
-                    // return_derivs only supported for the vector
-                    arg_derivs.set_bit(0);  // mark as any derivatives requested
-                    arg_derivs.set_bit(1);
-                    return;
-                } else if (lhs_is_mat || rhs_is_mat) {
-                    // other matrix multiplications are currently not supported with derivatives
-                    return;
-                }
-
-                // apply it to all arguments
-                arg_derivs.set_bits();
-                return;
-            }
 
             default:
                 // apply it to all arguments
@@ -767,17 +776,14 @@ Func_deriv_info *Derivative_infos::get_or_calc_function_derivative_infos(
 bool Derivative_infos::should_calc_derivatives(DAG_node const *node) const
 {
     Deriv_info_dag_map::const_iterator it = m_deriv_info_dag_map.find(node);
-    if (it == m_deriv_info_dag_map.end()) return false;
+    if (it == m_deriv_info_dag_map.end())
+        return false;
     return it->second;
 }
 
 // Mark the given DAG node as a node for which derivatives should be calculated.
 void Derivative_infos::mark_calc_derivatives(DAG_node const *node)
 {
-    // derivatives on matrices are not supported
-    if (is<IType_matrix>(node->get_type()->skip_type_alias()))
-        return;
-
     m_deriv_info_dag_map[node] = true;
 }
 
@@ -1038,10 +1044,6 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
                 DAG_node const *arg = call->get_argument(i);
 
                 bool calc_arg_derivs = want_arg_derivs.test_bit(i + 1);
-
-                // derivatives on matrices are not supported
-                if (is<IType_matrix>(arg->get_type()->skip_type_alias()))
-                    calc_arg_derivs = false;
 
                 args[i].param_name = call->get_parameter_name(i);
                 args[i].arg = rebuild(arg, calc_arg_derivs);

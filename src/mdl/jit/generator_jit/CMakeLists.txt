@@ -66,6 +66,7 @@ set(PROJECT_HEADERS
     "generator_jit_code_printer.h"
     "generator_jit_context.h"
     "generator_jit_generated_code.h"
+    "generator_jit_generated_code_value_layout.h"
     "generator_jit_hlsl_depgraph.h"
     "generator_jit_hlsl_function.h"
     "generator_jit_hlsl_writer.h"

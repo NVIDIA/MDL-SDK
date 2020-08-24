@@ -98,6 +98,7 @@ public:
         DEF_NO_INLINE,              ///< This definition should never be inlined.
         DEF_USES_STATE,             ///< This function uses the state.
         DEF_USES_TEXTURES,          ///< This function uses textures.
+        DEF_USES_SCENE_DATA,        ///< This function uses scene data.
         DEF_CAN_THROW_BOUNDS,       ///< This function can throw a bounds exception.
         DEF_CAN_THROW_DIVZERO,      ///< This function can throw a division by zero exception.
         DEF_REF_BY_DEFAULT_INIT,    ///< This function is referenced by a default initializer.
@@ -177,6 +178,11 @@ public:
 
     /// Return the position of this definition if any.
     Position const *get_position() const MDL_FINAL;
+
+    /// Set the position of this definition if any.
+    ///
+    /// \param pos  the new position
+    void set_position(Position const *pos) MDL_FINAL;
 
     /// Return the mask specifying which parameters of a function are derivable.
     ///

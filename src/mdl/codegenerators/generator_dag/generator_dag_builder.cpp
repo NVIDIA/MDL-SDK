@@ -941,7 +941,7 @@ bool Inline_checker::can_inline(IStatement const *stmt)
 
             IStatement_for const *for_stmt = cast<IStatement_for>(stmt);
             IStatement const *init_stmt = for_stmt->get_init();
-            IStatement_declaration const *decl_stmt = cast<IStatement_declaration>(init_stmt);
+            IStatement_declaration const *decl_stmt = as<IStatement_declaration>(init_stmt);
             if (decl_stmt == NULL)
                 return false;
 
@@ -1116,15 +1116,16 @@ bool DAG_builder::is_user_type(IType const *type)
 }
 
 // Convert a definition to a name.
-string DAG_builder::def_to_name(IDefinition const *def, const char *module_name) const
+string DAG_builder::def_to_name(
+    IDefinition const *def, const char *module_name, bool with_signature_suffix) const
 {
-    return m_mangler.mangle(def, module_name);
+    return m_mangler.mangle(def, module_name, with_signature_suffix);
 }
 
 // Convert a definition to a name.
-string DAG_builder::def_to_name(IDefinition const *def, IModule const *module) const
+string DAG_builder::def_to_name(IDefinition const *def, IModule const *module, bool with_signature_suffix) const
 {
-    return m_mangler.mangle(def, module);
+    return m_mangler.mangle(def, module, with_signature_suffix);
 }
 
 // Convert a definition to a name.
@@ -1140,6 +1141,12 @@ string DAG_builder::type_to_name(IType const *type) const
 
     printer.print(type);
     return printer.get_line();
+}
+
+// Convert a parameter type to a name.
+string DAG_builder::parameter_type_to_name(IType const *type) const
+{
+    return m_mangler.mangle_parameter_type(type);
 }
 
 // Clear temporary data to restart code generation.
@@ -1797,16 +1804,18 @@ DAG_node const *DAG_builder::ref_to_dag(
 }
 
 // Returns the name of an unary operator.
-string DAG_builder::get_unary_name(IExpression_unary const *unary) const
+string DAG_builder::get_unary_name(IExpression_unary const *unary, bool with_signature_suffix) const
 {
     IExpression_unary::Operator op   = unary->get_operator();
     IExpression const           *arg = unary->get_argument();
 
     string name(unary_op_to_name(op), get_allocator());
-    name += '(';
-    m_printer.print(arg->get_type()->skip_type_alias());
-    name += m_printer.get_line();
-    name += ')';
+    if (with_signature_suffix) {
+        name += '(';
+        m_printer.print(arg->get_type()->skip_type_alias());
+        name += m_printer.get_line();
+        name += ')';
+    }
 
     return name;
 }
@@ -1949,7 +1958,7 @@ DAG_node const *DAG_builder::unary_to_dag(
 }
 
 // Returns the name of a binary operator.
-string DAG_builder::get_binary_name(IExpression_binary const *binary) const
+string DAG_builder::get_binary_name(IExpression_binary const *binary, bool with_signature_suffix) const
 {
     IExpression_binary::Operator op = binary->get_operator();
     IExpression const *left  = binary->get_left_argument();
@@ -1982,9 +1991,11 @@ string DAG_builder::get_binary_name(IExpression_binary const *binary) const
                     string name(s_name, get_allocator());
                     name += '.';
                     name += symbol->get_name();
-                    name += '(';
-                    name += s_name;
-                    name += ')';
+                    if (with_signature_suffix) {
+                        name += '(';
+                        name += s_name;
+                        name += ')';
+                    }
 
                     return name;
                 }
@@ -1995,9 +2006,12 @@ string DAG_builder::get_binary_name(IExpression_binary const *binary) const
 
                     // create the name (+ signature) of the index function here
                     string name = v_name;
-                    name += "@(";
-                    name += v_name;
-                    name += ",int)";
+                    name += "@";
+                    if (with_signature_suffix) {
+                        name += "(";
+                        name += v_name;
+                        name += ",int)";
+                    }
 
                     return name;
                 }
@@ -2057,13 +2071,16 @@ string DAG_builder::get_binary_name(IExpression_binary const *binary) const
     IType const *rt = right->get_type();
 
     string name(binary_op_to_name(op), get_allocator());
-    name += '(';
-    m_printer.print(lt->skip_type_alias());
-    name += m_printer.get_line();
-    name += ',';
-    m_printer.print(rt->skip_type_alias());
-    name += m_printer.get_line();
-    name += ')';
+
+    if (with_signature_suffix) {
+        name += '(';
+        m_printer.print(lt->skip_type_alias());
+        name += m_printer.get_line();
+        name += ',';
+        m_printer.print(rt->skip_type_alias());
+        name += m_printer.get_line();
+        name += ')';
+    }
 
     return name;
 }
@@ -2152,7 +2169,7 @@ DAG_node const *DAG_builder::create_struct_insert(
         for (int i = 0; i < n_fields; ++i)
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
 
-        IValue const *v = DAG_node_factory_impl::evaluate_constructor(
+        IValue const *v = m_node_factory.evaluate_constructor(
             m_value_factory, IDefinition::DS_ELEM_CONSTRUCTOR, s_type, values);
         if (v != NULL)
             return m_node_factory.create_constant(v);
@@ -2249,7 +2266,7 @@ DAG_node const *DAG_builder::create_vector_insert(
         for (int i = 0; i < n_fields; ++i)
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
 
-        IValue const *v = DAG_node_factory_impl::evaluate_constructor(
+        IValue const *v = m_node_factory.evaluate_constructor(
             m_value_factory, IDefinition::DS_ELEM_CONSTRUCTOR, v_type, values);
         if (v != NULL)
             return m_node_factory.create_constant(v);
@@ -2773,14 +2790,6 @@ DAG_node const *DAG_builder::call_to_dag(
         IDefinition const      *call_def = ref->get_definition();
         IDefinition::Semantics call_sema = call_def->get_semantics();
 
-        if (call_sema == IDefinition::DS_COPY_CONSTRUCTOR) {
-            // a copy constructor, ignore it, just return its argument
-            IArgument const *arg = call->get_argument(0);
-            IExpression const *arg_exp = arg->get_argument_expr();
-
-            return exp_to_dag(arg_exp);
-        }
-
         if (call_sema == IDefinition::DS_UNKNOWN) {
             // try to inline user defined function or material
             DAG_node const *res = try_inline(call);
@@ -2852,10 +2861,10 @@ DAG_node const *DAG_builder::call_to_dag(
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
 
         IValue const *res = NULL;
-        if (call_def->get_kind() == IDefinition::DK_CONSTRUCTOR)
-            res = DAG_node_factory_impl::evaluate_constructor(
-            m_value_factory, call_sema, ret_type, values);
-        else {
+        if (call_def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
+            res = m_node_factory.evaluate_constructor(
+                m_value_factory, call_sema, ret_type, values);
+        } else {
             size_t n_args = values.size();
             IValue const * const *args = n_args > 0 ? &values[0] : NULL;
             res = m_node_factory.evaluate_intrinsic_function(call_sema, args, n_args);
@@ -3153,8 +3162,9 @@ IValue_resource const *DAG_builder::process_resource_urls(
     char const *url = res->get_string_value();
     if (url != NULL && url[0] != '\0') {
 
+        // check for special marker for non-resolved  weak relative paths, keep it.
         for (size_t i = 0, n = strlen(url); i < n; ++i) {
-            if (url[i] == '|') // special marker for non-resolved  weak rel. paths, keep it.
+            if (url[i] == ':' && i+1 < n && url[i+1] == ':')
                 return res;
         }
         // non-empty URL, check if relative

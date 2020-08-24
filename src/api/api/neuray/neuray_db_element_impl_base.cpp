@@ -41,6 +41,7 @@
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
+#include <io/scene/mdl_elements/mdl_elements_annotation_definition_proxy.h>
 
 // If defined, the destructor of Db_element_impl_base dumps all set journal flags for elements in
 // state STATE_EDIT.
@@ -61,7 +62,8 @@ Db_element_tracker g_db_element_tracker;
 Db_element_impl_base::Db_element_impl_base()
 {
     m_state = STATE_INVALID;
-    m_pointer.m_const = 0;
+    m_pointer.m_const = nullptr;
+    m_transaction = nullptr;
 
     g_db_element_tracker.add_element( this);
 }
@@ -192,7 +194,8 @@ mi::Sint32 Db_element_impl_base::store(
         SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
         if(    (class_id == MDL::ID_MDL_MODULE)
             || (class_id == MDL::ID_MDL_MATERIAL_DEFINITION)
-            || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
+            || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION)
+            || (class_id == MDL::ID_MDL_ANNOTATION_DEFINITION_PROXY))
             return -9;
 
         if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
@@ -235,10 +238,10 @@ void Db_element_impl_base::post_store()
 {
     m_state = STATE_INVALID;
     // DB took over ownership of m_pointer.m_mutable (assuming store() was called before).
-    m_pointer.m_mutable = 0;
+    m_pointer.m_mutable = nullptr;
     m_transaction->remove_element( this);
     m_transaction->release();
-    m_transaction = 0;
+    m_transaction = nullptr;
 }
 
 Transaction_impl* Db_element_impl_base::get_transaction() const
@@ -249,10 +252,10 @@ Transaction_impl* Db_element_impl_base::get_transaction() const
         case STATE_POINTER:
             return m_transaction;
         case STATE_INVALID:
-            return 0;
+            return nullptr;
     }
     ASSERT( M_NEURAY_API, false);
-    return 0;
+    return nullptr;
 }
 
 DB::Transaction* Db_element_impl_base::get_db_transaction() const
@@ -261,12 +264,12 @@ DB::Transaction* Db_element_impl_base::get_db_transaction() const
         case STATE_ACCESS:
         case STATE_EDIT:
         case STATE_POINTER:
-            return m_transaction ? m_transaction->get_db_transaction() : 0;
+            return m_transaction ? m_transaction->get_db_transaction() : nullptr;
         case STATE_INVALID:
-            return 0;
+            return nullptr;
     }
     ASSERT( M_NEURAY_API, false);
-    return 0;
+    return nullptr;
 }
 
 void Db_element_impl_base::clear_transaction()
@@ -274,7 +277,7 @@ void Db_element_impl_base::clear_transaction()
     if( m_transaction) {
         m_transaction->remove_element( this);
         m_transaction->release();
-        m_transaction = 0;
+        m_transaction = nullptr;
     }
     m_access_base.clear_transaction();
 }
@@ -331,14 +334,15 @@ DB::Element_base* Db_element_impl_base::get_db_element_base()
 {
     switch( m_state) {
         case STATE_ACCESS:
-            return 0; // internal or external programming error (e.g. invalid use of const_cast)
+            // internal or external programming error (e.g. invalid use of const_cast)
+            return nullptr; 
         case STATE_INVALID:
         case STATE_EDIT:
         case STATE_POINTER:
             return m_pointer.m_mutable;
     }
     ASSERT( M_NEURAY_API, false);
-    return 0;
+    return nullptr;
 }
 
 } // namespace NEURAY

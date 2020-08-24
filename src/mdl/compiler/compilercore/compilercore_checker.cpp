@@ -246,7 +246,7 @@ Module_checker::Module_checker(
 }
 
 // Check a module.
-bool Module_checker::check(MDL *compiler, Module *module, bool verbose)
+bool Module_checker::check(MDL const *compiler, Module const *module, bool verbose)
 {
     mi::base::Handle<IOutput_stream> os_stderr(compiler->create_std_stream(IMDL::OS_STDERR));
     IPrinter *printer = compiler->create_printer(os_stderr.get());
@@ -268,7 +268,6 @@ bool Module_checker::check(MDL *compiler, Module *module, bool verbose)
             printer->print(module->get_name());
             printer->print(" FAILED!\n\n");
         }
-        abort();
         return false;
     }
 

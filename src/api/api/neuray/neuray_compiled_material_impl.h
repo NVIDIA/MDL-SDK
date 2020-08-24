@@ -86,6 +86,8 @@ public:
 
     bool depends_on_global_distribution() const final;
 
+    bool depends_on_uniform_scene_data() const final;
+
     mi::Size get_referenced_scene_data_count() const final;
 
     char const *get_referenced_scene_data_name( mi::Size index) const final;

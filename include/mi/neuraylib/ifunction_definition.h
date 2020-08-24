@@ -35,6 +35,7 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/imodule.h>
 
 namespace mi {
 
@@ -54,6 +55,9 @@ class IMdl_execution_context;
 /// #create_function_call() method allows to create function calls based on this function
 /// definition.
 ///
+/// \note See \ref mi_neuray_mdl_template_like_functions_definitions for function definitions
+///       with special semantics.
+///
 /// \see #mi::neuraylib::IFunction_call, #mi::neuraylib::IModule,
 ///      #mi::neuraylib::Definition_wrapper
 class IFunction_definition : public
@@ -68,7 +72,7 @@ public:
     ///       further notice.
     enum Semantics
     {
-        DS_UNKNOWN = 0,                            ///< Unknown semantics.
+        DS_UNKNOWN = 0,                           ///< Unknown semantics.
 
         DS_CONV_CONSTRUCTOR,                      ///< The conversion constructor.
         DS_ELEM_CONSTRUCTOR,                      ///< The elemental constructor.
@@ -81,6 +85,8 @@ public:
 
         DS_CONV_OPERATOR,                         ///< The type conversion operator.
 
+        DS_COPY_CONSTRUCTOR,                      ///< The copy constructor.
+
         // Unary operators
         DS_OPERATOR_FIRST = 0x0200,
         DS_UNARY_FIRST = DS_OPERATOR_FIRST,
@@ -92,13 +98,17 @@ public:
         DS_PRE_DECREMENT,                         ///< The pre-decrement operator.
         DS_POST_INCREMENT,                        ///< The post-increment operator.
         DS_POST_DECREMENT,                        ///< The post-decrement operator.
-        DS_CAST,                                  ///< The cast operator.
+
+        /// The cast operator. See \ref mi_neuray_mdl_cast_operator.
+        DS_CAST,
         DS_UNARY_LAST = DS_CAST,
 
         // Binary operators
         DS_BINARY_FIRST,
         DS_SELECT = DS_BINARY_FIRST,              ///< The select operator.
-        DS_ARRAY_INDEX,                           ///< The array index operator.
+
+        /// The array index operator. See \ref mi_neuray_mdl_array_index_operator.
+        DS_ARRAY_INDEX,
         DS_MULTIPLY,                              ///< The multiplication operator.
         DS_DIVIDE,                                ///< The division operator.
         DS_MODULO,                                ///< The modulus operator.
@@ -134,7 +144,8 @@ public:
         DS_BINARY_LAST = DS_SEQUENCE,
 
         // Ternary operator
-        DS_TERNARY,                               ///< The ternary operator (conditional).
+        /// The ternary operator (conditional). See \ref mi_neuray_mdl_ternary_operator.
+        DS_TERNARY,
         DS_OPERATOR_LAST = DS_TERNARY,
 
         // ::math module intrinsics
@@ -155,8 +166,9 @@ public:
         DS_INTRINSIC_MATH_DEGREES,                ///< The %math::degrees() intrinsic function.
         DS_INTRINSIC_MATH_DISTANCE,               ///< The %math::distance() intrinsic function.
         DS_INTRINSIC_MATH_DOT,                    ///< The %math::dot() intrinsic function.
-        DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH,     ///< The %math::eval_at_wavelength()
-                                                  ///  intrinsic function.
+
+        /// The %math::eval_at_wavelength() intrinsic function.
+        DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH,
         DS_INTRINSIC_MATH_EXP,                    ///< The %math::exp() intrinsic function.
         DS_INTRINSIC_MATH_EXP2,                   ///< The %math::exp2() intrinsic function.
         DS_INTRINSIC_MATH_FLOOR,                  ///< The %math::floor() intrinsic function.
@@ -172,12 +184,14 @@ public:
         DS_INTRINSIC_MATH_LUMINANCE,              ///< The %math::luminance() intrinsic function.
         DS_INTRINSIC_MATH_MAX,                    ///< The %math::max() intrinsic function.
         DS_INTRINSIC_MATH_MAX_VALUE,              ///< The %math::max_value() intrinsic function.
-        DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH,   ///< The %math::max_value_wavelength()
-                                                  ///  intrinsic function.
+
+        /// The %math::max_value_wavelength() intrinsic function.
+        DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH,
         DS_INTRINSIC_MATH_MIN,                    ///< The %math::min() intrinsic function.
         DS_INTRINSIC_MATH_MIN_VALUE,              ///< The %math::min_value() intrinsic function.
-        DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH,   ///< The %math::min_value_wavelength()
-                                                  ///  intrinsic function.
+
+        /// The %math::min_value_wavelength() intrinsic function.
+        DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH,
         DS_INTRINSIC_MATH_MODF,                   ///< The %math::modf() intrinsic function.
         DS_INTRINSIC_MATH_NORMALIZE,              ///< The %math::normalize() intrinsic function.
         DS_INTRINSIC_MATH_POW,                    ///< The %math::pow() intrinsic function.
@@ -194,8 +208,9 @@ public:
         DS_INTRINSIC_MATH_TAN,                    ///< The %math::tan() intrinsic function.
         DS_INTRINSIC_MATH_TRANSPOSE,              ///< The %math::transpose() intrinsic function.
         DS_INTRINSIC_MATH_BLACKBODY,              ///< The %math::blackbody() intrinsic function.
-        DS_INTRINSIC_MATH_EMISSION_COLOR,         ///< The %math::emission_color() intrinsic
-                                                  ///  function.
+
+        /// The %math::emission_color() intrinsic function.
+        DS_INTRINSIC_MATH_EMISSION_COLOR,
         DS_INTRINSIC_MATH_DX,                     ///< The %math::DX() intrinsic function.
         DS_INTRINSIC_MATH_DY,                     ///< The %math::DY() intrinsic function.
         DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
@@ -279,6 +294,7 @@ public:
         DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM,    ///< The df::light_profile_maximum() function.
         DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID,    ///< The df::light_profile_isvalid() function.
         DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID, ///< The df::bsdf_measurement_is_valid() function.
+
         /// The df::microfacet_beckmann_smith_bsdf() function.
         DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF,
         /// The df::microfacet_ggx_smith_bsdf() function.
@@ -294,6 +310,7 @@ public:
         DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER,     ///< The df::color_weigthed_layer() function.
         DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER,      ///< The df::color_fresnel_layer() function.
         DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER, ///< The df::color_custom_curve_layer() function.
+
         /// The df::color_measured_curve_layer() function.
         DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER,
         DS_INTRINSIC_DF_FRESNEL_FACTOR,           ///< The df::fresnel_factor() function.
@@ -341,8 +358,10 @@ public:
         DS_INTRINSIC_DAG_FIRST = 0x0A00,
         /// The structure field access function.
         DS_INTRINSIC_DAG_FIELD_ACCESS = DS_INTRINSIC_DAG_FIRST,
-        DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,       ///< The array constructor.
-        DS_INTRINSIC_DAG_ARRAY_LENGTH,            ///< The array length operator.
+        /// The array constructor. See \ref mi_neuray_mdl_array_constructor.
+        DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
+        /// The array length operator. See \ref mi_neuray_mdl_array_length_operator.
+        DS_INTRINSIC_DAG_ARRAY_LENGTH,
         DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_ARRAY_LENGTH,
 
         DS_FORCE_32_BIT = 0xffffffffU             //   Undocumented, for alignment only.
@@ -361,9 +380,45 @@ public:
     /// \return         The MDL name of the function definition.
     virtual const char* get_mdl_name() const = 0;
 
+
+    /// Returns the MDL name of the module containing this function definition.
+    virtual const char* get_mdl_module_name() const = 0;
+
+    /// Returns the simple MDL name of the function definition.
+    ///
+    /// The simple name is the last component of the MDL name, i.e., without any packages and
+    /// scope qualifiers, and without the parameter type names.
+    ///
+    /// \return         The simple MDL name of the function definition.
+    virtual const char* get_mdl_simple_name() const = 0;
+
+    /// Returns the type name of the parameter at \p index.
+    ///
+    /// \note The type names provided here are substrings of the MDL name returned by
+    ///       #get_mdl_name(). They are provided here such that parsing of the MDL name is not
+    ///       necessary. Their main use case is one variant of overload resolution if no actual
+    ///       arguments are given (see
+    ///       #mi::neuraylib::IModule::get_function_overloads(const char*,const IArray*)const. For
+    ///       almost all other use cases it is strongly recommended to use #get_parameter_types()
+    ///       instead.
+    ///
+    /// \param index    The index of the parameter.
+    /// \return         The type name of the parameter, or \c NULL if \p index is out of range.
+    virtual const char* get_mdl_parameter_type_name( Size index) const = 0;
+
     /// Returns the DB name of the prototype, or \c NULL if this function definition is not a
     /// variant.
     virtual const char* get_prototype() const = 0;
+
+    /// Returns the MDL version when this function definition was added and removed.
+    ///
+    /// \param[out] since     The MDL version in which this function definition was added. If the
+    ///                       function definition does not belong to the standard library, the
+    ///                       MDL version of the corresponding module is returned.
+    /// \param[out] removed   The MDL version in which this function definition was removed, or
+    ///                       mi::neuraylib::MDL_VERSION_INVALID if the function has not been
+    ///                       removed so far or does not belong to the standard library.
+    virtual void get_mdl_version( Mdl_version& since, Mdl_version& removed) const = 0;
 
     /// Returns the semantic of this function definition.
     virtual Semantics get_semantic() const = 0;
@@ -537,7 +592,7 @@ public:
     ///       functions, this method always returns \c NULL. For all other functions, i.e., for
     ///       functions, whose body is an expression or a plain return statement, the method never
     ///       returns \c NULL.
-    virtual const IExpression_direct_call* get_body() const = 0;
+    virtual const IExpression* get_body() const = 0;
 
     /// Returns the number of temporaries used by this function.
     virtual Size get_temporary_count() const = 0;
@@ -583,7 +638,6 @@ public:
         ptr_iexpression->release();
         return ptr_T;
     }
-
 };
 
 mi_static_assert(sizeof(IFunction_definition::Semantics) == sizeof(Uint32));

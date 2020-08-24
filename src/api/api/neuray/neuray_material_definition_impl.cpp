@@ -56,7 +56,7 @@ DB::Element_base* Material_definition_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new MDL::Mdl_material_definition;
 }
 
@@ -66,7 +66,7 @@ mi::base::IInterface* Material_definition_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Material_definition_impl())->cast_to_major();
 }
 
@@ -85,10 +85,26 @@ const char* Material_definition_impl::get_mdl_name() const
     return get_db_element()->get_mdl_name();
 }
 
+const char* Material_definition_impl::get_mdl_module_name() const
+{
+    return get_db_element()->get_mdl_module_name();
+}
+
+const char*  Material_definition_impl::get_mdl_simple_name() const
+{
+    return get_db_element()->get_mdl_simple_name();
+}
+
 const char* Material_definition_impl::get_prototype() const
 {
     DB::Tag tag = get_db_element()->get_prototype();
     return get_db_transaction()->tag_to_name( tag);
+}
+
+void Material_definition_impl::get_mdl_version(
+    mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const
+{
+    return get_db_element()->get_mdl_version( since, removed);
 }
 
 bool Material_definition_impl::is_exported() const
@@ -181,7 +197,7 @@ mi::neuraylib::IMaterial_instance* Material_definition_impl::create_material_ins
         get_db_element()->create_material_instance(
             get_db_transaction(), arguments_int.get(), errors));
     if( !db_instance)
-        return 0;
+        return nullptr;
     mi::neuraylib::IMaterial_instance* api_instance
         = get_transaction()->create<mi::neuraylib::IMaterial_instance>(
             "__Material_instance");

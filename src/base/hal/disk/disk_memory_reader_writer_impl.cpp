@@ -198,7 +198,7 @@ mi::Sint64 Memory_reader_impl::read( char* buffer, mi::Sint64 size)
 bool Memory_reader_impl::readline( char* buffer, mi::Sint32 size)
 {
     if( size == 0)
-	return false;
+        return false;
 
     const mi::Uint8* data = m_buffer->get_data();
     mi::Size data_size = m_buffer->get_data_size();

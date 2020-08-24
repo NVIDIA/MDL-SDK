@@ -87,7 +87,7 @@ const char* Array_impl_base<T>::get_key( mi::Size index) const
 {
     std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     m_cached_key = key;
     return m_cached_key.c_str();
@@ -105,7 +105,7 @@ const mi::base::IInterface* Array_impl_base<T>::get_value( const char* key) cons
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_element( index);
 }
@@ -115,7 +115,7 @@ mi::base::IInterface* Array_impl_base<T>::get_value( const char* key)
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_element( index);
 }
@@ -159,7 +159,7 @@ template <typename T>
 const mi::base::IInterface* Array_impl_base<T>::get_element( mi::Size index) const
 {
     if( index >= m_array.size())
-        return 0;
+        return nullptr;
 
     m_array[index]->retain();
     return m_array[index];
@@ -169,7 +169,7 @@ template <typename T>
 mi::base::IInterface* Array_impl_base<T>::get_element( mi::Size index)
 {
     if( index >= m_array.size())
-        return 0;
+        return nullptr;
 
     m_array[index]->retain();
     return m_array[index];
@@ -211,7 +211,7 @@ bool Array_impl_base<T>::set_length_internal( mi::Size length)
     for( mi::Size i = length; i < old_length; ++i)
         m_array[i]->release();
 
-    m_array.resize( length, 0);
+    m_array.resize( length, nullptr);
 
     std::string element_type_name
         = (m_element_type_name == "Interface") ? "Void" : m_element_type_name;
@@ -256,7 +256,7 @@ bool Array_impl_base<T>::key_to_index( const char* key, mi::Size& index) const
     STLEXT::Likely<mi::Size> index_likely = STRING::lexicographic_cast_s<mi::Size>( key);
     if( !index_likely.get_status())
         return false;
-    index = *index_likely.get_ptr();
+    index = *index_likely.get_ptr(); //-V522 PVS
     return index < m_array.size();
 }
 
@@ -281,20 +281,20 @@ mi::base::IInterface* Array_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 2)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> istring( argv[0]->get_interface<mi::IString>());
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* element_type_name = istring->get_c_str();
     mi::base::Handle<const mi::ISize> ivalue( argv[1]->get_interface<mi::ISize>());
     if( !ivalue.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::Size length = ivalue->get_value<mi::Size>();
 
     Array_impl* array = new Array_impl( transaction, element_type_name, length);
     if( !array->successfully_constructed()) {
         array->release();
-        return 0;
+        return nullptr;
     } else
         return array;
 }
@@ -325,16 +325,16 @@ mi::base::IInterface* Dynamic_array_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 1)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> istring( argv[0]->get_interface<mi::IString>());
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* element_type_name = istring->get_c_str();
 
     Dynamic_array_impl* dynamic_array = new Dynamic_array_impl( transaction, element_type_name);
     if( !dynamic_array->successfully_constructed()) {
         dynamic_array->release();
-        return 0;
+        return nullptr;
     } else
         return dynamic_array;
 }
@@ -411,7 +411,7 @@ mi::Sint32 Dynamic_array_impl::pop_back()
 const mi::base::IInterface* Dynamic_array_impl::back() const
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     const mi::base::IInterface* element = m_array.back();
     element->retain();
@@ -421,7 +421,7 @@ const mi::base::IInterface* Dynamic_array_impl::back() const
 mi::base::IInterface* Dynamic_array_impl::back()
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     mi::base::IInterface* element = m_array.back();
     element->retain();
@@ -431,7 +431,7 @@ mi::base::IInterface* Dynamic_array_impl::back()
 const mi::base::IInterface* Dynamic_array_impl::front() const
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     const mi::base::IInterface* element = m_array.front();
     element->retain();
@@ -441,7 +441,7 @@ const mi::base::IInterface* Dynamic_array_impl::front() const
 mi::base::IInterface* Dynamic_array_impl::front()
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     mi::base::IInterface* element = m_array.front();
     element->retain();
@@ -455,7 +455,7 @@ bool Dynamic_array_impl::key_to_index_unbounded( const char* key, mi::Size& inde
     STLEXT::Likely<mi::Size> index_likely = STRING::lexicographic_cast_s<mi::Size>( key);
     if( !index_likely.get_status())
         return false;
-    index = *index_likely.get_ptr();
+    index = *index_likely.get_ptr(); //-V522 PVS
     return true;
 }
 

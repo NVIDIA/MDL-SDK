@@ -41,6 +41,15 @@
 #include "compilercore_file_utils.h"
 #include "compilercore_mangle.h"
 
+//#include <cstring>
+
+//#include <mi/mdl/mdl_declarations.h>
+//#include <mi/mdl/mdl_expressions.h>
+//#include <mi/mdl/mdl_modules.h>
+//#include <mi/mdl/mdl_statements.h>
+//#include <mi/mdl/mdl_symbols.h>
+//#include <mi/mdl/mdl_values.h>
+
 namespace mi {
 namespace mdl {
 
@@ -1527,8 +1536,19 @@ void Comparator::compare_function_or_annotation(
 
     // check if all defaults are still there
     int n_paramsA = typeA->get_parameter_count();
+    int n_paramsB = typeB->get_parameter_count();
 
-    MDL_ASSERT(n_paramsA <= typeB->get_parameter_count());
+    if (n_paramsA > n_paramsB) {
+        error(
+            m_fnameA,
+            is_anno ? ANNOTATION_PARAM_DELETED : FUNCTION_PARAM_DELETED,
+            defA,
+            Error_params(get_allocator())
+                .add_signature(defA)
+                .add(m_fnameB)
+        );
+        return;
+    }
 
     for (int i = 0; i < n_paramsA; ++i) {
         IExpression const *initA = defA->get_default_param_initializer(i);
@@ -2348,6 +2368,1056 @@ void Archive_comparator::compare_archives()
     m_ctx.access_messages_impl().copy_messages(m_msgs);
 }
 
+
+namespace {
+
+bool equal( const IValue* value_a, const IValue* value_b);
+bool equal( const IExpression* expression_a, const IExpression* expression_b);
+bool equal( const IAnnotation_block* block_a, const IAnnotation_block* block_b);
+bool equal( const IStatement* stmt_a, const IStatement* stmt_b);
+bool equal( const IDeclaration* decl_a, const IDeclaration* decl_b);
+
+// Compares symbols.
+bool equal( const ISymbol* symbol_a, const ISymbol* symbol_b)
+{
+    if( symbol_a->get_id() != symbol_b->get_id())
+        return false;
+
+    const char* a = symbol_a->get_name();
+    const char* b = symbol_b->get_name();
+    if( strcmp( a, b) != 0)
+        return false;
+
+    return true;
+}
+
+// Compares simple names. Supports NULL arguments.
+bool equal( const ISimple_name* name_a, const ISimple_name* name_b)
+{
+    if( !name_a && !name_b)
+        return true;
+    if( !name_a || !name_b)
+        return false;
+
+    const ISymbol* symbol_a = name_a->get_symbol();
+    const ISymbol* symbol_b = name_b->get_symbol();
+    return equal( symbol_a, symbol_b);
+}
+
+// Compares qualified names. Supports NULL arguments.
+bool equal( const IQualified_name* name_a, const IQualified_name* name_b)
+{
+    if( !name_a && !name_b)
+        return true;
+    if( !name_a || !name_b)
+        return false;
+
+    if( name_a->is_absolute() != name_b->is_absolute())
+        return false;
+
+    int count_a = name_a->get_component_count();
+    int count_b = name_b->get_component_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const ISimple_name* component_a = name_a->get_component( i);
+        const ISimple_name* component_b = name_b->get_component( i);
+        if( !equal( component_a, component_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares type names. Supports NULL arguments.
+bool equal( const IType_name* name_a, const IType_name* name_b)
+{
+    if( !name_a && !name_b)
+        return true;
+    if( !name_a || !name_b)
+        return false;
+
+    if( name_a->is_absolute() != name_b->is_absolute())
+        return false;
+
+    if( name_a->get_qualifier() != name_b->get_qualifier())
+        return false;
+
+    const IQualified_name* qual_a = name_a->get_qualified_name();
+    const IQualified_name* qual_b = name_b->get_qualified_name();
+    if( !equal( qual_a, qual_b))
+        return false;
+
+    if( name_a->is_array() != name_b->is_array())
+        return false;
+    if( name_a->is_concrete_array() != name_b->is_concrete_array())
+        return false;
+
+    const IExpression* array_size_a = name_a->get_array_size();
+    const IExpression* array_size_b = name_b->get_array_size();
+    if( !equal( array_size_a, array_size_b))
+        return false;
+
+    const ISimple_name* size_name_a = name_a->get_size_name();
+    const ISimple_name* size_name_b = name_b->get_size_name();
+    if( !equal( size_name_a, size_name_b))
+        return false;
+
+    if( name_a->is_incomplete_array() != name_b->is_incomplete_array())
+        return false;
+
+    return true;
+}
+
+// Compares values.
+bool equal( const IValue* value_a, const IValue* value_b)
+{
+    IValue::Kind kind_a = value_a->get_kind();
+    IValue::Kind kind_b = value_b->get_kind();
+    if( kind_a != kind_b)
+        return false;
+
+    switch( kind_a) {
+
+        case IValue::VK_BAD:
+            return true;
+
+        case IValue::VK_BOOL: {
+            auto bool_a = cast<IValue_bool>( value_a);
+            auto bool_b = cast<IValue_bool>( value_b);
+            return bool_a->get_value() == bool_b->get_value();
+        }
+
+        case IValue::VK_INT:
+        case IValue::VK_ENUM: {
+            auto int_valued_a = cast<IValue_int_valued>( value_a);
+            auto int_valued_b = cast<IValue_int_valued>( value_b);
+            return int_valued_a->get_value() == int_valued_b->get_value();
+        }
+
+        case IValue::VK_FLOAT: {
+            auto float_a = cast<IValue_float>( value_a);
+            auto float_b = cast<IValue_float>( value_b);
+            IValue_FP::FP_class class_a = float_a->get_fp_class();
+            IValue_FP::FP_class class_b = float_b->get_fp_class();
+            if( class_a != class_b)
+                return false;
+            if( class_a != IValue_FP::FPC_NORMAL)
+                return true;
+            return float_a->get_value() == float_b->get_value();
+        }
+
+        case IValue::VK_DOUBLE: {
+            auto double_a = cast<IValue_double>( value_a);
+            auto double_b = cast<IValue_double>( value_b);
+            IValue_FP::FP_class class_a = double_a->get_fp_class();
+            IValue_FP::FP_class class_b = double_b->get_fp_class();
+            if( class_a != class_b)
+                return false;
+            if( class_a != IValue_FP::FPC_NORMAL)
+                return true;
+            return double_a->get_value() == double_b->get_value();
+        }
+
+        case IValue::VK_STRING: {
+            auto string_a = cast<IValue_string>( value_a);
+            auto string_b = cast<IValue_string>( value_b);
+            return strcmp( string_a->get_value(), string_b->get_value()) == 0;
+        }
+
+        case IValue::VK_VECTOR:
+        case IValue::VK_MATRIX:
+        case IValue::VK_ARRAY:
+        case IValue::VK_RGB_COLOR:
+        case IValue::VK_STRUCT: {
+            auto compound_a = cast<IValue_compound>( value_a);
+            auto compound_b = cast<IValue_compound>( value_b);
+            int count_a = compound_a->get_component_count();
+            int count_b = compound_b->get_component_count();
+            if( count_a != count_b)
+                return false;
+            for( int i = 0; i < count_a; ++i) {
+                const IValue* component_a = compound_a->get_value( i);
+                const IValue* component_b = compound_b->get_value( i);
+                if( !equal( component_a, component_b))
+                    return false;
+            }
+            return true;
+        }
+
+        case IValue::VK_INVALID_REF:
+            return true;
+
+        case IValue::VK_TEXTURE: {
+            auto texture_a = cast<IValue_texture>( value_a);
+            auto texture_b = cast<IValue_texture>( value_b);
+            if( texture_a->get_gamma_mode() != texture_b->get_gamma_mode())
+                return false;
+            if( texture_a->get_bsdf_data_kind() != texture_b->get_bsdf_data_kind())
+                return false;
+            return strcmp( texture_a->get_string_value(), texture_b->get_string_value()) == 0;
+        }
+
+        case IValue::VK_LIGHT_PROFILE:
+        case IValue::VK_BSDF_MEASUREMENT: {
+            auto resource_a = cast<IValue_resource>( value_a);
+            auto resource_b = cast<IValue_resource>( value_b);
+            return strcmp( resource_a->get_string_value(), resource_b->get_string_value()) == 0;
+        }
+    }
+
+    MDL_ASSERT( !"unsupported type kind");
+    return false;
+}
+
+// Compares literal expressions.
+bool equal( const IExpression_literal* expr_a, const IExpression_literal* expr_b)
+{
+    const IValue* value_a = expr_a->get_value();
+    const IValue* value_b = expr_b->get_value();
+    if( !equal( value_a, value_b))
+        return false;
+
+    return true;
+}
+
+// Compares reference expressions.
+bool equal( const IExpression_reference* expr_a, const IExpression_reference* expr_b)
+{
+    const IType_name* name_a = expr_a->get_name();
+    const IType_name* name_b = expr_b->get_name();
+    if( !equal( name_a, name_b))
+        return false;
+
+    if( expr_a->is_array_constructor() != expr_b->is_array_constructor())
+        return false;
+
+    return true;
+}
+
+// Compares unary expressions.
+bool equal( const IExpression_unary* expr_a, const IExpression_unary* expr_b)
+{
+    IExpression_unary::Operator operator_a = expr_a->get_operator();
+    IExpression_unary::Operator operator_b = expr_b->get_operator();
+    if( operator_a != operator_b)
+        return false;
+
+    const IExpression* argument_a = expr_a->get_argument();
+    const IExpression* argument_b = expr_b->get_argument();
+    if( !equal( argument_a, argument_b))
+        return false;
+
+    const IType_name* type_name_a = expr_a->get_type_name();
+    const IType_name* type_name_b = expr_b->get_type_name();
+    if( !equal( type_name_a, type_name_b))
+        return false;
+
+    return true;
+}
+
+// Compares binary expressions.
+bool equal( const IExpression_binary* expr_a, const IExpression_binary* expr_b)
+{
+    IExpression_binary::Operator operator_a = expr_a->get_operator();
+    IExpression_binary::Operator operator_b = expr_b->get_operator();
+    if( operator_a != operator_b)
+        return false;
+
+    const IExpression* left_argument_a = expr_a->get_left_argument();
+    const IExpression* left_argument_b = expr_b->get_left_argument();
+    if( !equal( left_argument_a, left_argument_b))
+        return false;
+
+    const IExpression* right_argument_a = expr_a->get_right_argument();
+    const IExpression* right_argument_b = expr_b->get_right_argument();
+    if( !equal( right_argument_a, right_argument_b))
+        return false;
+
+    return true;
+}
+
+// Compares conditional expressions.
+bool equal( const IExpression_conditional* expr_a, const IExpression_conditional* expr_b)
+{
+    const IExpression* cond_argument_a = expr_a->get_condition();
+    const IExpression* cond_argument_b = expr_b->get_condition();
+    if( !equal( cond_argument_a, cond_argument_b))
+        return false;
+
+    const IExpression* true_argument_a = expr_a->get_true();
+    const IExpression* true_argument_b = expr_b->get_true();
+    if( !equal( true_argument_a, true_argument_b))
+        return false;
+
+    const IExpression* false_argument_a = expr_a->get_false();
+    const IExpression* false_argument_b = expr_b->get_false();
+    if( !equal( false_argument_a, false_argument_b))
+        return false;
+
+    return true;
+}
+
+// Compares let expressions.
+bool equal( const IExpression_let* expr_a, const IExpression_let* expr_b)
+{
+    const IExpression* body_a = expr_a->get_expression();
+    const IExpression* body_b = expr_b->get_expression();
+    if( !equal( body_a, body_b))
+        return false;
+
+    int count_a = expr_a->get_declaration_count();
+    int count_b = expr_b->get_declaration_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IDeclaration* decl_a = expr_a->get_declaration( i);
+        const IDeclaration* decl_b = expr_b->get_declaration( i);
+        if( !equal( decl_a, decl_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares arguments.
+bool equal( const IArgument* arg_a, const IArgument* arg_b)
+{
+    IArgument::Kind kind_a = arg_a->get_kind();
+    IArgument::Kind kind_b = arg_b->get_kind();
+    if( kind_a != kind_b)
+        return false;
+
+    const IExpression* expr_a = arg_a->get_argument_expr();
+    const IExpression* expr_b = arg_b->get_argument_expr();
+    if( !equal( expr_a, expr_b))
+        return false;
+
+    if( kind_a == IArgument::AK_NAMED) {
+        auto arg_named_a = cast<IArgument_named>( arg_a);
+        auto arg_named_b = cast<IArgument_named>( arg_b);
+        const ISimple_name* name_a = arg_named_a->get_parameter_name();
+        const ISimple_name* name_b = arg_named_b->get_parameter_name();
+        if( !equal( name_a, name_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares call expressions.
+bool equal( const IExpression_call* expr_a, const IExpression_call* expr_b)
+{
+    const IExpression* ref_a = expr_a->get_reference();
+    const IExpression* ref_b = expr_b->get_reference();
+    if( !equal( ref_a, ref_b))
+        return false;
+
+    int count_a = expr_a->get_argument_count();
+    int count_b = expr_b->get_argument_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IArgument* arg_a = expr_a->get_argument( i);
+        const IArgument* arg_b = expr_b->get_argument( i);
+        if( !equal( arg_a, arg_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares expressions. Supports NULL arguments.
+bool equal( const IExpression* expr_a, const IExpression* expr_b)
+{
+    if( !expr_a && !expr_b)
+        return true;
+    if( !expr_a || !expr_b)
+        return false;
+
+    IExpression::Kind kind_a = expr_a->get_kind();
+    IExpression::Kind kind_b = expr_b->get_kind();
+    if( kind_a != kind_b)
+        return false;
+
+    if( expr_a->in_parenthesis() != expr_b->in_parenthesis())
+        return false;
+
+#define CASE( kind, type) \
+        case IExpression::kind: { \
+            auto type##_a = cast<IExpression_##type>( expr_a); \
+            auto type##_b = cast<IExpression_##type>( expr_b); \
+            return equal( type##_a, type##_b); \
+        }
+
+    switch( kind_a) {
+        case IExpression::EK_INVALID:
+            return true;
+        CASE( EK_LITERAL, literal);
+        CASE( EK_REFERENCE, reference);
+        CASE( EK_UNARY, unary);
+        CASE( EK_BINARY, binary);
+        CASE( EK_CONDITIONAL, conditional);
+        CASE( EK_CALL, call);
+        CASE( EK_LET, let);
+    }
+
+#undef CASE
+
+    MDL_ASSERT( !"unsupported type kind");
+    return false;
+}
+
+// Compares annotations.
+bool equal( const IAnnotation* anno_a, const IAnnotation* anno_b)
+{
+    IAnnotation::Kind kind_a = anno_a->get_kind();
+    IAnnotation::Kind kind_b = anno_b->get_kind();
+    if( kind_a != kind_b)
+        return false;
+
+    const IQualified_name* name_a = anno_a->get_name();
+    const IQualified_name* name_b = anno_b->get_name();
+    if( !equal( name_a, name_b))
+        return false;
+
+    int count_a = anno_a->get_argument_count();
+    int count_b = anno_b->get_argument_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IArgument* arg_a = anno_a->get_argument( i);
+        const IArgument* arg_b = anno_b->get_argument( i);
+        if( !equal( arg_a, arg_b))
+            return false;
+    }
+
+    if( kind_a == IAnnotation::AK_ENABLE_IF) {
+        auto anno_enable_if_a = cast<IAnnotation_enable_if>( anno_a);
+        auto anno_enable_if_b = cast<IAnnotation_enable_if>( anno_b);
+        const IExpression* expr_a = anno_enable_if_a->get_expression();
+        const IExpression* expr_b = anno_enable_if_b->get_expression();
+        if( !equal( expr_a, expr_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares annotation blocks. Supports NULL arguments.
+bool equal( const IAnnotation_block* block_a, const IAnnotation_block* block_b)
+{
+    if( !block_a && !block_b)
+        return true;
+    if( !block_a || !block_b)
+        return false;
+
+    int count_a = block_a->get_annotation_count();
+    int count_b = block_b->get_annotation_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IAnnotation* anno_a = block_a->get_annotation( i);
+        const IAnnotation* anno_b = block_b->get_annotation( i);
+        if( !equal( anno_a, anno_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares compound statements.
+bool equal( const IStatement_compound* stmt_a, const IStatement_compound* stmt_b)
+{
+    int count_a = stmt_a->get_statement_count();
+    int count_b = stmt_b->get_statement_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IStatement* s_a = stmt_a->get_statement( i);
+        const IStatement* s_b = stmt_b->get_statement( i);
+        if( !equal( s_a, s_b))
+           return false;
+    }
+
+    return true;
+}
+
+// Compares declaration statements.
+bool equal( const IStatement_declaration* stmt_a, const IStatement_declaration* stmt_b)
+{
+    const IDeclaration* decl_a = stmt_a->get_declaration();
+    const IDeclaration* decl_b = stmt_b->get_declaration();
+    if( !equal( decl_a, decl_b))
+       return false;
+
+    return true;
+}
+
+// Compares expression statements.
+bool equal( const IStatement_expression* stmt_a, const IStatement_expression* stmt_b)
+{
+    const IExpression* expr_a = stmt_a->get_expression();
+    const IExpression* expr_b = stmt_b->get_expression();
+    if( !equal( expr_a, expr_b))
+       return false;
+
+    return true;
+}
+
+// Compares if statements.
+bool equal( const IStatement_if* stmt_a, const IStatement_if* stmt_b)
+{
+    const IExpression* expr_a = stmt_a->get_condition();
+    const IExpression* expr_b = stmt_b->get_condition();
+    if( !equal( expr_a, expr_b))
+       return false;
+
+    const IStatement* then_a = stmt_a->get_then_statement();
+    const IStatement* then_b = stmt_b->get_then_statement();
+    if( !equal( then_a, then_b))
+       return false;
+
+    const IStatement* else_a = stmt_a->get_else_statement();
+    const IStatement* else_b = stmt_b->get_else_statement();
+    if( !equal( else_a, else_b))
+       return false;
+
+    return true;
+}
+
+// Compares case statements.
+bool equal( const IStatement_case* stmt_a, const IStatement_case* stmt_b)
+{
+    const IExpression* label_a = stmt_a->get_label();
+    const IExpression* label_b = stmt_b->get_label();
+    if( !equal( label_a, label_b))
+       return false;
+
+    const IStatement_compound* compound_a = stmt_a;
+    const IStatement_compound* compound_b = stmt_b;
+    return equal( compound_a, compound_b);
+}
+
+// Compares switch statements.
+bool equal( const IStatement_switch* stmt_a, const IStatement_switch* stmt_b)
+{
+    const IExpression* cond_a = stmt_a->get_condition();
+    const IExpression* cond_b = stmt_b->get_condition();
+    if( !equal( cond_a, cond_b))
+       return false;
+
+    int count_a = stmt_a->get_case_count();
+    int count_b = stmt_b->get_case_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IStatement* s_a = stmt_a->get_case( i);
+        const IStatement* s_b = stmt_b->get_case( i);
+        if( !equal( s_a, s_b))
+           return false;
+    }
+
+    return true;
+}
+
+// Compares loop statements.
+bool equal( const IStatement_loop* stmt_a, const IStatement_loop* stmt_b)
+{
+    const IExpression* cond_a = stmt_a->get_condition();
+    const IExpression* cond_b = stmt_b->get_condition();
+    if( !equal( cond_a, cond_b))
+        return false;
+
+    const IStatement* body_a = stmt_a->get_body();
+    const IStatement* body_b = stmt_b->get_body();
+    if( !equal( body_a, body_b))
+        return false;
+
+    return true;
+}
+
+// Compares for loop statements.
+bool equal( const IStatement_for* stmt_a, const IStatement_for* stmt_b)
+{
+    const IStatement* init_a = stmt_a->get_init();
+    const IStatement* init_b = stmt_b->get_init();
+    if( !equal( init_a, init_b))
+        return false;
+
+    const IExpression* update_a = stmt_a->get_update();
+    const IExpression* update_b = stmt_b->get_update();
+    if( !equal( update_a, update_b))
+        return false;
+
+    const IStatement_loop* loop_a = stmt_a;
+    const IStatement_loop* loop_b = stmt_b;
+    return equal( loop_a, loop_b);
+}
+
+// Compares return statements.
+bool equal( const IStatement_return* stmt_a, const IStatement_return* stmt_b)
+{
+    const IExpression* expr_a = stmt_a->get_expression();
+    const IExpression* expr_b = stmt_b->get_expression();
+    if( !equal( expr_a, expr_b))
+        return false;
+
+    return true;
+}
+
+// Compares statements. Supports NULL arguments.
+bool equal( const IStatement* stmt_a, const IStatement* stmt_b)
+{
+    if( !stmt_a && !stmt_b)
+        return true;
+    if( !stmt_a || !stmt_b)
+        return false;
+
+    IStatement::Kind kind_a = stmt_a->get_kind();
+    IStatement::Kind kind_b = stmt_b->get_kind();
+    if( kind_a != kind_b)
+        return false;
+
+#define CASE( kind, type) \
+        case IStatement::kind: { \
+            auto type##_a = cast<IStatement_##type>( stmt_a); \
+            auto type##_b = cast<IStatement_##type>( stmt_b); \
+            return equal( type##_a, type##_b); \
+        }
+
+    switch( kind_a) {
+        case IStatement::SK_INVALID:
+            return true;
+        CASE( SK_COMPOUND, compound);
+        CASE( SK_DECLARATION, declaration);
+        CASE( SK_EXPRESSION, expression);
+        CASE( SK_IF, if);
+        CASE( SK_CASE, case);
+        CASE( SK_SWITCH, switch);
+        CASE( SK_WHILE, while);
+        CASE( SK_DO_WHILE, do_while);
+        CASE( SK_FOR, for);
+        case IStatement::SK_BREAK:
+        case IStatement::SK_CONTINUE:
+            return true;
+        CASE( SK_RETURN, return);
+    }
+
+#undef CASE
+
+    MDL_ASSERT( !"unsupported type kind");
+    return false;
+}
+
+// Compares import declarations.
+bool equal( const IDeclaration_import* decl_a, const IDeclaration_import* decl_b)
+{
+    const IQualified_name* module_name_a = decl_a->get_module_name();
+    const IQualified_name* module_name_b = decl_b->get_module_name();
+    if( !equal( module_name_a, module_name_b))
+        return false;
+
+    int count_a = decl_a->get_name_count();
+    int count_b = decl_b->get_name_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IQualified_name* name_a = decl_a->get_name( i);
+        const IQualified_name* name_b = decl_b->get_name( i);
+        if( !equal( name_a, name_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares parameters.
+bool equal( const IParameter* param_a, const IParameter* param_b)
+{
+    const IType_name* type_name_a = param_a->get_type_name();
+    const IType_name* type_name_b = param_b->get_type_name();
+    if( !equal( type_name_a, type_name_b))
+        return false;
+
+    const ISimple_name* name_a = param_a->get_name();
+    const ISimple_name* name_b = param_b->get_name();
+    if( !equal( name_a, name_b))
+        return false;
+
+    const IExpression* init_expr_a = param_a->get_init_expr();
+    const IExpression* init_expr_b = param_b->get_init_expr();
+    if( !equal( init_expr_a, init_expr_b))
+        return false;
+
+    const IAnnotation_block* block_a = param_a->get_annotations();
+    const IAnnotation_block* block_b = param_b->get_annotations();
+    if( !equal( block_a, block_b))
+        return false;
+
+    return true;
+}
+
+// Compares annotation declarations.
+bool equal( const IDeclaration_annotation* decl_a, const IDeclaration_annotation* decl_b)
+{
+    const ISimple_name* name_a = decl_a->get_name();
+    const ISimple_name* name_b = decl_b->get_name();
+    if( !equal( name_a, name_b))
+        return false;
+
+    const IAnnotation_block* block_a = decl_a->get_annotations();
+    const IAnnotation_block* block_b = decl_b->get_annotations();
+    if( !equal( block_a, block_b))
+        return false;
+
+    int count_a = decl_a->get_parameter_count();
+    int count_b = decl_b->get_parameter_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IParameter* parameter_a = decl_a->get_parameter( i);
+        const IParameter* parameter_b = decl_b->get_parameter( i);
+        if( !equal( parameter_a, parameter_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares constant declarations.
+bool equal( const IDeclaration_constant* decl_a, const IDeclaration_constant* decl_b)
+{
+    const IType_name* type_name_a = decl_a->get_type_name();
+    const IType_name* type_name_b = decl_b->get_type_name();
+    if( !equal( type_name_a, type_name_b))
+        return false;
+
+    int count_a = decl_a->get_constant_count();
+    int count_b = decl_b->get_constant_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const ISimple_name* name_a = decl_a->get_constant_name( i);
+        const ISimple_name* name_b = decl_b->get_constant_name( i);
+        if( !equal( name_a, name_b))
+            return false;
+        const IExpression* expr_a = decl_a->get_constant_exp( i);
+        const IExpression* expr_b = decl_b->get_constant_exp( i);
+        if( !equal( expr_a, expr_b))
+            return false;
+        const IAnnotation_block* block_a = decl_a->get_annotations( i);
+        const IAnnotation_block* block_b = decl_b->get_annotations( i);
+        if( !equal( block_a, block_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares type alias declarations.
+bool equal( const IDeclaration_type_alias* decl_a, const IDeclaration_type_alias* decl_b)
+{
+    const IType_name* type_name_a = decl_a->get_type_name();
+    const IType_name* type_name_b = decl_b->get_type_name();
+    if( !equal( type_name_a, type_name_b))
+        return false;
+
+    const ISimple_name* alias_name_a = decl_a->get_alias_name();
+    const ISimple_name* alias_name_b = decl_b->get_alias_name();
+    if( !equal( alias_name_a, alias_name_b))
+        return false;
+
+    return true;
+}
+
+// Compares type struct declarations.
+bool equal( const IDeclaration_type_struct* decl_a, const IDeclaration_type_struct* decl_b)
+{
+    const ISimple_name* name_a = decl_a->get_name();
+    const ISimple_name* name_b = decl_b->get_name();
+    if( !equal( name_a, name_b))
+        return false;
+
+    const IAnnotation_block* block_a = decl_a->get_annotations();
+    const IAnnotation_block* block_b = decl_b->get_annotations();
+    if( !equal( block_a, block_b))
+        return false;
+
+    int count_a = decl_a->get_field_count();
+    int count_b = decl_b->get_field_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IType_name* type_name_a = decl_a->get_field_type_name( i);
+        const IType_name* type_name_b = decl_b->get_field_type_name( i);
+        if( !equal( type_name_a, type_name_b))
+            return false;
+        const ISimple_name* name_a = decl_a->get_field_name( i);
+        const ISimple_name* name_b = decl_b->get_field_name( i);
+        if( !equal( name_a, name_b))
+            return false;
+        const IExpression* expr_a = decl_a->get_field_init( i);
+        const IExpression* expr_b = decl_b->get_field_init( i);
+        if( !equal( expr_a, expr_b))
+            return false;
+        const IAnnotation_block* block_a = decl_a->get_annotations( i);
+        const IAnnotation_block* block_b = decl_b->get_annotations( i);
+        if( !equal( block_a, block_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares type enum declarations.
+bool equal( const IDeclaration_type_enum* decl_a, const IDeclaration_type_enum* decl_b)
+{
+    const ISimple_name* name_a = decl_a->get_name();
+    const ISimple_name* name_b = decl_b->get_name();
+    if( !equal( name_a, name_b))
+        return false;
+
+    const IAnnotation_block* block_a = decl_a->get_annotations();
+    const IAnnotation_block* block_b = decl_b->get_annotations();
+    if( !equal( block_a, block_b))
+        return false;
+
+    int count_a = decl_a->get_value_count();
+    int count_b = decl_b->get_value_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const ISimple_name* name_a = decl_a->get_value_name( i);
+        const ISimple_name* name_b = decl_b->get_value_name( i);
+        if( !equal( name_a, name_b))
+            return false;
+        const IExpression* expr_a = decl_a->get_value_init( i);
+        const IExpression* expr_b = decl_b->get_value_init( i);
+        if( !equal( expr_a, expr_b))
+            return false;
+        const IAnnotation_block* block_a = decl_a->get_annotations( i);
+        const IAnnotation_block* block_b = decl_b->get_annotations( i);
+        if( !equal( block_a, block_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares variable declarations.
+bool equal( const IDeclaration_variable* decl_a, const IDeclaration_variable* decl_b)
+{
+    const IType_name* type_name_a = decl_a->get_type_name();
+    const IType_name* type_name_b = decl_b->get_type_name();
+    if( !equal( type_name_a, type_name_b))
+        return false;
+
+    int count_a = decl_a->get_variable_count();
+    int count_b = decl_b->get_variable_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const ISimple_name* name_a = decl_a->get_variable_name( i);
+        const ISimple_name* name_b = decl_b->get_variable_name( i);
+        if( !equal( name_a, name_b))
+            return false;
+        const IExpression* expr_a = decl_a->get_variable_init( i);
+        const IExpression* expr_b = decl_b->get_variable_init( i);
+        if( !equal( expr_a, expr_b))
+            return false;
+        const IAnnotation_block* block_a = decl_a->get_annotations( i);
+        const IAnnotation_block* block_b = decl_b->get_annotations( i);
+        if( !equal( block_a, block_b))
+            return false;
+    }
+
+    return true;
+}
+
+// Compares function declarations.
+bool equal( const IDeclaration_function* decl_a, const IDeclaration_function* decl_b)
+{
+    const IType_name* return_type_name_a = decl_a->get_return_type_name();
+    const IType_name* return_type_name_b = decl_b->get_return_type_name();
+    if( !equal( return_type_name_a, return_type_name_b))
+        return false;
+
+    const ISimple_name* name_a = decl_a->get_name();
+    const ISimple_name* name_b = decl_b->get_name();
+    if( !equal( name_a, name_b))
+        return false;
+
+    if( decl_a->is_preset() != decl_b->is_preset())
+        return false;
+
+    int count_a = decl_a->get_parameter_count();
+    int count_b = decl_b->get_parameter_count();
+    if( count_a != count_b)
+        return false;
+
+    for( int i = 0; i < count_a; ++i) {
+        const IParameter* param_a = decl_a->get_parameter( i);
+        const IParameter* param_b = decl_b->get_parameter( i);
+        if( !equal( param_a, param_b))
+            return false;
+    }
+
+    if( decl_a->get_qualifier() != decl_b->get_qualifier())
+        return false;
+
+    const IStatement* body_a = decl_a->get_body();
+    const IStatement* body_b = decl_b->get_body();
+    if( !equal( body_a, body_b))
+        return false;
+
+    const IAnnotation_block* block_a = decl_a->get_annotations();
+    const IAnnotation_block* block_b = decl_b->get_annotations();
+    if( !equal( block_a, block_b))
+        return false;
+
+    const IAnnotation_block* return_block_a = decl_a->get_return_annotations();
+    const IAnnotation_block* return_block_b = decl_b->get_return_annotations();
+    if( !equal( return_block_a, return_block_b))
+        return false;
+
+    return true;
+}
+
+// Compares module declarations.
+bool equal( const IDeclaration_module* decl_a, const IDeclaration_module* decl_b)
+{
+    const IAnnotation_block* block_a = decl_a->get_annotations();
+    const IAnnotation_block* block_b = decl_b->get_annotations();
+    if( !equal( block_a, block_b))
+        return false;
+
+    return true;
+}
+
+// Compares namespace alias declarations.
+bool equal( const IDeclaration_namespace_alias* decl_a, const IDeclaration_namespace_alias* decl_b)
+{
+    const ISimple_name* alias_a = decl_a->get_alias();
+    const ISimple_name* alias_b = decl_b->get_alias();
+    if( !equal( alias_a, alias_b))
+        return false;
+
+    const IQualified_name* namespace_a = decl_a->get_namespace();
+    const IQualified_name* namespace_b = decl_b->get_namespace();
+    if( !equal( namespace_a, namespace_b))
+        return false;
+
+    return true;
+}
+
+// Compares declarations.
+bool equal( const IDeclaration* decl_a, const IDeclaration* decl_b)
+{
+    IDeclaration::Kind kind_a = decl_a->get_kind();
+    IDeclaration::Kind kind_b = decl_b->get_kind();
+    if( kind_a != kind_b)
+        return false;
+
+    if( decl_a->is_exported() != decl_b->is_exported())
+        return false;
+
+#define CASE( kind, type) \
+        case IDeclaration::kind: { \
+            auto type##_a = cast<IDeclaration_##type>( decl_a); \
+            auto type##_b = cast<IDeclaration_##type>( decl_b); \
+            return equal( type##_a, type##_b); \
+        }
+
+    switch( kind_a) {
+        case IDeclaration::DK_INVALID:
+            return true;
+        CASE( DK_IMPORT, import);
+        CASE( DK_ANNOTATION, annotation);
+        CASE( DK_CONSTANT, constant);
+        CASE( DK_TYPE_ALIAS, type_alias);
+        CASE( DK_TYPE_STRUCT, type_struct);
+        CASE( DK_TYPE_ENUM, type_enum);
+        CASE( DK_VARIABLE, variable);
+        CASE( DK_FUNCTION, function);
+        CASE( DK_MODULE, module);
+        CASE( DK_NAMESPACE_ALIAS, namespace_alias);
+    }
+
+#undef CASE
+
+    MDL_ASSERT( !"unsupported type kind");
+    return false;
+}
+
+} // namespace
+
+bool equal( const IModule* module_a, const IModule* module_b)
+{
+    // compare module name
+    const char* name_a = module_a->get_name();
+    const char* name_b = module_b->get_name();
+    if( strcmp( name_a, name_b) != 0)
+        return false;
+
+    // compare filename
+    const char* filename_a = module_a->get_filename();
+    const char* filename_b = module_b->get_filename();
+    if( !!filename_a ^ !!filename_b)
+        return false;
+    if( filename_a && strcmp( filename_a, filename_b) != 0)
+        return false;
+
+    // compare version
+    int major_a, minor_a, major_b, minor_b;
+    module_a->get_version( major_a, minor_a);
+    module_b->get_version( major_b, minor_b);
+    if( major_a != major_b || minor_a != minor_b)
+        return false;
+
+    // compare analyzed/valid properties
+    if( module_a->is_analyzed() != module_b->is_analyzed())
+        return false;
+    if( module_a->is_valid() != module_b->is_valid())
+        return false;
+
+    // compare stdlib/builtins/mdle properties
+    if( module_a->is_stdlib() != module_b->is_stdlib())
+        return false;
+    if( module_a->is_builtins() != module_b->is_builtins())
+        return false;
+    if( module_a->is_mdle() != module_b->is_mdle())
+        return false;
+
+    // compare declaration count
+    int n_decl_a = module_a->get_declaration_count();
+    int n_decl_b = module_b->get_declaration_count();
+    if( n_decl_a != n_decl_b)
+        return false;
+
+    // compare declarations
+    for( int i = 0; i < n_decl_a; ++i) {
+        const IDeclaration* decl_a = module_a->get_declaration( i);
+        const IDeclaration* decl_b = module_b->get_declaration( i);
+        if( !equal( decl_a, decl_b))
+           return false;
+    }
+
+   return true;
+}
 
 }  // mdl
 }  // mi

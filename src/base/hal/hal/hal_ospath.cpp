@@ -35,13 +35,16 @@
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/util/string_utils/i_string_utils.h>
-#include <mi/base/config.h>
 
 #include <sstream>
 #include <algorithm>
 
 #ifndef WIN_NT
- #include <unistd.h>
+#include <unistd.h>
+#else
+#include <mi/base/miwindows.h>
+#include <Knownfolders.h>
+#include <shlobj.h>
 #endif
 
 
@@ -52,20 +55,20 @@ namespace {
 
 // Replace all occurrence of a string with another one
 std::string replace_all(
-    const std::string& str,		// input string
-    const std::string& fstr,		// find string
-    const std::string& rstr)		// replace string
+    const std::string& str,             // input string
+    const std::string& fstr,            // find string
+    const std::string& rstr)            // replace string
 {
     if (str.empty())
-	return std::string("");
+        return std::string("");
 
     std::string fs(str);
     size_t pos = 0;
     while(pos != std::string::npos) {
-	pos = fs.find(fstr, pos);
-	if (pos != std::string::npos) {
-	    fs.replace(pos, fstr.size(), rstr);
-	}
+        pos = fs.find(fstr, pos);
+        if (pos != std::string::npos) {
+            fs.replace(pos, fstr.size(), rstr);
+        }
     }
 
     return fs;
@@ -79,9 +82,9 @@ std::string replace_all(
 std::string Ospath::sep()
 {
 #ifdef WIN_NT
-	return std::string("\\");
+        return std::string("\\");
 #else
-	return std::string("/");
+        return std::string("/");
 #endif
 }
 
@@ -103,7 +106,7 @@ std::string Ospath::get_path_set_separator()
 // different from the Unix basename program; where basename for '/foo/bar/'
 // returns 'bar', the basename() function returns an empty string ('').
 std::string Ospath::basename(
-    const std::string& path)			// Incoming path
+    const std::string& path)                    // Incoming path
 {
     std::string head, tail;
     split(path, head, tail);
@@ -113,7 +116,7 @@ std::string Ospath::basename(
 // Return the directory name of pathname path. This is the first half of
 // the pair returned by split(path).
 std::string Ospath::dirname(
-    const std::string& path)			// Incoming path
+    const std::string& path)                    // Incoming path
 {
     std::string head, tail;
     split(path, head, tail);
@@ -125,11 +128,11 @@ std::string Ospath::join(
     const std::string& path2)
 {
     if (path.empty())
-	return path2;
+        return path2;
     else if (path2.empty())
-	return path;
+        return path;
     else
-	return path + sep() + path2;
+        return path + sep() + path2;
 }
 
 std::string Ospath::join_v2(const std::string& path1, const std::string& path2)
@@ -156,33 +159,33 @@ std::string Ospath::normpath(
 
     // iterate over all elements, skipping . and resolving ..
     while(it != token_list.end()) {
-	if (it->empty()) { // We do not care about empty tokens (i.e. //)
-	    ++it;
-	    continue;
-	}
-	// valid dir names are appended and saved on a stack (last_dir)
-	if (*it != ".." && *it != ".") {
-	    last_dir.push_back(*it);
-	    if (!out_path.empty() && out_path[out_path.length() - 1] != separator[0])
-		out_path.append(separator);
-	    out_path.append(*it);
-	}
-	// ".." means we have to pop the last valid dir name from the stack if we can
-	else if (*it == "..") {
-	    if (last_dir.empty())
-		return orig_in_path;
-	    size_t ind = out_path.rfind(last_dir.back());
-	    if (ind == std::string::npos)
-		return orig_in_path;
-	    out_path = out_path.substr(0, ind);
-	    last_dir.pop_back();
-	}
-	++it;
+        if (it->empty()) { // We do not care about empty tokens (i.e. //)
+            ++it;
+            continue;
+        }
+        // valid dir names are appended and saved on a stack (last_dir)
+        if (*it != ".." && *it != ".") {
+            last_dir.push_back(*it);
+            if (!out_path.empty() && out_path[out_path.length() - 1] != separator[0])
+                out_path.append(separator);
+            out_path.append(*it);
+        }
+        // ".." means we have to pop the last valid dir name from the stack if we can
+        else if (*it == "..") {
+            if (last_dir.empty())
+                return orig_in_path;
+            size_t ind = out_path.rfind(last_dir.back());
+            if (ind == std::string::npos)
+                return orig_in_path;
+            out_path = out_path.substr(0, ind);
+            last_dir.pop_back();
+        }
+        ++it;
     }
 
     // special case: path ended with /
     if (!out_path.empty() && !in_path.empty() && in_path[in_path.length() - 1] == separator[0])
-	out_path.append(separator);
+        out_path.append(separator);
     // special case: path was absolute, i.e. started with /
     if (!in_path.empty() && in_path[0] == separator[0])
       out_path.insert(0, separator);
@@ -194,8 +197,8 @@ std::string Ospath::normpath(
     // which returns backslashes on windows would not work.
     std::string win_path = convert_to_backward_slashes(orig_in_path);
     if (win_path.length() >= 2 &&
-	(win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
-	out_path.insert(0, sep());
+        (win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
+        out_path.insert(0, sep());
     return convert_to_backward_slashes(out_path);
 #else
     return out_path;
@@ -215,8 +218,8 @@ std::string Ospath::normpath_only(
     // which returns backslashes on windows would not work.
     std::string win_path = convert_to_backward_slashes(path);
     if (win_path.length() >= 2 &&
-	(win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
-	npath.insert(0, sep());
+        (win_path[0] == sep()[0]) && (win_path[1] == sep()[0]))
+        npath.insert(0, sep());
     return convert_to_backward_slashes(npath);
 #else
     return npath;
@@ -265,7 +268,7 @@ std::string Ospath::normpath_v2(const std::string& path)
 #if WIN_NT
     // re-add another leading separator for UNC paths on Windows
     if (path.length() >= 2 && path[0] == separator[0] && path[1] == separator[0])
-	result.insert(0, separator);
+        result.insert(0, separator);
 #endif
 
     return result.empty() ? "." : result;
@@ -280,16 +283,16 @@ std::string Ospath::normpath_v2(const std::string& path)
 // cases, join(head, tail) equals path (the only exception being when there
 // were multiple slashes separating head from tail).
 void Ospath::split(
-    const std::string& path,			// Incoming path
-    std::string& head_ref,			// Out head part
-    std::string& tail_ref)			// Out tail part
+    const std::string& path,                    // Incoming path
+    std::string& head_ref,                      // Out head part
+    std::string& tail_ref)                      // Out tail part
 {
     std::string head, tail;
 
     if (path.empty()) {
-	head_ref = head;
-	tail_ref = tail;
-	return;
+        head_ref = head;
+        tail_ref = tail;
+        return;
     }
 
     std::string filepath;
@@ -297,9 +300,9 @@ void Ospath::split(
 
     std::string::size_type i = filepath.find_last_of('/');
     if (i == std::string::npos) {
-	head_ref = std::string("");
-	tail_ref = path;
-	return;
+        head_ref = std::string("");
+        tail_ref = path;
+        return;
     }
 
     // Remove from one behind '/' to the end
@@ -308,11 +311,11 @@ void Ospath::split(
     // remove trailing '/' iff size()>1 and if this is not a Windows drive, eg C:/
     if (head.size() > 1
 #ifdef WIN_NT
-	// watch out for a drive
-	&& !(head.size() > 2 && head[head.size()-2] == ':')
+        // watch out for a drive
+        && !(head.size() > 2 && head[head.size()-2] == ':')
 #endif
-	)
-	head.erase(i);
+        )
+        head.erase(i);
 
     // Remove from the beginning of the string to the '/' included
     tail = path;
@@ -326,22 +329,22 @@ void Ospath::split(
 // last pathname component and head is everything leading up to that.
 // This version leaves both parts untouched and does only the splitting.
 void Ospath::split_only(
-    const std::string& path,		// Incoming path
-    std::string& head,			// Out head part
-    std::string& tail)			// Out tail part
+    const std::string& path,            // Incoming path
+    std::string& head,                  // Out head part
+    std::string& tail)                  // Out tail part
 {
     // set pos to the 1st delimiter
     std::string::size_type pos_win = path.rfind('\\');
     std::string::size_type pos_lin = path.rfind('/');
     std::string::size_type pos = std::string::npos;
     if (pos_win == std::string::npos && pos_lin != std::string::npos)
-	pos = pos_lin;
+        pos = pos_lin;
     else if (pos_win != std::string::npos && pos_lin == std::string::npos)
-	pos = pos_win;
+        pos = pos_win;
     else
-	pos = std::max(pos_win, pos_lin);
+        pos = std::max(pos_win, pos_lin);
 
-    head = path.substr(0, pos);				// this spares the trailing delimiter
+    head = path.substr(0, pos);                         // this spares the trailing delimiter
     tail = path.substr(pos == std::string::npos? 0 : pos+1);
 }
 
@@ -350,20 +353,20 @@ void Ospath::split_only(
 // drive specifications, drive will always be the empty string. In all
 // cases, drive + tail will be the same as path.
 void Ospath::splitdrive(
-    const std::string& path,		// Incoming path
-    std::string& drive,			// Out drive part
-    std::string& tail)			// Out tail part
+    const std::string& path,            // Incoming path
+    std::string& drive,                 // Out drive part
+    std::string& tail)                  // Out tail part
 {
     drive = std::string("");
     tail = std::string("");
     if (path.empty())
-	return;
+        return;
 
     std::string::size_type i = path.find_last_of(':');
     if (i == std::string::npos)
     {
-	tail = path;
-	return;
+        tail = path;
+        return;
     }
 
     drive = path.substr(0,i+1);
@@ -374,18 +377,18 @@ void Ospath::splitdrive(
 // root + ext == path, and ext is empty or begins with a period and
 // contains at most one period.
 void Ospath::splitext(
-    const std::string& path,		// Incoming path
-    std::string& root,			// Out root part
-    std::string& ext)			// Out extension part
+    const std::string& path,            // Incoming path
+    std::string& root,                  // Out root part
+    std::string& ext)                   // Out extension part
 {
     root = std::string("");
     ext = std::string("");
     if (path.empty())
-	return;
+        return;
 
     std::string::size_type i = path.find_last_of('.');
     if (i == std::string::npos)
-	return;
+        return;
 
     root = path;
     root.erase(i, std::string::npos);
@@ -399,14 +402,14 @@ std::string Ospath::get_ext(
 {
     std::string::size_type i = path.find_last_of('.');
     if (i == std::string::npos)
-	return std::string();
+        return std::string();
     return path.substr(i);
 }
 
 
 // Convert the given path to use forward slashes
 std::string Ospath::convert_to_forward_slashes(
-    const std::string& path)		// Convert this path
+    const std::string& path)            // Convert this path
 {
     return replace_all(path, std::string("\\"), std::string("/"));
 }
@@ -414,7 +417,7 @@ std::string Ospath::convert_to_forward_slashes(
 
 // Convert the given path to use forward slashes
 std::string Ospath::convert_to_backward_slashes(
-    const std::string& path)		// Convert this path
+    const std::string& path)            // Convert this path
 {
     return replace_all(path, std::string("/"), std::string("\\"));
 }
@@ -426,12 +429,53 @@ std::string Ospath::convert_to_platform_specific_path(
 {
     return
 #ifdef MI_PLATFORM_WINDOWS
-	convert_to_backward_slashes(path)
+        convert_to_backward_slashes(path)
 #else
-	convert_to_forward_slashes(path)
+        convert_to_forward_slashes(path)
 #endif
-	;
+        ;
 }
+
+#ifdef MI_PLATFORM_WINDOWS
+
+namespace {
+
+// Get a common directory, like documents, program data, ...
+std::string get_known_folder(const KNOWNFOLDERID& id)
+{
+#if(_WIN32_WINNT >= 0x0600)
+    wchar_t* knownFolderPath = nullptr;
+    HRESULT hr = SHGetKnownFolderPath(id, 0, nullptr, &knownFolderPath);
+    if (! SUCCEEDED(hr))
+        return std::string();
+    
+    // convert from wstring to UTF8 string
+    std::wstring s(knownFolderPath);
+    int slength = (int)s.length();
+    int len = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slength, 0, 0, 0, 0);
+    std::string result = std::string(len, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slength, &result[0], len, 0, 0);
+    CoTaskMemFree(static_cast<void*>(knownFolderPath));
+
+    return result;
+#else
+    return std::string();
+#endif
+}
+
+}
+
+std::string Ospath::get_windows_folder_programdata()
+{
+    return get_known_folder(FOLDERID_ProgramData);
+}
+
+std::string Ospath::get_windows_folder_documents()
+{
+    return get_known_folder(FOLDERID_Documents);
+}
+
+#endif
 
 }
 }

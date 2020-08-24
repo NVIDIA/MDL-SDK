@@ -28,7 +28,7 @@
 
 /*! \page mi_neuray_compiler MDL Compiler
 
-The \ref mi_neuray_mdl_compiler "MDL compiler" can generate target code for different backends, which can be accessed via the #mi::neuraylib::IMdl_compiler::get_backend() method.
+The \ref mi_neuray_mdl_compiler "MDL compiler" can generate target code for different backends, which can be accessed via the #mi::neuraylib::IMdl_backend_api::get_backend() method.
 
 Currently these backends are supported:
 
@@ -37,8 +37,7 @@ Currently these backends are supported:
 - \c MB_LLVM_IR: The LLVM IR backend allowing to generate code for custom target platforms or just giving more control over the output.
 - \c MB_GLSL: The GLSL backend for OpenGL renderers.
 
-Please refer to the \ref mi_neuray_examples section on how to use the backends.
-
+\if MDL_SDK_API Please refer to the \ref mi_neuray_examples section on how to use the backends. \endif
 
 \section mi_neuray_compilation_modes Instance-compilation and class-compilation
 

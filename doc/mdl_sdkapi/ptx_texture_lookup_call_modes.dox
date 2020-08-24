@@ -269,7 +269,8 @@ to avoid name mangling.
 
 \section mi_neuray_ptx_texture_lookup_call_modes_optix_cp "optix_cp" mode
 
-This mode is meant for applications using the OptiX framework.
+This mode is meant for applications using the OptiX 6 framework (for OptiX 7, the \c "direct_call"
+mode is recommended).
 In this mode, the generated code will contain OptiX \c rtCallableProgramId variables which
 have to be set to the texture access functions like this (\c mdl_textures_ptx_path is the
 path to a PTX file containing the implementations of the texture access functions,

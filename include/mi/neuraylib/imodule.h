@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IMODULE_H
 
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/version.h>
 
 
 namespace mi {
@@ -99,11 +100,9 @@ export struct Foo {
 in a module \c "mod_struct" creates the following function definitions:
 - a default constructor named \c "mdl::mod_struct::Foo()",
 - an elemental constructor named \c "mdl::mod_struct::Foo(int,float)", and
-- a ternary operator named
-  \c "mdl::mod_struct::operator?(bool,::mod_struct::Foo,::mod_struct::Foo)".
 .
 The elemental constructor has a parameter \c "param_int" of type #mi::neuraylib::IType_int and a
-parameter \c "param_float" of type #mi::neuraylib::IType_float. All three function definitions have
+parameter \c "param_float" of type #mi::neuraylib::IType_float. Both function definitions have
 the return type #mi::neuraylib::IType_struct with name \c "::mod_struct::Foo".
 
 In addition, for each exported struct type, and for each of its fields, a function definition for
@@ -130,62 +129,124 @@ definitions have a single parameter \c "s" of type \c "mdl::struct::Foo" and ret
 
 In contrast to struct types which are explicitly declared there are infinitely many array types
 (considering pairs of element type and array length). Deferred-sized arrays make the situation even
-more complicated. Each of these array types requires its own constructor. Therefore, a special
-convention is used to represent array constructors. Conversely, handling of array constructors
-requires special code paths compared to all other function calls.
+more complicated. Each of these array types would its own constructor and its own index operator.
+Therefore, template-like functions definitions are used in the context of arrays to satisfy this
+need. See the next section for details
 
-Instead of infinitely many function definitions, there is \em one \em single function definition
-created in the DB as placeholder for \em all array constructors. The DB name of this function
-definition is \c "mdl::T[](...)". Since this function definition acts as placeholder for \em all
-array constructors the reported return type, the number of parameters, and their types are
-meaningless.
+\section mi_neuray_mdl_template_like_functions_definitions Template-like function definitions
 
-When creating a function call based on this function definition the following requirements must be
-met: (1) the expression list for the arguments contains a non-zero number of arguments, (2) all
-arguments must be of the same type (which is the element type of the constructed array), and (3) the
-positional order of the arguments in the expression list is used,  their names are irrelevant.
+Usually, function definitions have a fixed set of parameter types and a fixed return type. As an
+exception of this rule, there are five function definitions which rather have the character of a
+template with generic parameter and/or return types.
 
-Once a function call for the array constructor has been created its return type, the number of
-arguments, and their type is fixed. Changing the array length or the element type requires the
-creation of a new function call from the array constructor definition.
+- the array constructor (#mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR),
+- the array length operator (#mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH),
+- the array index operator (#mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX),
+- the ternary operator (#mi::neuraylib::IFunction_definition::DS_TERNARY), and
+- the cast operator (#mi::neuraylib::IFunction_definition::DS_CAST).
 
-\section mi_neuray_mdl_indexable_types Indexable types
+The MDL and DB names of these function definitions use \c "<0>" or \c "T" to indicate such a generic
+parameter or return type. When querying the actual type, #mi::neuraylib::IType_int (arbitrary
+choice) is returned for lack of a better alternative.
 
-Arrays, vectors, and matrices are also called indexable types. For each such type occurring in an
-exported type or in the signature of an exported function or material, an indexing function is
-created in the DB. The name of this indexing function is formed by suffixing the name of the type
-with an \em at symbol ('@'). The indexing function has two parameters, where the first parameter
-\c "a" is the value to be indexed and the second parameter \c "i" is the index.
+When creating function calls from such template-like function definitions, the parameter and return
+types are fixed, i.e., the function call itself has concrete parameter and return types as usual,
+and has no template-like behavior as the definition from which it was created. This implies that,
+for example, after creation of a ternary operator on floats, you cannot set its arguments to
+expressions of a different type than float (this would require creation of another function call
+with the desired parameter types).
 
-\par Example
-The MDL code
-\code
-export int some_function(float[42] some_parameter) { ... }
-export int some_function(float[<N>] some_parameter) { ... }
-export int some_function(float3 some_parameter) { ... }
-export int some_function(float3x3 some_parameter) { ... }
-\endcode
-in a module \c "mod_indexable" creates the indexing functions
-- \c "mdl::mod_indexable::float[42]@(float[42],int)" with the first parameter \c "a" of type
-  #mi::neuraylib::IType_array,
-- \c "mdl::float[]@(float[],int)" with the first parameter \c "a" of type
-  #mi::neuraylib::IType_array,
-- \c "mdl::float3@(float3,int)" with the first parameter \c "a" of type
-  #mi::neuraylib::IType_vector, and
-- \c "mdl::float3x3@(float3x3,int)" with the first parameter \c "a" of type
-  #mi::neuraylib::IType_matrix.
-.
-In all cases the second parameter \c "i" is of type #mi::neuraylib::IType_int. In the first three
-cases the return type is #mi::neuraylib::IType_float. In the last case the return type is
-#mi::neuraylib::IType_vector with three components of type #mi::neuraylib::IType_float. Note that
-for immediate-sized arrays the indexing functions is in the module that uses that array type, for
-all other indexable types the indexing function is in the module that defines the type.
+More details about the five different template-like function definitions follow.
+
+
+\subsection mi_neuray_mdl_array_constructor Array constructor
+
+Semantic: #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR \n
+DB name: \c "mdl::T[](...)" \n
+MDL name: \c "T[](...)"
+
+The following requirements apply when creating function calls of the array constructor:
+- the expression list for the arguments contains a non-zero number of arguments,
+- all arguments must be of the same type (which is the element type of the constructed array), and
+- the positional order of the arguments in the expression list is used, their names are irrelevant
+  (although the expression list itself requires that they are distinct).
+
+
+\subsection mi_neuray_mdl_array_length_operator Array length operator
+
+Semantic: #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH \n
+DB name: \c "mdl::operator_len(<0>[])" \n
+MDL name: \c "operator_len(<0>[])"
+
+The following requirements apply when creating function calls of the array length operator:
+- the expression list for the arguments contains a single expression named \c "a" of type
+  #mi::neuraylib::IType_array.
+
+
+\subsection mi_neuray_mdl_array_index_operator Array index operator
+
+Semantic: #mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX \n
+DB name: \c "mdl::operator[](<0>[],int)" \n
+MDL name: \c "operator[](<0>[],int)"
+
+Despite its name, the array index operator can also be used on vectors and matrices.
+
+The following requirements apply when creating function calls of the array index operator:
+- the expression list for the arguments contains two expressions named \c "a" and \c "i",
+  respectively,
+- the expression named \c "a" is of type #mi::neuraylib::IType_array, #mi::neuraylib::IType_vector,
+  or #mi::neuraylib::IType_matrix, and
+- the expression named \c "i" is of type #mi::neuraylib::IType_int.
+
+
+\subsection mi_neuray_mdl_ternary_operator Ternary operator
+
+Semantic: #mi::neuraylib::IFunction_definition::DS_TERNARY \n
+DB name: \c "mdl::operator?(bool,<0>,<0>)" \n
+MDL name: \c "operator?(bool,<0>,<0>)"
+
+The following requirements apply when creating function calls of the ternary operator:
+- the expression list for the arguments contains three expressions named \c "cond", \c "true_exp",
+   and \c "false_exp", respectively,
+- the expression named \c "cond" is of type #mi::neuraylib::IType_bool, and
+- the the two other expressions are of the same type.
+
+
+\subsection mi_neuray_mdl_cast_operator Cast operator
+
+Semantic: #mi::neuraylib::IFunction_definition::DS_CAST \n
+DB name: \c "mdl::operator_cast(<0>)" \n
+MDL name: \c "operator_cast(<0>)"
+
+The following requirements apply when creating function calls of the ternary operator:
+- the expression list for the arguments contains \em two expressions named \c "cast" and
+  \c "cast_return", respectively,
+- the expression named \c "cast" is of an arbitrary type (this is the intended argument of the
+  function call),
+- the type of the expression named \c "cast_return" specifies the return type of the function
+  call (the expression itself is not used), and
+- the types of \c "cast" and \c "cast_return" are compatible.
+
+See also #mi::neuraylib::IExpression_factory::create_cast().
 
 @}*/ // end group mi_neuray_mdl_elements
 
 /** \addtogroup mi_neuray_mdl_elements
 @{
 */
+
+/// The MDL version.
+enum Mdl_version {
+    MDL_VERSION_1_0,                       ///< MDL version 1.0
+    MDL_VERSION_1_1,                       ///< MDL version 1.1
+    MDL_VERSION_1_2,                       ///< MDL version 1.2
+    MDL_VERSION_1_3,                       ///< MDL version 1.3
+    MDL_VERSION_1_4,                       ///< MDL version 1.4
+    MDL_VERSION_1_5,                       ///< MDL version 1.5
+    MDL_VERSION_1_6,                       ///< MDL version 1.6
+    MDL_VERSION_INVALID = 0xffffffffU,     ///< Invalid MDL version
+    MDL_VERSION_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+};
 
 /// This interface represents an MDL module.
 ///
@@ -209,6 +270,26 @@ public:
     ///
     /// \return         The MDL name of the module.
     virtual const char* get_mdl_name() const = 0;
+
+    /// Returns the number of package components in the MDL name.
+    virtual Size get_mdl_package_component_count() const = 0;
+
+    /// Returns the name of a package component in the MDL name.
+    ///
+    /// \return         The \p index -th package component name, or \c NULL if \p index is out of
+    ///                 bounds.
+    virtual const char* get_mdl_package_component_name( Size index) const = 0;
+
+    /// Returns the simple MDL name of the module.
+    ///
+    /// The simple name is the last component of the MDL name, i.e., without any packages and scope
+    /// qualifiers.
+    ///
+    /// \return         The simple MDL name of the module.
+    virtual const char* get_mdl_simple_name() const = 0;
+
+    /// Returns the MDL version of this module.
+    virtual Mdl_version get_mdl_version() const = 0;
 
     /// Returns the number of modules imported by the module.
     virtual Size get_import_count() const = 0;
@@ -246,7 +327,7 @@ public:
     ///                 valid indices if the corresponding material definition has already been
     ///                 removed from the DB.
     virtual const char* get_material( Size index) const = 0;
-    
+
     /// Returns the number of resources defined in the module.
     /// Resources defined in a module that is imported by this module are not included.
     virtual Size get_resources_count() const = 0;
@@ -260,7 +341,7 @@ public:
     /// Returns the absolute MDL file path of the resource at \p index.
     ///
     /// \param index    The index of the resource.
-    /// \return         The absolute MDL file path of the resource. 
+    /// \return         The absolute MDL file path of the resource.
     virtual const char* get_resource_mdl_file_path( Size index) const = 0;
 
     /// Returns the database name of the resource at \p index.
@@ -278,13 +359,13 @@ public:
     /// \param index    The index of the annotation definition.
     /// \return         The annotation definition or \c NULL if
     ///                 \p index is out of range.
-    virtual const IAnnotation_definition* get_annotation_definition(Size index) const = 0;
+    virtual const IAnnotation_definition* get_annotation_definition( Size index) const = 0;
 
     /// Returns the annotation definition of the given \p name.
     ///
     /// \param name     The name of the annotation definition.
     /// \return         The annotation definition or \c NULL if there is no such definition.
-    virtual const IAnnotation_definition* get_annotation_definition(const char *name) const = 0;
+    virtual const IAnnotation_definition* get_annotation_definition( const char* name) const = 0;
 
     /// Returns the annotations of the module, or \c NULL if there are no such annotations.
     virtual const IAnnotation_block* get_annotations() const = 0;
@@ -295,21 +376,23 @@ public:
     /// \c "noise", and \c "df".
     virtual bool is_standard_module() const = 0;
 
+    /// Indicates whether this module results from an \c .mdle file.
+    virtual bool is_mdle_module() const = 0;
+
     /// Returns overloads of a function definition.
     ///
     /// The method returns overloads of function definition of this module, either all overloads or
     /// just the overloads matching a given set of arguments.
     ///
-    /// \param name        The DB name of a function definition from this module. Due to the nature
-    ///                    of this method the function signature (starting with the left
-    ///                    parenthesis) is irrelevant and thus optional.
-    /// \param arguments   Optional arguments to select a specific overload. If present, the method
-    ///                    returns only the overloads of \p name whose signature matches the
-    ///                    provided arguments, i.e., a call to
-    ///                    #mi::neuraylib::IFunction_definition::create_function_call() with
-    ///                    these arguments would succeed.
-    /// \return            The DB names of overloads of the given function definition, or \c NULL
-    ///                    if \p name is invalid.
+    /// \param name             The DB name of a function definition from this module \em without
+    ///                         signature.
+    /// \param arguments        Optional arguments to select specific overload(s). If present, the
+    ///                         method returns only the overloads of \p name whose signature matches
+    ///                         the provided arguments, i.e., a call to
+    ///                         #mi::neuraylib::IFunction_definition::create_function_call() with
+    ///                         these arguments would succeed.
+    /// \return                 The DB names of overloads of the given function definition, or
+    ///                         \c NULL if \p name is invalid.
     virtual const IArray* get_function_overloads(
         const char* name, const IExpression_list* arguments = 0) const = 0;
 
@@ -318,23 +401,35 @@ public:
     /// The method returns the best-matching overloads of a function definition of this module,
     /// given a list of positional parameter types.
     ///
-    /// \param name        The DB name of a function definition from this module \em without
-    ///                    signature.
-    /// \param param_sig   A parameter signature as a comma separated string of MDL type names. The
-    ///                    method returns only the overloads of \p name whose signature matches the
-    ///                    provided positional parameter types. In addition, it returns only the
-    ///                    best-matching overloads according to the MDL rules for overload
-    ///                    resolution. Optionally, the parameter signature can be enclosed in
-    ///                    parentheses.
-    /// \return            The DB names of overloads of the given function definition, or \c NULL if
-    ///                    \p name is invalid.
+    /// \note This overload should only be used if no actual arguments are available. If arguments
+    ///       are available, consider using
+    ///       #get_function_overloads(const char*,const IExpression_list*)const instead.
+    ///
+    /// \note This method does not work for the function definitions with the following semantics:
+    ///       - #mi::neuraylib::IFunction_definition::DS_CAST,
+    ///       - #mi::neuraylib::IFunction_definition::DS_TERNARY,
+    ///       - #mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX,
+    ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
+    ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH. and
+    ///       - #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_FIELD_ACCESS.
+    ///       These are the \ref mi_neuray_mdl_template_like_functions_definitions plus the field
+    ///       access function definitions.
+    ///
+    /// \param name             The DB name of a function definition from this module \em without
+    ///                         signature.
+    /// \param parameter_types  A static or dynamic array with elements of type #mi::IString
+    ///                         representing positional parameter type names as returned by
+    ///                         #mi::neuraylib::IFunction_definition::get_mdl_parameter_type_name().
+    /// \return                 The DB names of overloads of the given function definition, or
+    ///                         \c NULL if \p name is invalid.
     virtual const IArray* get_function_overloads(
-        const char* name, const char* param_sig) const = 0;
+        const char* name, const IArray* parameter_types) const = 0;
 
     /// Returns true if all imports of the module are valid.
+    ///
     /// \param context     In case of failure, the execution context can be checked for error
     ///                    messages. Can be \c NULL.
-    virtual bool is_valid(IMdl_execution_context* context) const = 0;
+    virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     /// Reload the module from disk.
     ///
@@ -347,7 +442,7 @@ public:
     /// \return
     ///               -     0: Success
     ///               -    -1: Reloading failed, check the context for details.
-    virtual Sint32 reload(bool recursive, IMdl_execution_context* context) = 0;
+    virtual Sint32 reload( bool recursive, IMdl_execution_context* context) = 0;
 
     /// Reload the module from string.
     ///
@@ -356,10 +451,10 @@ public:
     /// \c mdl::nvidia::distilling_support \endif cannot be reloaded.
     ///
     /// \param module_source The module source code.
-    /// \param context       In case of failure, the execution context can be checked for error
-    ///                      messages. Can be \c NULL.
     /// \param recursive     If true, all imported file based modules are reloaded
     ///                      prior to this one.
+    /// \param context       In case of failure, the execution context can be checked for error
+    ///                      messages. Can be \c NULL.
     /// \return
     ///               -     0: Success
     ///               -    -1: Reloading failed, check the context for details.
@@ -367,6 +462,17 @@ public:
         const char* module_source,
         bool recursive,
         IMdl_execution_context* context) = 0;
+
+    virtual const IArray* deprecated_get_function_overloads(
+        const char* name, const char* param_sig) const = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_11_1
+    inline const IArray* get_function_overloads(
+        const char* name, const char* param_sig) const
+    {
+        return deprecated_get_function_overloads( name, param_sig);
+    }
+#endif
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

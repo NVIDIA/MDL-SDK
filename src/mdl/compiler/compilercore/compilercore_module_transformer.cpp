@@ -46,6 +46,8 @@
 namespace mi {
 namespace mdl {
 
+typedef Store<mi::base::Handle<Module const> > Module_scope;
+
 /// Checks, if the given type is user-defined.
 static bool is_user_type(IType const *t)
 {
@@ -83,7 +85,7 @@ static Definition const *get_type_definition(
 /// \param[out] rules     output: necessary rules to modify the arguments of the call
 ///
 /// \return the (potentially modified) callee reference
-static IExpression_reference const *promote_call_reference(
+IExpression_reference const *Module_inliner::promote_call_reference(
     Module                      &mod,
     int                         major,
     int                         minor,
@@ -93,8 +95,9 @@ static IExpression_reference const *promote_call_reference(
 {
     IType_name const *tn = ref->get_name();
     rules = Module::PR_NO_CHANGE;
-    if (tn->is_array() || ref->is_array_constructor())
+    if (tn->is_array() || ref->is_array_constructor()) {
         return ref;
+    }
 
     IDefinition const      *def = ref->get_definition();
     IDefinition::Semantics sema = def->get_semantics();
@@ -189,8 +192,9 @@ static IExpression_reference const *promote_call_reference(
             }
         }
     }
-    if (rules == Module::PR_NO_CHANGE)
+    if (rules == Module::PR_NO_CHANGE) {
         return ref;
+    }
 
     Name_factory *name_fact = mod.get_name_factory();
 
@@ -205,40 +209,47 @@ static IExpression_reference const *promote_call_reference(
     sn = name_fact->create_simple_name(sym);
     n_qn->add_component(sn);
 
-    if (qn->is_absolute())
+    if (qn->is_absolute()) {
         n_qn->set_absolute();
+    }
     n_qn->set_definition(qn->get_definition());
 
     IType_name *n_tn = name_fact->create_type_name(n_qn);
 
-    if (tn->is_absolute())
+    if (tn->is_absolute()) {
         n_tn->set_absolute();
-    if (IExpression const *array_size = tn->get_array_size())
+    }
+    if (IExpression const *array_size = tn->get_array_size()) {
         n_tn->set_array_size(mod.clone_expr(array_size, modifier));
-    if (tn->is_incomplete_array())
+    }
+    if (tn->is_incomplete_array()) {
         n_tn->set_incomplete_array();
+    }
     n_tn->set_qualifier(tn->get_qualifier());
-    if (ISimple_name const *size_name = tn->get_size_name())
+    if (ISimple_name const *size_name = tn->get_size_name()) {
         n_tn->set_size_name(size_name);
+    }
     n_tn->set_type(tn->get_type());
     return mod.get_expression_factory()->create_reference(n_tn);
 }
 
 // Constructor
 Module_inliner::Module_inliner(
-    IAllocator    *alloc,
-    Module const  *module,
-    Module        *target_module,
-    bool          is_root_module,
-    bool          inline_mdle,
-    Reference_map &references,
-    Import_set    &imports,
-    Def_set       &visible_definitions,
-    int&          counter)
+    IAllocator              *alloc,
+    Module const            *module,
+    Module                  *target_module,
+    IInline_import_callback *inline_imports,
+    bool                    omit_anno_origin,
+    bool                    is_root_module,
+    Reference_map           &references,
+    Import_set              &imports,
+    Def_set                 &visible_definitions,
+    size_t                  &counter)
 : m_module(mi::base::make_handle_dup(module))
 , m_target_module(base::make_handle_dup(target_module))
+, m_inline_imports(inline_imports)
+, m_omit_anno_origin(omit_anno_origin)
 , m_is_root(is_root_module)
-, m_inline_mdle(inline_mdle)
 , m_references(references)
 , m_imports(imports)
 , m_exports(visible_definitions)
@@ -249,9 +260,12 @@ Module_inliner::Module_inliner(
 , m_df(*m_target_module->get_declaration_factory())
 , m_nf(*m_target_module->get_name_factory())
 , m_vf(*m_target_module->get_value_factory())
-, m_keep_non_root_parameter_defaults(false)
 , m_counter(counter)
+, m_keep_non_root_parameter_defaults(false)
 {
+    if (m_is_root) {
+        Exports_collector(module, m_exports, /*is_root=*/true).collect();
+    }
 }
 
 // Destructor.
@@ -263,79 +277,117 @@ Module_inliner::~Module_inliner()
 void Module_inliner::run()
 {
     // if we have to export hidden helper definitions, add required import upfront
-    if (!m_exports.empty())
+    if (!m_exports.empty()) {
         register_import("::anno", "hidden");
+    }
     // display name is always required
     register_import("::anno", "display_name");
-    // origin is always required
-    register_import("::anno", "origin");
+    // register ::anno::origin if required
+    if (!m_omit_anno_origin) {
+        register_import("::anno", "origin");
+    }
 
     // inline the module
     visit(m_module.get());
 
     // add imports
-    for (Import_set::iterator it = m_imports.begin(); it != m_imports.end(); ++it) {
+    for (Import_set::iterator it(m_imports.begin()), end(m_imports.end()); it != end; ++it) {
         m_target_module->add_import((*it).c_str());
     }
 }
 
 // Called, before an annotation block is visited.
-bool Module_inliner::pre_visit(IAnnotation_block *anno) {
-
-    if (m_is_root)
-        return true;
-
-    // do not traverse non-root annotation blocks
-    return false;
+bool Module_inliner::pre_visit(IAnnotation_block *anno)
+{
+    // traverse children (aka annotations) only for the root module
+    return m_is_root;
 }
 
 // Called, whenever a reference has been visited.
-void Module_inliner::post_visit(IExpression_reference *expr)
+IExpression *Module_inliner::post_visit(IExpression_reference *expr)
 {
-    if (expr->is_array_constructor())
-        return;
+    if (expr->is_array_constructor()) {
+        return expr;
+    }
 
     Definition const *def = impl_cast<Definition>(expr->get_definition());
+    Definition::Kind kind = def->get_kind();
 
-    if (def->get_kind() != IDefinition::DK_FUNCTION)
-        return;
+    switch (kind) {
+    case IDefinition::DK_ENUM_VALUE:
+        {
+            // we cannot import enum values, only enum types
+            IType const *e_type = def->get_type();
+            def = get_type_definition(m_module.get(), e_type);
+        }
+        break;
+    case IDefinition::DK_CONSTRUCTOR:
+        {
+            // constructors are automatically imported, if the type is imported
+            IType_function const *f_type   = cast<IType_function>(def->get_type());
+            IType const          *ret_type = f_type->get_return_type();
+            def = get_type_definition(m_module.get(), ret_type);
+        }
+        break;
+    case IDefinition::DK_FUNCTION:
+    case IDefinition::DK_CONSTANT:
+        // import them
+        break;
+    default:
+        // ignore all others so far
+        return expr;
+    }
 
     if (!m_is_root || def->get_original_import_idx() != 0) {
         // Definition was imported
-        mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
-        if (mod_ori->is_builtins())
-            return;
-        Definition const *def_ori = m_module->get_original_definition(def);
-        if (!needs_inline(mod_ori.get())) {
-            register_import(mod_ori->get_name(), def_ori->get_symbol()->get_name());
-            return;
+        mi::base::Handle<Module const> orig_module(m_module->get_owner_module(def));
+        if (orig_module->is_builtins()) {
+            return expr;
         }
-        if (m_references.find(def_ori) != m_references.end()) {
+        Definition const *orig_def = m_module->get_original_definition(def);
+        if (!needs_inline(orig_module.get())) {
+            register_import(orig_module->get_name(), orig_def->get_symbol()->get_name());
+
+            {
+                Module_scope scope(m_module, orig_module);
+                register_child_types(orig_def->get_type());
+            }
+            return expr;
+        }
+        if (m_references.find(orig_def) != m_references.end()) {
             // the reference was already collected
-            return;
+            return expr;
         }
 
-        IDeclaration const *decl_ori = def_ori->get_declaration();
-        MDL_ASSERT(decl_ori);
+        IDeclaration const *orig_decl = orig_def->get_declaration();
+        if (orig_def->get_kind() == IDefinition::DK_TYPE && orig_decl == NULL) {
+            // not all types have a declaration
+            return expr;
+        }
+
+        MDL_ASSERT(orig_decl != NULL);
 
         // Traverse original declaration
         Module_inliner inliner(
             m_alloc,
-            mod_ori.get(),
+            orig_module.get(),
             m_target_module.get(),
+            m_inline_imports,
+            m_omit_anno_origin,
             /*is_root_module=*/false,
-            m_inline_mdle,
             m_references,
             m_imports,
             m_exports,
             m_counter);
-        inliner.visit(decl_ori);
+        inliner.visit(orig_decl);
     }
+    return expr;
 }
 
-void Module_inliner::post_visit(IExpression_literal *lit)
+IExpression *Module_inliner::post_visit(IExpression_literal *lit)
 {
     do_type(lit->get_type());
+    return lit;
 }
 
 void Module_inliner::post_visit(IType_name *tn)
@@ -348,17 +400,22 @@ void Module_inliner::post_visit(IAnnotation *anno)
     Definition const *def = impl_cast<Definition>(anno->get_name()->get_definition());
     if (!m_is_root || def->get_original_import_idx() != 0) {
         mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
-        if (mod_ori->is_builtins())
+        if (mod_ori->is_builtins()) {
             return;
+        }
 
         Definition const *def_ori = m_module->get_original_definition(def);
         if (!needs_inline(mod_ori.get())) {
-            if (def_ori->get_semantics() != IDefinition::DS_VERSION_NUMBER_ANNOTATION)
+            unsigned flags = def_ori->get_version_flags();
+            unsigned rem   = mdl_removed_version(flags);
+            if (rem > unsigned(m_target_module->get_version())) {
                 register_import(mod_ori->get_name(), def_ori->get_symbol()->get_name());
+            }
             return;
         }
-        if (m_references.find(def_ori) != m_references.end())
+        if (m_references.find(def_ori) != m_references.end()) {
             return;
+        }
 
         IDeclaration const *decl = def_ori->get_declaration();
         MDL_ASSERT(decl);
@@ -366,9 +423,11 @@ void Module_inliner::post_visit(IAnnotation *anno)
         // Traverse original declaration
         Module_inliner inliner(
             m_alloc,
-            mod_ori.get(), m_target_module.get(),
+            mod_ori.get(),
+            m_target_module.get(),
+            m_inline_imports,
+            m_omit_anno_origin,
             /*is_root_module=*/false,
-            m_inline_mdle,
             m_references,
             m_imports,
             m_exports,
@@ -393,6 +452,25 @@ void Module_inliner::post_visit(IDeclaration_type_struct *decl)
 }
 
 // Checks, if the non-root declaration has already been copied.
+bool Module_inliner::pre_visit(IDeclaration_constant *decl)
+{
+    if (!m_is_root) {
+        for (int i = 0, n = decl->get_constant_count(); i < n; ++i) {
+            MDL_ASSERT(
+                m_references.find(
+                    decl->get_constant_name(i)->get_definition()) == m_references.end());
+        }
+    }
+    return true;
+}
+
+// Clones the given declaration and puts it into the reference map.
+void Module_inliner::post_visit(IDeclaration_constant *decl)
+{
+    clone_declaration(decl, "c_");
+}
+
+// Checks, if the non-root declaration has already been copied.
 bool Module_inliner::pre_visit(IDeclaration_type_enum *decl)
 {
     if (!m_is_root) {
@@ -410,26 +488,26 @@ void Module_inliner::post_visit(IDeclaration_type_enum *decl)
 // Checks, if the non-root declaration has already been copied.
 bool Module_inliner::pre_visit(IDeclaration_function *decl)
 {
-    if (!m_is_root) {
-        MDL_ASSERT(m_references.find(decl->get_definition()) == m_references.end());
-    }
     if (m_is_root) {
-        if (IAnnotation_block const *anno = decl->get_annotations())
+        if (IAnnotation_block const *anno = decl->get_annotations()) {
             visit(anno);
-        if (IAnnotation_block const *ranno = decl->get_return_annotations())
+        }
+        if (IAnnotation_block const *ranno = decl->get_return_annotations()) {
             visit(ranno);
-    }
-    else {
-        MDL_ASSERT(m_references.find(decl->get_definition()) == m_references.end());
+        }
+    } else {
+        MDL_ASSERT(m_references.find(
+            decl->get_definition()) == m_references.end() &&
+            "visited function is already inlined");
     }
 
     bool is_exported = (m_exports.find(decl->get_definition()) != m_exports.end());
     for (int i = 0, n = decl->get_parameter_count(); i < n; ++i) {
 
         IParameter const *param = decl->get_parameter(i);
-        if (m_is_root)
+        if (m_is_root) {
             visit(param);
-        else {
+        } else {
 
             // visit type name
             visit(const_cast<IType_name*>(param->get_type_name()));
@@ -437,8 +515,9 @@ bool Module_inliner::pre_visit(IDeclaration_function *decl)
             if (m_keep_non_root_parameter_defaults || is_exported) {
 
                 IExpression const *init = param->get_init_expr();
-                if (init)
+                if (init != NULL) {
                     visit(init);
+                }
             }
         }
     }
@@ -484,51 +563,48 @@ IExpression *Module_inliner::clone_expr_reference(IExpression_reference const *r
         Definition const *def = impl_cast<Definition>(ref->get_definition());
         Definition::Kind kind = def->get_kind();
 
-        ISymbol const *new_sym = NULL;
+        ISymbol const *new_local_sym = NULL;
         if (kind == IDefinition::DK_FUNCTION) {
+            Definition const *orig_def = def;
+            bool is_imported = def->get_original_import_idx() != 0;
 
-            Definition const *def_lookup = def;
-            if (def->get_original_import_idx() != 0) {
-                def_lookup = m_module->get_original_definition(def);
+            if (is_imported) {
+                orig_def = m_module->get_original_definition(def);
             }
-            Reference_map::iterator const &p = m_references.find(def_lookup);
+
+            Reference_map::iterator const &p = m_references.find(orig_def);
             if (p != m_references.end()) {
-                new_sym = p->second;
-            }
-
-            if (def_lookup->get_semantics() != IDefinition::DS_UNKNOWN) {
-                // construct qualified name for reference
-                mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
-                MDL_ASSERT(!needs_inline(mod_ori.get()));
-
-                IQualified_name *qn_new = m_nf.create_qualified_name();
-                IQualified_name const *mqn = mod_ori->get_qualified_name();
-                for (int i = 0, n = mqn->get_component_count(); i < n; ++i) {
-                    qn_new->add_component(m_target_module->clone_name(mqn->get_component(i)));
-                }
-                ISymbol const *sym_new = m_nf.create_symbol(def_lookup->get_symbol()->get_name());
-                qn_new->add_component(m_nf.create_simple_name(sym_new));
-
-                IType_name const *type_name = m_nf.create_type_name(qn_new);
-                return m_ef.create_reference(type_name);
+                new_local_sym = p->second;
+            } else if (is_imported) {
+                // always rewrite the reference
+                return create_imported_reference(def, orig_def);
             }
         } else if (kind == IDefinition::DK_CONSTRUCTOR) {
             IType_function const *tf = cast<IType_function>(def->get_type());
-            IType const *t = tf->get_return_type();
+            IType const          *t  = tf->get_return_type();
             if (is_user_type(t)) {
-                Definition const *type_def = get_type_definition(m_module.get(), t);
-                if (type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
-                    type_def = m_module->get_original_definition(type_def);
+                Definition const *type_def      = get_type_definition(m_module.get(), t);
+                Definition const *orig_type_def = type_def;
+
+                bool is_imported = type_def->has_flag(Definition::DEF_IS_IMPORTED);
+                if (is_imported) {
+                    orig_type_def = m_module->get_original_definition(type_def);
                 }
-                Reference_map::iterator const &p = m_references.find(type_def);
+                Reference_map::iterator const &p = m_references.find(orig_type_def);
                 if (p != m_references.end()) {
-                    new_sym = p->second;
+                    new_local_sym = p->second;
+                } else if (is_imported) {
+                    // always rewrite the reference
+                    return create_imported_reference(type_def, orig_type_def);
                 }
             }
+        } else if (kind == IDefinition::DK_ENUM_VALUE || kind == IDefinition::DK_CONSTANT) {
+            IType_name *tname = m_target_module->clone_name(ref->get_name(), this);
+            return m_ef.create_reference(tname);
         }
 
-        if (new_sym != NULL) {
-            ISimple_name    *sname = m_nf.create_simple_name(new_sym);
+        if (new_local_sym != NULL) {
+            ISimple_name    *sname = m_nf.create_simple_name(new_local_sym);
             IQualified_name *qname = m_nf.create_qualified_name();
             IType_name      *tname = m_nf.create_type_name(qname);
 
@@ -602,8 +678,9 @@ IExpression *Module_inliner::clone_literal(IExpression_literal const *lit)
         Definition const *type_def = get_type_definition(m_module.get(), lit_type);
         if (type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
             mi::base::Handle<const IModule> mod_ori(m_module->get_owner_module(type_def));
-            if (!needs_inline(mod_ori.get()))
+            if (!needs_inline(mod_ori.get())) {
                 return m_target_module->clone_expr(lit, /*modifier=*/NULL);
+            }
 
             type_def = m_module->get_original_definition(type_def);
         }
@@ -614,9 +691,9 @@ IExpression *Module_inliner::clone_literal(IExpression_literal const *lit)
 
             IDefinition const *vndef = sn->get_definition();
             Reference_map::iterator const &it = m_references.find(vndef);
-            if (it == m_references.end())
+            if (it == m_references.end()) {
                 return simple_name_to_reference(m_target_module->clone_name(sn));
-            else {
+            } else {
                 ISymbol const *sym = it->second;
                 ISimple_name *sn = m_nf.create_simple_name(sym);
                 return simple_name_to_reference(sn);
@@ -624,10 +701,11 @@ IExpression *Module_inliner::clone_literal(IExpression_literal const *lit)
         } else if (IValue_compound const *vs = as<IValue_compound>(lit->get_value())) {
             ISymbol const *sym;
             Reference_map::iterator const &it = m_references.find(type_def);
-            if (it == m_references.end())
+            if (it == m_references.end()) {
                 sym = m_nf.create_symbol(type_def->get_symbol()->get_name());
-            else
+            } else {
                 sym = it->second;
+            }
             return make_constructor(vs, sym);
         }
     }
@@ -646,9 +724,9 @@ IQualified_name *Module_inliner::clone_name(IQualified_name const *qname)
         orig_module_name = mod_ori->get_name();
         def = def_ori;
     }
+
     Reference_map::iterator const& it = m_references.find(def);
     if (it == m_references.end()) {
-
         if (!qname->is_absolute() && !orig_module_name.empty()) {
             IQualified_name *res = m_nf.create_qualified_name();
             int j = 2;
@@ -744,18 +822,18 @@ IExpression_call *Module_inliner::make_constructor(
     return c;
 }
 
-// Generates a new name from a simple name and a module name.
+// Generates a new name from a simple name and a prefix.
 ISimple_name const *Module_inliner::generate_name(
     ISimple_name const *simple_name,
-    char const *prefix)
+    char const         *prefix)
 {
-    string name(prefix ? prefix : "", m_alloc);
+    string name(prefix != NULL ? prefix : "", m_alloc);
     name.append(simple_name->get_symbol()->get_name());
 
     // find an unused name
     string test = name;
     Symbol_table const &st = m_target_module->get_symbol_table();
-    while (true) {
+    for (;;) {
         if (st.lookup_symbol(test.c_str()) == NULL) {
             name = test;
             break;
@@ -764,7 +842,7 @@ ISimple_name const *Module_inliner::generate_name(
         test.append('_');
 
         char buf[32];
-        snprintf(buf, sizeof(buf), "%d", ++m_counter);
+        snprintf(buf, sizeof(buf), "%" FMT_SIZE_T, ++m_counter);
         buf[sizeof(buf) - 1] = '\0';
 
         test.append(buf);
@@ -775,8 +853,9 @@ ISimple_name const *Module_inliner::generate_name(
 // Clones a statement.
 IStatement *Module_inliner::clone_statement(IStatement const *stmt)
 {
-    if (stmt == NULL)
+    if (stmt == NULL) {
         return NULL;
+    }
 
     switch (stmt->get_kind()) {
     case IStatement::SK_EXPRESSION:
@@ -791,10 +870,11 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
             IStatement_compound const *stmt_cmp = cast<IStatement_compound>(stmt);
 
             IStatement_compound *new_cmp = m_sf.create_compound();
-            for (int i = 0; i < stmt_cmp->get_statement_count(); ++i) {
+            for (int i = 0, n = stmt_cmp->get_statement_count(); i < n; ++i) {
                 IStatement *stmt = clone_statement(stmt_cmp->get_statement(i));
-                if (stmt)
+                if (stmt != NULL) {
                     new_cmp->add_statement(stmt);
+                }
             }
             return new_cmp;
         }
@@ -803,8 +883,9 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
             IStatement_return const *stmt_ret = cast<IStatement_return>(stmt);
 
             IExpression const *new_expr = NULL;
-            if (IExpression const *expr = stmt_ret->get_expression())
+            if (IExpression const *expr = stmt_ret->get_expression()) {
                 new_expr = m_target_module->clone_expr(expr, this);
+            }
 
             return m_sf.create_return(new_expr);
         }
@@ -814,8 +895,9 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
         {
             IStatement_case const *stmt_case = cast<IStatement_case>(stmt);
             IExpression const *new_label = NULL;
-            if (IExpression const *label = stmt_case->get_label())
+            if (IExpression const *label = stmt_case->get_label()) {
                 new_label = m_target_module->clone_expr(label, this);
+            }
             IStatement_case *new_stmt_case = m_sf.create_switch_case(new_label);
             for (int i = 0, n = stmt_case->get_statement_count(); i < n; ++i) {
                 IStatement *new_stmt = clone_statement(stmt_case->get_statement(i));
@@ -844,8 +926,9 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
         {
             IStatement_do_while const *stmt_do = cast<IStatement_do_while>(stmt);
             IExpression const *new_cond = NULL;
-            if (IExpression const *cond = stmt_do->get_condition())
+            if (IExpression const *cond = stmt_do->get_condition()) {
                 new_cond = m_target_module->clone_expr(cond, this);
+            }
             IStatement *new_body = clone_statement(stmt_do->get_body());
 
             return m_sf.create_do_while(new_cond, new_body);
@@ -854,10 +937,12 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
         {
             IStatement_for const* stmt_for = cast<IStatement_for>(stmt);
             IExpression const *new_update = NULL, *new_cond = NULL;
-            if (IExpression const *update = stmt_for->get_update())
+            if (IExpression const *update = stmt_for->get_update()) {
                 new_update = m_target_module->clone_expr(update, this);
-            if (IExpression const *cond = stmt_for->get_condition())
+            }
+            if (IExpression const *cond = stmt_for->get_condition()) {
                 new_cond = m_target_module->clone_expr(cond, this);
+            }
             IStatement *new_init = clone_statement(stmt_for->get_init());
             IStatement *new_body = clone_statement(stmt_for->get_body());
 
@@ -867,8 +952,9 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
         {
             IStatement_if const *stmt_if = cast<IStatement_if>(stmt);
             IExpression const *new_cond = NULL;
-            if(IExpression const *cond = stmt_if->get_condition())
+            if (IExpression const *cond = stmt_if->get_condition()) {
                 new_cond = m_target_module->clone_expr(cond, this);
+            }
             IStatement *new_then = clone_statement(stmt_if->get_then_statement());
             IStatement *new_else = clone_statement(stmt_if->get_else_statement());
 
@@ -878,8 +964,9 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
         {
             IStatement_switch const *stmt_sw = cast<IStatement_switch>(stmt);
             IExpression const *new_cond = NULL;
-            if (IExpression const *cond = stmt_sw->get_condition())
+            if (IExpression const *cond = stmt_sw->get_condition()) {
                 new_cond = m_target_module->clone_expr(cond, this);
+            }
             IStatement_switch *new_sw = m_sf.create_switch(new_cond);
             for (int i = 0, n = stmt_sw->get_case_count(); i < n; ++i) {
                 new_sw->add_case(clone_statement(stmt_sw->get_case(i)));
@@ -890,8 +977,9 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
         {
             IStatement_while const *stmt_w = cast<IStatement_while>(stmt);
             IExpression const *new_cond = NULL;
-            if (IExpression const *cond = stmt_w->get_condition())
+            if (IExpression const *cond = stmt_w->get_condition()) {
                 new_cond = m_target_module->clone_expr(cond, this);
+            }
             IStatement *new_body = clone_statement(stmt_w->get_body());
 
             return m_sf.create_while(new_cond, new_body);
@@ -991,14 +1079,18 @@ IAnnotation_block *Module_inliner::create_annotation_block(
     }
 
     if (anno_origin == NULL) {
-        string name_ori(m_alloc);
-        name_ori += m_module->get_name();
-        name_ori += "::";
-        name_ori += def->get_symbol()->get_name();
+        if (!m_omit_anno_origin) {
+            string name_ori(m_alloc);
+            name_ori += m_module->get_name();
+            name_ori += "::";
+            name_ori += def->get_symbol()->get_name();
 
-        anno_origin = create_string_anno("origin", name_ori.c_str());
+            anno_origin = create_string_anno("origin", name_ori.c_str());
+            new_block->add_annotation(anno_origin);
+        }
+    } else {
+        new_block->add_annotation(anno_origin);
     }
-    new_block->add_annotation(anno_origin);
 
     if (!is_anno) {
         if (anno_display_name == NULL) {
@@ -1087,7 +1179,7 @@ IDeclaration_function *Module_inliner::clone_declaration(
 
     bool clone_init = (m_exports.find(decl->get_definition()) != m_exports.end() ||
         m_keep_non_root_parameter_defaults || m_is_root);
-    for (int i = 0; i < decl->get_parameter_count(); ++i) {
+    for (int i = 0, n = decl->get_parameter_count(); i < n; ++i) {
         new_decl->add_parameter(
             clone_parameter(decl->get_parameter(i), clone_init));
     }
@@ -1097,9 +1189,9 @@ IDeclaration_function *Module_inliner::clone_declaration(
 // Clone the given parameter.
 IParameter const *Module_inliner::clone_parameter(
     IParameter const *param,
-    bool clone_init)
+    bool             clone_init)
 {
-    IType_name *tn = m_target_module->clone_name(param->get_type_name(), this);
+    IType_name         *tn = m_target_module->clone_name(param->get_type_name(), this);
     ISimple_name const *sn = m_target_module->clone_name(param->get_name());
 
     IExpression *new_init = NULL;
@@ -1108,9 +1200,12 @@ IParameter const *Module_inliner::clone_parameter(
             new_init = m_target_module->clone_expr(init_expr, this);
         }
     }
-    IAnnotation_block const *new_annos = clone_parameter_annotations(
-        param->get_annotations(), /*display_name=*/NULL);
+    IAnnotation_block const *new_annos = NULL;
 
+    if (m_is_root) {
+        new_annos = clone_parameter_annotations(
+            param->get_annotations(), /*display_name=*/NULL);
+    }
     return m_df.create_parameter(tn, sn, new_init, new_annos);
 }
 
@@ -1138,8 +1233,9 @@ IDeclaration_type_enum *Module_inliner::clone_declaration(
                 new_name->get_symbol()));
         }
         IExpression *new_init = NULL;
-        if (IExpression const *init_expr = decl->get_value_init(i))
+        if (IExpression const *init_expr = decl->get_value_init(i)) {
             new_init = m_target_module->clone_expr(init_expr, this);
+        }
         IAnnotation_block const *new_annos = clone_parameter_annotations(
             decl->get_annotations(i), value_name->get_symbol()->get_name());
         new_enum->add_value(new_name, new_init, new_annos);
@@ -1163,8 +1259,9 @@ IDeclaration_type_struct *Module_inliner::clone_declaration(
     for (int i = 0, n = decl->get_field_count(); i < n; ++i) {
         ISimple_name const *new_name = m_target_module->clone_name(decl->get_field_name(i));
         IExpression        *new_init = NULL;
-        if (IExpression const *init_expr = decl->get_field_init(i))
+        if (IExpression const *init_expr = decl->get_field_init(i)) {
             new_init = m_target_module->clone_expr(init_expr, this);
+        }
         IType_name const *new_tn =
             m_target_module->clone_name(decl->get_field_type_name(i), this);
         IAnnotation_block const *new_annos = clone_parameter_annotations(
@@ -1187,7 +1284,7 @@ IDeclaration_annotation *Module_inliner::clone_declaration(
     IDeclaration_annotation *new_decl = m_df.create_annotation(
         anno_name, annos, is_exported);
 
-    for (int i = 0; i < decl->get_parameter_count(); ++i) {
+    for (int i = 0, n = decl->get_parameter_count(); i < n; ++i) {
         new_decl->add_parameter(m_target_module->clone_param(
             decl->get_parameter(i),
             /*clone_init=*/true,
@@ -1195,6 +1292,56 @@ IDeclaration_annotation *Module_inliner::clone_declaration(
             this));
     }
     return new_decl;
+}
+
+// Clones a constant declaration.
+void Module_inliner::clone_declaration(
+    IDeclaration_constant *decl,
+    char const            *prefix)
+{
+    if (m_is_root) {
+        bool is_exported = decl->is_exported();
+
+        IDeclaration_constant *cst_decl = m_df.create_constant(
+            m_target_module->clone_name(decl->get_type_name(), this),
+            is_exported);
+
+        for (int i = 0, n = decl->get_constant_count(); i < n; ++i) {
+            ISimple_name const *c_name = decl->get_constant_name(i);
+
+            ISimple_name const *new_name = m_target_module->clone_name(c_name);
+            IExpression const  *c_expr =
+                m_target_module->clone_expr(decl->get_constant_exp(i), this);
+
+            cst_decl->add_constant(new_name, c_expr);
+        }
+        m_target_module->add_declaration(cst_decl);
+    } else {
+        for (int i = 0, n = decl->get_constant_count(); i < n; ++i) {
+            ISimple_name const *c_name = decl->get_constant_name(i);
+            IDefinition const  *def    = c_name->get_definition();
+
+            MDL_ASSERT(m_references.find(def) == m_references.end());
+
+            ISimple_name const *new_name = generate_name(c_name, prefix);
+            IExpression const  *c_expr   =
+                m_target_module->clone_expr(decl->get_constant_exp(i), this);
+
+            bool is_exported = m_exports.find(def) != m_exports.end();
+
+            IDeclaration_constant *cst_decl = m_df.create_constant(
+                m_target_module->clone_name(decl->get_type_name(), this),
+                is_exported);
+
+            cst_decl->add_constant(new_name, c_expr);
+
+            m_target_module->add_declaration(cst_decl);
+
+            // Enter it into the references map.
+            m_references.insert(Reference_map::value_type(def, new_name->get_symbol()));
+        }
+    }
+
 }
 
 // Creates a reference from a simple name.
@@ -1217,7 +1364,48 @@ void Module_inliner::register_import(char const *module_name, char const *symbol
     m_imports.insert(import);
 }
 
-/// Handles a type.
+void Module_inliner::register_child_types(
+    IType const *tp)
+{
+    tp = tp->skip_type_alias();
+
+    switch (tp->get_kind()) {
+    case IType::TK_FUNCTION:
+        {
+            IType_function const *f_tp = cast<IType_function>(tp);
+
+            if (IType const *ret_tp = f_tp->get_return_type()) {
+                do_type(ret_tp);
+            }
+            for (int i = 0, n = f_tp->get_parameter_count(); i < n; ++i) {
+                ISymbol const *p_sym;
+                IType const   *p_tp;
+
+                f_tp->get_parameter(i, p_tp, p_sym);
+                do_type(p_tp);
+            }
+        }
+        break;
+    case IType::TK_STRUCT:
+        {
+            IType_struct const *s_tp = cast<IType_struct>(tp);
+
+            for (int i = 0, n = s_tp->get_field_count(); i < n; ++i) {
+                ISymbol const *f_sym;
+                IType const   *f_tp;
+
+                s_tp->get_field(i, f_tp, f_sym);
+                do_type(f_tp);
+            }
+        }
+        break;
+    default:
+        // do nothing
+        break;
+    }
+}
+
+// Handles a type.
 void Module_inliner::do_type(IType const *t)
 {
     if (t != NULL) {
@@ -1228,36 +1416,48 @@ void Module_inliner::do_type(IType const *t)
         }
 
         if (IType_array const *ta = as<IType_array>(t)) {
-            t = ta->get_element_type();
+            t = ta->get_element_type()->skip_type_alias();
         }
 
         Definition const *type_def = get_type_definition(m_module.get(), t);
         if (!m_is_root || type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
-            mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(type_def));
-            if (mod_ori->is_builtins())
-                return;
-
-            type_def = m_module->get_original_definition(type_def);
-            if (!needs_inline(mod_ori.get())) {
-                register_import(mod_ori->get_name(), type_def->get_symbol()->get_name());
+            mi::base::Handle<Module const> orig_module(m_module->get_owner_module(type_def));
+            if (orig_module->is_builtins()) {
                 return;
             }
 
-            if (!is_user_type(t))
-                return;
+            Definition const *orig_type_def = m_module->get_original_definition(type_def);
+            if (!needs_inline(orig_module.get())) {
+                if (is_user_type(t)) {
+                    register_import(orig_module->get_name(), type_def->get_symbol()->get_name());
+                }
 
-            if (m_references.find(type_def) != m_references.end())
+                {
+                    Module_scope scope(m_module, orig_module);
+                    register_child_types(orig_type_def->get_type());
+                }
                 return;
+            }
 
-            IDeclaration const *type_decl = type_def->get_declaration();
+            if (!is_user_type(t)) {
+                return;
+            }
+
+            if (m_references.find(orig_type_def) != m_references.end()) {
+                return;
+            }
+
+            IDeclaration const *type_decl = orig_type_def->get_declaration();
             MDL_ASSERT(type_decl);
 
             // Traverse original declaration
             Module_inliner inliner(
                 m_alloc,
-                mod_ori.get(), m_target_module.get(),
+                orig_module.get(),
+                m_target_module.get(),
+                m_inline_imports,
+                m_omit_anno_origin,
                 /*is_root_module=*/false,
-                m_inline_mdle,
                 m_references,
                 m_imports,
                 m_exports,
@@ -1267,25 +1467,31 @@ void Module_inliner::do_type(IType const *t)
     }
 }
 
-static bool is_mdle(char const *module_name)
-{
-    if (module_name[0] == ':' && module_name[1] == ':' &&
-        (module_name[2] == '/' ||
-        (isalpha(module_name[2]) && module_name[3] == ':' && module_name[4] == '/')))
-        return true;
-
-    return false;
-}
-
 bool Module_inliner::needs_inline(IModule const *module) const
 {
-    if (m_inline_mdle)
-        return is_mdle(module->get_name());
+    return m_inline_imports->inline_import(module);
+}
 
-    if (module->is_stdlib() || module->is_builtins())
-        return false;
+// Creates a reference to an imported entity.
+mi::mdl::IExpression *Module_inliner::create_imported_reference(
+    Definition const *imported_def,
+    Definition const *orig_def)
+{
+    // construct qualified name for reference
+    mi::base::Handle<Module const> orig_module(m_module->get_owner_module(imported_def));
+    MDL_ASSERT(!needs_inline(orig_module.get()));
 
-    return true;
+    IQualified_name       *qn_new = m_nf.create_qualified_name();
+    IQualified_name const *mqn    = orig_module->get_qualified_name();
+
+    for (int i = 0, n = mqn->get_component_count(); i < n; ++i) {
+        qn_new->add_component(m_target_module->clone_name(mqn->get_component(i)));
+    }
+    ISymbol const *sym_new = m_nf.create_symbol(orig_def->get_symbol()->get_name());
+    qn_new->add_component(m_nf.create_simple_name(sym_new));
+
+    IType_name const *type_name = m_nf.create_type_name(qn_new);
+    return m_ef.create_reference(type_name);
 }
 
 // Constructor.
@@ -1293,19 +1499,27 @@ Exports_collector::Exports_collector(
     Module const *module,
     Def_set      &def_set,
     bool         is_root)
-    : m_module(mi::base::make_handle_dup(module))
-    , m_def_set(def_set)
-    , m_is_root(is_root)
+: m_module(mi::base::make_handle_dup(module))
+, m_def_set(def_set)
+, m_is_root(is_root)
 {
+}
+
+// Collect entities.
+void Exports_collector::collect()
+{
+    visit(m_module.get());
 }
 
 bool Exports_collector::pre_visit(IDeclaration_function *decl)
 {
     if (m_is_root) {
-        if (IAnnotation_block const *anno = decl->get_annotations())
+        if (IAnnotation_block const *anno = decl->get_annotations()) {
             visit(anno);
-        if (IAnnotation_block const *ranno = decl->get_return_annotations())
+        }
+        if (IAnnotation_block const *ranno = decl->get_return_annotations()) {
             visit(ranno);
+        }
     }
 
     for (int i = 0, n = decl->get_parameter_count(); i < n; ++i) {
@@ -1315,7 +1529,6 @@ bool Exports_collector::pre_visit(IDeclaration_function *decl)
     visit(decl->get_return_type_name());
 
     if (decl->is_preset()) {
-
         IStatement_expression const *preset_body
             = cast<IStatement_expression>(decl->get_body());
         IExpression const           *expr = preset_body->get_expression();
@@ -1336,14 +1549,16 @@ bool Exports_collector::pre_visit(IDeclaration_function *decl)
 bool Exports_collector::pre_visit(IParameter *param)
 {
     if (m_is_root) {
-        if (IAnnotation_block const *anno = param->get_annotations())
+        if (IAnnotation_block const *anno = param->get_annotations()) {
             visit(anno);
+        }
     }
 
     visit(param->get_type_name());
 
-    if (IExpression const *init = param->get_init_expr())
+    if (IExpression const *init = param->get_init_expr()) {
         visit(init);
+    }
 
     return false;
 }
@@ -1353,8 +1568,9 @@ void Exports_collector::post_visit(IAnnotation *anno)
     IDefinition const *d = anno->get_name()->get_definition();
     if (impl_cast<Definition>(d)->get_original_import_idx() != 0) {
         mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(d));
-        if (mod_ori->is_builtins() || mod_ori->is_stdlib())
+        if (mod_ori->is_builtins() || mod_ori->is_stdlib()) {
             return;
+        }
         m_def_set.insert(m_module->get_original_definition(d));
     }
 }
@@ -1362,35 +1578,44 @@ void Exports_collector::post_visit(IAnnotation *anno)
 bool Exports_collector::pre_visit(IDeclaration_type_struct *decl)
 {
     if (m_is_root)
-        if (IAnnotation_block const *anno = decl->get_annotations())
+        if (IAnnotation_block const *anno = decl->get_annotations()) {
             visit(anno);
+        }
 
     for (int i = 0, n = decl->get_field_count(); i < n; ++i) {
         visit(decl->get_field_type_name(i));
-        if (decl->get_field_init(i))
+        if (decl->get_field_init(i)) {
             visit(decl->get_field_init(i));
-        if (m_is_root)
-            if (IAnnotation_block const *anno = decl->get_annotations(i))
-            visit(anno);
+        }
+        if (m_is_root) {
+            if (IAnnotation_block const *anno = decl->get_annotations(i)) {
+                visit(anno);
+            }
+        }
     }
     return false;
 }
 
-void Exports_collector::post_visit(IExpression_reference *ref)
+IExpression *Exports_collector::post_visit(IExpression_reference *ref)
 {
-    if (ref->is_array_constructor())
-        return;
+    if (ref->is_array_constructor()) {
+        return ref;
+    }
     Definition const *def = impl_cast<Definition>(ref->get_definition());
 
-    if (def->get_kind() != Definition::DK_FUNCTION)
-        return;
+    if (def->get_kind() != Definition::DK_FUNCTION &&
+        def->get_kind() != IDefinition::DK_CONSTANT)
+    {
+        return ref;
+    }
 
     mi::base::Handle<Module const> mod_ori(mi::base::make_handle_dup(m_module.get()));
     bool is_root = m_is_root;
     if (def->get_original_import_idx() != 0) {
         mod_ori = m_module->get_owner_module(def);
-        if (mod_ori->is_builtins() || mod_ori->is_stdlib())
-            return;
+        if (mod_ori->is_builtins() || mod_ori->is_stdlib()) {
+            return ref;
+        }
         def = m_module->get_original_definition(def);
         is_root = false;
     }
@@ -1399,20 +1624,23 @@ void Exports_collector::post_visit(IExpression_reference *ref)
         Exports_collector c(mod_ori.get(), m_def_set, is_root);
         c.visit(def->get_declaration());
     }
+    return ref;
 }
 
-void Exports_collector::post_visit(IExpression_literal *lit)
+IExpression *Exports_collector::post_visit(IExpression_literal *lit)
 {
     handle_type(lit->get_type());
+    return lit;
 }
 
 
 void Exports_collector::post_visit(IType_name *tn)
 {
     if (IType const *t = tn->get_type()) {
+        // this typename names a real type
         handle_type(t);
-    }
-    else {
+    } else {
+        // this typename names a non-type entity
         IQualified_name const *qn = tn->get_qualified_name();
         if (Definition const *d = impl_cast<Definition>(qn->get_definition())) {
             if (d->get_kind() == IDefinition::DK_ENUM_VALUE) {
@@ -1441,8 +1669,9 @@ void Exports_collector::handle_type(IType const *t) {
         bool is_root = m_is_root;
         if (type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
             mod_ori = m_module->get_owner_module(type_def);
-            if (mod_ori->is_builtins() || mod_ori->is_stdlib())
+            if (mod_ori->is_builtins() || mod_ori->is_stdlib()) {
                 return;
+            }
             type_def = m_module->get_original_definition(type_def);
             is_root = false;
         }
@@ -1454,6 +1683,41 @@ void Exports_collector::handle_type(IType const *t) {
     }
 }
 
+static bool is_mdle(char const *module_name)
+{
+    if (module_name[0] == ':' && module_name[1] == ':' &&
+        (module_name[2] == '/' ||
+        (isalpha(module_name[2]) && module_name[3] == ':' && module_name[4] == '/')))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+class Inline_import_callback : public IInline_import_callback
+{
+public:
+    Inline_import_callback(bool inline_mdle) : m_inline_mdle(inline_mdle) { }
+
+    bool inline_import(IModule const *module)
+    {
+        if (m_inline_mdle) {
+            return is_mdle(module->get_name());
+        }
+        if (module->is_stdlib() || module->is_builtins()) {
+            // never inline the standard modules (besides it will fail)
+            return false;
+        }
+
+        return true;
+    }
+
+private:
+    bool m_inline_mdle;
+};
+
+// Creates a new error.
 // Constructor.
 MDL_module_transformer::MDL_module_transformer(
     IAllocator *alloc,
@@ -1477,6 +1741,33 @@ IModule const *MDL_module_transformer::inline_mdle(IModule const *imodule)
     return inline_module(imodule, true);
 }
 
+// Compute the resulting MDL version.
+IMDL::MDL_version MDL_module_transformer::compute_mdl_version(
+    Module const *root)
+{
+    IMDL::MDL_version v = root->get_mdl_version();
+
+    for (int i = 0, n = root->get_import_count(); i < n; ++i) {
+        base::Handle<Module const> import(root->get_import(i));
+        if (import->is_builtins() || import->is_stdlib()) {
+            continue;
+        }
+
+        IMDL::MDL_version imp_v = import->get_mdl_version();
+        if (imp_v > v) {
+            v = imp_v;
+        }
+    }
+
+    // MDL 1.5 is required for
+    // - the cast<> operator (needed by MDLE)
+    // - the ::anno::origin anotation
+    if (v < IMDL::MDL_VERSION_1_5) {
+        v = IMDL::MDL_VERSION_1_5;
+    }
+    return v;
+}
+
 // Inline all imports of a module, creating a new one.
 IModule const *MDL_module_transformer::inline_module(IModule const *imodule, bool inline_mdle)
 {
@@ -1489,7 +1780,7 @@ IModule const *MDL_module_transformer::inline_module(IModule const *imodule, boo
     Module const *module = impl_cast<Module>(imodule);
 
     bool user_imports = false;
-    for (int i = 0; i < module->get_import_count(); ++i) {
+    for (int i = 0, n = module->get_import_count(); i < n; ++i) {
         base::Handle<IModule const> im(module->get_import(i));
         if (!(im->is_builtins() || im->is_stdlib())) {
             user_imports = true;
@@ -1506,9 +1797,7 @@ IModule const *MDL_module_transformer::inline_module(IModule const *imodule, boo
     // Create new module
     string module_name(imodule->get_name(), get_allocator());
 
-    IMDL::MDL_version v = module->get_mdl_version();
-    if (v < IMDL::MDL_VERSION_1_5)
-        v = IMDL::MDL_VERSION_1_5;/* MDLE needs the cast<> operator */
+    IMDL::MDL_version v = compute_mdl_version(module);
 
     base::Handle<Module> inlined_module(
         m_compiler->create_module(
@@ -1516,27 +1805,26 @@ IModule const *MDL_module_transformer::inline_module(IModule const *imodule, boo
             module_name.c_str(),
             v));
 
-    // collect non-root definitions that need to be exported from the
-    // new module in a pre-pass
+    // setup inliner ...
+    Inline_import_callback callback(inline_mdle);
+
     Def_set exports(
         0, Def_set::hasher(), Def_set::key_equal(), get_allocator());
-    Exports_collector collector(module, exports, /*is_root=*/true);
-    collector.visit(module);
 
-    // setup inliner ...
     Module_inliner::Reference_map references(
         Module_inliner::Reference_map::key_compare(), get_allocator());
 
     Module_inliner::Import_set imports(
         Module_inliner::Import_set::key_compare(), get_allocator());
 
-    int counter = 0;
+    size_t counter = 0;
     Module_inliner inliner(
         get_allocator(),
         module,
         inlined_module.get(),
+        &callback,
+        /*omit_anno_origin=*/false,
         /*is_root_module=*/true,
-        inline_mdle,
         references,
         imports,
         exports,
@@ -1549,12 +1837,14 @@ IModule const *MDL_module_transformer::inline_module(IModule const *imodule, boo
     MDL_ASSERT(AST_checker::check_module(inlined_module.get()) && "inlined AST containes errors");
 
     // Finalize the new module
-    inlined_module->analyze(/*cache=*/NULL, /*context=*/NULL, /*resolve_resources=*/true);
+    inlined_module->analyze(/*cache=*/NULL, /*context=*/NULL);
     if (!inlined_module->is_valid()) {
-
-        error(INLINING_MODULE_FAILED, Error_params(get_allocator()).add(imodule->get_name()));
-        Messages const& messages = inlined_module->access_messages();
-        for (int i = 0, n = messages.get_message_count(); i < n; ++i) {
+        error(
+            INLINING_MODULE_FAILED,
+            Error_params(get_allocator())
+                .add(imodule->get_name()));
+        Messages const &messages = inlined_module->access_messages();
+        for (size_t i = 0, n = messages.get_message_count(); i < n; ++i) {
             m_msg_list.add_imported(m_last_msg_idx, 0, messages.get_message(i));
         }
         return NULL;

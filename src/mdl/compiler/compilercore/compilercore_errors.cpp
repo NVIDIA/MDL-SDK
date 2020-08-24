@@ -761,6 +761,10 @@ char const *get_error_template(
             return "getting a symbol in the jit compiled code failed: $0";
         case LINKING_LIBMDLRT_FAILED:
             return "linking libmdlrt failed: $0";
+        case PARSING_RENDERER_MODULE_FAILED:
+            return "parsing the user-specified renderer module failed: $0";
+        case LINKING_RENDERER_MODULE_FAILED:
+            return "linking the user-specified renderer module failed: $0";
 
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:
@@ -818,12 +822,16 @@ char const *get_error_template(
             return "Function '$0' does not exists in $1";
         case FUNCTION_RET_TYPE_DIFFERENT:
             return "Functions '$0' have different return types, $1 != $2";
+        case FUNCTION_PARAM_DELETED:
+            return "Function '$0' has fewer parameters in $1";
         case FUNCTION_PARAM_DEF_ARG_DELETED:
             return "Parameter '$0' of function '$1' has no default argument in $2";
         case FUNCTION_PARAM_DEF_ARG_CHANGED:
             return "Parameter '$0' of function '$1' has a different default argument in $2";
         case ANNOTATION_DOES_NOT_EXISTS:
             return "'$0' does not exists in $1";
+        case ANNOTATION_PARAM_DELETED:
+            return "Annotation '$0' has fewer parameters in $1";
         case ANNOTATION_PARAM_DEF_ARG_DELETED:
             return "Parameter '$0' of '$1' has no default argument in $2";
         case ANNOTATION_PARAM_DEF_ARG_CHANGED:

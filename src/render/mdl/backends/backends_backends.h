@@ -40,7 +40,8 @@
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/neuraylib/icanvas.h>
-#include <mi/neuraylib/imdl_compiler.h>
+#include <mi/neuraylib/imdl_backend.h>
+#include <mi/neuraylib/imdl_backend_api.h>
 #include <mi/neuraylib/itile.h>
 
 #include <io/scene/dbimage/i_dbimage.h>
@@ -82,7 +83,7 @@ public:
     /// \param code_cache      If non-NULL, the code cache.
     /// \param string_ids      If True, string arguments are mapped to string identifiers.
     Mdl_llvm_backend(
-        mi::neuraylib::IMdl_compiler::Mdl_backend_kind kind,
+        mi::neuraylib::IMdl_backend_api::Mdl_backend_kind kind,
         mi::mdl::IMDL* compiler,
         mi::mdl::ICode_generator_jit* jit,
         mi::mdl::ICode_cache *code_cache,
@@ -107,24 +108,6 @@ public:
         const char* fname,
         MDL::Execution_context* context);
 
-    const mi::neuraylib::ITarget_code* translate_material_expressions(
-        DB::Transaction* transaction,
-        const MDL::Mdl_compiled_material* material,
-        const char* const paths[],
-        mi::Uint32 path_cnt,
-        const char* fname,
-        mi::Sint32* errors);
-
-    const mi::neuraylib::ITarget_code* translate_material_expression_uniform_state(
-        DB::Transaction* transaction,
-        const MDL::Mdl_compiled_material* material,
-        const char* path,
-        const char* fname,
-        const mi::Float32_4_4_struct& world_to_obj,
-        const mi::Float32_4_4_struct& obj_to_world,
-        mi::Sint32 object_id,
-        mi::Sint32* errors);
-
     const mi::neuraylib::ITarget_code* translate_material_df(
         DB::Transaction* transaction,
         const MDL::Mdl_compiled_material* material,
@@ -143,9 +126,17 @@ public:
         DB::Transaction *transaction,
         const MDL::Mdl_compiled_material* material);
 
+    mi::mdl::ILink_unit *create_link_unit(
+        MDL::Execution_context* context);
+
     mi::neuraylib::ITarget_code const *translate_link_unit(
         Link_unit const *lu,
         MDL::Execution_context* context);
+
+    /// Update the MDL JIT options from the given parameters.
+    void update_jit_options(
+        const char *internal_space,
+        MDL::Execution_context *context);
 
     /// Get the MDL compiler.
     mi::base::Handle<mi::mdl::IMDL> get_compiler() const { return m_compiler; }
@@ -154,7 +145,7 @@ public:
     mi::base::Handle<mi::mdl::ICode_generator_jit> get_jit_be() const { return m_jit; }
 
     /// Get the backend kind.
-    mi::neuraylib::IMdl_compiler::Mdl_backend_kind get_kind() const { return m_kind; }
+    mi::neuraylib::IMdl_backend_api::Mdl_backend_kind get_kind() const { return m_kind; }
 
     /// If true, the LLVM-IR backend uses SIMD instructions.
     bool get_enable_simd() const { return m_enable_simd; }
@@ -182,7 +173,7 @@ public:
 
 private:
     /// The backend kind.
-    mi::neuraylib::IMdl_compiler::Mdl_backend_kind m_kind;
+    mi::neuraylib::IMdl_backend_api::Mdl_backend_kind m_kind;
 
     /// If compiling for PTX, the SM version.
     unsigned m_sm_version;
@@ -392,6 +383,16 @@ public:
         ITarget_resource_callback_internal *resource_callback,
         mi::neuraylib::Target_value_layout_state state =
             mi::neuraylib::Target_value_layout_state()) const;
+
+    /// Get the internal IGenerated_code_value_layout
+    mi::mdl::IGenerated_code_value_layout const* get_internal_layout() const
+    {
+        m_layout->retain();
+        return m_layout.get();
+    }
+
+    /// If true, string argument values are mapped to string identifiers.
+    bool strings_mapped_to_ids() const { return m_strings_mapped_to_ids; }
 
 private:
     /// The MDL argument block.

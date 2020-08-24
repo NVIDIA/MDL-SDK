@@ -45,7 +45,7 @@ create_from_base_preset(
     NAMESPACE mdl_core
     OUTPUT_NAME "execution_cuda"
     SOURCES ${PROJECT_SOURCES}
-    WINDOWS_UNICODE
+    EXAMPLE
 )
 
 # add dependencies

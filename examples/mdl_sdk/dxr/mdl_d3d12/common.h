@@ -69,7 +69,13 @@
 
 #include "utils.h"
 
-namespace mdl_d3d12
+// mdl example shared
+#include <utils/enums.h>
+#include <utils/io.h>
+#include <utils/os.h>
+#include <utils/strings.h>
+
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     using namespace DirectX;
     template<class T>
@@ -115,7 +121,5 @@ namespace mdl_d3d12
         virtual std::string get_debug_name() const = 0;
     };
 
-}
-
-
+}}} // mi::examples::mdl_d3d12
 #endif

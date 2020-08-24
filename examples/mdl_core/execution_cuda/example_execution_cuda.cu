@@ -150,18 +150,28 @@ extern "C" __global__ void evaluate_mat_expr(
     tct_float3 texture_tangent_v[1] = { { 0.0f, 1.0f, 0.0f } };
 
     Mdl_state mdl_state = {
-        /*normal=*/           { 0.0f, 0.0f, 1.0f },
-        /*geom_normal=*/      { 0.0f, 0.0f, 1.0f },
-        /*position=*/         { pos_x, pos_y, 0.0f },
-        /*animation_time=*/   0.0f,
-        /*texture_coords=*/   texture_coords,
-        /*tangent_u=*/        texture_tangent_u,
-        /*tangent_v=*/        texture_tangent_v,
-        /*text_results=*/     NULL,
-        /*ro_data_segment=*/  tc_data_list[tc_idx].ro_data_segment,
-        /*world_to_object=*/  identity,
-        /*object_to_world=*/  identity,
-        /*object_id=*/        0
+        /*normal=*/                { 0.0f, 0.0f, 1.0f },
+        /*geom_normal=*/           { 0.0f, 0.0f, 1.0f },
+#ifdef ENABLE_DERIVATIVES
+        /*position=*/
+        {
+            { pos_x, pos_y, 0.0f },
+            { 2 * step_x, 0.0f, 0.0f },
+            { 0.0f, 2 * step_y, 0.0f }
+        },
+#else
+        /*position=*/              { pos_x, pos_y, 0.0f },
+#endif
+        /*animation_time=*/        0.0f,
+        /*texture_coords=*/        texture_coords,
+        /*tangent_u=*/             texture_tangent_u,
+        /*tangent_v=*/             texture_tangent_v,
+        /*text_results=*/          NULL,
+        /*ro_data_segment=*/       tc_data_list[tc_idx].ro_data_segment,
+        /*world_to_object=*/       identity,
+        /*object_to_world=*/       identity,
+        /*object_id=*/             0,
+        /*meters_per_scene_unit=*/ 1.0f
     };
 
     Tex_handler tex_handler;
@@ -180,12 +190,14 @@ extern "C" __global__ void evaluate_mat_expr(
         float offs_y = radinv2(i) * step_y;
 
         // Update the position and the texture coordinate
-        mdl_state.position.x = pos_x + 2 * offs_x;
-        mdl_state.position.y = pos_y + 2 * offs_y;
 #ifdef ENABLE_DERIVATIVES
+        mdl_state.position.val.x = pos_x + 2 * offs_x;
+        mdl_state.position.val.y = pos_y + 2 * offs_y;
         texture_coords[0].val.x = tex_x + offs_x;
         texture_coords[0].val.y = tex_y + offs_y;
 #else
+        mdl_state.position.x = pos_x + 2 * offs_x;
+        mdl_state.position.y = pos_y + 2 * offs_y;
         texture_coords[0].x = tex_x + offs_x;
         texture_coords[0].y = tex_y + offs_y;
 #endif

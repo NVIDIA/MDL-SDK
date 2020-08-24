@@ -84,7 +84,7 @@ const char* Compound_impl<I, T, ROWS, COLUMNS>::get_key( mi::Size index) const
 {
     std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     m_cached_key = key;
     return m_cached_key.c_str();
@@ -102,7 +102,7 @@ const mi::base::IInterface* Compound_impl<I, T, ROWS, COLUMNS>::get_value( const
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_value( index);
 }
@@ -112,7 +112,7 @@ mi::base::IInterface* Compound_impl<I, T, ROWS, COLUMNS>::get_value( const char*
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_value( index);
 }
@@ -121,14 +121,14 @@ template <typename I, typename T, mi::Size ROWS, mi::Size COLUMNS>
 const mi::base::IInterface* Compound_impl<I, T, ROWS, COLUMNS>::get_value( mi::Size index) const
 {
     if( index >= ROWS*COLUMNS)
-        return 0;
+        return nullptr;
 
     std::string element_proxy_class_name = "__";
     element_proxy_class_name += get_element_type_name();
     element_proxy_class_name += "_proxy";
 
     mi::INumber* value
-        = s_class_factory->create_type_instance<mi::INumber>( 0, element_proxy_class_name.c_str());
+        = s_class_factory->create_type_instance<mi::INumber>( nullptr, element_proxy_class_name.c_str());
     mi::base::Handle<IProxy> proxy( value->get_interface<IProxy>());
     proxy->set_pointer_and_owner( &m_storage[index], this->cast_to_major());
     return value;
@@ -138,14 +138,14 @@ template <typename I, typename T, mi::Size ROWS, mi::Size COLUMNS>
 mi::base::IInterface* Compound_impl<I, T, ROWS, COLUMNS>::get_value( mi::Size index)
 {
     if( index >= ROWS*COLUMNS)
-        return 0;
+        return nullptr;
 
     std::string element_proxy_class_name = "__";
     element_proxy_class_name += get_element_type_name();
     element_proxy_class_name += "_proxy";
 
     mi::INumber* value
-        = s_class_factory->create_type_instance<mi::INumber>( 0, element_proxy_class_name.c_str());
+        = s_class_factory->create_type_instance<mi::INumber>( nullptr, element_proxy_class_name.c_str());
     mi::base::Handle<IProxy> proxy( value->get_interface<IProxy>());
     proxy->set_pointer_and_owner( &m_storage[index], this->cast_to_major());
     return value;
@@ -211,7 +211,7 @@ bool Compound_impl<I, T, ROWS, COLUMNS>::get_value(
     mi::Size row, mi::Size column, bool& value) const
 {
     if(( row >= ROWS) || ( column >= COLUMNS)) {
-        value = static_cast<bool>( 0);
+        value = false;
         return false;
     }
     value = static_cast<bool>( m_storage[ row*COLUMNS + column]);
@@ -423,7 +423,7 @@ mi::base::IInterface* Vector_impl<I, T, ROWS>::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Vector_impl<I,T,ROWS>())->cast_to_major();
 }
 
@@ -470,7 +470,7 @@ bool Vector_impl<I,T,ROWS>::index_to_key( mi::Size index, std::string& key) cons
     if( index >= ROWS)
         return false;
 
-    key = (index == 3) ? 'w' : static_cast<char>( 'x' + index);
+    key = (index == 3) ? 'w' : static_cast<char>( 'x' + index); //-V601 PVS
     return true;
 }
 
@@ -481,7 +481,7 @@ mi::base::IInterface* Matrix_impl<I, T, ROWS, COLUMNS>::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Matrix_impl<I,T,ROWS,COLUMNS>())->cast_to_major();
 }
 
@@ -540,8 +540,8 @@ bool Matrix_impl<I,T,ROWS,COLUMNS>::index_to_key( mi::Size index, std::string& k
 
     mi::Size row    = index / COLUMNS;
     mi::Size column = index % COLUMNS;
-    key  = (row    == 3) ? 'w' : static_cast<char>( 'x' + row   );
-    key += (column == 3) ? 'w' : static_cast<char>( 'x' + column);
+    key  = (row    == 3) ? 'w' : static_cast<char>( 'x' + row   ); //-V601 PVS
+    key += (column == 3) ? 'w' : static_cast<char>( 'x' + column); //-V601 PVS
     return true;
 }
 
@@ -551,7 +551,7 @@ mi::base::IInterface* Color_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Color_impl)->cast_to_major();
 }
 
@@ -611,7 +611,7 @@ mi::base::IInterface* Color3_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Color3_impl)->cast_to_major();
 }
 
@@ -668,7 +668,7 @@ mi::base::IInterface* Spectrum_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Spectrum_impl)->cast_to_major();
 }
 
@@ -724,7 +724,7 @@ mi::base::IInterface* Bbox3_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Bbox3_impl)->cast_to_major();
 }
 

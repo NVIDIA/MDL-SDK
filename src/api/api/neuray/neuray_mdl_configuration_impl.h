@@ -36,22 +36,22 @@
 #define API_API_NEURAY_MDL_CONFIGURATION_IMPL_H
 
 #include <mi/base/interface_implement.h>
+#include <mi/base/handle.h>
 #include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/ineuray.h>
 
+#include <vector>
+#include <string>
 #include <boost/core/noncopyable.hpp>
 #include <base/system/main/access_module.h>
 
 namespace MI {
 
 namespace MDLC { class Mdlc_module; }
+namespace PATH { class Path_module; }
 
 namespace NEURAY {
 
-class Class_factory;
-
-/// This API component is shared between Neuray_impl and Cluster_impl. It must not use
-/// Access_module<DATA::Data_module> or DATA::mod_data directly.
 class Mdl_configuration_impl
   : public mi::base::Interface_implement<mi::neuraylib::IMdl_configuration>,
     public boost::noncopyable
@@ -67,6 +67,41 @@ public:
 
     // public API methods
 
+    void set_logger( mi::base::ILogger* logger) final;
+
+    mi::base::ILogger* get_logger() final;
+
+
+    mi::Sint32 add_mdl_path( const char* path) final;
+
+    mi::Sint32 remove_mdl_path( const char* path) final;
+
+    void clear_mdl_paths() final;
+
+    mi::Size get_mdl_paths_length() const final;
+
+    const mi::IString* get_mdl_path( mi::Size index) const final;
+
+    mi::Size get_mdl_system_paths_length() const final;
+
+    const char* get_mdl_system_path( mi::Size index) const final;
+
+    mi::Size get_mdl_user_paths_length() const final;
+
+    const char* get_mdl_user_path( mi::Size index) const final;
+
+
+    mi::Sint32 add_resource_path( const char* path) final;
+
+    mi::Sint32 remove_resource_path( const char* path) final;
+
+    void clear_resource_paths() final;
+
+    mi::Size get_resource_paths_length() const final;
+
+    const mi::IString* get_resource_path( mi::Size index) const final;
+
+
     mi::Sint32 set_implicit_cast_enabled( bool value) final;
 
     bool get_implicit_cast_enabled() const final;
@@ -75,10 +110,19 @@ public:
 
     bool get_expose_names_of_let_expressions() const final;
 
+    mi::Sint32 set_simple_glossy_bsdf_legacy_enabled( bool value) final;
+
+    bool get_simple_glossy_bsdf_legacy_enabled() const final;
+
+
+    mi::neuraylib::IMdl_entity_resolver* get_entity_resolver() const final;
+
+    void set_entity_resolver( mi::neuraylib::IMdl_entity_resolver* resolver) final;
+
     // internal methods
 
     /// Starts this API component.
-    /// 
+    ///
     /// The implementation of INeuray::start() calls the #start() method of each API component.
     /// This method performs the API component's specific part of the library start.
     ///
@@ -93,10 +137,29 @@ public:
     /// \return 0, in case of success, -1 in case of failure
     mi::Sint32 shutdown();
 
+    /// Resets this API component.
+    ///
+    /// Releases and re-acquires the MDLC module.
+    void reset();
+
+    /// Returns the default MDL system path.
+    std::string get_default_mdl_system_path() const;
+
+    /// Returns the default MDL user path.
+    std::string get_default_mdl_user_path() const;
+
 private:
     mi::neuraylib::INeuray* m_neuray;                       // neuray interface
-    
+
+    SYSTEM::Access_module<PATH::Path_module> m_path_module; // path module
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module; // mdlc module
+
+    bool m_implicit_cast_enabled;
+    bool m_expose_names_of_let_expressions;
+    bool m_simple_glossy_bsdf_legacy_enabled;
+    mi::base::Handle<mi::neuraylib::IMdl_entity_resolver> m_entity_resolver;
+    std::vector<std::string> m_mdl_system_paths;
+    std::vector<std::string> m_mdl_user_paths;
 };
 
 } // namespace NEURAY

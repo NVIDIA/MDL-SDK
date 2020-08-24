@@ -588,6 +588,9 @@ public:
     IGenerated_code_executable *compile_unit(
         ILink_unit const *unit) MDL_FINAL;
 
+    /// Create a blank layout used for deserialization of target codes.
+    IGenerated_code_value_layout* create_value_layout() const MDL_FINAL;
+
 private:
     /// Calculate the state mapping mode from options.
     unsigned get_state_mapping() const;

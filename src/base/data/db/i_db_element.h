@@ -62,34 +62,34 @@ class Element_base : public SERIAL::Serializable
     /// Return the approximate size in bytes of the element including all its substructures. This is
     /// used to make decisions about garbage collection.
     ///
-    /// \return				The size of the element
+    /// \return                         The size of the element
     virtual size_t get_size() const;
 
     /// This is used by the database when it needs to create a new version of a tag. It will create
     /// and return a full copy of the element.
     ///
-    /// \return				The new copy of the element
+    /// \return                         The new copy of the element
     virtual Element_base* copy() const = 0;
 
     /// Check, if this object is of the given type. This is true, if either the class id of this
     /// object equals the given class id, or the class is derived from another class which has the
     /// given class id.
     ///
-    /// \param id			The class id to check
-    /// \return				True, if the class is derived from the class with the id
+    /// \param id                       The class id to check
+    /// \return                         True, if the class is derived from the class with the id
     virtual bool is_type_of(
-	SERIAL::Class_id id) const
+        SERIAL::Class_id id) const
     {
-	return id == 0 ? true : false;
+        return id == 0 ? true : false;
     }
 
     /// Return which journal flags could be changed in the database element. This is anded later
     /// with the Edits' journal flags to reduce the size of the journals.
     ///
-    /// \return				The journal flags
+    /// \return                         The journal flags
     virtual Journal_type get_journal_flags() const
     {
-	return Journal_type();
+        return Journal_type();
     }
 
     /// The class id for the base class
@@ -104,23 +104,23 @@ class Element_base : public SERIAL::Serializable
     /// which does nothing is provided.
     /// Important note: From within the bundle call no accesses to database elements may be done!
     ///
-    /// \param results			A place to store the tags to be bundled
-    /// \param size			The size of the array and as such the limit for the number
-    ///					of elements which can be bundled
-    /// \return				The actual number of bundled elements.
+    /// \param results                  A place to store the tags to be bundled
+    /// \param size                     The size of the array and as such the limit for the number
+    ///                                 of elements which can be bundled
+    /// \return                         The actual number of bundled elements.
     virtual Uint bundle(
-	Tag* results,
-	Uint size) const
+        Tag* results,
+        Uint size) const
     {
-	return 0;
+        return 0;
     }
 
     /// Create a list of references this element has stored. The default implementation is supplied
     /// because most elements don't need this.
     ///
-    /// \param result			Store the referenced tags here
+    /// \param result                   Store the referenced tags here
     virtual void get_references(
-	Tag_set*   result) const
+        Tag_set*   result) const
     { }
 
     /// This function will be called by the database before a new version of a
@@ -159,7 +159,7 @@ class Element_base : public SERIAL::Serializable
     /// Return a human readable version of the class id. While the id is enough to identify each
     /// Serializable's type, is it not exactly human readable to read 0x5f43616d for Camera.
     ///
-    /// \return				The name of the class
+    /// \return                         The name of the class
     virtual std::string get_class_name() const = 0;
 };
 
@@ -185,7 +185,7 @@ class Element : public P
     /// construct an instance of this class
     static SERIAL::Serializable* factory()
     {
-	return new T;
+        return new T;
     }
 
     /// default constructor needed because of the copy constructor
@@ -193,39 +193,39 @@ class Element : public P
 
     /// copy constructor which will call the copy constructor of the base class
     ///
-    /// \param source			The source to copy
+    /// \param source                   The source to copy
     Element(const Element& source);
 
     /// get the class id of an instance of our class
     ///
-    /// \return				The class id of this class
+    /// \return                         The class id of this class
     SERIAL::Class_id get_class_id() const;
 
     /// make a copy of this instance
     ///
-    /// \return				The new copy
+    /// \return                         The new copy
     Element_base* copy() const;
 
     /// Return the approximate size in bytes of the element including all its substructures. This is
     /// used to make decisions about garbage collection.
     ///
-    /// \return				The size of the element
+    /// \return                         The size of the element
     size_t get_size() const
     {
-	return sizeof(*this)
-	    + P::get_size() - sizeof(P);
+        return sizeof(*this)
+            + P::get_size() - sizeof(P);
     }
 
     /// Check, if this object is of the given type. This is true, if either the class id of this
     /// object equals the given class id, or the class is derived from another class which has the
     /// given class id.
     ///
-    /// \param id			The class id to check
-    /// \return				True, if the class is derived from the class with the id
+    /// \param id                       The class id to check
+    /// \return                         True, if the class is derived from the class with the id
     bool is_type_of(
-	SERIAL::Class_id id) const
+        SERIAL::Class_id id) const
     {
-	return ID == id ? true : P::is_type_of(id);
+        return ID == id ? true : P::is_type_of(id);
     }
 };
 

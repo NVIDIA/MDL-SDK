@@ -288,7 +288,7 @@ void ParserGen::GenCode (Node *p, int indent, BitArray *isChecked) {
 				}
 				GenCode(p2->sub, indent + 1, s1);
 				if (useSwitch) {
-					Indent(indent); fwprintf(gen, L"\tbreak;\n");
+					Indent(indent + 1); fwprintf(gen, L"break;\n");
 					Indent(indent); fwprintf(gen, L"}\n");
 				}
 				p2 = p2->down;
@@ -302,7 +302,9 @@ void ParserGen::GenCode (Node *p, int indent, BitArray *isChecked) {
 					fwprintf(gen, L"default: SynErr(%d); break;\n", errorNr);
 					Indent(indent); fwprintf(gen, L"}\n");
 				} else {
-					fwprintf(gen, L"} "); fwprintf(gen, L"else SynErr(%d);\n", errorNr);
+					fwprintf(gen, L"} else {\n");
+					Indent(indent + 1); fwprintf(gen, L"SynErr(%d);\n", errorNr);
+					Indent(indent); fwprintf(gen, L"}\n");
 				}
 			}
 			break;
@@ -350,7 +352,7 @@ void ParserGen::GenTokensHeader() {
 	int i;
 	bool isFirst = true;
 
-	fwprintf(gen, L"\tenum {\n");
+	fwprintf(gen, L"\tenum TokenKind {\n");
 
 	// tokens
 	for (i=0; i<tab->terminals->Count; i++) {
@@ -420,7 +422,7 @@ void ParserGen::GenProductions() {
 		CopySourcePart(sym->attrPos, 0);
 		fwprintf(gen, L") {\n");
 		CopySourcePart(sym->semPos, 2);
-		GenCode(sym->graph, 2, new BitArray(tab->terminals->Count));
+		GenCode(sym->graph, 1, new BitArray(tab->terminals->Count));
 		fwprintf(gen, L"}\n"); fwprintf(gen, L"\n");
 	}
 }

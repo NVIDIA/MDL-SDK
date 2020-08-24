@@ -166,7 +166,7 @@ const char* Image_plugin_impl::get_file_extension( mi::Uint32 index) const
             return 0;
     }
 
-    assert( false);
+    assert( false); //-V779 PVS
     return 0;
 }
 

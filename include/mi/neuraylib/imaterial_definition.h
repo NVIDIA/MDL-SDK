@@ -33,6 +33,7 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
+#include <mi/neuraylib/imodule.h>
 
 namespace mi {
 
@@ -71,9 +72,30 @@ public:
     /// \return         The MDL name of the material definition.
     virtual const char* get_mdl_name() const = 0;
 
+    /// Returns the MDL name of the module containing this material definition.
+    virtual const char* get_mdl_module_name() const = 0;
+
+    /// Returns the simple MDL name of the function definition.
+    ///
+    /// The simple name is the last component of the MDL name, i.e., without any packages and scope
+    /// qualifiers.
+    ///
+    /// \return         The simple MDL name of the function definition.
+    virtual const char* get_mdl_simple_name() const = 0;
+
     /// Returns the DB name of the prototype, or \c NULL if this material definition is not a
     /// variant.
     virtual const char* get_prototype() const = 0;
+
+    /// Returns the MDL version when this material definition was added and removed.
+    ///
+    /// \param[out] since     The MDL version in which this material definition was added. Since
+    ///                       there are no material definitions in the standard library, the
+    ///                       MDL version of the corresponding module is returned.
+    /// \param[out] removed   The MDL version in which this material definition was removed. Since
+    ///                       there are no material definitions in the standard library,
+    ///                       mi::neuraylib::MDL_VERSION_INVALID is always returned.
+    virtual void get_mdl_version( Mdl_version& since, Mdl_version& removed) const = 0;
 
     /// Indicates whether the material definition is exported by its module.
     virtual bool is_exported() const = 0;
@@ -142,7 +164,7 @@ public:
 
     /// Returns the resolved file name of the thumbnail image for this material definition.
     ///
-    /// The function first checks for a thumbnail annotation. If the annotation is provided, 
+    /// The function first checks for a thumbnail annotation. If the annotation is provided,
     /// it uses the 'name' argument of the annotation and resolves that in the MDL search path.
     /// If the annotation is not provided or file resolution fails, it checks for a file
     /// module_name.material_name.png next to the MDL module.

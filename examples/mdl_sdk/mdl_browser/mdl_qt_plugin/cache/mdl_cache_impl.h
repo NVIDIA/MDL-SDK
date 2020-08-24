@@ -43,7 +43,6 @@
 #include <unordered_map>
 #include <vector>
 #include <mi/base/atom.h>
-#include "../utilities/mdl_helper.h"
 
 
 namespace mi
@@ -70,6 +69,7 @@ class Mdl_cache_item :
 public:
     explicit Mdl_cache_item()
         : m_cache(nullptr)
+        , m_entity_name("")
         , m_simple_name("")
         , m_qualified_name("")
         , m_hidden(false)
@@ -77,6 +77,7 @@ public:
     { }
     virtual ~Mdl_cache_item<T_item>() = default;
 
+    const char* get_entity_name() const override { return m_entity_name.c_str(); }
     const char* get_simple_name() const override { return m_simple_name.c_str(); }
     const char* get_qualified_name() const override { return m_qualified_name.c_str(); }
 
@@ -89,7 +90,11 @@ public:
     const IMdl_cache* get_cache() const override { return m_cache; }
 
     // used while building the cache
-    void initialize(IMdl_cache* cache, const std::string& qualified_name);
+    void initialize(
+        IMdl_cache* cache,
+        const std::string& entity_name,
+        const std::string& simple_name,
+        const std::string& qualified_name);
 
     // used while building the cache
     virtual bool update(mi::neuraylib::INeuray* neuray, 
@@ -105,6 +110,7 @@ protected:
 
 private:
     IMdl_cache* m_cache;
+    std::string m_entity_name;
     std::string m_simple_name;
     std::string m_qualified_name;
     std::vector<std::string> m_keys; // to be able to iterate using the interface
@@ -191,11 +197,12 @@ private:
 // ------------------------------------------------------------------------------------------------
 
 template<class T_item>
-void Mdl_cache_item<T_item>::initialize(IMdl_cache* cache, const std::string& qualified_name)
+void Mdl_cache_item<T_item>::initialize(IMdl_cache* cache, const std::string& entity_name, const std::string& simple_name, const std::string& qualified_name)
 {
     m_cache = cache;
+    m_entity_name = entity_name;
+    m_simple_name = simple_name;
     m_qualified_name = qualified_name;
-    m_simple_name = Mdl_helper::qualified_to_simple_name(m_qualified_name);
 }
 
 template<class T_item>
@@ -311,7 +318,7 @@ const IMdl_cache_item* Mdl_cache_node<T_node>::get_child(
 template<class T_node>
 bool Mdl_cache_node<T_node>::add_child(IMdl_cache_item* child)
 {
-    const IMdl_cache_node::Child_map_key key = {child->get_kind(), child->get_simple_name()};
+    const IMdl_cache_node::Child_map_key key = {child->get_kind(), child->get_entity_name()};
     const auto it = m_children.find(key);
     if (it != m_children.end())
         return false;
@@ -340,7 +347,7 @@ IMdl_cache_item* Mdl_cache_node<T_node>::remove_child(const IMdl_cache_node::Chi
 template<class T_node>
 bool Mdl_cache_node<T_node>::remove_child(IMdl_cache_item* child)
 {
-    const auto removed = remove_child({child->get_kind(), child->get_simple_name()});
+    const auto removed = remove_child({child->get_kind(), child->get_entity_name()});
     return removed != nullptr;
 }
 
@@ -355,7 +362,7 @@ const char* Mdl_cache_element<T_element>::get_module() const
     if (m_module.empty())
     {
         std::string qualified_name = Base::get_qualified_name();
-        m_module = qualified_name.substr(0, qualified_name.rfind(Base::get_simple_name()) - 2);
+        m_module = qualified_name.substr(0, qualified_name.rfind(Base::get_entity_name()) - 2);
     }
     return m_module.c_str();
 }

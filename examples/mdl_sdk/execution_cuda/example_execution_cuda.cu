@@ -150,8 +150,8 @@ extern "C" __global__ void evaluate_mat_expr(
     tct_float3 texture_tangent_v[1] = { { 0.0f, 1.0f, 0.0f } };
 
     Mdl_state mdl_state = {
-        /*normal=*/           { 0.0f, 0.0f, 1.0f },
-        /*geom_normal=*/      { 0.0f, 0.0f, 1.0f },
+        /*normal=*/                { 0.0f, 0.0f, 1.0f },
+        /*geom_normal=*/           { 0.0f, 0.0f, 1.0f },
 #ifdef ENABLE_DERIVATIVES
         /*position=*/
         {
@@ -160,17 +160,18 @@ extern "C" __global__ void evaluate_mat_expr(
             { 0.0f, 2 * step_y, 0.0f }
         },
 #else
-        /*position=*/         { pos_x, pos_y, 0.0f },
+        /*position=*/              { pos_x, pos_y, 0.0f },
 #endif
-        /*animation_time=*/   0.0f,
-        /*texture_coords=*/   texture_coords,
-        /*tangent_u=*/        texture_tangent_u,
-        /*tangent_v=*/        texture_tangent_v,
-        /*text_results=*/     NULL,
-        /*ro_data_segment=*/  tc_data_list[tc_idx].ro_data_segment,
-        /*world_to_object=*/  identity,
-        /*object_to_world=*/  identity,
-        /*object_id=*/        0
+        /*animation_time=*/        0.0f,
+        /*texture_coords=*/        texture_coords,
+        /*tangent_u=*/             texture_tangent_u,
+        /*tangent_v=*/             texture_tangent_v,
+        /*text_results=*/          NULL,
+        /*ro_data_segment=*/       tc_data_list[tc_idx].ro_data_segment,
+        /*world_to_object=*/       identity,
+        /*object_to_world=*/       identity,
+        /*object_id=*/             0,
+        /*meters_per_scene_unit=*/ 1.0f
     };
     
     Tex_handler tex_handler;

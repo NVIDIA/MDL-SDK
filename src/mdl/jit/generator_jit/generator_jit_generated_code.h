@@ -43,6 +43,7 @@
 #include <mdl/codegenerators/generator_dag/generator_dag_lambda_function.h>
 #include <mdl/codegenerators/generator_dag/generator_dag_tools.h>
 
+#include "generator_jit_generated_code_value_layout.h"
 #include "generator_jit_res_manager.h"
 
 namespace llvm {
@@ -83,115 +84,6 @@ typedef struct {
     unsigned short children_state_offs;  ///< state offset for children
 } Layout_struct;
 
-
-/// Represents the layout of an argument value block with support for nested elements.
-/// Implementation of #mi::mdl::IGenerated_code_value_layout.
-class Generated_code_value_layout : public
-    Allocator_interface_implement<IGenerated_code_value_layout>
-{
-    typedef Allocator_interface_implement<IGenerated_code_value_layout> Base;
-
-public:
-    /// Constructor.
-    ///
-    /// \param alloc     The allocator.
-    /// \param code_gen  The LLVM code generator providing the information about the captured
-    ///                  arguments and the type mapper.
-    Generated_code_value_layout(
-        IAllocator          *alloc,
-        LLVM_code_generator *code_gen);
-
-    /// Constructor from layout data block.
-    ///
-    /// \param alloc                  The allocator.
-    /// \param layout_data_block      The data block containing the layout data.
-    /// \param layout_data_size       The size of the layout data block.
-    /// \param strings_mapped_to_ids  True, if strings are mapped to IDs.
-    Generated_code_value_layout(
-        IAllocator *alloc,
-        char const *layout_data_block,
-        size_t     layout_data_size,
-        bool       strings_mapped_to_ids);
-
-    /// Returns the size of the target argument block.
-    size_t get_size() const MDL_FINAL;
-
-    /// Returns the number of arguments / elements at the given layout state.
-    ///
-    /// \param state  The layout state representing the current nesting within the
-    ///               argument value block. The default value is used for the top-level.
-    size_t get_num_elements(State state = State()) const MDL_FINAL;
-
-    /// Get the offset, the size and the kind of the argument / element inside the argument
-    /// block at the given layout state.
-    ///
-    /// \param[out]  kind      Receives the kind of the argument.
-    /// \param[out]  arg_size  Receives the size of the argument.
-    /// \param       state     The layout state representing the current nesting within the
-    ///                        argument value block. The default value is used for the top-level.
-    ///
-    /// \returns the offset of the requested argument / element or ~size_t  (0) if the state
-    ///          is invalid.
-    size_t get_layout(
-        mi::mdl::IValue::Kind &kind,
-        size_t                &arg_size,
-        State                 state = State()) const MDL_FINAL;
-
-    /// Get the layout state for the i'th argument / element inside the argument value block
-    /// at the given layout state.
-    ///
-    /// \param i      The index of the argument / element.
-    /// \param state  The layout state representing the current nesting within the argument
-    ///               value block. The default value is used for the top-level.
-    ///
-    /// \returns the layout state for the nested element or a state with m_state_offs set to
-    ///          ~mi::Uint32(0) if the element is atomic.
-    IGenerated_code_value_layout::State get_nested_state(
-        size_t i,
-        State  state = State()) const MDL_FINAL;
-
-    /// Set the value inside the given block at the given layout state.
-    ///
-    /// \param[inout] block           The argument value block buffer to be modified.
-    /// \param[in]    value           The value to be set. It has to match the expected kind.
-    /// \param[in]    value_callback  Callback for retrieving resource indices for resource values.
-    /// \param[in]    state           The layout state representing the current nesting within the
-    ///                               argument value block.
-    ///                               The default value is used for the top-level.
-    ///
-    /// \return
-    ///                      -  0: Success.
-    ///                      - -1: Invalid parameters, block or value is a \c NULL pointer.
-    ///                      - -2: Invalid state provided.
-    ///                      - -3: Value kind does not match expected kind.
-    ///                      - -4: Size of compound value does not match expected size.
-    ///                      - -5: Unsupported value type.
-    int set_value(
-        char                           *block,
-        mi::mdl::IValue const          *value,
-        IGenerated_code_value_callback *value_callback,
-        State                          state = State()) const MDL_FINAL;
-
-    // Non-API methods
-
-    /// Get the layout data buffer and its size.
-    char const *get_layout_data(size_t &size) const;
-
-private:
-    /// The layout data buffer.
-    vector<char>::Type m_layout_data;
-
-    /// If true, string argument values are mapped to string identifiers.
-    bool m_strings_mapped_to_ids;
-};
-
-// Allow impl_cast on Generated_code_value_layout
-template<>
-inline Generated_code_value_layout const *impl_cast(IGenerated_code_value_layout const *t) {
-    return static_cast<Generated_code_value_layout const *>(t);
-}
-
-
 /// Structure containing information about a function in a generated executable code object.
 struct Generated_code_function_info
 {
@@ -199,19 +91,21 @@ struct Generated_code_function_info
         string const &name,
         IGenerated_code_executable::Distribution_kind dist_kind,
         IGenerated_code_executable::Function_kind kind,
-        size_t arg_block_index)
+        size_t arg_block_index,
+        IGenerated_code_executable::State_usage state_usage)
     : m_name(name)
     , m_dist_kind(dist_kind)
     , m_kind(kind)
     , m_prototypes(name.get_allocator())
     , m_arg_block_index(arg_block_index)
     , m_df_handle_name_table(name.get_allocator())
+    , m_state_usage(state_usage)
     {}
 
     /// The name of the function.
     string m_name;
 
-    /// The kind of the function.
+    /// The kind of distribution function, if it is a distribution function.
     IGenerated_code_executable::Distribution_kind m_dist_kind;
 
     /// The kind of the function.
@@ -226,6 +120,9 @@ struct Generated_code_function_info
 
     /// The DF handle name table.
     vector<string>::Type m_df_handle_name_table;
+
+    /// The state usage of the function.
+    IGenerated_code_executable::State_usage m_state_usage;
 };
 
 
@@ -304,13 +201,15 @@ public:
     /// \param dist_kind        the kind of distribution to add
     /// \param func_kind        the kind of the function to add
     /// \param arg_block_index  the argument block index for this function or ~0 if not used
+    /// \param state_usage      the state usage of the function to add
     ///
     /// \returns the function index of the added function
     size_t add_function_info(
         char const *name,
         IGenerated_code_executable::Distribution_kind dist_kind,
         IGenerated_code_executable::Function_kind func_kind,
-        size_t arg_block_index) MDL_FINAL;
+        size_t arg_block_index,
+        IGenerated_code_executable::State_usage state_usage) MDL_FINAL;
 
     /// Get the number of distribution function handles referenced by a function.
     ///
@@ -338,6 +237,13 @@ public:
     size_t add_function_df_handle(
         size_t func_index,
         char const *handle_name) MDL_FINAL;
+
+    /// Get the state properties used by a function.
+    ///
+    /// \param func_index     The index of the function.
+    ///
+    /// \return The state usage or 0, if the \p func_index was invalid.
+    IGenerated_code_executable::State_usage get_function_state_usage(size_t func_index) const MDL_FINAL;
 
 private:
     typedef vector<Generated_code_function_info>::Type Func_info_vec;

@@ -52,15 +52,15 @@ namespace HAL
 //
 
 static const char * const colorstrings[] = {
-    "\033[0m",		// default
-    "\033[30m",		// black
-    "\033[31m",		// red
-    "\033[32m",		// green
-    "\033[33m",		// yellow
-    "\033[34m",		// blue
-    "\033[35m",		// magenta
-    "\033[36m",		// cyan
-    "\033[37m"		// white
+    "\033[0m",          // default
+    "\033[30m",         // black
+    "\033[31m",         // red
+    "\033[32m",         // green
+    "\033[33m",         // yellow
+    "\033[34m",         // blue
+    "\033[35m",         // magenta
+    "\033[36m",         // cyan
+    "\033[37m"          // white
 };
 
 #ifdef WIN_NT
@@ -89,7 +89,7 @@ static WORD colorcodes[] = {
 // colorization: ANSI color switching strings for printing to a terminal
 // helper method.
 const char *get_ansi_color(
-    Color		c)		// one of C_*
+    Color               c)              // one of C_*
 {
     ASSERT(M_HAL, sizeof(colorstrings) == C_NUM * sizeof(char *));
     ASSERT(M_HAL, c >= 0 && c < C_NUM);
@@ -101,14 +101,14 @@ const char *get_ansi_color(
 //
 
 void set_console_color(
-    Color		c)		// one of C_*
+    Color               c)              // one of C_*
 {
 #ifdef WIN_NT
     HANDLE std_out = GetStdHandle(STD_OUTPUT_HANDLE);
     if (std_out == INVALID_HANDLE_VALUE)
     {
-	ASSERT(M_HAL, !"Can't obtain std out handle");
-	return;
+        ASSERT(M_HAL, !"Can't obtain std out handle");
+        return;
     }
     SetConsoleTextAttribute(std_out, colorcodes[c]);
 #else

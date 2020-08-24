@@ -29,6 +29,10 @@
 #ifndef MDL_LIBBSDF_INTERNAL_H
 #define MDL_LIBBSDF_INTERNAL_H
 
+#include "../../../mdl/compiler/stdmodule/enums.h"
+
+using namespace mi::mdl::df;
+
 #define BSDF_API extern "C"
 #define BSDF_PARAM extern "C"
 
@@ -46,12 +50,6 @@
     #define M_PI            3.14159265358979323846
 #endif
 #define M_ONE_OVER_PI       0.318309886183790671538
-
-enum scatter_mode {
-    scatter_reflect,
-    scatter_transmit,
-    scatter_reflect_transmit
-};
 
 //-----------------------------------------------------------------------------
 // define vector types CUDA-like

@@ -198,7 +198,7 @@ inline void set_value(
 
 /// Get the given \p data at the looked-up \p address as type T.
 template<typename T>
-inline const T get_value(
+inline T get_value(
     const Type& root,				        // the root's type
     const char* data,				        // the data block
     const char* address)				// the name of the address
@@ -215,7 +215,7 @@ inline const T get_value(
 /// Get the given \p data at the looked-up \p address as type T.
 /// Specialization for type bool.
 template<>
-inline const bool get_value<bool>(
+inline bool get_value<bool>(
     const Type& root,				// the root's type
     const char* data,				// the data block
     const char* address)			// the name of the address
@@ -232,7 +232,7 @@ inline const bool get_value<bool>(
 /// Get the given \p data at the looked-up \p address as type T (wrapper for std::string
 /// addresses).
 template<typename T>
-inline const T get_value(
+inline T get_value(
     const Type& root,				        // the root's type
     const char* data,				        // the data block
     const std::string& address)			// the name of the address
@@ -252,7 +252,6 @@ std::string get_dump_attr_values_string(
     const char* name,
     const char* data,
     int depth);
-
 }
 }
 

@@ -32,13 +32,32 @@ set(PROJECT_NAME examples-mdl_sdk-shared)
 # collect sources
 set(PROJECT_SOURCES
     "example_cuda_shared.h"
+    "example_shared.cpp"
     "example_shared.h"
     "texture_support_cuda.h"
     "compiled_material_traverser_base.h"
     "compiled_material_traverser_base.cpp"
     "lpe.cpp"
     "lpe.h"
+    "gui/gui.h"
+    "gui/gui.cpp"
+    "gui/gui_api_interface_dx11.h"
+    "gui/gui_api_interface_dx12.h"
+    "gui/gui_material_properties.h"
+    "gui/gui_material_properties.cpp"
+    "utils/enums.h"
+    "utils/io.h"
+    "utils/mdl.h"
+    "utils/os.h"
+    "utils/strings.h"
     )
+
+if(MDL_ENABLE_OPENGL_EXAMPLES)
+    set(PROJECT_SOURCES
+        ${PROJECT_SOURCES}
+        "utils/gl_display.h"
+        )
+endif()
 
 # create target from template
 create_from_base_preset(
@@ -46,7 +65,7 @@ create_from_base_preset(
     NAMESPACE mdl_sdk
     OUTPUT_NAME "shared"
     SOURCES ${PROJECT_SOURCES}
-    WINDOWS_UNICODE
+    EXAMPLE
 )
 add_library(mdl_sdk::shared ALIAS ${PROJECT_NAME})
 
@@ -60,6 +79,7 @@ target_compile_definitions(${PROJECT_NAME}
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         mdl::mdl_sdk
+        imgui
     NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
     )
 

@@ -127,7 +127,7 @@ public:
     Expression_direct_call(
         const IType* type,
         DB::Tag module_tag,
-        Mdl_tag_ident definition_ident,
+        const Mdl_tag_ident& definition_ident,
         const std::string& definition_db_name,
         IExpression_list* arguments)
         : Base(type)
@@ -138,7 +138,7 @@ public:
     {
         ASSERT(M_SCENE, definition_ident.first); ASSERT(M_SCENE, module_tag); ASSERT(M_SCENE, arguments);
     }
-   
+
     DB::Tag get_definition(DB::Transaction *transaction) const;
 
     DB::Tag get_module() const { return m_module_tag; }
@@ -147,7 +147,13 @@ public:
 
     const char* get_definition_db_name() const { return m_definition_db_name.c_str(); }
 
-    mi::Sint32 set_definition(Mdl_tag_ident definition_ident) { if( !definition_ident.first) return -1; m_definition_ident = definition_ident; return 0; }
+    mi::Sint32 set_definition( const Mdl_tag_ident& definition_ident)
+    {
+        if( !definition_ident.first)
+            return -1;
+        m_definition_ident = definition_ident;
+        return 0;
+    }
 
     const IExpression_list* get_arguments() const;
 
@@ -157,7 +163,7 @@ private:
     DB::Tag m_module_tag;
     Mdl_tag_ident m_definition_ident;
     std::string m_definition_db_name;
-    
+
     mi::base::Handle<IExpression_list> m_arguments;
 };
 
@@ -221,19 +227,34 @@ class Annotation_definition : public mi::base::Interface_implement<IAnnotation_d
 public:
     Annotation_definition(
         const char* name,
+        const char* module_name,
+        const char* simple_name,
+        const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics semantic,
         bool is_exported,
         const IType_list* parameter_types,
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations)
         : m_name(name)
+        , m_module_name(module_name)
+        , m_module_db_name(get_db_name(module_name))
+        , m_simple_name(simple_name)
+        , m_parameter_type_names(parameter_type_names)
         , m_semantic(semantic)
         , m_is_exported(is_exported)
         , m_parameter_types(parameter_types, mi::base::DUP_INTERFACE)
         , m_parameter_defaults(parameter_defaults, mi::base::DUP_INTERFACE)
         , m_annotations(annotations, mi::base::DUP_INTERFACE) { }
 
+    const char* get_module() const { return m_module_db_name.c_str(); }
+
     const char* get_name() const { return m_name.c_str(); }
+
+    const char* get_mdl_module_name() const { return m_module_name.c_str(); }
+
+    const char* get_mdl_simple_name() const { return m_simple_name.c_str(); }
+
+    const char* get_mdl_parameter_type_name( Size index) const;
 
     mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const;
 
@@ -255,8 +276,14 @@ public:
 
     mi::Size get_memory_consumption() const;
 
+    std::string get_mdl_name_without_parameter_types() const;
+
 private:
     std::string m_name;
+    std::string m_module_name;
+    std::string m_module_db_name;
+    std::string m_simple_name;
+    std::vector<std::string> m_parameter_type_names;
     mi::neuraylib::IAnnotation_definition::Semantics m_semantic;
     bool m_is_exported;
     mi::base::Handle<const IType_list> m_parameter_types;
@@ -365,7 +392,7 @@ public:
     IExpression_direct_call* create_direct_call(
         const IType* type,
         DB::Tag module_tag,
-        Mdl_tag_ident definition_ident,
+        const Mdl_tag_ident& definition_ident,
         const std::string& definition_db_name,
         IExpression_list* arguments) const;
 
@@ -373,10 +400,14 @@ public:
 
     IExpression_list* create_expression_list() const;
 
-    IAnnotation* create_annotation( const char* name, const IExpression_list* arguments) const;
+    IAnnotation* create_annotation(
+        const char* name, const IExpression_list* arguments) const;
 
     IAnnotation_definition* create_annotation_definition(
         const char* name,
+        const char* module_name,
+        const char* simple_name,
+        const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics sema,
         bool is_exported,
         const IType_list* parameter_types,

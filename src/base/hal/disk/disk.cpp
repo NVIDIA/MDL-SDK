@@ -47,11 +47,11 @@
 #include <sys/mount.h>
 #else
 #include <climits>
-#include <sys/vfs.h>		// for statfs (Linux)
-#include <sys/statfs.h>		// for statfs (Irix)
+#include <sys/vfs.h>            // for statfs (Linux)
+#include <sys/statfs.h>         // for statfs (Irix)
 #endif
-#include <sys/stat.h>		// for mkdir, stat
-#include <unistd.h>		// for access, link, unlink, rmdir
+#include <sys/stat.h>           // for mkdir, stat
+#include <unistd.h>             // for access, link, unlink, rmdir
 
 #else
 #include <crtdbg.h>             // For _CrtSetReportMode
@@ -60,8 +60,8 @@
 #include <io.h>
 #endif
 
-#include <sys/types.h>		// for statfs (Irix), mkdir
-#include <sys/stat.h>		// for _stat
+#include <sys/types.h>          // for statfs (Irix), mkdir
+#include <sys/stat.h>           // for _stat
 
 namespace MI {
 namespace DISK {
@@ -72,7 +72,7 @@ using namespace LOG;
 
 // Set error to given value.
 void set_error(
-    int value)						// the value
+    int value)                                          // the value
 {
     // just to avoid any compiler warnings - this whole function should be removed.
     STLEXT::no_unused_variable_warning_please(value);
@@ -82,7 +82,7 @@ void set_error(
 
 // test if character is file path separator
 inline bool is_path_separator(
-    char  c )						// character to test
+    char  c )                                           // character to test
 {
     return c == '/' || c == '\\';
 }
@@ -92,7 +92,7 @@ inline bool is_path_separator(
 
 // return true if a path is absolute, ie. begins with / or X:/
 bool is_path_absolute(
-    const char* path)					// check this path
+    const char* path)                                   // check this path
 {
     if (!path)
         return false;
@@ -120,7 +120,7 @@ bool is_path_absolute(
 
 // given a path, return true if that path is a directory, false otherwise
 bool is_directory(
-    const char* path)					// path to check
+    const char* path)                                   // path to check
 {
     Stat file_stat;
     if (stat(path, &file_stat) && file_stat.m_is_dir)
@@ -133,7 +133,7 @@ bool is_directory(
 
 // given a path, return true if that path is a regular file or a symlink, false otherwise
 bool is_file(
-    const char* path)					// path to check
+    const char* path)                                   // path to check
 {
     Stat file_stat;
     if (stat(path, &file_stat) && file_stat.m_is_file)
@@ -149,7 +149,7 @@ bool is_file(
 
 // delete a file
 bool file_remove(
-    const char* path)			// path of file to remove
+    const char* path)                   // path of file to remove
 {
     std::string npath(path? path : "");
 
@@ -166,8 +166,8 @@ bool file_remove(
 
 // rename a file or directory
 bool rename(
-    const char		*opath,		// path of file to rename
-    const char		*npath)		// new path; must be on the same disk
+    const char          *opath,         // path of file to rename
+    const char          *npath)         // new path; must be on the same disk
 {
     std::string nopath(opath? opath : "");
     std::string nnpath(npath? npath : "");
@@ -216,13 +216,13 @@ int mkpath(char *path, mode_t mode, mode_t dir_mode)
          if (::mkdir(path, done ? mode : dir_mode) < 0) {
              if (!exists) {
                  /* Not there */
-//		 warn("%s", path);
+//               warn("%s", path);
                  return (-1);
              }
              if (!S_ISDIR(sb.st_mode)) {
                  /* Is there, but isn't a directory */
                  errno = ENOTDIR;
-//		 warn("%s", path);
+//               warn("%s", path);
                  return (-1);
              }
          }
@@ -241,8 +241,8 @@ int mkpath(char *path, mode_t mode, mode_t dir_mode)
 
 // create a directory with a given set of permissios, default 0755
 bool mkdir(
-    const char		*path,		// path of directory to create
-    int			mode)		// rwxrwxrwx permissions
+    const char          *path,          // path of directory to create
+    int                 mode)           // rwxrwxrwx permissions
 {
     std::string npath(path? path : "");
 
@@ -261,7 +261,7 @@ bool mkdir(
 
 // delete a directory. The directory must be empty.
 bool rmdir(
-    const char		*path)		// path of directory to delete
+    const char          *path)          // path of directory to delete
 {
     std::string npath(path? path : "");
 
@@ -279,7 +279,7 @@ bool rmdir(
 
 // set the current working directory
 bool chdir(
-    const char	*path)		// path of directory to make current
+    const char  *path)          // path of directory to make current
 {
     if (path == NULL)
         return false;
@@ -331,10 +331,10 @@ std::string get_cwd()
 // operation succeeded or false, if not. In the latter case the file_stat
 // structure is left unchanged.
 bool stat(
-    const char		*path,		// path to get information for
-    Stat		*file_stat)	// store the results here
+    const char          *path,          // path to get information for
+    Stat                *file_stat)     // store the results here
 {
-    struct stat		st;		// results of inode check
+    struct stat         st;             // results of inode check
 
     // Be defensive and check for NULL since std::string will
     // ASSERT if handed a NULL string. Set m_error to ENOENT since
@@ -370,9 +370,9 @@ bool stat(
 // return free space in bytes on the file system that <path> resides on. This
 // can be any file or directory in the filesystem, including its mountpoint.
 Sint64 freespace(
-    const char		*path)		// path of a file/dir on disk to test
+    const char          *path)          // path of a file/dir on disk to test
 {
-    struct statfs	fs;		// collect file system stats here
+    struct statfs       fs;             // collect file system stats here
 
     std::string npath(path? path : "");
 
@@ -393,35 +393,35 @@ Sint64 freespace(
 // else's file but we can delete it. Mustn't lose data in such a case. This
 // means that we may leave partial files behind, that's up to the caller.
 bool file_copy(
-    const char		*opath,		// path of file to copy
-    const char		*npath)		// path of target copy
+    const char          *opath,         // path of file to copy
+    const char          *npath)         // path of target copy
 {
-    char		buf[4096];	// copy buffer
-    File		src, tar;	// source and target file
-    int			n;		// number of bytes read/written
+    char                buf[4096];      // copy buffer
+    File                src, tar;       // source and target file
+    int                 n;              // number of bytes read/written
 
     std::string nopath(opath? opath : "");
 
-    if (!src.open(nopath.c_str(), File::M_READ)) {	// open source file
+    if (!src.open(nopath.c_str(), File::M_READ)) {      // open source file
         set_error(src.error());
         return false;
     }
 
     std::string nnpath(npath? npath : "");
-    if (!tar.open(nnpath.c_str(), File::M_WRITE)) {	// open target file
+    if (!tar.open(nnpath.c_str(), File::M_WRITE)) {     // open target file
         set_error(tar.error());
         src.close();
         return false;
     }
 
-    do {						// copy loop:
-        if ((n = src.read(buf, sizeof(buf))) < 0) {	// read source data
+    do {                                                // copy loop:
+        if ((n = src.read(buf, sizeof(buf))) < 0) {     // read source data
             set_error(src.error());
             src.close();
             tar.close();
             return false;
         }
-        if (n != tar.write(buf, n)) {			// write target data
+        if (n != tar.write(buf, n)) {                   // write target data
             set_error(tar.error());
             src.close();
             tar.close();
@@ -429,12 +429,12 @@ bool file_copy(
         }
     } while (n && !src.eof());
 
-    if (!src.close()) {					// close source file
+    if (!src.close()) {                                 // close source file
         set_error(src.error());
         tar.close();
         return false;
     }
-    if (!tar.close()) {					// close target file
+    if (!tar.close()) {                                 // close target file
         set_error(tar.error());
         return false;
     }
@@ -447,7 +447,7 @@ bool file_copy(
 
 // delete a file
 bool file_remove(
-    const char		*path)		// path of file to remove
+    const char          *path)          // path of file to remove
 {
     std::string npath(path? path : "");
 
@@ -461,8 +461,8 @@ bool file_remove(
 
 // rename a file or directory
 bool rename(
-    const char		*opath,		// path of file to rename
-    const char		*npath)		// new path; must be on the same disk
+    const char          *opath,         // path of file to rename
+    const char          *npath)         // new path; must be on the same disk
 {
     std::string nopath(opath? opath : "");
     std::string nnpath(npath? npath : "");
@@ -474,16 +474,19 @@ bool rename(
 
 // create a directory with a given set of permissions, default 0755
 bool mkdir(
-    const char		*path,		// path of directory to create
-    int			mode)		// rwxrwxrwx permissions
+    const char          *path,          // path of directory to create
+    int                 mode)           // rwxrwxrwx permissions
 {
     std::string npath(path? path : "");
     // path has to be absolute!
     if (!is_path_absolute(npath))
         npath = HAL::Ospath::join(get_cwd(), npath);
 
+    // normalize the path, SHCreateDirectoryEx() does not support slashes
+    npath = HAL::Ospath::normpath(npath);
+
     // TODO: Translate mode flags to Win32 security descriptor
-    HWND window_handle = 0;				// I think we get along without one ;-)
+    HWND window_handle = 0;                             // I think we get along without one ;-)
     SECURITY_ATTRIBUTES* sec = 0;
     int result = SHCreateDirectoryEx(window_handle, npath.c_str(), sec);
 
@@ -502,7 +505,7 @@ bool mkdir(
 
 // delete a directory. The directory must be empty.
 bool rmdir(
-    const char		*path)		// path of directory to delete
+    const char          *path)          // path of directory to delete
 {
     std::string npath(path? path : "");
 
@@ -514,7 +517,7 @@ bool rmdir(
 
 // set the current working directory
 bool chdir(
-    const char	*path)		// path of directory to make current
+    const char  *path)          // path of directory to make current
 {
     if (path == NULL)
         return false;
@@ -555,10 +558,10 @@ std::string get_cwd()
 // operation succeeded or false, if not. In the latter case the file_stat
 // structure is left unchanged.
 bool stat(
-    const char		*path,		// path to get information for
-    Stat		*file_stat)	// store the results here
+    const char          *path,          // path to get information for
+    Stat                *file_stat)     // store the results here
 {
-    struct _stat64	st;		// results of inode check
+    struct _stat64      st;             // results of inode check
 
     // Be defensive and check for NULL since strlen will segfault
     // if handed a NULL string. Set m_error to ENOENT since that
@@ -579,15 +582,15 @@ bool stat(
     std::wstring p(STRING::utf8_to_wchar(new_path.c_str()));
     if (!::_wstat64(p.c_str(), &st)) {
         set_error(0);
-        file_stat->m_size		= st.st_size;
-        file_stat->m_modification_time	= double(st.st_mtime);
-        file_stat->m_access_time	= double(st.st_atime);
-        file_stat->m_change_time	= double(st.st_ctime);
-        file_stat->m_is_dir		= !!(st.st_mode & S_IFDIR);
-        file_stat->m_is_file		= !!(st.st_mode & S_IFREG);
-        file_stat->m_is_readable	= !!(st.st_mode & S_IREAD);
-        file_stat->m_is_writable	= !!(st.st_mode & S_IWRITE);
-        file_stat->m_is_executable	= !!(st.st_mode & S_IEXEC);
+        file_stat->m_size               = st.st_size;
+        file_stat->m_modification_time  = double(st.st_mtime);
+        file_stat->m_access_time        = double(st.st_atime);
+        file_stat->m_change_time        = double(st.st_ctime);
+        file_stat->m_is_dir             = !!(st.st_mode & S_IFDIR);
+        file_stat->m_is_file            = !!(st.st_mode & S_IFREG);
+        file_stat->m_is_readable        = !!(st.st_mode & S_IREAD);
+        file_stat->m_is_writable        = !!(st.st_mode & S_IWRITE);
+        file_stat->m_is_executable      = !!(st.st_mode & S_IEXEC);
         return true;
     }
     else {
@@ -602,7 +605,7 @@ bool stat(
 // return free space in bytes on the file system that <path> resides on. This
 // can be any file or directory in the filesystem, including its mountpoint.
 Sint64 freespace(
-    const char		*path)		// path of a file/dir on disk to test
+    const char          *path)          // path of a file/dir on disk to test
 {
     Uint64 free_bytes_available_to_caller;
     Uint64 total_number_of_bytes;
@@ -628,8 +631,8 @@ Sint64 freespace(
 // else's file but we can delete it. Mustn't lose data in such a case. This
 // means that we may leave partial files behind, that's up to the caller.
 bool file_copy(
-    const char		*opath,		// path of file to copy
-    const char		*npath)		// path of target copy
+    const char          *opath,         // path of file to copy
+    const char          *npath)         // path of target copy
 {
     return CopyFile(opath, npath, FALSE) != FALSE;
 }
@@ -641,8 +644,8 @@ bool file_copy(
 
 // check whether a named file is readable or writable
 bool access(
-    const char		*path,		// path of a file/dir
-    bool		write)		// have permission to read or write?
+    const char          *path,          // path of a file/dir
+    bool                write)          // have permission to read or write?
 {
     std::string npath(path? path : "");
 
@@ -776,7 +779,7 @@ std::string find_file_on_paths(
 }
 
 std::string convert_to_forward_slashes(
-    const std::string &in)	// input
+    const std::string &in)      // input
 {
     std::string fs(in);
     size_t pos = 0;

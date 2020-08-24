@@ -59,8 +59,8 @@ public:
             case mi::base::MESSAGE_SEVERITY_ERROR:   severity = "error: "; break;
             case mi::base::MESSAGE_SEVERITY_WARNING: severity = "warn:  "; break;
             case mi::base::MESSAGE_SEVERITY_INFO:    severity = "info:  "; break;
-            case mi::base::MESSAGE_SEVERITY_VERBOSE: return;
-            case mi::base::MESSAGE_SEVERITY_DEBUG:   return;
+            case mi::base::MESSAGE_SEVERITY_VERBOSE: return; //-V1037 PVS
+            case mi::base::MESSAGE_SEVERITY_DEBUG:   return; //-V1037 PVS
             case mi::base::MESSAGE_SEVERITY_FORCE_32_BIT:
                 ASSERT( M_NEURAY_API, false);
                 return;
@@ -229,8 +229,8 @@ class Logger : public ILogger
             MDL::g_logger->message( mi::base::MESSAGE_SEVERITY_DEBUG, "MDL", buf);
     }
 
-    void vdebug( const char* /*mod*/, Category /*cat*/, const mi::base::Message_details&,
-                 const char* fmt, va_list args) //-V524 PVS
+    void vdebug( const char* /*mod*/, Category /*cat*/, //-V524 PVS
+                 const mi::base::Message_details&, const char* fmt, va_list args)
     {
         char buf[32768];
         vsnprintf( buf, sizeof( buf), fmt, args);

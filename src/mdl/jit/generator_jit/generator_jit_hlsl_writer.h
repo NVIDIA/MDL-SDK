@@ -287,11 +287,7 @@ private:
     /// Translate an LLVM value to an HLSL expression.
     ///
     /// \param value    the LLVM value to translate
-    /// \param dst_var  if non-NULL, store the resulting expression to this variable/parameter
-    hlsl::Expr *translate_expr(
-        llvm::Value      *value,
-        hlsl::Definition *dst_var
-    );
+    hlsl::Expr *translate_expr(llvm::Value *value);
 
     /// If a given type has an unsigned variant, return it.
     ///
@@ -548,15 +544,18 @@ private:
     /// \param args  the arguments to the constructor call
     /// \param loc   the location for the call
     hlsl::Expr *create_constructor_call(
-        hlsl::Type *type,
+        hlsl::Type                    *type,
         Array_ref<hlsl::Expr *> const &args,
-        hlsl::Location loc);
+        hlsl::Location                 loc);
 
     /// Generates a new local variable for an HLSL symbol and an LLVM type.
     ///
     /// \param var_sym  the variable symbol
     /// \param type     the LLVM type of the local to create
-    hlsl::Def_variable *create_local_var(hlsl::Symbol *var_sym, llvm::Type *type);
+    hlsl::Def_variable *create_local_var(
+        hlsl::Symbol *var_sym,
+        llvm::Type   *type,
+        bool          add_decl_statement = true);
 
     /// Generates a new local variable for an LLVM value and use this variable as the value's
     /// result in further generated HLSL code.
@@ -565,7 +564,8 @@ private:
     /// \param do_not_register  if true, do not map this variable as the result for value
     hlsl::Def_variable *create_local_var(
         llvm::Value *value,
-        bool        do_not_register = false);
+        bool        do_not_register = false,
+        bool        add_decl_statement = true);
 
     /// Generates a new local const variable to hold an LLVM constant.
     ///
@@ -600,6 +600,14 @@ private:
     /// Convert the LLVM debug location (if any is attached to the given instruction)
     /// to an HLSL location.
     hlsl::Location convert_location(llvm::Instruction *inst);
+
+    /// Returns true, if the expression is a reference to the given definition.
+    bool is_ref_to_def(hlsl::Expr *expr, hlsl::Definition *def) {
+        if (hlsl::Expr_ref *ref = hlsl::as<hlsl::Expr_ref>(expr)) {
+            return ref->get_definition() == def;
+        }
+        return false;
+    }
 
 private:
     /// MDL allocator used for generating the HLSL AST.
@@ -711,6 +719,9 @@ private:
 
     /// Debug info regarding struct types.
     Struct_info_map  m_struct_dbg_info;
+
+    /// ID used to create unique names.
+    unsigned m_next_unique_name_id;
 };
 
 /// Creates a HLSL writer pass.

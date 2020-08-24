@@ -78,7 +78,7 @@ struct IStatus_listener
 {
     /// This is called when the status of the database changed
     ///
-    /// \param status 		The new status
+    /// \param status           The new status
     virtual void status_changed(Db_status status) { }
 };
 
@@ -90,7 +90,7 @@ struct ITransaction_listener : public
 {
     /// This method is called when the provided transaction has been created.
     ///
-    /// \param trans 		The new transaction
+    /// \param trans            The new transaction
     virtual void transaction_created(Transaction* trans) = 0;
 
     /// This method is called when the provided transaction is about to be committed. The 
@@ -98,23 +98,23 @@ struct ITransaction_listener : public
     /// in case of an error even if the pre-commit callback has been made, in which case
     /// this call will be followed by a transaction_aborted call.
     ///
-    /// \param trans 		The transaction
+    /// \param trans            The transaction
     virtual void transaction_pre_commit(Transaction* trans) = 0;
 
     /// This method is called when the provided transaction is about to be aborted. The 
     /// transaction is still valid at this point.
     ///
-    /// \param trans 		The transaction
+    /// \param trans            The transaction
     virtual void transaction_pre_abort(Transaction* trans) = 0;
 
     /// This method is called when the provided transaction has been committed.
     ///
-    /// \param trans 		The transaction
+    /// \param trans            The transaction
     virtual void transaction_committed(Transaction* trans) = 0;
     
     /// This method is called when the provided transaction has been aborted.
     ///
-    /// \param trans 		The transaction
+    /// \param trans            The transaction
     virtual void transaction_aborted(Transaction* trans) = 0;
 };
 
@@ -159,16 +159,18 @@ class Database
 {
   public:
     /// Create a database instance.
-    /// \param selector				For event delivery
-    /// \param cluster_manager			For communication
-    /// \param deserialization_manager		For deserialization
-    /// \param redundancy_level			Nr of tag copies
-    /// \param web_interface_url_prefix		For web interface
-    /// \param http_server			For web interface
-    /// \param logger				For logging messages
-    /// \param send_elements_only_to_owners	Send elements to all host or only to owners?
-    /// \param disk_cache_path			When a disk cache should be created the path or NULL
-    /// \return					The new database
+    /// \param selector                         For event delivery
+    /// \param cluster_manager                  For communication
+    /// \param deserialization_manager          For deserialization
+    /// \param redundancy_level                 Nr of tag copies
+    /// \param web_interface_url_prefix         For web interface
+    /// \param http_server                      For web interface
+    /// \param logger                           For logging messages
+    /// \param send_elements_only_to_owners     Send elements to all host or only to owners?
+    /// \param disk_cache_path                  When a disk cache should be created the path or NULL
+    /// \param max_journal_size
+    /// \param track_memory_usage               Track memory usage of DB elements?
+    /// \return                                 The new database
     static Database* create(
         MSG::Selector* selector,
         CLUSTER::Cluster_manager* cluster_manager,
@@ -180,7 +182,8 @@ class Database
         bool is_allowed_to_own_data = true,
         bool send_elements_only_to_owners = false,
         const char* disk_cache_path = NULL,
-        int max_journal_size = 10000);
+        int max_journal_size = 10000,
+        bool track_memory_usage = false);
 
     /// Prepare closing the database
     ///
@@ -199,7 +202,7 @@ class Database
     /// scopes. This function is used to get the global scope so that child scopes can be created
     /// etc.
     ///
-    /// \return					The global scope
+    /// \return                                 The global scope
     virtual Scope *get_global_scope() = 0;
 
     /// In some applications the application needs to lookup a certain scope. This has to be
@@ -210,15 +213,15 @@ class Database
     /// arena scope. The application would store the scope id in the database and later it would use
     /// the id to lookup the scope.
     ///
-    /// \param id				The id of the scope to lookup.
-    /// \return					The found scope
+    /// \param id                               The id of the scope to lookup.
+    /// \return                                 The found scope
     virtual Scope *lookup_scope(
         Scope_id id) = 0;
 
     /// Lookup a named scope.
     ///
-    /// \param name				The name of the scope to lookup.
-    /// \return					The found scope or NULL if it was not found.
+    /// \param name                             The name of the scope to lookup.
+    /// \return                                 The found scope or NULL if it was not found.
     virtual Scope *lookup_scope(
         const std::string& name) = 0;
 
@@ -232,13 +235,13 @@ class Database
     /// It will not stop others from editing the tag. It will only prevent them from obtaining a
     /// lock on the same tag.
     ///
-    /// \param tag				Lock this tag
+    /// \param tag                              Lock this tag
     virtual void lock(
         Tag tag) = 0;
 
     /// Unlock a tag previously locked from the same context.
     ///
-    /// \param tag				Unlock this tag
+    /// \param tag                              Unlock this tag
     /// \return                                 A bool indicating success, true, or failure, false
     virtual bool unlock(
         Tag tag) = 0;
@@ -246,7 +249,7 @@ class Database
     /// Check, if a tag is locked. In the debug version, abort if not. In the release version, just
     /// print an error.
     ///
-    /// \param tag				Check this tag
+    /// \param tag                              Check this tag
     virtual void check_is_locked(
         Tag tag) = 0;
 
@@ -256,9 +259,9 @@ class Database
     /// The return value true means, that the notification arrived, false means, that a timeout
     /// occurred.
     ///
-    /// \param tag				Tag to wait for
-    /// \param timeout				Return after the timeout, -1 means never
-    /// \return					See description.
+    /// \param tag                              Tag to wait for
+    /// \param timeout                          Return after the timeout, -1 means never
+    /// \return                                 See description.
     virtual bool wait_for_notify(
         Tag tag,
         TIME::Time timeout = TIME::Time(-1)) = 0;
@@ -266,7 +269,7 @@ class Database
     /// Send a notification for a certain tag. This will wakeup all threads in the network waiting
     /// for a notification on that tag.
     ///
-    /// \param tag				The tag to send a notification for
+    /// \param tag                              The tag to send a notification for
     virtual void notify(
         Tag tag) = 0;
 
@@ -274,13 +277,13 @@ class Database
     /// stored in the database. This is relatively slow, since it requires a map lookup for each
     /// call.
     ///
-    /// \param pattern				The pattern for searching the names
+    /// \param pattern                          The pattern for searching the names
     virtual std::string get_next_name(
         const std::string& pattern) = 0;
 
     /// Get the database statistics
     ///
-    /// \return					The gathered statistics
+    /// \return                                 The gathered statistics
     virtual Database_statistics get_statistics() = 0;
 
     /// Get the database status
@@ -293,7 +296,7 @@ class Database
     /// Note that calls to register and unregister a listener of this type must not 
     /// be made from the callback since this will result in a deadlock.
     ///
-    /// \param listener				The new listener.
+    /// \param listener                         The new listener.
     virtual void register_status_listener(IStatus_listener* listener) = 0;
 
     /// Unregister a previously registered status listener
@@ -301,7 +304,7 @@ class Database
     /// Note that calls to register and unregister a listener of this type must not 
     /// be made from the callback since this will result in a deadlock.
     ///
-    /// \param listener				The old listener.
+    /// \param listener                         The old listener.
     virtual void unregister_status_listener(IStatus_listener* listener) = 0;
 
     /// Register a listener to be notified for transaction events.
@@ -309,7 +312,7 @@ class Database
     /// Note that calls to register and unregister a listener of this type must not 
     /// be made from the callback since this will result in a deadlock.
     ///
-    /// \param listener				The new listener.
+    /// \param listener                         The new listener.
     virtual void register_transaction_listener(ITransaction_listener* listener) = 0;
 
     /// Unregister a previously registered transaction listener
@@ -317,7 +320,7 @@ class Database
     /// Note that calls to register and unregister a listener of this type must not 
     /// be made from the callback since this will result in a deadlock.
     ///
-    /// \param listener				The old listener.
+    /// \param listener                         The old listener.
     virtual void unregister_transaction_listener(ITransaction_listener* listener) = 0;
 
     /// Register a listener to be notified for transaction events.
@@ -325,7 +328,7 @@ class Database
     /// Note that calls to register and unregister a listener of this type must not 
     /// be made from the callback since this will result in a deadlock.
     ///
-    /// \param listener				The new listener.
+    /// \param listener                         The new listener.
     virtual void register_scope_listener(IScope_listener* listener) = 0;
 
     /// Unregister a previously registered transaction listener
@@ -333,7 +336,7 @@ class Database
     /// Note that calls to register and unregister a listener of this type must not 
     /// be made from the callback since this will result in a deadlock.
     ///
-    /// \param listener				The old listener.
+    /// \param listener                         The old listener.
     virtual void unregister_scope_listener(IScope_listener* listener) = 0;
     
 
@@ -349,7 +352,7 @@ class Database
 
     /// Set an event to be signalled when the database is completely ready.
     ///
-    /// \param event				The even to signal when the database is ready
+    /// \param event                            The even to signal when the database is ready
     virtual void set_ready_event(
         EVENT::Event0_base* event) = 0;
 
@@ -360,8 +363,8 @@ class Database
     /// This is to be used by the sched module only. It will return the requested transaction. It
     /// may return NULL, if the transaction is already committed.
     ///
-    /// \param id				The id of the transaction to be retrieved.
-    /// \return					The transaction or NULL
+    /// \param id                               The id of the transaction to be retrieved.
+    /// \return                                 The transaction or NULL
     virtual Transaction* get_transaction(
         Transaction_id id) = 0;
 

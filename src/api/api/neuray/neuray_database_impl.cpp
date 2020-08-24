@@ -49,7 +49,7 @@ namespace NEURAY {
 
 Database_impl::Database_impl( mi::neuraylib::INeuray::Status& status)
   : m_status( status),
-    m_database( 0)
+    m_database( nullptr)
 {
 }
 
@@ -60,11 +60,11 @@ Database_impl::~Database_impl()
 mi::neuraylib::IScope* Database_impl::get_global_scope() const
 {
     if( m_status != mi::neuraylib::INeuray::STARTED)
-        return 0;
+        return nullptr;
 
     DB::Scope* scope = m_database->get_global_scope();
     if( !scope)
-        return 0;
+        return nullptr;
 
     return new Scope_impl( scope, s_class_factory);
 }
@@ -75,13 +75,13 @@ mi::neuraylib::IScope* Database_impl::create_scope(
     bool temp)
 {
     if( m_status != mi::neuraylib::INeuray::STARTED)
-        return 0;
+        return nullptr;
 
     if( !parent) {
         // a recursive call here simplifies resource management, alternative: use handles
         parent = get_global_scope();
         if( !parent)
-            return 0;
+            return nullptr;
         mi::neuraylib::IScope* child = create_scope( parent, privacy_level, temp);
         parent->release();
         return child;
@@ -90,13 +90,13 @@ mi::neuraylib::IScope* Database_impl::create_scope(
     if( privacy_level == 0)
         privacy_level = parent->get_privacy_level() + 1;
     if( privacy_level <= parent->get_privacy_level())
-        return 0;
+        return nullptr;
 
     Scope_impl* parent_scope_impl = static_cast<Scope_impl *>( parent);
     DB::Scope* parent_db_scope = parent_scope_impl->get_scope();
     DB::Scope* child_db_scope = parent_db_scope->create_child( privacy_level, temp, "");
     if( !child_db_scope)
-        return 0;
+        return nullptr;
 
     return new Scope_impl( child_db_scope, s_class_factory);
 }
@@ -107,15 +107,15 @@ mi::neuraylib::IScope* Database_impl::create_or_get_named_scope(
     mi::Uint8 privacy_level)
 {
     if( !name)
-        return 0;
+        return nullptr;
     if( m_status != mi::neuraylib::INeuray::STARTED)
-        return 0;
+        return nullptr;
 
     if( !parent){
         // a recursive call here simplifies resource management, alternative: use handles
         parent = get_global_scope();
         if( !parent)
-            return 0;
+            return nullptr;
         mi::neuraylib::IScope* child = create_or_get_named_scope( name, parent, privacy_level);
         parent->release();
         return child;
@@ -124,13 +124,13 @@ mi::neuraylib::IScope* Database_impl::create_or_get_named_scope(
     if( privacy_level == 0)
         privacy_level = parent->get_privacy_level() + 1;
     if( privacy_level <= parent->get_privacy_level())
-        return 0;
+        return nullptr;
 
     Scope_impl* parent_scope_impl = static_cast<Scope_impl *>( parent);
     DB::Scope* parent_db_scope = parent_scope_impl->get_scope();
     DB::Scope* child_db_scope = parent_db_scope->create_child( privacy_level, false, name);
     if( !child_db_scope)
-        return 0;
+        return nullptr;
 
     return new Scope_impl( child_db_scope, s_class_factory);
 }
@@ -138,19 +138,19 @@ mi::neuraylib::IScope* Database_impl::create_or_get_named_scope(
 mi::neuraylib::IScope* Database_impl::get_scope( const char* id_string) const
 {
     if( !id_string)
-        return 0;
+        return nullptr;
     if( m_status != mi::neuraylib::INeuray::STARTED)
-        return 0;
+        return nullptr;
 
     STLEXT::Likely<mi::Uint32> id_likely = STRING::lexicographic_cast_s<mi::Uint32>( id_string);
     if( !id_likely.get_status())
-        return 0;
-    mi::Uint32 id = *id_likely.get_ptr();
+        return nullptr;
+    mi::Uint32 id = *id_likely.get_ptr(); //-V522 PVS
     DB::Scope_id scope_id( id);
 
     DB::Scope* scope = m_database->lookup_scope( scope_id);
     if(! scope)
-        return 0;
+        return nullptr;
 
     return new Scope_impl( scope, s_class_factory);
 }
@@ -158,13 +158,13 @@ mi::neuraylib::IScope* Database_impl::get_scope( const char* id_string) const
 mi::neuraylib::IScope* Database_impl::get_named_scope( const char* name) const
 {
     if( !name)
-        return 0;
+        return nullptr;
     if( m_status != mi::neuraylib::INeuray::STARTED)
-        return 0;
+        return nullptr;
 
     DB::Scope* scope = m_database->lookup_scope( name);
     if(! scope)
-        return 0;
+        return nullptr;
 
     return new Scope_impl( scope, s_class_factory);
 }
@@ -179,7 +179,7 @@ mi::Sint32 Database_impl::remove_scope( const char* id_string) const
     STLEXT::Likely<mi::Uint32> id_likely = STRING::lexicographic_cast_s<mi::Uint32>( id_string);
     if( !id_likely.get_status())
         return -1;
-    mi::Uint32 id = *id_likely.get_ptr();
+    mi::Uint32 id = *id_likely.get_ptr(); //-V522 PVS
     if( id == 0)
         return -1;
 
@@ -213,7 +213,7 @@ mi::Sint32 Database_impl::start( DB::Database* database)
 
 mi::Sint32 Database_impl::shutdown()
 {
-    m_database = 0;
+    m_database = nullptr;
     return 0;
 }
 

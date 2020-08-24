@@ -30,13 +30,16 @@
 /// \brief The lexicographic_cast_s definition.
 ///
 /// This utility is intended to be used like
+///
 /// \code
 ///     int i_val = 7789;
 ///     Likely<string> s_val = lexicographic_cast_s<string>(i_val);
 ///     MI_REQUIRE(s_val.get_status());
 ///     MI_REQUIRE_EQUAL(static_cast<string>(s_val), "7789");
 /// \endcode
+///
 /// If something goes wrong, the \c Likely<> will reflect it with a bad status. E.g.
+///
 /// \code
 ///    string wrong_value = "ali";
 ///    Likely<unsigned int> i_val = lexicographic_cast_s<unsigned int>(wrong_value);
@@ -54,23 +57,34 @@
 namespace MI {
 namespace STRING {
 
-/// A completely generic lexicographic case. Due to the lack of exceptions we are using a
-/// \c Likely<> wrapper here to allow for checking for failures. The suffix _s stands for 'safe'.
-/// This is an extension of the following version in that it allows for both the acceptance or
-/// rejection of partially read inputs, eg a
+/// A completely generic lexicographic case.
+///
+/// Due to the lack of exceptions we are using a \c Likely<> wrapper here to allow for checking for
+/// failures. The suffix _s stands for 'safe'. This is an extension of the following version in
+/// that it allows for both the acceptance or rejection of partially read inputs, eg a
+///
 /// \code
 ///    string value = "100ali";
 ///    lexicographic_cast_s<int, string, true>(value);
 /// \endcode
+///
 /// would still be accepted, while
+///
 /// \code
 ///    string value = "100ali";
 ///    lexicographic_cast_s<int, string, false>(value);
 /// \endcode
-/// would not. The following (and original) version always accepts partially read inputs, btw.
-/// \param value the source input value
 ///
-/// \return the cast-to-target-type representation of the input
+/// would not. The following (and original) version always accepts partially read inputs, btw.
+///
+/// This method differs from boost::lexical_cast in two aspects:
+/// (1) It accepts leading whitespace (probably not intentional, but an artefact of using stream
+///     operators).
+/// (2) It fails for attempts to convert strings with negative numbers to unsigned integral types
+///     (see comment below). The feature is actively used in quite a few places.
+///
+/// \param value   the source input value
+/// \return        the cast-to-target-type representation of the input
 template<typename Target, typename Source, bool SupportPartialInput>
 STLEXT::Likely<Target> lexicographic_cast_s(
     const Source& value)
@@ -79,7 +93,7 @@ STLEXT::Likely<Target> lexicographic_cast_s(
     std::stringstream s;
     s << value;
     if (s.fail())
-	return STLEXT::Likely<Target>(result, false);
+        return STLEXT::Likely<Target>(result, false);
     // Note that std::stringstream::operator>>() used below does not set the fail bit for unsigned
     // integral types if s.str() represents a small negative number (see strtoul() for details).
     // Hence, we check whether the first non-whitespace character is a '-'.
@@ -89,18 +103,21 @@ STLEXT::Likely<Target> lexicographic_cast_s(
         while (isspace(str[i]))
             ++i;
         if (str[i] == '-')
-    	    return STLEXT::Likely<Target>(result, false);
+            return STLEXT::Likely<Target>(result, false);
     }
     s >> result;
     if (s.fail())
-	return STLEXT::Likely<Target>(result, false);
+        return STLEXT::Likely<Target>(result, false);
     return STLEXT::Likely<Target>(result, SupportPartialInput? true : s.eof());
 }
 
-/// A completely generic lexicographic case. Due to the lack of exceptions we are using a
-/// \c Likely<> wrapper here to allow for checking for failures. The suffix _s stands for 'safe'.
-/// \param value the source input value, which must be consumed completely
-/// \return the cast-to-target-type representation of the input
+/// A completely generic lexicographic case.
+///
+/// Due to the lack of exceptions we are using a \c Likely<> wrapper here to allow for checking for
+/// failures. The suffix _s stands for 'safe'.
+///
+/// \param value   the source input value
+/// \return        the cast-to-target-type representation of the input
 template<typename Target, typename Source>
 STLEXT::Likely<Target> lexicographic_cast_s(
     const Source& value)
@@ -108,7 +125,7 @@ STLEXT::Likely<Target> lexicographic_cast_s(
     return lexicographic_cast_s<Target, Source, false>(value);
 }
 
-}
-}
+} // namespace STRING
+} // namespace MI
 
 #endif

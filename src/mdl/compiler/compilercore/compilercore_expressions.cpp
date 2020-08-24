@@ -1019,7 +1019,7 @@ public:
                     // this is the default constructor for a struct
                     {
                         Definition const *c_def = impl_cast<Definition>(def);
-                        
+
                         if (c_def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR)) {
                             IType_function const *func_type = cast<IType_function>(def->get_type());
                             IType const          *dst_type  = func_type->get_return_type();

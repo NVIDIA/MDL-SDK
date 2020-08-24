@@ -1,0 +1,122 @@
+/******************************************************************************
+ * Copyright 2020 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_optix7 Example for Inlining MDL Code into Shaders (OptiX 7)
+
+<div align="right">
+    [\link mi_neuray_example_dxr Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+This example shows how to inline the generated MDL code into the closest hit shader of an OptiX 7 example.
+This makes it possible to get rid of most MDL state related memory reads and writes, leading to much better
+performance at the cost of possibly higher compilation times.
+
+
+\section example_optix7_new New Topics
+
+  - Execution of generated code (OptiX 7)
+  - Linking and optimizing generated MDL code with renderer code
+  - Limiting the number of exported PTX functions
+
+
+  \section example_optix7_descr Detailed Description
+
+<dl>
+    <dt><b>Execution of generated code (OptiX 7)</b></dt>
+    <dd><br>
+        For OptiX 7, you use the CUDA PTX backend with the \c "direct_call" texture lookup call mode
+        (see \link mi_neuray_ptx_texture_lookup_call_modes Texture lookup call modes of the PTX backend \endlink).
+
+        The example shows two ways to execute the generated code:
+        <ul>
+        <li>Using one closest hit shader program which calls different sets of callable programs for each material ("direct-call mode"), and
+        <li>using several closest hit shader programs (one per material) where the generated material-specific MDL code has been inlined ("no-direct-call mode").
+        </ul>
+        You can choose between the two ways by defining or not defining the \c "NO_DIRECT_CALL" macro in \c optix7_mdl.h.
+
+        To illustrate the execution of both DF (distribution function) and non-DF expressions, we will use
+        \c "surface.scattering" and \c "thin_walled" for each material.
+
+        For the direct-call mode, one hitgroup program group is created for the closest hit shader, which will call the generated MDL functions using \c "optixDirectCall".
+        The indices of the functions to be called depend on the hitgroup data of the object hit by the current ray.
+        For each material, the above expressions are translated into PTX code using the MDL SDK, turned into an OptiX module
+        and one callable program is created for each generated function (\c init, \c sample, \c evaluate, \c pdf and \c thin_walled).
+
+        Sadly, this causes a lot of memory reads and writes as the MDL state has to be completely materialized in memory
+        and provided to the generated functions via pointers. This makes this mode pretty slow.
+
+        For the no-direct-call mode, the example provides an LLVM bitcode version of the closest hit shader to the MDL SDK
+        and instructs the MDL SDK to inline and optimize all generated code together with the closest hit shader, resulting
+        in one specialized closest hit shader program per material.
+        Thus, only the part of the MDL state, which is actually used, has to be calculated (the rest is optimized away),
+        and can usually be stored in registers, avoiding most memory reads and writes.
+    </dd>
+
+    <dt><b>Linking and optimizing generated MDL code with renderer code</b></dt>
+    <dd><br>
+        For the no-direct-call mode, the closest hit shader of the renderer in this example contains calls to
+        \c extern declared functions which the MDL SDK will generate.
+
+        To create the LLVM bitcode of the closest hit shader, we use Clang in a version matching the version used by the MDL SDK.
+        Currently, this has to be Clang 7.0.0, which needs a CUDA 8 installation to be able to compile the closest hit shader.
+        CUDA 8 will not be used at runtime.
+        On the command line, you should provide these options to ensure fast code and good compatibility with the generated code:
+        \code
+        -O3 -ffast-math -fcuda-flush-denormals-to-zero -fno-vectorize
+        \endcode
+
+        The resulting \c .bc file is then loaded as a binary file and provided to the CUDA PTX backend via the binary option
+        \c "llvm_renderer_module" using the #mi::neuraylib::IMdl_backend::set_option_binary() function.
+        With this option set, the given module will be linked and optimized with the generated code.
+
+        Additionally, the example sets the \c "inline_aggressively" backend option using
+        #mi::neuraylib::IMdl_backend::set_option() to inline all functions, if possible.
+        This also allows to inline the renderer provided texture runtime into the generated code,
+        usually removing all the complex wrapping and cropping logic.
+
+        For each material instance, the closest hit shader is thus "instantiated" and specialized, when generating target code.
+        From this target code, the example then creates the material-specific hitgroup program group for the closest hit shader.
+    </dd>
+
+    <dt><b>Limiting the number of exported PTX functions</b></dt>
+    <dd><br>
+        If you looked at the generated PTX code, you would notice, that the code contains the \c init, \c sample, \c evaluate, \c pdf
+        and \c thin_walled functions, although nobody calls them anymore, because they were inlined into the closest hit function.
+        So generating and processing all this PTX code is just a waste of time.
+
+        With the backend option \c "visible_functions", you can instruct the backend to try to avoid emitting PTX code for
+        unneeded functions by making all other functions internal.
+        This example only requests PTX code for the \c "__closesthit__radiance" function.
+    </dd>
+
+    <dt><b>Additional notes</b></dt>
+    <dd><br>
+        As OptiX 7 is using CUDA, the example can reuse the texture runtime of the CUDA examples.
+        But vtable support has to be disabled, as you are not allowed to take function pointers in OptiX 7.
+
+        Also, the example disables the dummy scene data support and provides a set of simple own functions allowing
+        to access example vertex colors and vertex row/column values of the generated sphere mesh.
+
+        To be able to compile the texture runtime with Clang 7.0.0, a set of \c __itex* functions is required
+        in \c optix7_mdl_closest_hit_radiance.cu to map the texture functions to the correct PTX assembler instructions.
+    </dd>
+</dl>
+
+\section example_optix7 Example Source
+
+To compile the source code, you need OptiX 7.0 or higher (<a href="https://developer.nvidia.com/designworks/optix/download">https://developer.nvidia.com/designworks/optix/download</a>),
+Clang 7.0.0 (<a href="http://releases.llvm.org/download.html#7.0.0">http://releases.llvm.org/download.html#7.0.0</a>),
+CUDA 8 (<a href="https://developer.nvidia.com/cuda-toolkit-archive">https://developer.nvidia.com/cuda-toolkit-archive</a>), GLFW, and GLEW.
+For detailed instructions, please refer to the \link mi_neuray_getting_started Getting Started \endlink section.
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/optix7</tt>
+
+<div align="right">
+    [\link mi_neuray_example_dxr Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+</div>
+
+*/

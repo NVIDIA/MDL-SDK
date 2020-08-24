@@ -69,7 +69,14 @@ public:
 
     const char* get_mdl_name() const final;
 
+    const char* get_mdl_module_name() const final;
+
+    const char* get_mdl_simple_name() const final;
+
     const char* get_prototype() const final;
+
+    void get_mdl_version(
+        mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const final;
 
     bool is_exported() const final;
 
@@ -99,7 +106,7 @@ public:
 
     mi::neuraylib::IMaterial_instance* create_material_instance(
         const mi::neuraylib::IExpression_list* arguments,
-        mi::Sint32* errors = 0) const final;
+        mi::Sint32* errors = nullptr) const final;
 
     const mi::neuraylib::IExpression_direct_call* get_body() const final;
 

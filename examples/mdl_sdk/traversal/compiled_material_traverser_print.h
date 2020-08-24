@@ -37,9 +37,11 @@
 #define COMPILED_MATERIAL_TRAVERSER_PRINT_H
 
 #include "compiled_material_traverser_base.h"
+
 #include <stack>
 #include <set>
 #include <map>
+#include <sstream>
 
 // An implementation of the Compiled_material_traverser_base to demonstrate a 
 // valid traversal mechanism. In this case to print MDL code from a compiled material. 
@@ -58,14 +60,14 @@ public:
         // configurations.
         //
         // Param:  transaction     The DB transaction to resolve resources.
-        // Param:  compiler        The instance of the mdl compiler.
         // Param:  keep_structure  The structures produced by the compiler do not always 
         //                         match the structure of the input material, e.g., constants are 
         //                         transformed to parameters this printer focuses on producing mdl 
         //                         code. However, it could be interesting to see an output that is 
         //                         closer to the compiler output. Therefore, set true.
-        Context(mi::neuraylib::ITransaction* transaction, mi::neuraylib::IMdl_compiler* compiler,
-                bool keep_structure);
+        Context(
+            mi::neuraylib::ITransaction* transaction,
+            bool keep_structure);
 
         // modules that have been imported directly by the module and used by the input material
         const std::set<std::string>& get_used_modules() const { return m_used_modules; }
@@ -87,7 +89,6 @@ public:
 
         // required to resolve resources
         mi::neuraylib::ITransaction* m_transaction;
-        mi::neuraylib::IMdl_compiler* m_compiler;
 
         // stream to build up the mdl code
         std::stringstream m_print;

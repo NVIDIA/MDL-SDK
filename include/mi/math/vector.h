@@ -677,7 +677,7 @@ public:
     inline bool normalize()
     {
         const T rec_length = T(1) / length( *this);
-        const bool result = isfinite( rec_length);
+        const bool result = isfinite( rec_length); //-V601 PVS
         if( result)
             (*this) *= rec_length;
         return result;

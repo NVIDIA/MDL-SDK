@@ -501,8 +501,16 @@ class SignatureParser:
 		elif name == "transform_scale":
 			self.intrinsic_modes[name + signature] = "state::transform_scale"
 			return True
-		elif (name == "meters_per_scene_unit" or name == "scene_units_per_meter" or
-				name == "object_id" or name == "wavelength_min" or name == "wavelength_max"):
+		elif name == "meters_per_scene_unit":
+			self.intrinsic_modes[name + signature] = "state::meters_per_scene_unit"
+			return True
+		elif name == "scene_units_per_meter":
+			self.intrinsic_modes[name + signature] = "state::scene_units_per_meter"
+			return True
+		elif name == "wavelength_min" or name == "wavelength_max":
+			self.intrinsic_modes[name + signature] = "state::wavelength_min_max"
+			return True
+		elif name == "object_id":
 			# these should be handled by the code generator directly and never be
 			# called here
 			self.intrinsic_modes[name + signature] = "state::zero_return"
@@ -613,6 +621,28 @@ class SignatureParser:
 				# support texel_float2|3|4|color(texture_2d) with uv_tile parameter
 				self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile"
 				return True
+		return False
+
+	def is_scene_supported(self, name, signature):
+		"""Checks if the given scene intrinsic is supported."""
+		ret_type, params = self.split_signature(signature)
+
+		if re.match("data_lookup_(float|int)$", name):
+			self.intrinsic_modes[name + signature] = "scene::data_lookup_atomic"
+			return True
+		elif re.match("data_lookup_uniform_(float|int)$", name):
+			self.intrinsic_modes[name + signature] = "scene::data_lookup_uniform_atomic"
+			return True
+		elif re.match("data_lookup_(float2|float3|float4|color|int2|int3|int4)$", name):
+			self.intrinsic_modes[name + signature] = "scene::data_lookup_vector"
+			return True
+		elif re.match("data_lookup_uniform_(float2|float3|float4|color|int2|int3|int4)$", name):
+			self.intrinsic_modes[name + signature] = "scene::data_lookup_uniform_vector"
+			return True
+		elif name == "data_isvalid":
+			self.intrinsic_modes[name + signature] = "scene::data_isvalid"
+			return True
+
 		return False
 
 	def is_builtin_supported(self, name, signature):
@@ -817,6 +847,8 @@ class SignatureParser:
 			return self.is_df_supported(name, signature)
 		elif modname == "tex":
 			return self.is_tex_supported(name, signature)
+		elif modname == "scene":
+			return self.is_scene_supported(name, signature)
 		elif modname == "debug":
 			return self.is_debug_supported(name, signature)
 		elif modname == "":
@@ -1088,12 +1120,14 @@ class SignatureParser:
 		llvm::Value *res;
 
 		func->setLinkage(llvm::GlobalValue::InternalLinkage);
+		if (m_code_gen.is_always_inline_enabled())
+			func->addFnAttr(llvm::Attribute::AlwaysInline);
 		"""
 		self.format_code(f, code % params)
 
 		ret_type, params = self.split_signature(signature)
 
-		need_res_data = mode[0:5] == "tex::" or mode == "df::attr_lookup"
+		need_res_data = mode[0:5] == "tex::" or mode == "df::attr_lookup" or mode[0:7] == "scene::"
 
 		if need_res_data or params != []:
 			self.write(f, "llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();\n")
@@ -2026,20 +2060,29 @@ class SignatureParser:
 
 		elif mode == "math::transpose":
 			type_code = params[0]
-			rows = int(type_code[-1])
-			cols = int(type_code[-2])
+			src_rows = int(type_code[-1])
+			src_cols = int(type_code[-2])
+			tgt_rows = src_cols
+			tgt_cols = src_rows
 
-			params = { "rows" : rows, "cols" : cols }
+			#        0 3
+			#   a = (1 4) = [0, 1, 2, 3, 4, 5]
+			#        2 5
+			#
+			# res = (0 1 2) = [0, 3, 1, 4, 2, 5]
+			#        3 4 5
+
+			params = { "rows" : src_rows, "cols" : src_cols }
 
 			# the shuffle indexes for big_vector mode
 			code = "";
 
-			for col in range(cols):
-				for row in range(rows):
-					src_idx = row * cols + col
+			for col in range(tgt_cols):
+				for row in range(tgt_rows):
+					src_idx = row * tgt_cols + col
 					code = code + (" %d," % src_idx)
 
-			params["shuffle_idxes"] = code[0:-1]
+			params["shuffle_idxes"] = code[0:-1] # remove last ','
 
 			code = """
 				llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
@@ -2048,31 +2091,91 @@ class SignatureParser:
 					llvm::Type      *e_tp = a_tp->getElementType();
 					if (e_tp->isVectorTy()) {
 						// small vector mode
-						llvm::Value *column[%(cols)d];
-
 						res = llvm::UndefValue::get(ret_tp);
-						for (unsigned col = 0; col < %(cols)d; ++col) {
-							column[col] = ctx->CreateExtractValue(a, { col });
-						}
-						for (unsigned row = 0; row < %(rows)d; ++row) {
-							llvm::Value *tmp = llvm::UndefValue::get(e_tp);
+
+						if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
+							llvm::Value *column_val[%(cols)d];
+							llvm::Value *column_dx[%(cols)d];
+							llvm::Value *column_dy[%(cols)d];
+
+							llvm::Value *a_val = ctx.get_dual_val(a);
+							llvm::Value *a_dx  = ctx.get_dual_dx(a);
+							llvm::Value *a_dy  = ctx.get_dual_dy(a);
+
+							llvm::Value *res_val = res, *res_dx = res, *res_dy = res;
+
 							for (unsigned col = 0; col < %(cols)d; ++col) {
-								llvm::Value *elem = ctx->CreateExtractElement(column[col], ctx.get_constant(int(row)));
-								tmp  = ctx->CreateInsertElement(tmp, elem, ctx.get_constant(int(col)));
+								column_val[col] = ctx->CreateExtractValue(a_val, { col });
+								column_dx [col] = ctx->CreateExtractValue(a_dx , { col });
+								column_dy [col] = ctx->CreateExtractValue(a_dy , { col });
 							}
-							res = ctx->CreateInsertValue(res, tmp, { row });
+							for (unsigned row = 0; row < %(rows)d; ++row) {
+								llvm::Value *tmp_val = llvm::UndefValue::get(e_tp);
+								llvm::Value *tmp_dx  = llvm::UndefValue::get(e_tp);
+								llvm::Value *tmp_dy  = llvm::UndefValue::get(e_tp);
+
+								for (unsigned col = 0; col < %(cols)d; ++col) {
+									llvm::Value *elem_val = ctx->CreateExtractElement(column_val[col], ctx.get_constant(int(row)));
+									llvm::Value *elem_dx  = ctx->CreateExtractElement(column_dx[col],  ctx.get_constant(int(row)));
+									llvm::Value *elem_dy  = ctx->CreateExtractElement(column_dy[col],  ctx.get_constant(int(row)));
+
+									tmp_val  = ctx->CreateInsertElement(tmp_val, elem_val, ctx.get_constant(int(col)));
+									tmp_dx   = ctx->CreateInsertElement(tmp_dx , elem_dx , ctx.get_constant(int(col)));
+									tmp_dy   = ctx->CreateInsertElement(tmp_dy , elem_dy , ctx.get_constant(int(col)));
+								}
+								res_val = ctx->CreateInsertValue(res_val, tmp_val, { row });
+								res_dx  = ctx->CreateInsertValue(res_dx,  tmp_dx,  { row });
+								res_dy  = ctx->CreateInsertValue(res_dy,  tmp_dy,  { row });
+							}
+							res = ctx.get_dual(res_val, res_dx, res_dy);
+						} else {
+							llvm::Value *column[%(cols)d];
+
+							for (unsigned col = 0; col < %(cols)d; ++col) {
+								column[col] = ctx->CreateExtractValue(a, { col });
+							}
+							for (unsigned row = 0; row < %(rows)d; ++row) {
+								llvm::Value *tmp = llvm::UndefValue::get(e_tp);
+								for (unsigned col = 0; col < %(cols)d; ++col) {
+									llvm::Value *elem = ctx->CreateExtractElement(column[col], ctx.get_constant(int(row)));
+									tmp  = ctx->CreateInsertElement(tmp, elem, ctx.get_constant(int(col)));
+								}
+								res = ctx->CreateInsertValue(res, tmp, { row });
+							}
 						}
 					} else {
 						// all scalar mode
 						res = llvm::UndefValue::get(ret_tp);
 						llvm::Value *tmp;
 
-						for (unsigned col = 0; col < %(cols)d; ++col) {
-							for (unsigned row = 0; row < %(rows)d; ++row) {
-								unsigned tgt_idxes[1] = { col * %(rows)d + row };
-								unsigned src_idxes[1] = { row * %(cols)d + col };
-								tmp = ctx->CreateExtractValue(a, src_idxes);
-								res = ctx->CreateInsertValue(res, tmp, tgt_idxes);
+						if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
+							llvm::Value *a_val = ctx.get_dual_val(a);
+							llvm::Value *a_dx  = ctx.get_dual_dx(a);
+							llvm::Value *a_dy  = ctx.get_dual_dy(a);
+
+							llvm::Value *res_val = res, *res_dx = res, *res_dy = res;
+
+							for (unsigned col = 0; col < %(cols)d; ++col) {
+								for (unsigned row = 0; row < %(rows)d; ++row) {
+									unsigned tgt_idxes[1] = { col * %(rows)d + row };
+									unsigned src_idxes[1] = { row * %(cols)d + col };
+									tmp = ctx->CreateExtractValue(a_val, src_idxes);
+									res_val = ctx->CreateInsertValue(res_val, tmp, tgt_idxes);
+									tmp = ctx->CreateExtractValue(a_dx, src_idxes);
+									res_dx = ctx->CreateInsertValue(res_dx, tmp, tgt_idxes);
+									tmp = ctx->CreateExtractValue(a_dy, src_idxes);
+									res_dy = ctx->CreateInsertValue(res_dy, tmp, tgt_idxes);
+								}
+							}
+							res = ctx.get_dual(res_val, res_dx, res_dy);
+						} else {
+							for (unsigned col = 0; col < %(cols)d; ++col) {
+								for (unsigned row = 0; row < %(rows)d; ++row) {
+									unsigned tgt_idxes[1] = { col * %(rows)d + row };
+									unsigned src_idxes[1] = { row * %(cols)d + col };
+									tmp = ctx->CreateExtractValue(a, src_idxes);
+									res = ctx->CreateInsertValue(res, tmp, tgt_idxes);
+								}
 							}
 						}
 					}
@@ -2080,10 +2183,19 @@ class SignatureParser:
 					// big vector mode
 					static const int idxes[] = { %(shuffle_idxes)s };
 					llvm::Value *shuffle = ctx.get_shuffle(idxes);
-					res = ctx->CreateShuffleVector(a, a, shuffle);
-				}
-				if (inst.get_return_derivs()) { // expand to dual (actually should not happen)
-					res = ctx.get_dual(res);
+
+					if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
+						llvm::Value *a_val = ctx.get_dual_val(a);
+						llvm::Value *a_dx  = ctx.get_dual_dx(a);
+						llvm::Value *a_dy  = ctx.get_dual_dy(a);
+
+						res = ctx.get_dual(
+							ctx->CreateShuffleVector(a_val, a_val, shuffle),
+							ctx->CreateShuffleVector(a_dx , a_dx , shuffle),
+							ctx->CreateShuffleVector(a_dy , a_dy , shuffle));
+					} else {
+						res = ctx->CreateShuffleVector(a, a, shuffle);
+					}
 				}
 			"""
 			self.format_code(f, code % params)
@@ -2091,7 +2203,6 @@ class SignatureParser:
 		elif mode == "math::sincos":
 			# we know that the return type is an array, so get the element type here
 			code = """
-				unsigned    idxes[1];
 				llvm::Value *res_0, *res_1;
 				llvm::Value *a_val = ctx.get_dual_val(a);
 
@@ -2120,8 +2231,7 @@ class SignatureParser:
 				if atom_code == "FF":
 					is_float = True
 					code += """
-						llvm::Function *sincos_func =
-							m_has_sincosf ? get_runtime_func(RT_SINCOSF) : NULL;
+						llvm::Function *sincos_func = m_has_sincosf ? get_runtime_func(RT_SINCOSF) : NULL;
 					"""
 
 				code += """
@@ -2131,93 +2241,51 @@ class SignatureParser:
 					res_1 = llvm::ConstantAggregateZero::get(elm_tp);
 				""" % code_params
 
-				code += """
-					if (elm_tp->isArrayTy()) {
-						llvm::Value *tmp;
-				"""
-
-				for i in range(n_elems):
-					code += """
-						idxes[0] = %du;
-						tmp   = ctx->CreateExtractValue(a_val, idxes);
-					""" % i
-
-					if is_float:
-						code += """
-							if (m_has_sincosf) {
-								llvm::Value *access0[] = {
-									ctx.get_constant(int(0)),
-									ctx.get_constant(int(%d))
-								};
-								llvm::Value *sinp = ctx->CreateInBoundsGEP(res, access0);
-								llvm::Value *access1[] = {
-									ctx.get_constant(int(1)),
-									ctx.get_constant(int(%d))
-								};
-								llvm::Value *cosp = ctx->CreateInBoundsGEP(res, access1);
-								ctx->CreateCall(sincos_func, { a_val, sinp, cosp });
-							} else {
-						""" % (i, i)
-
-					code += """
-						res_0 = ctx->CreateInsertValue(res_0, ctx->CreateCall(sin_func, tmp), idxes);
-						res_1 = ctx->CreateInsertValue(res_1, ctx->CreateCall(cos_func, tmp), idxes);
-					"""
-					if is_float:
-						code += """
-							}
-						"""
-
-				code += """
-					} else {
-						llvm::Value *tmp, *idx;
-				"""
-
 				if is_float:
 					code += """
-							if (m_has_sincosf) {
-								llvm::Value *sc_tmp = ctx->CreateAlloca(elm_tp);
-								llvm::Value *s_tmp  = ctx.create_simple_gep_in_bounds(
-									sc_tmp, ctx.get_constant(int(0)));
-								llvm::Value *c_tmp  = ctx.create_simple_gep_in_bounds(
-									sc_tmp, ctx.get_constant(int(1)));
-					"""
-
-					for i in range(n_elems):
-						code += """
-								idx = ctx.get_constant(%d);
-
-								tmp   = ctx->CreateExtractElement(a_val, idx);
-								ctx->CreateCall(sincos_func, { tmp, s_tmp, c_tmp });
-								res_0 = ctx->CreateInsertElement(res_0, ctx->CreateLoad(s_tmp), idx);
-								res_1 = ctx->CreateInsertElement(res_1, ctx->CreateLoad(c_tmp), idx);
-						""" % i
-
-					code += """
-							} else {
-					"""
-
-				for i in range(n_elems):
-					code += """
-							idx = ctx.get_constant(%d);
-
-							tmp   = ctx->CreateExtractElement(a_val, idx);
-							res_0 = ctx->CreateInsertElement(res_0, ctx->CreateCall(sin_func, tmp), idx);
-							res_1 = ctx->CreateInsertElement(res_1, ctx->CreateCall(cos_func, tmp), idx);
-					""" % i
-
-				if is_float:
-					code += """
+						llvm::Value *sc_tmp = nullptr;
+						llvm::Value *s_tmp  = nullptr;
+						llvm::Value *c_tmp  = nullptr;
+						if (m_has_sincosf) {
+							sc_tmp = ctx->CreateAlloca(elm_tp);
+							s_tmp  = ctx.create_simple_gep_in_bounds(sc_tmp, 0u);
+							c_tmp  = ctx.create_simple_gep_in_bounds(sc_tmp, 1u);
 						}
 					"""
 
 				code += """
-					}
+					for (unsigned i = 0; i < %d; ++i) {
+						llvm::Value *tmp = ctx.create_extract(a_val, i);
+					""" % n_elems
 
-					idxes[0] = 0;
-					res = ctx->CreateInsertValue(res, res_0, idxes);
-					idxes[0] = 1;
-					res = ctx->CreateInsertValue(res, res_1, idxes);
+				if is_float:
+					code += """
+						llvm::Value *s_val;
+						llvm::Value *c_val;
+						if (m_has_sincosf) {
+							ctx->CreateCall(sincos_func, { tmp, s_tmp, c_tmp });
+							s_val = ctx->CreateLoad(s_tmp);
+							c_val = ctx->CreateLoad(c_tmp);
+						} else {
+							s_val = ctx->CreateCall(sin_func, tmp);
+							c_val = ctx->CreateCall(cos_func, tmp);
+						}
+					"""
+				else:
+					code += """
+						llvm::Value *s_val = ctx->CreateCall(sin_func, tmp);
+						llvm::Value *c_val = ctx->CreateCall(cos_func, tmp);
+					"""
+
+				code += """
+						res_0 = ctx.create_insert(res_0, s_val, i);
+						res_1 = ctx.create_insert(res_1, c_val, i);
+					}
+					"""
+
+				code += """
+					res = ctx.create_insert(res, res_0, 0);
+					res = ctx.create_insert(res, res_1, 1);
 				"""
 				self.format_code(f, code)
 			else:
@@ -2233,10 +2301,8 @@ class SignatureParser:
 						if (m_has_sincosf) {
 							llvm::Function *sincos_func = get_runtime_func(RT_SINCOSF);
 							res = ctx->CreateAlloca(ret_tp);
-							llvm::Value *sinp = ctx.create_simple_gep_in_bounds(
-								res, ctx.get_constant(int(0)));
-							llvm::Value *cosp = ctx.create_simple_gep_in_bounds(
-								res, ctx.get_constant(int(1)));
+							llvm::Value *sinp = ctx.create_simple_gep_in_bounds(res, 0u);
+							llvm::Value *cosp = ctx.create_simple_gep_in_bounds(res, 1u);
 							ctx->CreateCall(sincos_func, { a_val, sinp, cosp });
 							res = ctx->CreateLoad(res);
 						} else {
@@ -2245,10 +2311,8 @@ class SignatureParser:
 							res_0 = ctx->CreateCall(sin_func, a_val);
 							res_1 = ctx->CreateCall(cos_func, a_val);
 
-							idxes[0] = 0;
-							res = ctx->CreateInsertValue(res, res_0, idxes);
-							idxes[0] = 1;
-							res = ctx->CreateInsertValue(res, res_1, idxes);
+							res = ctx.create_insert(res, res_0, 0);
+							res = ctx.create_insert(res, res_1, 1);
 						}
 					""" % code_params
 					self.format_code(f, code)
@@ -2260,10 +2324,8 @@ class SignatureParser:
 						res_0 = ctx->CreateCall(sin_func, a_val);
 						res_1 = ctx->CreateCall(cos_func, a_val);
 
-						idxes[0] = 0;
-						res = ctx->CreateInsertValue(res, res_0, idxes);
-						idxes[0] = 1;
-						res = ctx->CreateInsertValue(res, res_1, idxes);
+						res = ctx.create_insert(res, res_0, 0);
+						res = ctx.create_insert(res, res_1, 1);
 					""" % code_params
 					self.format_code(f, code)
 
@@ -2276,26 +2338,14 @@ class SignatureParser:
 				llvm::Value *cos_a = ctx.create_extract(res, 1);
 				llvm::Type *base_type = a_val->getType();
 
-				llvm::Value *res_dx_0 = ctx.create_mul(
-					base_type,
-					ctx.get_dual_dx(a),
-					cos_a);
-				llvm::Value *res_dx_1 = ctx.create_mul(
-					base_type,
-					ctx.get_dual_dx(a),
-					neg_sin_a);
+				llvm::Value *res_dx_0 = ctx.create_mul(base_type, ctx.get_dual_dx(a), cos_a);
+				llvm::Value *res_dx_1 = ctx.create_mul(base_type, ctx.get_dual_dx(a), neg_sin_a);
 				llvm::Value *res_dx = llvm::ConstantAggregateZero::get(ret_tp);
 				res_dx = ctx.create_insert(res_dx, res_dx_0, 0);
 				res_dx = ctx.create_insert(res_dx, res_dx_1, 1);
 
-				llvm::Value *res_dy_0 = ctx.create_mul(
-					base_type,
-					ctx.get_dual_dy(a),
-					cos_a);
-				llvm::Value *res_dy_1 = ctx.create_mul(
-					base_type,
-					ctx.get_dual_dy(a),
-					neg_sin_a);
+				llvm::Value *res_dy_0 = ctx.create_mul(base_type, ctx.get_dual_dy(a), cos_a);
+				llvm::Value *res_dy_1 = ctx.create_mul(base_type, ctx.get_dual_dy(a), neg_sin_a);
 				llvm::Value *res_dy = llvm::ConstantAggregateZero::get(ret_tp);
 				res_dy = ctx.create_insert(res_dy, res_dy_0, 0);
 				res_dy = ctx.create_insert(res_dy, res_dy_1, 1);
@@ -2914,6 +2964,64 @@ class SignatureParser:
 					res = ctx.get_dual(res);
 				}
 				""")
+
+		elif mode == "state::meters_per_scene_unit":
+			self.format_code(f,
+			"""
+			if (m_code_gen.m_fold_meters_per_scene_unit) {
+				res = ctx.get_constant(m_code_gen.m_meters_per_scene_unit);
+			} else {
+				llvm::Type *ret_tp = %s;
+				if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
+					llvm::Value *state = ctx.get_state_parameter();
+					llvm::Value *adr = ctx.create_simple_gep_in_bounds(
+						state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_METERS_PER_SCENE_UNIT)));
+					res = ctx.load_and_convert(ret_tp, adr);
+				} else {
+					// zero in all other contexts, as currently not available in state
+					res = llvm::Constant::getNullValue(ret_tp);
+				}
+			}
+			if (inst.get_return_derivs()) { // expand to dual
+				res = ctx.get_dual(res);
+			}
+			""" % (
+				"ctx.get_non_deriv_return_type()",
+			))
+
+		elif mode == "state::scene_units_per_meter":
+			self.format_code(f,
+			"""
+			if (m_code_gen.m_fold_meters_per_scene_unit) {
+				res = ctx.get_constant(1.f / m_code_gen.m_meters_per_scene_unit);
+			} else {
+				llvm::Type *ret_tp = %s;
+				if (m_code_gen.m_state_mode & Type_mapper::SSM_CORE) {
+					llvm::Value *state = ctx.get_state_parameter();
+					llvm::Value *adr = ctx.create_simple_gep_in_bounds(
+						state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(Type_mapper::STATE_CORE_METERS_PER_SCENE_UNIT)));
+					res = ctx.load_and_convert(ret_tp, adr);
+					res = ctx->CreateFDiv(ctx.get_constant(1.f), res);
+				} else {
+					// zero in all other contexts, as currently not available in state
+					res = llvm::Constant::getNullValue(ret_tp);
+				}
+			}
+			if (inst.get_return_derivs()) { // expand to dual
+				res = ctx.get_dual(res);
+			}
+			""" % (
+				"ctx.get_non_deriv_return_type()",
+			))
+
+		elif mode == "state::wavelength_min_max":
+			self.format_code(f,
+			"""
+			res = ctx.get_constant(m_code_gen.m_%s);
+			if (inst.get_return_derivs()) { // expand to dual
+				res = ctx.get_dual(res);
+			}
+			""" % intrinsic)
 
 		elif mode == "state::rounded_corner_normal":
 			code = """
@@ -3618,7 +3726,7 @@ class SignatureParser:
 					// calc average
 					llvm::Value *factor = ctx->CreateFAdd(v_x, v_y);
 					factor = ctx->CreateFAdd(factor, v_z);
-					factor = ctx->CreateFMul(factor, ctx.get_constant(1.0f/3.0f));
+					factor = ctx->CreateFMul(factor, ctx.get_constant((float)(1.0/3.0)));
 					non_id_res = ctx->CreateFMul(factor, ctx.get_dual_val(scale));
 
 					if (inst.get_return_derivs()) {
@@ -4443,6 +4551,181 @@ class SignatureParser:
 				res = ctx.get_dual(res);
 			}
 			""")
+
+		elif mode == "scene::data_isvalid":
+			code = """
+			if (m_has_res_handler) {
+				MDL_ASSERT(!"not implemented yet");
+				res = nullptr;
+			} else {
+				llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+					res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+				llvm::Value *self     = ctx->CreateBitCast(
+					ctx->CreateLoad(self_adr),
+					m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+				llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+					self, Type_mapper::THV_scene_data_isvalid);
+
+				llvm::Value *args[] = { self, ctx.get_state_parameter(), a };
+				llvm::CallInst *call = ctx->CreateCall(runtime_func, args);
+				call->setDoesNotThrow();
+				res = call;
+			}
+			"""
+			self.format_code(f, code)
+
+		elif mode == "scene::data_lookup_atomic" or mode == "scene::data_lookup_uniform_atomic":
+			runtime_func_enum_name = "THV_scene_" + intrinsic.replace("uniform_", "")
+			runtime_func_enum_deriv_name = runtime_func_enum_name.replace("lookup", "lookup_deriv")
+			if "_int" in intrinsic:
+				code = """
+				if (m_has_res_handler) {
+					MDL_ASSERT(!"not implemented yet");
+					res = nullptr;
+				} else {
+					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+					llvm::Value *self     = ctx->CreateBitCast(
+						ctx->CreateLoad(self_adr),
+						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+					llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+						self, Type_mapper::%(runtime_func_enum_name)s);
+					llvm::Value *args[] = {
+						self, ctx.get_state_parameter(), a, b, ctx.get_constant(%(is_uniform)s) };
+					llvm::CallInst *call = ctx->CreateCall(runtime_func, args);
+					call->setDoesNotThrow();
+					res = call;
+				}
+				""" % {
+					"runtime_func_enum_name": runtime_func_enum_name,
+					"is_uniform": "true" if "uniform" in intrinsic else "false"
+				}
+			else:
+				code = """
+				if (m_has_res_handler) {
+					MDL_ASSERT(!"not implemented yet");
+					res = nullptr;
+				} else {
+					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+					llvm::Value *self     = ctx->CreateBitCast(
+						ctx->CreateLoad(self_adr),
+						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+					if (inst.get_return_derivs()) {
+						llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+							self, Type_mapper::%(runtime_func_enum_deriv_name)s);
+
+						llvm::Value *tmp       = ctx.create_local(ctx.get_return_type(), "tmp");
+						llvm::Value *def_value = ctx.create_local(ctx.get_return_type(), "def_value");
+
+						ctx.convert_and_store(b, def_value);
+
+						llvm::Value *args[] = {
+							tmp, self, ctx.get_state_parameter(), a, def_value, ctx.get_constant(%(is_uniform)s) };
+						llvm::CallInst *call = ctx->CreateCall(runtime_func, args);
+						call->setDoesNotThrow();
+
+						res = ctx->CreateLoad(tmp);
+					} else {
+						llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+							self, Type_mapper::%(runtime_func_enum_name)s);
+						llvm::Value *args[] = {
+							self, ctx.get_state_parameter(), a, b, ctx.get_constant(%(is_uniform)s) };
+						llvm::CallInst *call = ctx->CreateCall(runtime_func, args);
+						call->setDoesNotThrow();
+						res = call;
+					}
+				}
+				""" % {
+					"runtime_func_enum_name": runtime_func_enum_name,
+					"runtime_func_enum_deriv_name": runtime_func_enum_deriv_name,
+					"elem_type": "float",
+					"is_uniform": "true" if "uniform" in intrinsic else "false"
+				}
+			self.format_code(f, code)
+
+		elif mode == "scene::data_lookup_vector" or mode == "scene::data_lookup_uniform_vector":
+			runtime_func_enum_name = "THV_scene_" + intrinsic.replace("uniform_", "")
+			runtime_func_enum_deriv_name = runtime_func_enum_name.replace("lookup", "lookup_deriv")
+			if "_int" in intrinsic:
+				code = """
+				if (m_has_res_handler) {
+					MDL_ASSERT(!"not implemented yet");
+					res = nullptr;
+				} else {
+					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+					llvm::Value *self     = ctx->CreateBitCast(
+						ctx->CreateLoad(self_adr),
+						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+					llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+						self, Type_mapper::%(runtime_func_enum_name)s);
+
+					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_%(elem_type)s_%(vector_dim)s_type();
+					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
+					llvm::Value *def_value  = ctx.create_local(res_type, "def_value");
+
+					ctx.convert_and_store(b, def_value);
+					llvm::Value *args[] = {
+						tmp, self, ctx.get_state_parameter(), a, def_value, ctx.get_constant(%(is_uniform)s) };
+					llvm::CallInst *call = ctx->CreateCall(runtime_func, args);
+					call->setDoesNotThrow();
+
+					res = ctx.load_and_convert(ctx.get_return_type(), tmp);
+				}
+				""" % {
+					"runtime_func_enum_name": runtime_func_enum_name,
+					"vector_dim": "3" if "color" in intrinsic else intrinsic[-1],  # last character of name is dim if not color
+					"elem_type": "int",
+					"is_uniform": "true" if "uniform" in intrinsic else "false"
+				}
+			else:
+				code = """
+				if (m_has_res_handler) {
+					MDL_ASSERT(!"not implemented yet");
+					res = nullptr;
+				} else {
+					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+					llvm::Value *self     = ctx->CreateBitCast(
+						ctx->CreateLoad(self_adr),
+						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+					llvm::Value *runtime_func;
+					llvm::Type *res_type;
+					if (inst.get_return_derivs()) {
+						runtime_func = ctx.get_tex_lookup_func(
+							self, Type_mapper::%(runtime_func_enum_deriv_name)s);
+						res_type = m_code_gen.m_type_mapper.get_deriv_arr_%(elem_type)s_%(vector_dim)s_type();
+					} else {
+						runtime_func = ctx.get_tex_lookup_func(
+							self, Type_mapper::%(runtime_func_enum_name)s);
+						res_type = m_code_gen.m_type_mapper.get_arr_%(elem_type)s_%(vector_dim)s_type();
+					}
+
+					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
+					llvm::Value *def_value  = ctx.create_local(res_type, "def_value");
+
+					ctx.convert_and_store(b, def_value);
+					llvm::Value *args[] = {
+						tmp, self, ctx.get_state_parameter(), a, def_value, ctx.get_constant(%(is_uniform)s) };
+					llvm::CallInst *call = ctx->CreateCall(runtime_func, args);
+					call->setDoesNotThrow();
+
+					res = ctx.load_and_convert(ctx.get_return_type(), tmp);
+				}
+				""" % {
+					"runtime_func_enum_name": runtime_func_enum_name,
+					"runtime_func_enum_deriv_name": runtime_func_enum_deriv_name,
+					"vector_dim": "3" if "color" in intrinsic else intrinsic[-1],  # last character of name is dim if not color
+					"elem_type": "float",
+					"is_uniform": "true" if "uniform" in intrinsic else "false"
+				}
+			self.format_code(f, code)
 
 		elif mode == "debug::breakpoint":
 			code = """
@@ -6075,6 +6358,7 @@ def main(args):
 		parser.parse("state")
 		parser.parse("df")
 		parser.parse("tex")
+		parser.parse("scene")
 		parser.parse("debug")
 		parser.parse_builtins(
 			"""

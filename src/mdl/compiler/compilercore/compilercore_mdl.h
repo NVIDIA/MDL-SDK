@@ -45,6 +45,7 @@
 namespace mi {
 namespace mdl {
 
+class Analysis;
 class IMDL_import_result;
 class File_resolver;
 class Jitted_code;
@@ -56,6 +57,107 @@ extern IValue const *evaluate_intrinsic_function(
     IDefinition::Semantics sema,
     IValue const * const   arguments[],
     size_t                 n_arguments);
+
+/// RAII-like helper class to simplify IModule_loaded_callback and IModule_cache_lookup_handle
+//7 handling.
+class Module_callback {
+public:
+    /// Constructor.
+    /*implicit*/ Module_callback(
+        IModule_cache *module_cache)
+    : m_module_cache(module_cache)
+    , m_cb(module_cache != NULL ? module_cache->get_module_loading_callback() : NULL)
+    , m_cache_lookup_handle(m_cb != NULL ? module_cache->create_lookup_handle() : NULL)
+    {
+    }
+
+    /// Destructor.
+    ~Module_callback()
+    {
+        if (m_module_cache != NULL && m_cache_lookup_handle != NULL) {
+            m_module_cache->free_lookup_handle(m_cache_lookup_handle);
+        }
+    }
+
+    /// check if valid.
+    bool is_valid() const { return m_cache_lookup_handle != NULL; }
+
+    /// Function that is called when the \c module was loaded successfully so that it can be cached.
+    ///
+    /// \param module   The loaded, valid, module.
+    bool register_module(
+        IModule const *module)
+    {
+        return m_cb != NULL ? m_cb->register_module(module) : true;
+    }
+
+    /// Function that is called when a module was not found or when loading failed.
+    void module_loading_failed()
+    {
+        if (m_cb != NULL) {
+            m_cb->module_loading_failed(*m_cache_lookup_handle);
+        }
+    }
+
+    /// Called while loading a module to check if the built-in modules are already registered.
+    ///
+    /// \param absname  the absolute name of the built-in module to check.
+    /// \return         If false, the built-in will be registered shortly after.
+    bool is_builtin_module_registered(
+        char const *absname) const
+    {
+        return m_cb != NULL ? m_cb->is_builtin_module_registered(absname) : false;
+    }
+
+    /// Get an identifier to be used throughout the loading of a module.
+    char const *get_lookup_name() const
+    {
+        return m_cache_lookup_handle != NULL ? m_cache_lookup_handle->get_lookup_name(): NULL;
+    }
+
+    /// Returns true if this handle belongs to context that loads module.
+    /// If the module is already loaded or the handle belongs to a waiting context, false will be
+    /// returned.
+    bool is_processing() const
+    {
+        return m_cache_lookup_handle != NULL ? m_cache_lookup_handle->is_processing() : false;
+    }
+
+    /// Conversion operator.
+    operator IModule_cache_lookup_handle *()
+    {
+        return m_cache_lookup_handle;
+    }
+
+    /// Conversion operator.
+    operator IModule_loaded_callback *()
+    {
+        return m_cb;
+    }
+
+private:
+    /// The module cache if any.
+    IModule_cache *m_module_cache;
+
+    /// The module loaded callback if any.
+    IModule_loaded_callback *m_cb;
+
+    /// The lookup handle if any.
+    IModule_cache_lookup_handle *m_cache_lookup_handle;
+};
+
+/// RAII-like helper class for IModule_cache_lookup_handle.
+class Module_cache_lookup_handle {
+public:
+    /// Constructor.
+    /*implicit*/ Module_cache_lookup_handle(
+        IModule_loaded_callback *cb)
+    {
+    }
+
+private:
+};
+
 
 /// Implementation of the IMDL interface.
 class MDL : public Allocator_interface_implement<IMDL>
@@ -100,6 +202,9 @@ public:
     /// The value of state::WAVELENGTH_BASE_MAX.
     static char const *option_state_wavelength_base_max;
 
+
+    /// The name of the option to keep resource file paths as is.
+    static char const *option_keep_original_resource_file_paths;
 
     /// Get the type factory.
     Type_factory *get_type_factory() const MDL_FINAL;
@@ -226,7 +331,7 @@ public:
     /// \param ds  the deserializer data is read from
     ///
     /// \return the module
-    IModule const *deserialize_module(IDeserializer *ds) MDL_FINAL;
+    Module const *deserialize_module(IDeserializer *ds) MDL_FINAL;
 
     /// Create an IOutput_stream standard stream.
     ///
@@ -348,6 +453,13 @@ public:
     IEntity_resolver *create_entity_resolver(
         IModule_cache *module_cache) const MDL_FINAL;
 
+    /// Return the current MDL entity resolver.
+    ///
+    /// If an external resolver is installed, it is returned. Otherwise, a newly created instance
+    /// of the built-in resolver using the provided module cache is returned.
+    IEntity_resolver *get_entity_resolver(
+        IModule_cache *module_cache) const MDL_FINAL;
+
     /// Create an MDL archive tool using this compiler.
     IArchive_tool *create_archive_tool() MDL_FINAL;
 
@@ -370,7 +482,36 @@ public:
     /// \note This disables the built-it resolver currently.
     void set_external_entity_resolver(IEntity_resolver *resolver) MDL_FINAL;
 
+    /// Check if an external entity resolver is installed.
+    bool uses_external_entity_resolver() const MDL_FINAL;
+
+    /// Add a foreign module translator.
+    ///
+    /// \param translator  the translator
+    void add_foreign_module_translator(
+        IMDL_foreign_module_translator *translator) MDL_FINAL;
+
+    /// Remove a foreign module translator.
+    ///
+    /// \param translator  the translator
+    ///
+    /// \return true on success, false if the given translator was not found
+    bool remove_foreign_module_translator(
+        IMDL_foreign_module_translator *translator) MDL_FINAL;
+
     // ------------------- non interface methods ---------------------------
+
+    /// Create an empty module.
+    ///
+    /// \param module_name   the (absolute) name of the module
+    /// \param file_name     the file name of the module
+    /// \param version       the MDL language level of this module
+    /// \param flags         module property flags
+    Module *create_module(
+        char const        *module_name,
+        char const        *file_name,
+        IMDL::MDL_version version,
+        unsigned          flags);
 
     /// Check if a given identifier is a valid MDL identifier.
     ///
@@ -458,6 +599,22 @@ public:
         Thread_context &ctx,
         char const     *module_name,
         IModule_cache  *module_cache);
+
+    /// Compile a foreign module with a given name.
+    ///
+    /// \param translator    The foreign module translator.
+    /// \param ctx           The thread context.
+    /// \param module_name   The module name (absolute or relative).
+    /// \param module_cache  If non-NULL, a module cache.
+    /// \returns             An interface to the compiled module.
+    ///
+    /// If the module is already loaded, no new module will be created,
+    /// but an interface to the already loaded module will be returned.
+    Module const *compile_foreign_module(
+        IMDL_foreign_module_translator &translator,
+        Thread_context                 &ctx,
+        char const                     *module_name,
+        IModule_cache                  *module_cache);
 
     /// Compile a module with a given name from a input stream.
     ///
@@ -587,8 +744,24 @@ public:
         bool          enable_experimental_features,
         Messages_impl &msgs);
 
+    /// Creates a new thread context from current analysis settings.
+    ///
+    /// \param analysis    the current analysis
+    /// \param front_path  a front path to set if any
+    Thread_context *create_thread_context(
+        Analysis const &analysis,
+        char const    *front_path);
+
+    /// If the given module name names a foreign module, return the matching translator.
+    ///
+    /// \param module_name  the module name
+    IMDL_foreign_module_translator *is_foreign_module(
+        char const *module_name);
+
 public:
     /// Constructor.
+    ///
+    /// \param alloc  the allocator
     explicit MDL(IAllocator *alloc);
 
 private:
@@ -596,7 +769,6 @@ private:
     ~MDL();
 
 private:
-
     /// Register built-in modules at a module cache
     void register_builtin_module_at_cache(IModule_cache *cache);
 
@@ -605,18 +777,6 @@ private:
 
     /// Create all options (and default values) of the compiler.
     void create_options();
-
-    /// Create an empty module.
-    ///
-    /// \param module_name   the (absolute) name of the module
-    /// \param file_name     the file name of the module
-    /// \param version       the MDL language level of this module
-    /// \param flags         module property flags
-    Module *create_module(
-        char const        *module_name,
-        char const        *file_name,
-        IMDL::MDL_version version,
-        unsigned          flags);
 
     /// Load a module from a stream.
     ///
@@ -706,6 +866,11 @@ private:
 
     /// The Jitted code singleton if any.
     Jitted_code *m_jitted_code;
+
+    typedef list<mi::base::Handle<IMDL_foreign_module_translator> >::Type Translator_list;
+
+    /// The list of registered translators.
+    Translator_list m_translator_list;
 };
 
 /// Implementation of the factory function mi_mdl_factory().

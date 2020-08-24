@@ -631,6 +631,7 @@ bool Option_parser::consume_arguments(
         }
         else
         {
+            Util::log_error("Invalid option: " + *it);
             return false;
         }
     }

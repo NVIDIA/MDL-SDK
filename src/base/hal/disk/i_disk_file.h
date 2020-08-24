@@ -56,16 +56,16 @@ class File : public IFile
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     virtual bool open(
-	const char* path,
-	IFile::Mode mode = M_READ);
+        const char* path,
+        IFile::Mode mode = M_READ);
     /// Open a file by path. To open stdin/stdout, set path to empty string and pass the
     /// corresponding mode, ie M_READ for stdin and M_WRITE for stdout.
     /// \param path (already substituted) path to file
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     virtual bool open(
-	const std::string& path,
-	IFile::Mode mode = M_READ);
+        const std::string& path,
+        IFile::Mode mode = M_READ);
 
     /// Close the file.
     /// \return success, ie false if internal close failed.
@@ -81,8 +81,8 @@ class File : public IFile
     /// \param num copy this many bytes (63 valid bits)
     /// \return # chars read, -1 = error
     virtual Sint64 read(
-	char* buf,
-	Uint64 num);
+        char* buf,
+        Uint64 num);
 
     /// Read a line ending with a newline or EOF from the open file. Leave
     /// newlines in the returned buffer.
@@ -90,16 +90,16 @@ class File : public IFile
     /// \param num copy this many bytes or until \n\0
     /// \return true=ok, false=fail (see error())
     virtual bool readline(
-	char* line,
-	int num);
+        char* line,
+        int num);
     /// Read a line ending with an EOL or EOF from the open file. Note that the line will be
     /// stripped of whitespaces, if not told otherwise.
     /// \param line copy data here
     /// \param strip strip whitespaces?
     /// \return true=ok, false=fail (see error())
     virtual bool read_line(
-	std::string& line,
-	bool strip=true);
+        std::string& line,
+        bool strip=true);
 
     /// Write raw data to a file
     /// 64 bit platform:
@@ -111,28 +111,28 @@ class File : public IFile
     /// \param num write this many bytes(63 valid bits)
     /// \return # chars written, -1 = error
     virtual Sint64 write(
-	const char* buf,
-	Uint64 num);
+        const char* buf,
+        Uint64 num);
 
     /// Write a line to open file. Any newlines must be in <line>, writeline
     /// doesn't add one.
     /// \param line write this string
     /// \return true=ok, false=fail (see error())
     virtual bool writeline(
-	const char* line);
+        const char* line);
 
     /// Write a formatted string to an open file.
     /// \param fmt format string with %X
     virtual int printf(
-	const char* fmt,
-	...) PRINTFLIKE2;
+        const char* fmt,
+        ...) PRINTFLIKE2;
 
     /// Write a formatted string to an open file.
     /// \param fmt format string with %X
     /// \param args arguments for %X
     virtual int vprintf(
-	const char* fmt,
-	va_list args);
+        const char* fmt,
+        va_list args);
 
     /// Flush buffered output data to the file.
     /// \return success
@@ -151,8 +151,8 @@ class File : public IFile
     /// \param whence 0=absolute, 1=relative, 2=rel to eof
     /// \return success
     virtual bool seek(
-	Sint64 offset,
-	int whence=0);
+        Sint64 offset,
+        int whence=0);
 
     /// Retrieve the current absolute position in the file where the next byte
     /// would be read or written. This is 0 after opening except in append mode.
@@ -197,10 +197,10 @@ class File : public IFile
     virtual int get_file_descriptor() const;
 
   private:
-    std::string	m_path;			///< last path passed to open()
-    int			m_error;		///< last error, 0 if none
-    FILE*		m_fp;			///< open file, 0 if not open
-    IFile::Mode 	m_mode;			///< current opend mode
+    std::string m_path;                 ///< last path passed to open()
+    int                 m_error;                ///< last error, 0 if none
+    FILE*               m_fp;                   ///< open file, 0 if not open
+    IFile::Mode         m_mode;                 ///< current opend mode
 
     File(const File&);
     File& operator=(const File&);

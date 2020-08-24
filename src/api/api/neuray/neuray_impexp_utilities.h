@@ -375,28 +375,6 @@ public:
         DB::Tag_version* time_stamp,
         bool shortcuts_mdl);
 
-    // Convenience 
-    // ==================
-
-    /// Resolves a string containing a UDIM/uv-tile marker and a corresponding u,v pair
-    /// to a pattern as used in the filename of a udim/uv-tile sequence.
-    ///
-    /// \param marker string containing a valid MDL UDIM/uv-tile marker.
-    /// \param u      uv-tile position in u-direction
-    /// \param v      uv-tile position in v-direction
-    /// \return       a string containing the resolved pattern. 
-    static mi::IString* uvtile_marker_to_string(
-        const char* marker, mi::Sint32 u, mi::Sint32 v);
-
-    /// Replaces the pattern describing the tile index of a UDIM/uv-tile image sequence 
-    /// by the given marker, if the pattern exists in the string.
-    ///
-    /// \param str      string containing the pattern, e.g. _u1_v1
-    /// \param marker   the marker to replace the pattern with
-    /// \return string with marker or \p NULL, if a corresponding pattern could not be found.
-    static mi::IString* uvtile_string_to_marker(
-        const std::string& str, const std::string& marker);
-
 private:
 
     /// The constant "${shader}".

@@ -57,16 +57,16 @@ public:
 
     /// Check whether a tag is valid or invalid.
     //@{
-    bool is_valid()   const		{ return m_tag != 0u; }
-    bool is_invalid() const		{ return m_tag == 0u; }
+    bool is_valid()   const             { return m_tag != 0u; }
+    bool is_invalid() const             { return m_tag == 0u; }
     //@}
 
     /// Allow implicit version to bool. True means "is_valid()" returns true,
     /// false means "is_invalid()" returns true.
-    operator unknown_bool_type() const	{ return is_valid() ? &Tag::is_valid : 0; }
+    operator unknown_bool_type() const  { return is_valid() ? &Tag::is_valid : 0; }
 
     /// Implementor's access to the low-level type.
-    Uint32 get_uint() const		{ return m_tag; }
+    Uint32 get_uint() const             { return m_tag; }
 
 private:
     Uint32 m_tag;                       ///< the actual unique key of low-level type
@@ -103,14 +103,14 @@ public:
     /// from a typed tag to a tag, however, is not supported.
     Typed_tag(Tag tag = Tag()) : m_tag(tag) { }
 
-    bool is_valid()   const		{ return m_tag.is_valid(); }
-    bool is_invalid() const		{ return m_tag.is_invalid(); }
-    Tag get_untyped() const		{ return m_tag; }
+    bool is_valid()   const             { return m_tag.is_valid(); }
+    bool is_invalid() const             { return m_tag.is_invalid(); }
+    Tag get_untyped() const             { return m_tag; }
 
-    operator unknown_bool_type() const	{ return is_valid() ? &Typed_tag::is_valid : 0; }
+    operator unknown_bool_type() const  { return is_valid() ? &Typed_tag::is_valid : 0; }
 
     /// Implementor's access to the low-level type.
-    Uint32 get_uint() const		{ return m_tag.get_uint(); }
+    Uint32 get_uint() const             { return m_tag.get_uint(); }
 };
 
 template <class T> inline bool operator== (Typed_tag<T> const & l, Typed_tag<T> const & r)
@@ -167,8 +167,8 @@ struct Tag_version
 
 /// compare two tag versions
 ///
-/// \param v1				The first version
-/// \param v2				The second version
+/// \param v1                           The first version
+/// \param v2                           The second version
 inline bool operator==(
     const Tag_version& v1,
     const Tag_version& v2)
@@ -181,8 +181,8 @@ inline bool operator==(
 
 /// compare two tag versions
 ///
-/// \param v1				The first version
-/// \param v2				The second version
+/// \param v1                           The first version
+/// \param v2                           The second version
 inline bool operator!=(
     const Tag_version& v1,
     const Tag_version& v2)
@@ -192,8 +192,8 @@ inline bool operator!=(
 
 /// compare two tag versions
 ///
-/// \param v1				The first version
-/// \param v2				The second version
+/// \param v1                           The first version
+/// \param v2                           The second version
 inline bool operator<(
     const Tag_version& v1,
     const Tag_version& v2)
@@ -207,8 +207,8 @@ inline bool operator<(
 
 /// compare two tag versions
 ///
-/// \param v1				The first version
-/// \param v2				The second version
+/// \param v1                           The first version
+/// \param v2                           The second version
 inline bool operator>(
     const Tag_version& v1,
     const Tag_version& v2)
@@ -226,23 +226,23 @@ inline size_t dynamic_memory_consumption (Tag_version const &) { return 0; }
 namespace boost
 {
 
-template <>				// Hash functor for a tag
+template <>                             // Hash functor for a tag
 class hash<MI::DB::Tag>
 {
 public:
     size_t operator()(const MI::DB::Tag& tag) const
     {
-	return tag.get_uint();
+        return tag.get_uint();
     }
 };
 
-template <class T>			// Hash functor for a typed tag
+template <class T>                      // Hash functor for a typed tag
 class hash< MI::DB::Typed_tag<T> >
 {
   public:
     size_t operator()(const MI::DB::Typed_tag<T>& tag) const
     {
-	return tag.get_uint();
+        return tag.get_uint();
     }
 };
 

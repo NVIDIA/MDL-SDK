@@ -33,12 +33,11 @@
 #ifndef MDL_SDK_EXAMPLES_MDL_BROWSER_MDL_CACHE_H
 #define MDL_SDK_EXAMPLES_MDL_BROWSER_MDL_CACHE_H
 
+#include "example_shared.h"
 #include "imdl_cache.h"
+
 #include <string>
 #include <unordered_map>
-
-#include <mi/base/handle.h>
-#include <mi/neuraylib/imdl_discovery_api.h>
 
 namespace mi
 {
@@ -75,7 +74,11 @@ public:
     explicit Mdl_cache();
     virtual ~Mdl_cache();
 
-    IMdl_cache_item* create(IMdl_cache_item::Kind kind, const char* qualified_name) override;
+    IMdl_cache_item* create(
+        IMdl_cache_item::Kind kind,
+        const char* entity_name,
+        const char* simple_name,
+        const char* qualified_name) override;
     bool erase(IMdl_cache_item* item) override;
 
     const char* get_locale() const override {return m_locale.empty() ? nullptr : m_locale.c_str();}

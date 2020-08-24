@@ -106,7 +106,7 @@ Sint32 Database_impl::set_memory_limits(size_t low_water, size_t high_water)
 void Database_impl::get_memory_limits(size_t& low_water, size_t& high_water) const
 {
     MI_ASSERT(false);
-    low_water = 0;
+    low_water = 0; //-V779 PVS
     high_water = 0;
 }
 
@@ -238,7 +238,7 @@ void Database_impl::garbage_collection_internal()
             DB::Tag tag = *it;
 
             Tag_map::iterator it_info = m_tags.find(tag);
-            it_info->second->unpin();
+            it_info->second->unpin(); //-V783 PVS
             m_tags.erase(it_info);
 
             Reverse_named_tag_map::iterator it_name = m_reverse_named_tags.find(tag);
@@ -264,7 +264,7 @@ DB::Database* factory()
 
 namespace DBNR { class Transaction_impl : public DB::Transaction { }; }
 
-namespace DB { Database_statistics::Database_statistics() { MI_ASSERT(false); } }
+namespace DB { Database_statistics::Database_statistics() { MI_ASSERT(false); } } //-V730 PVS
 
 } // namespace MI
 

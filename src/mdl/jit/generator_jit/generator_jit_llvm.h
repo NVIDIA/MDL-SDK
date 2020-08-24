@@ -883,6 +883,73 @@ typedef vector<Light_profile_attribute_entry>::Type    Light_profile_table;
 typedef vector<Bsdf_measurement_attribute_entry>::Type Bsdf_measurement_table;
 typedef vector<string>::Type                           String_table;
 
+
+/// Helper class storing information about state usage per function and module.
+class State_usage_analysis
+{
+public:
+    typedef IGenerated_code_lambda_function::State_usage State_usage;
+
+    /// Constructor.
+    State_usage_analysis(LLVM_code_generator &code_gen);
+
+    /// Register a function to take part in the analysis.
+    void register_function(llvm::Function *func);
+
+    /// Add a state usage flag to the given function.
+    void add_state_usage(llvm::Function *func, State_usage flag_to_add);
+
+    /// Add a call to the call graph.
+    void add_call(llvm::Function *caller, llvm::Function *callee);
+
+    /// Updates the state usage of the exported functions of the code generator.
+    void update_exported_functions_state_usage();
+
+    /// Returns the state usage for the whole module.
+    State_usage get_module_state_usage() const
+    {
+        return m_module_state_usage;
+    }
+
+    void clear()
+    {
+        m_module_state_usage = 0;
+        m_func_state_usage_info_map.clear();
+    }
+
+private:
+    /// The code generator whose exported functions will be updated in finalize state usage.
+    LLVM_code_generator &m_code_gen;
+
+    /// The memory arena used to allocate usage information.
+    mi::mdl::Memory_arena m_arena;
+
+    /// The builder for objects on the memory arena.
+    mi::mdl::Arena_builder m_arena_builder;
+
+    /// The state usage of the whole module.
+    State_usage m_module_state_usage;
+
+    class Function_state_usage_info
+    {
+    public:
+        State_usage state_usage;
+        mi::mdl::Arena_ptr_hash_set<llvm::Function>::Type called_funcs;
+
+        Function_state_usage_info(Memory_arena *arena)
+            : state_usage(0)
+            , called_funcs(arena)
+        {}
+    };
+
+    typedef mi::mdl::ptr_hash_map<llvm::Function, Function_state_usage_info *>::Type
+        Function_state_usage_info_map;
+
+    /// Map from LLVM functions to per-function state-usage information.
+    Function_state_usage_info_map m_func_state_usage_info_map;
+};
+
+
 ///
 /// Implementation of the LLVM jit code generator.
 ///
@@ -894,6 +961,7 @@ class LLVM_code_generator
     friend class Function_context;
     friend class Df_component_info;
     friend class Derivative_infos;
+    friend class State_usage_analysis;
 public:
     static char const MESSAGE_CLASS = 'J';
 
@@ -1007,6 +1075,7 @@ public:
         string                                         name;
         vector<string>::Type                           prototypes;
         vector<string>::Type                           df_handles;
+        State_usage                                    state_usage;
 
         Exported_function(
             IAllocator                                    *alloc,
@@ -1021,6 +1090,7 @@ public:
         , name(func->getName().begin(), func->getName().end(), alloc)
         , prototypes(alloc)
         , df_handles(alloc)
+        , state_usage(0)
         {
         }
 
@@ -1236,6 +1306,15 @@ public:
     /// Return true if reciprocal math is enabled (i.e. a/b = a * 1/b).
     bool is_reciprocal_math_enabled() const { return m_reciprocal_math; }
 
+    /// Returns true if generated LLVM functions should receive the AlwaysInline attribute.
+    bool is_always_inline_enabled() const { return m_always_inline; }
+
+    /// Set LLVM function attributes which need to be consistent to avoid loosing
+    /// them during inlining (e.g. for fast math).
+    ///
+    /// \param func  LLVM function which should get the attributes
+    void set_llvm_function_attributes(llvm::Function *func);
+
     /// Return true, if the state parameter was used inside the generated code.
     ///
     /// \note Currently this property is calculated statically at code generation
@@ -1246,7 +1325,7 @@ public:
     /// Get the potential render state usage of the currently compiled entity.
     IGenerated_code_lambda_function::State_usage get_render_state_usage() const
     {
-        return m_render_state_usage;
+        return m_state_usage_analysis.get_module_state_usage();
     }
 
     /// Get the MDL types of the captured arguments if any.
@@ -1691,7 +1770,7 @@ public:
     static void register_native_runtime_functions(Jitted_code *jitted_code);
 
     /// Get the number of error messages.
-    int get_error_message_count();
+    size_t get_error_message_count();
 
     /// Add a JIT backend error message to the messages.
     ///
@@ -2365,6 +2444,16 @@ private:
         size_t           lambda_index,
         llvm::Type       *expected_type);
 
+    /// Translate a DAG call argument which may be a precalculated lambda function to LLVM IR.
+    ///
+    /// \param ctx             the function context
+    /// \param arg             the DAG call argument to translate
+    /// \param expected_type   the result will be converted to this type if necessary
+    Expression_result translate_call_arg(
+        Function_context &ctx,
+        DAG_node const   *arg,
+        llvm::Type       *expected_type);
+
     /// Get the BSDF parameter ID metadata for an instruction.
     ///
     /// \param inst            the instruction for which the metadata should be retrieved
@@ -2678,7 +2767,25 @@ private:
     /// \param N         number of rows of the left matrix
     /// \param M         number of columns of the left and number of rows of the right matrix
     /// \param K         number of columns of the right matrix
-    llvm::Value *do_matrix_multiplication(
+    llvm::Value *do_matrix_multiplication_MxM(
+        Function_context &ctx,
+        llvm::Type       *res_type,
+        llvm::Value      *l,
+        llvm::Value      *r,
+        int              N,
+        int              M,
+        int              K);
+
+    /// Create a matrix by matrix multiplication with derivatives.
+    ///
+    /// \param ctx       the function context
+    /// \param res_type  the LLVM result type of the multiplication
+    /// \param l         the left NxM matrix
+    /// \param r         the right MxK matrix
+    /// \param N         number of rows of the left matrix
+    /// \param M         number of columns of the left and number of rows of the right matrix
+    /// \param K         number of columns of the right matrix
+    llvm::Value *do_matrix_multiplication_MxM_deriv(
         Function_context &ctx,
         llvm::Type       *res_type,
         llvm::Value      *l,
@@ -2703,6 +2810,22 @@ private:
         int              M,
         int              K);
 
+    /// Create a vector by matrix multiplication with derivatives.
+    ///
+    /// \param ctx       the function context
+    /// \param res_type  the LLVM result type of the multiplication
+    /// \param l         the left derivable vector
+    /// \param r         the right MxK derivable matrix
+    /// \param M         size of the left vector and number of rows of the right matrix
+    /// \param K         number of columns of the right matrix
+    llvm::Value *do_matrix_multiplication_VxM_deriv(
+        Function_context &ctx,
+        llvm::Type       *res_type,
+        llvm::Value      *l,
+        llvm::Value      *r,
+        int              M,
+        int              K);
+
     /// Create a matrix by vector multiplication.
     ///
     /// \param ctx       the function context
@@ -2718,6 +2841,58 @@ private:
         llvm::Value      *r,
         int              N,
         int              M);
+
+    /// Create a matrix by vector multiplication with derivatives.
+    ///
+    /// \param ctx       the function context
+    /// \param res_type  the LLVM result type of the multiplication
+    /// \param l         the left NxM derivable matrix
+    /// \param r         the right derivable vector
+    /// \param N         number of rows of the left matrix
+    /// \param M         number of columns of the left matrix and size of the right vector
+    llvm::Value *do_matrix_multiplication_MxV_deriv(
+        Function_context &ctx,
+        llvm::Type       *res_type,
+        llvm::Value      *l,
+        llvm::Value      *r,
+        int              N,
+        int              M);
+
+    /// Create a matrix by scalar multiplication.
+    ///
+    /// \param ctx       the function context
+    /// \param res_type  the LLVM result type of the multiplication
+    /// \param l         the left matrix
+    /// \param r         the right scalar
+    llvm::Value *do_matrix_multiplication_MxS(
+        Function_context &ctx,
+        llvm::Type       *res_llvm_type,
+        llvm::Value      *l,
+        llvm::Value      *r);
+
+    /// Create a matrix by scalar multiplication with derivatives.
+    ///
+    /// \param ctx       the function context
+    /// \param res_type  the LLVM result type of the multiplication
+    /// \param l         the left matrix
+    /// \param r         the right scalar
+    llvm::Value *do_matrix_multiplication_MxS_deriv(
+        Function_context &ctx,
+        llvm::Type       *res_llvm_type,
+        llvm::Value      *l,
+        llvm::Value      *r);
+
+    /// Create a matrix by matrix addition.
+    ///
+    /// \param ctx       the function context
+    /// \param res_type  the LLVM result type of the multiplication
+    /// \param l         the left matrix
+    /// \param r         the right matrix
+    llvm::Value *do_matrix_addition(
+        Function_context &ctx,
+        llvm::Type *res_llvm_type,
+        llvm::Value *l,
+        llvm::Value *r);
 
     /// Compile all functions waiting in the wait queue into the current module.
     void compile_waiting_functions();
@@ -3005,6 +3180,9 @@ private:
     /// \returns false if there was any error.
     bool load_and_link_libmdlrt(llvm::Module *llvm_module);
 
+    /// Load and link user-defined renderer module into the given LLVM module.
+    bool load_and_link_renderer_module(llvm::Module *llvm_module);
+
     /// Clear the DAG-to-LLVM-IR node map.
     void clear_dag_node_map() { m_node_value_map.clear(); }
 
@@ -3050,6 +3228,19 @@ private:
 
     /// The internal space for which to compile.
     char const *m_internal_space;
+
+    /// If true, occurrences of the functions state::meters_per_scene_unit() and
+    /// state::scene_units_per_meter() will be folded using \c m_meters_per_scene_unit.
+    bool m_fold_meters_per_scene_unit;
+
+    /// The value for the meter/scene unit conversion, only used when folding is enabled.
+    float m_meters_per_scene_unit;
+
+    /// The value for the state::wavelength_min() function.
+    float m_wavelength_min;
+
+    /// The value for the state::wavelength_max() function.
+    float m_wavelength_max;
 
     /// The resource manager if any.
     IResource_manager *m_res_manager;
@@ -3099,6 +3290,13 @@ private:
     /// A user-specified LLVM implementation of the state module.
     BinaryOptionData m_user_state_module;
 
+    /// A user-specified LLVM renderer module.
+    BinaryOptionData m_renderer_module;
+
+    /// User specified comma-separated list of names of functions which will be visible in the
+    /// generated code.
+    char const *m_visible_functions;
+
     /// The LLVM function pass manager for the current module.
     std::unique_ptr<llvm::legacy::FunctionPassManager> m_func_pass_manager;
 
@@ -3114,6 +3312,9 @@ private:
     /// If true, reciprocal math transformations are enabled (i.e. a/b = a * 1/b).
     bool m_reciprocal_math;
 
+    /// If true, generated functions should get an AlwaysInline attribute.
+    bool m_always_inline;
+
     /// If true, pass a user defined resource data struct to all resource callbacks.
     bool m_hlsl_use_resource_data;
 
@@ -3123,6 +3324,9 @@ private:
 
     /// The runtime creator.
     MDL_runtime_creator *m_runtime;
+
+    /// True, if a resource handler I/F is used.
+    bool m_has_res_handler;
 
     /// Cache for the tex_lookup functions once created.
     mutable llvm::Function *m_tex_lookup_functions[mi::mdl::Type_mapper::THV_LAST];
@@ -3348,6 +3552,21 @@ private:
     /// The HLSL renderer runtime function for scene::data_lookup_color.
     llvm::Function *m_hlsl_func_scene_data_lookup_color;
 
+    /// The HLSL renderer runtime function for scene::data_lookup_float with derivatives.
+    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_float2 with derivatives.
+    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float2;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_float3 with derivatives.
+    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float3;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_float4 with derivatives.
+    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float4;
+
+    /// The HLSL renderer runtime function for scene::data_lookup_color with derivatives.
+    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_color;
+
     /// If set, a resource map for mapping resources to tags.
     Resource_tag_map const *m_resource_tag_map;
 
@@ -3369,8 +3588,8 @@ private:
     /// If non-zero, the minimum PTX version required.
     unsigned m_min_ptx_version;
 
-    /// The render state usage for the currently compiled entity.
-    State_usage m_render_state_usage;
+    /// Analysis object storing state usage information per function and updating
+    State_usage_analysis m_state_usage_analysis;
 
     /// The target language.
     Target_language m_target_lang;

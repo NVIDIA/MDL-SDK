@@ -1400,10 +1400,8 @@ bool Archive_builder::create_zip_archive()
         }
     }
 
-    if (za != NULL) {
-        if (zip_close(za) != 0)
-            translate_zip_error(za);
-    }
+    if (zip_close(za) != 0)
+        translate_zip_error(za);
 
     if (m_has_error) {
         return false;

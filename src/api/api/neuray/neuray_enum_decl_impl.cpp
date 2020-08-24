@@ -46,7 +46,7 @@ mi::base::IInterface* Enum_decl_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new Enum_decl_impl();
 }
 
@@ -95,7 +95,7 @@ mi::Size Enum_decl_impl::get_length() const
 const char* Enum_decl_impl::get_name( mi::Size index) const
 {
     if( index >= m_name.size())
-        return 0;
+        return nullptr;
 
     return m_name[index].c_str();
 }
@@ -132,7 +132,7 @@ mi::Size Enum_decl_impl::get_index( mi::Sint32 value) const
 const char* Enum_decl_impl::get_enum_type_name() const
 {
     if( m_enum_type_name.empty())
-        return 0;
+        return nullptr;
 
     return m_enum_type_name.c_str();
 }

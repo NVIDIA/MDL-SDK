@@ -60,48 +60,61 @@ private:
 mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& options)
 {
     // Access the MDL SDK
-    auto neuray = mi::base::Handle<mi::neuraylib::INeuray>(load_and_get_ineuray());
-    if (!neuray.is_valid_interface()) 
+    auto neuray = mi::base::Handle<mi::neuraylib::INeuray>(
+        mi::examples::mdl::load_and_get_ineuray());
+
+    if (!neuray.is_valid_interface())
+    {
+        std::cerr << "[MDL Browser] Failed to load 'libmdl_sdk' library.\n";
         return nullptr;
+    }
 
     // Add MDL search paths
-    auto compiler = mi::base::Handle<mi::neuraylib::IMdl_compiler>(
-        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+    auto mdl_configuration = mi::base::Handle<mi::neuraylib::IMdl_configuration>(
+        neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
 
     auto logger = mi::base::make_handle(new Mdl_browser_logger(false));
-    compiler->set_logger(logger.get());
+    mdl_configuration->set_logger(logger.get());
 
     // clear all search paths and add specified default ones
-    compiler->clear_module_paths(); // contains the current working directory
+    mdl_configuration->clear_mdl_paths();
+    mdl_configuration->clear_resource_paths();
 
     // use default paths if none are specified explicitly
     if (options.search_paths.empty())
     {
         // add admin space search paths before user space paths
-        auto admin_space_paths = get_mdl_admin_space_search_paths();
-        for (const auto& path : admin_space_paths)
-            compiler->add_module_path(path.c_str());
+        mdl_configuration->add_mdl_system_paths();
+        mdl_configuration->add_mdl_user_paths();
 
-        auto user_space_paths = get_mdl_user_space_search_paths();
-        for (const auto& path : user_space_paths)
-            compiler->add_module_path(path.c_str());
+        for (mi::Size i = 0, n = mdl_configuration->get_mdl_system_paths_length(); i < n; ++i)
+            mdl_configuration->add_resource_path(mdl_configuration->get_mdl_system_path( i));
+
+        for (mi::Size i = 0, n = mdl_configuration->get_mdl_user_paths_length(); i < n; ++i)
+            mdl_configuration->add_resource_path(mdl_configuration->get_mdl_user_path( i));
     }
     else
     {
-        // add the paths specified on the command line 
+        // add the paths specified on the command line
         for (const auto& path : options.search_paths)
-            compiler->add_module_path(path.c_str());
+        {
+            mdl_configuration->add_mdl_path(path.c_str());
+            mdl_configuration->add_resource_path(path.c_str());
+        }
     }
 
     // print paths to check
-    for (mi::Size i = 0, n = compiler->get_module_paths_length(); i < n; ++i)
-        std::cout << "MDL Module Path: " << compiler->get_module_path(i)->get_c_str() << "\n";
+    for (mi::Size i = 0, n = mdl_configuration->get_mdl_paths_length(); i < n; ++i)
+        std::cerr << "MDL Module Path: " << mdl_configuration->get_mdl_path(i)->get_c_str() << "\n";
 
     // Configure the MDL SDK
     // Load plugin required for loading textures
-    if (0 != compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT))
+    auto plugin_configuration = mi::base::Handle<mi::neuraylib::IPlugin_configuration>(
+        neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
+
+    if (0 != plugin_configuration->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT))
     {
-        std::cerr << "[Mdl_sdk] start: failed to load 'nv_freeimage' library.\n";
+        std::cerr << "[MDL Browser] Failed to load 'nv_freeimage' library.\n";
         return nullptr;
     }
 
@@ -113,7 +126,7 @@ mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& opt
 
         if (!i18n_configuration.is_valid_interface())
         {
-            std::cerr << "[Mdl_sdk] start: failed to setup locale.\n";
+            std::cerr << "[MDL Browser] Failed to setup locale.\n";
             return nullptr;
         }
 
@@ -122,7 +135,10 @@ mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& opt
     }
 
     // Start the MDL SDK
-    check_start_success(neuray->start()); // NOTE: this kills the app in case of failure
+    mi::Sint32 ret = neuray->start();
+    if (ret != 0)
+        // NOTE: this kills the app in case of failure
+        exit_failure("Failed to initialize the SDK. Result code: %d", ret);
 
     neuray->retain();
     return neuray.get();

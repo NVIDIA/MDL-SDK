@@ -42,6 +42,7 @@
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_definitions.h>
+#include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/ifunction_definition.h>
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
@@ -59,7 +60,7 @@ namespace mi {
 
 namespace MI {
 
-    namespace DB { class Transaction; class Tag; }
+namespace DB { class Transaction; class Tag; }
 
 namespace MDL {
 
@@ -67,6 +68,158 @@ class Mdl_compiled_material;
 class Mdl_call_resolver;
 class Mdl_module_wait_queue;
 class Name_mangler;
+
+// **********  Name parsing/splitting **************************************************************
+
+// These functions are supposed to centralize all parsing/splitting of strings.
+//
+// More of these methods can be found in i_mdl_elements_utilities.
+//
+// Command to find all locations where parsing happens in this module (one long string without any
+// line breaks):
+//
+// grep -E -n "(strcmp|strncmp|strchr|strrchr|strstr|find|replace|==|!=).*
+//             ('\('|'\)'|'\['|'\]'|','|'\\$'|'\|'|'\\\\''|'/'|'\\\\\\\\'|':'|\"\(\"|\"\)\"|
+//             \"\[\"|\"\]\"|\",\"|\"\\$\"|\"\|\"|\"'\"|\"/\"|\"\\\\\\\\\"|\":\"|\"::\"|\"mdl)"
+//            *.h *.cpp
+//
+
+/// Functions on MDL names
+//@{
+
+/// Indicates whether \p name is s valid simple MDL package or module name.
+bool is_valid_simple_package_or_module_name( const std::string& name);
+
+/// Indicates whether the MDL module or definition name is absolute (starts with "::", or is from
+/// an MDLE module).
+bool is_absolute( const std::string& name);
+
+/// Indicates whether \p name starts with "/".
+bool starts_with_slash( const std::string& name);
+
+/// Indicates whether the MDL definition name is deprecated (contains "$").
+bool is_deprecated( const std::string& name);
+
+/// Indicates whether the MDL entity \p name is in module \p module_name (but not in a submodule).
+///
+/// Note that the check is done by string comparison, not by checking the actual module contents.
+bool is_in_module( const std::string& name, const std::string& module_name);
+
+/// Removes the suffix of deprecated MDL definition names (without parameter types).
+///
+/// Names without '$' are returned as is.
+std::string strip_deprecated_suffix( const std::string& name);
+
+/// Adds a "::" prefix for builtin enum/struct type names.
+std::string prefix_builtin_type_name( const char* name);
+
+// Returns the simple MDL module name from a fully qualified one.
+///
+/// I.e., the function strips off all packages and "::" delimiters.
+///
+/// \param name  The fully-qualified MDL module name, e.g., "::p1::p2::mod".
+/// \return      The simple MDL module name, e.g., "mod".
+std::string get_mdl_simple_module_name( const std::string& name);
+
+/// Returns the MDL package name (as vector of components) from a fully qualified module name.
+///
+/// I.e., removes the module name itself and splits the string at "::" delimiters.
+///
+/// \param name  The fully-qualified MDL module name, e.g., "::p1::p2::mod".
+/// \return      The components of the MDL package name, e.g., [ "p1", "p2" ].
+std::vector<std::string> get_mdl_package_component_names( const std::string& name);
+
+///  Returns the simple MDL definition name from a fully qualified one.
+///
+/// \param name  The fully-qualified MDL definition (or annotation) name, without parameter types,
+///              e.g., "::p1::p2::mod::fd".
+/// \return      The simple MDL definition name, e.g., "fd".
+std::string get_mdl_simple_definition_name( const std::string& name);
+
+/// Returns the MDL module name from a fully qualified MDL definition name.
+///
+/// \param name  The fully-qualified MDL definition (or annotation) name, without parameter types,
+///              e.g., "::p1::p2::mod::fd".
+/// \return      The fully-qualified MDL module name, e.g., "::p1::p2::mod".
+std::string get_mdl_module_name( const std::string& name);
+
+/// Returns the MDL field name from an MDL function definition name of a struct field getter
+/// (DS_INTRINSIC_DAG_FIELD_ACCESS), either without parameter types, or the simple name.
+///
+/// \param       The MDL name of a function definition with semantic DS_INTRINSIC_DAG_FIELD_ACCESS,
+///              e.g., "::p1::p2::mod::struct.field" or "struct.field".
+/// \param       The MDL names of the field, e.g., "field".
+std::string get_mdl_field_name( const std::string& name);
+
+/// Splits a string at the next separator (dot or bracket pair).
+///
+/// \param s      The string to split.
+/// \param head   The start of the string up to the dot, or the array index, or the entire string
+///               if no separator is found.
+/// \param tail   The remainder of the string, or empty if no separator is found.
+void split_next_dot_or_bracket( const char* s, std::string& head, std::string& tail);
+
+/// Converts an MDL annotation definition name into the name of the corresponding DB element.
+///
+/// Adds the prefix "mdla::".
+std::string get_db_name_annotation_definition( const std::string& name);
+
+//@}
+/// Functions on DB names.
+///
+/// Used by overload resolution. Otherwise, use the methods on the DB elements themselves.
+//@{
+
+/// Indicates whether \p name starts with "mdl::" or "mdle::".
+bool starts_with_mdl_or_mdle( const std::string& name);
+
+/// Strips "mdl" or "mdle" for "mdl::" or "mdle::" prefixes. Returns name unchanged otherwise.
+///
+/// For "mdle::/.:/" prefixes (where "." is any character), it also strips the initial slash.
+///
+/// Basically, this method obtains the MDL name from the DB name. Usage should be limited to cases
+/// where it is unavoidable, e.g., for overload resolution. Otherwise, use the methods on the DB
+/// elements themselves.
+std::string strip_mdl_or_mdle_prefix( const std::string& name);
+
+//@}
+/// Functions on MDL file paths (or filenames).
+//@{
+
+/// Indicates whether the MDL file path is absolute (starts with "/").
+bool is_absolute_mdl_file_path( const std::string& name);
+
+/// Returns true if the given file name ends with ".mdl".
+bool has_mdl_suffix(const std::string& filename);
+
+/// Removes the trailing ".mdl" suffix.
+std::string strip_dot_mdl_suffix(  const std::string& filename);
+
+/// Indicates whether the given filename/file path points to an (MDL) archive.
+///
+/// Note that the check is done by string comparison, not by checking for existence or content.
+bool is_archive_filename( const std::string& filename);
+
+/// Indicates whether the given filename/file path points to an MDLE.
+///
+/// Note that the check is done by string comparison, not by checking for existence or content.
+bool is_mdle_filename( const std::string& filename);
+
+/// Indicates whether the given filename/file path points to a \em member of a container (MDL
+/// archive or MDLE).
+///
+/// Note that the check is done by string comparison, not by checking the actual container contents.
+bool is_container_member( const char* filename);
+
+/// Returns the container filename/file path for the given combined container/member
+/// filename/file path, or the empty string in case of errors.
+std::string get_container_filename( const char* filename);
+
+/// Returns the member filename/file path for the given combined container/member
+/// filename/file path, or the empty string in case of errors.
+const char* get_container_membername( const char* filename);
+
+//@}
 
 // ********** Conversion from mi::mdl to mi::neuraylib *********************************************
 
@@ -105,8 +258,8 @@ typedef std::vector<std::vector<const mi::mdl::DAG_node*> > Mdl_annotation_block
 const IType* mdl_type_to_int_type(
     IType_factory* tf,
     const mi::mdl::IType* type,
-    const Mdl_annotation_block* annotations = 0,
-    const Mdl_annotation_block_vector* member_annotations = 0);
+    const Mdl_annotation_block* annotations = nullptr,
+    const Mdl_annotation_block_vector* member_annotations = nullptr);
 
 
 /// Converts mi::mdl::IType_enum to MI::MDL::IType_enum and checks,
@@ -119,8 +272,8 @@ const IType* mdl_type_to_int_type(
 bool mdl_type_enum_to_int_type_test(
     IType_factory* tf,
     const mi::mdl::IType_enum* type,
-    const Mdl_annotation_block* annotations = 0,
-    const Mdl_annotation_block_vector* member_annotations = 0);
+    const Mdl_annotation_block* annotations = nullptr,
+    const Mdl_annotation_block_vector* member_annotations = nullptr);
 
 /// Converts mi::mdl::IType_struct to MI::MDL::IType_struct and checks,
 /// if the type conflicts with an existing type.
@@ -132,8 +285,8 @@ bool mdl_type_enum_to_int_type_test(
 bool mdl_type_struct_to_int_type_test(
     IType_factory* tf,
     const mi::mdl::IType_struct* type,
-    const Mdl_annotation_block* annotations = 0,
-    const Mdl_annotation_block_vector* member_annotations = 0);
+    const Mdl_annotation_block* annotations = nullptr,
+    const Mdl_annotation_block_vector* member_annotations = nullptr);
 
 /// Converts mi::mdl::IType to MI::MDL::IType.
 ///
@@ -142,13 +295,13 @@ template <class T>
 const T* mdl_type_to_int_type(
     IType_factory* tf,
     const mi::mdl::IType* type,
-    const Mdl_annotation_block* annotations = 0,
-    const Mdl_annotation_block_vector* member_annotations = 0)
+    const Mdl_annotation_block* annotations = nullptr,
+    const Mdl_annotation_block_vector* member_annotations = nullptr)
 {
     mi::base::Handle<const IType> ptr_type(
         mdl_type_to_int_type( tf, type, annotations, member_annotations));
     if( !ptr_type)
-        return 0;
+        return nullptr;
     return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
 }
 /// Converts MI::MDL::IType to mi::mdl::IType.
@@ -290,31 +443,34 @@ const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
     DB::Transaction* transaction,
     mi::mdl::IDag_builder* builder,
     const mi::mdl::IType* type,
-    const IExpression* expr,
-    mi::Float32 mdl_meters_per_scene_unit,
-    mi::Float32 mdl_wavelength_min,
-    mi::Float32 mdl_wavelength_max);
+    const IExpression* expr);
 
 /// Converts MI::MDL::IExpression to mi::mdl::DAG_node.
 const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
     DB::Transaction* transaction,
     mi::mdl::IGenerated_code_dag::DAG_node_factory* builder,
     const mi::mdl::IType* type,
-    const IExpression* expr,
-    mi::Float32 mdl_meters_per_scene_unit,
-    mi::Float32 mdl_wavelength_min,
-    mi::Float32 mdl_wavelength_max);
+    const IExpression* expr);
 
 // ********** Misc utility functions around MI::MDL ************************************************
 
-/// Adds a "::" prefix for builtin enum/struct symbols.
-std::string prefix_symbol_name( const char* symbol);
-
+/// Indicates whether a value or an expression of a particular type can be used as an argument for a
+/// parameter of a particular type.
+///
 /// Returns \c true iff the modifier-stripped types are identical, or if the modifier-stripped
 /// argument type is an array and the modifier-stripped parameter type is a deferred-sized array of
 /// the same element type.
-/// If allow_compatible_types is true, this function also returns true, if \p argument_type can be
-/// casted to \p parameter_type. In this case, the output parameter \p needs_cast is set to true.
+///
+/// If \p allow_compatible_types is \c true, this function also returns \c true if \p argument_type
+/// can be casted to \p parameter_type. In this case, the output parameter \p needs_cast is set to
+/// \cc true.
+///
+/// \param tf                  The type factory.
+/// \param argument_type       The type of the intended argument.
+/// \param parameter_type      The parameter type of the definition.
+/// \param allow_cast          Indicates whether compatible types are feasible.
+/// \param[out] needs_cast     Indicates whether types are compatible (but not identical), i.e.,
+///                            require a cast operator (implies \c allow_cast).
 bool argument_type_matches_parameter_type(
     IType_factory* tf,
     const IType* argument_type,
@@ -348,12 +504,12 @@ IExpression* deep_copy(
 /// Returns a hash value for a resource (light profiles and BSDF measurements).
 ///
 /// Uses the MDL file path if not empty, and the tag version otherwise.
-mi::Uint32 get_hash( const std::string& mdl_file_path, DB::Tag_version tv);
+mi::Uint32 get_hash( const std::string& mdl_file_path, const DB::Tag_version& tv);
 
 /// Returns a hash value for a resource (light profiles and BSDF measurements).
 ///
 /// Uses the MDL file path if not empty, and the tag version otherwise.
-mi::Uint32 get_hash( const char* mdl_file_path, DB::Tag_version tv);
+mi::Uint32 get_hash( const char* mdl_file_path, const DB::Tag_version& tv);
 
 /// Returns a hash value for resource (textures).
 ///
@@ -362,8 +518,8 @@ mi::Uint32 get_hash( const char* mdl_file_path, DB::Tag_version tv);
 mi::Uint32 get_hash(
     const std::string& mdl_file_path,
     mi::Float32 gamma,
-    DB::Tag_version tv1,
-    DB::Tag_version tv2);
+    const DB::Tag_version& tv1,
+    const DB::Tag_version& tv2);
 
 /// Returns a hash value for resource (textures).
 ///
@@ -372,18 +528,20 @@ mi::Uint32 get_hash(
 mi::Uint32 get_hash(
     const char* mdl_file_path,
     mi::Float32 gamma,
-    DB::Tag_version tv1,
-    DB::Tag_version tv2);
+    const DB::Tag_version& tv1,
+    const DB::Tag_version& tv2);
 
 /// Returns a reader for the given string.
 mi::neuraylib::IReader* create_reader( const std::string& data);
 
 /// Checks, if the material definition with the given \p definition_db_name is valid, meaning a
 /// definition with that name and a matching identifier exists in its module.
+///
 /// \param transaction        transaction to use
 /// \param module_tag         the tag of the module that owns the definition. Can be \c NULL for
 ///                           immutable calls. In that case definition_db_name is used to get the
 ///                           module name and access the module.
+/// \param module_db_name     the DB name of the definition.
 /// \param definition_id      the definition identifier.
 /// \param definition_db_name the DB name of the definition.
 ///
@@ -392,15 +550,18 @@ mi::neuraylib::IReader* create_reader( const std::string& data);
 bool is_valid_material_definition(
     DB::Transaction* transaction,
     DB::Tag module_tag,
+    const std::string& module_db_name,
     Mdl_ident definition_id,
     const std::string& definition_db_name);
 
 /// Checks, if the function definition with the given \p definition_db_name is valid, meaning a
 /// definition with that name and a matching identifier exists in its module.
+///
 /// \param transaction        transaction to use
 /// \param module_tag         the tag of the module that owns the definition. Can be \c NULL for
-///                           immutable calls. In that case definition_db_name is used to get the
-///                           module name and access the module.
+///                           immutable calls. In that case \p module_db_name is used to access
+///                           the module.
+/// \param module_db_name     the DB name of the definition.
 /// \param definition_id      the definition identifier.
 /// \param definition_db_name the DB name of the definition.
 ///
@@ -409,14 +570,9 @@ bool is_valid_material_definition(
 bool is_valid_function_definition(
     DB::Transaction* transaction,
     DB::Tag module_tag,
+    const std::string& module_db_name,
     Mdl_ident definition_id,
     const std::string& definition_db_name);
-
-/// Extracts the module DB name from a definition DB name.
-std::string get_module_db_name(const std::string& definition_db_name);
-
-/// Extracts the module DB name from a (fully qualified) annotation MDL name.
-std::string get_module_db_name_from_annotation_mdl_name( const std::string& annotation_mdl_name);
 
 // **********  Traversal of types, values, and expressions *****************************************
 
@@ -448,7 +604,7 @@ const IValue* lookup_sub_value(
 ///
 /// As above, but without the type computation.
 inline const IValue* lookup_sub_value( const IValue* value, const char* path)
-{ return lookup_sub_value( 0, value, path, 0); }
+{ return lookup_sub_value( nullptr, value, path, nullptr); }
 
 /// Looks up a sub-expression according to path.
 ///
@@ -485,7 +641,7 @@ inline const IExpression* lookup_sub_expression(
     const IExpression_list* temporaries,
     const IExpression* expr,
     const char* path)
-{ return lookup_sub_expression( 0, ef, temporaries, 0, expr, path, 0); }
+{ return lookup_sub_expression( nullptr, ef, temporaries, nullptr, expr, path, nullptr); }
 
 
 // ********** Misc utility functions around mi::mdl ************************************************
@@ -496,11 +652,20 @@ const mi::mdl::IType_compound* convert_deferred_sized_into_immediate_sized_array
     const mi::mdl::IType_compound* mdl_type,
     mi::Size size);
 
+/// Creates an MDL AST qualified name for a given function/material signature.
+///
+/// \param nf                     The name factory to be used.
+/// \param signature              The signature without parameter types.
+/// \param name_mangler           The name mangler.
+/// \return                       The MDL AST expression reference for the signature.
+mi::mdl::IQualified_name* signature_to_qualified_name(
+    mi::mdl::IName_factory* nf, const char* signature, Name_mangler* name_mangler);
+
 /// Creates an MDL AST expression reference for a given function/material signature.
 ///
 /// \param module                 The module on which the qualified name is created.
-/// \param signature              The signature.
-/// \param signature              The name mangler.
+/// \param signature              The signature without parameter types.
+/// \param name_mangler              The name mangler.
 /// \return                       The MDL AST expression reference for the signature.
 const mi::mdl::IExpression_reference* signature_to_reference(
     mi::mdl::IModule* module, const char* signature, Name_mangler* name_mangler);
@@ -577,7 +742,7 @@ private:
 void collect_material_references(
     DB::Transaction* transaction,
     const mi::mdl::IGenerated_code_dag* code_dag,
-    mi::Uint32 material_index,
+    mi::Size material_index,
     DB::Tag_set& references);
 
 /// Collects all call references in a function body (precomputed by MDL compiler).
@@ -589,7 +754,7 @@ void collect_material_references(
 void collect_function_references(
     DB::Transaction* transaction,
     const mi::mdl::IGenerated_code_dag* code_dag,
-    mi::Uint32 function_index,
+    mi::Size function_index,
     DB::Tag_set& references);
 
 
@@ -692,7 +857,7 @@ private:
 public:
     /// Default implementation of the IMdl_loading_wait_handle interface.
     /// Used by the \c Wait_handle_factory if no other factory is registered at the module cache.
-    class Wait_handle 
+    class Wait_handle
         : public mi::base::Interface_implement<mi::neuraylib::IMdl_loading_wait_handle>
     {
     public:
@@ -736,7 +901,7 @@ public:
     /// If the DB contains the MDL module \p module_name, return it, otherwise \c NULL.
     /// In case of access from multiple threads, only the first thread that wants to load
     /// module will return \c NULL immediately, further threads will block until notify was called
-    /// by the loading thread. In case loading failed on a different thread, \c lookup will also 
+    /// by the loading thread. In case loading failed on a different thread, \c lookup will also
     /// return \c NULL after returning from waiting. The caller can check weather the current
     /// thread is supposed to load the module by calling \c processed_on_this_thread.
     ///
@@ -745,7 +910,7 @@ public:
     ///                     loading process of a model or NULL in case the goal is to just check if
     ///                     a module is loaded.
     const mi::mdl::IModule* lookup(
-        const char* module_name, 
+        const char* module_name,
         mi::mdl::IModule_cache_lookup_handle *handle) const override;
 
     /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
@@ -753,7 +918,7 @@ public:
     /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
     const mi::mdl::IModule* lookup_db(DB::Tag &tag) const;
 
-    /// Check if this module is loading was started in the current context. I.e., on the thread 
+    /// Check if this module is loading was started in the current context. I.e., on the thread
     /// that created this module cache instance.
     /// Note, this assumes a light weight implementation of the Cache. One instance for each
     /// call to \c load module.
@@ -780,7 +945,7 @@ public:
     const mi::neuraylib::IMdl_loading_wait_handle_factory* get_wait_handle_factory() const;
 
     /// Set the module cache wait handle factory.
-    void set_wait_handle_factory(mi::neuraylib::IMdl_loading_wait_handle_factory* factory);
+    void set_wait_handle_factory(const mi::neuraylib::IMdl_loading_wait_handle_factory* factory);
 
     /// Get an unique identifier for the context in which the current module is loaded.
     ///
@@ -793,8 +958,8 @@ private:
     DB::Transaction* m_transaction;
     Mdl_module_wait_queue* m_queue;
     mi::mdl::IModule_loaded_callback* m_module_load_callback;
-    mi::base::Handle<mi::neuraylib::IMdl_loading_wait_handle_factory> m_default_wait_handle_factory;
-    mi::base::Handle<mi::neuraylib::IMdl_loading_wait_handle_factory> m_user_wait_handle_factory;
+    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory> m_default_wait_handle_factory;
+    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory> m_user_wait_handle_factory;
     DB::Tag_set m_ignore_list;
 };
 
@@ -965,9 +1130,6 @@ mi::base::Handle<const IExpression> find_path(
 /// Converts a hash from the MDL API representation to the base API representation.
 mi::base::Uuid convert_hash( const mi::mdl::DAG_hash& hash);
 
-/// Converts a hash from the MDL API representation to the base API representation.
-mi::base::Uuid convert_hash( const unsigned char hash[16]);
-
 /// Returns the hash value of the resource reader (or {0,0,0,0} if not available).
 mi::base::Uuid get_hash( mi::mdl::IMDL_resource_reader* reader);
 
@@ -988,7 +1150,7 @@ Uint64 generate_unique_id();
 ///                     failed.
 /// \param level        recursion level
 /// \param context      execution context to propagate error messages.
-/// \return 
+/// \return
 ///      -  0:   Success
 ///      - -1:   Repairing failed. See the context for details.
 mi::Sint32 repair_arguments(
@@ -999,6 +1161,22 @@ mi::Sint32 repair_arguments(
     bool remove_calls,
     mi::Uint32 level,
     Execution_context* context);
+
+/// Creates a thread context. If \p context is not \c NULL, its relevant options are copied to
+/// the thread context. (Not all API context options are passed to the core compiler via the thread
+/// context, hence, only a subset, the relevant ones, are copied by this method.)
+mi::mdl::IThread_context* create_thread_context( mi::mdl::IMDL* mdl, Execution_context* context);
+
+/// Functions in the MDL core use the special value 0xffffffffU, although it is not part of the
+/// corresponding enum.
+const mi::mdl::IMDL::MDL_version mi_mdl_IMDL_MDL_VERSION_INVALID
+    = static_cast<mi::mdl::IMDL::MDL_version>( 0xffffffffU);
+
+/// Converts mi::mdl::IMDL::MDL_version into mi::neuraylib::Mdl_version.
+mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version version);
+
+/// Converts mi::neuraylib::Mdl_version into mi::mdl::IMDL::MDL_version.
+mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version version);
 
 } // namespace MDL
 

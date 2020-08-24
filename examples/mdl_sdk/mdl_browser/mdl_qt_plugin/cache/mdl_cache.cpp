@@ -45,17 +45,21 @@ Mdl_cache::Mdl_cache() :
     m_locale("")
 {
     m_cache_root = dynamic_cast<IMdl_cache_package*>(
-        Mdl_cache::create(IMdl_cache_item::CK_PACKAGE, "::"));
+        Mdl_cache::create(IMdl_cache_item::CK_PACKAGE, "::", "::", "::"));
 }
 
 Mdl_cache::~Mdl_cache()
 {
     delete m_index;
     delete m_cache_root;
-    // m_item_map stores week pointers (no ownership)
+    // m_item_map stores weak pointers (no ownership)
 }
 
-IMdl_cache_item* Mdl_cache::create(IMdl_cache_item::Kind kind, const char* qualified_name)
+IMdl_cache_item* Mdl_cache::create(
+    IMdl_cache_item::Kind kind,
+    const char* entity_name,
+    const char* simple_name,
+    const char* qualified_name)
 {
     IMdl_cache_item* item = nullptr;
     switch (kind)
@@ -63,7 +67,7 @@ IMdl_cache_item* Mdl_cache::create(IMdl_cache_item::Kind kind, const char* quali
         case IMdl_cache_item::CK_PACKAGE:
         {
             auto item_impl = new Mdl_cache_package();
-            item_impl->initialize(this, qualified_name);
+            item_impl->initialize(this, entity_name, entity_name, qualified_name);
             item = item_impl;
             break;
         }
@@ -71,7 +75,7 @@ IMdl_cache_item* Mdl_cache::create(IMdl_cache_item::Kind kind, const char* quali
         case IMdl_cache_item::CK_MODULE:
         {
             auto item_impl = new Mdl_cache_module();
-            item_impl->initialize(this, qualified_name);
+            item_impl->initialize(this, entity_name, entity_name, qualified_name);
             item = item_impl;
             break;
         }
@@ -79,7 +83,7 @@ IMdl_cache_item* Mdl_cache::create(IMdl_cache_item::Kind kind, const char* quali
         case IMdl_cache_item::CK_MATERIAL:
         {
             auto item_impl = new Mdl_cache_material();
-            item_impl->initialize(this, qualified_name);
+            item_impl->initialize(this, entity_name, entity_name, qualified_name);
             item = item_impl;
             break;
         }
@@ -87,7 +91,7 @@ IMdl_cache_item* Mdl_cache::create(IMdl_cache_item::Kind kind, const char* quali
         case IMdl_cache_item::CK_FUNCTION:
         {
             auto item_impl = new Mdl_cache_function();
-            item_impl->initialize(this, qualified_name);
+            item_impl->initialize(this, entity_name, entity_name, qualified_name);
             item = item_impl;
             break;
         }

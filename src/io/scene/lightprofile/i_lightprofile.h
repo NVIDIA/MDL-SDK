@@ -63,6 +63,8 @@ public:
     /// Default constructor.
     Lightprofile();
 
+    Lightprofile& operator=( const Lightprofile&) = delete;
+
     // methods of mi::neuraylib::ILightprofile
 
     /// Imports a light profile from a file.
@@ -115,49 +117,28 @@ public:
         mi::neuraylib::Lightprofile_degree degree = mi::neuraylib::LIGHTPROFILE_HERMITE_BASE_1,
         mi::Uint32 flags = mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE);
 
-    /// Imports a light profile from a file (used by MDL integration).
-    ///
-    /// \param transaction           The DB transaction to be used (to create the implementation
-    ///                              class in the DB).
-    /// \param resolved_filename     The resolved filename of the light profile. The MDL integration
-    ///                              passes an already resolved filename here since it uses its own
-    ///                              filename resolution rules.
-    /// \param mdl_file_path         The MDL file path.
-    /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
-    ///                              hash is not known.
-    /// \param resolution_phi        See #reset_file().
-    /// \param resolution_theta      See #reset_file().
-    /// \param degree                See #reset_file().
-    /// \param flags                 See #reset_file().
-    /// \return                      See #reset_file() (-2 not possible here).
-    mi::Sint32 reset_file_mdl(
-        DB::Transaction* transaction,
-        const std::string& resolved_filename,
-        const std::string& mdl_file_path,
-        const mi::base::Uuid& impl_hash,
-        mi::Uint32 resolution_phi = 0,
-        mi::Uint32 resolution_theta = 0,
-        mi::neuraylib::Lightprofile_degree degree = mi::neuraylib::LIGHTPROFILE_HERMITE_BASE_1,
-        mi::Uint32 flags = mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE);
-
     /// Imports a light profile from an container (used by MDL integration).
     ///
     /// \param transaction             The DB transaction to be used (to create the implementation
     ///                                class in the DB).
     /// \param reader                  The reader for the light profile.
-    /// \param container_filename      The resolved container filename.
-    /// \param container_membername    The resolved container member name.
+    /// \param filename                The resolved filename (for file-based light profiles).
+    /// \param container_filename      The resolved filename of the container itself (for container-
+    ///                                based light profiles).
+    /// \param container_membername    The relative filename of the light profile in the container
+    ///                                (for container-based light profiles).
     /// \param impl_hash               Hash of the data in the implementation class. Use {0,0,0,0} if
-    ///                              hash is not known.
+    ///                                hash is not known.
     /// \param mdl_file_path           The MDL file path.
     /// \param resolution_phi          See #reset_file().
     /// \param resolution_theta        See #reset_file().
     /// \param degree                  See #reset_file().
     /// \param flags                   See #reset_file().
     /// \return                        See #reset_file() (-2 not possible here).
-    mi::Sint32 reset_container_mdl(
+    mi::Sint32 reset_mdl(
         DB::Transaction* transaction,
         mi::neuraylib::IReader* reader,
+        const std::string& filename,
         const std::string& container_filename,
         const std::string& container_membername,
         const std::string& mdl_file_path,
@@ -260,11 +241,11 @@ private:
     /// Sets a light profile from a reader.
     ///
     /// Implements the common functionality for all \c reset_*() methods above. The parameter
-    /// \c filename is only to be used for log messages.
+    /// \c log_identifier is only to be used for log messages.
     mi::Sint32 reset_shared(
         DB::Transaction* transaction,
         mi::neuraylib::IReader* reader,
-        const std::string& filename,
+        const std::string& log_identifier,
         const mi::base::Uuid& impl_hash,
         mi::Uint32 resolution_phi = 0,
         mi::Uint32 resolution_theta = 0,
@@ -273,11 +254,6 @@ private:
 
     /// Set up all cached values based on the values in \p impl.
     void setup_cached_values( const Lightprofile_impl* impl);
-
-    /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
-    /// But the assignment operator is not implemented, although usually, they are implemented both
-    /// or none. Let's make the assignment operator private for now.
-    Lightprofile& operator=( const Lightprofile&);
 
     /// The file (or MDL file path) that contains the data of this DB element.
     ///
@@ -363,6 +339,8 @@ public:
         mi::Float32 delta_theta,
         const std::vector<mi::Float32>& data);
 
+    Lightprofile_impl& operator=( const Lightprofile_impl&) = delete;
+
     // methods of mi::neuraylib::ILightprofile
 
     mi::Uint32 get_resolution_phi() const { return m_resolution_phi; }
@@ -430,11 +408,6 @@ public:
 
 private:
 
-    /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
-    /// But the assignment operator is not implemented, although usually, they are implemented both
-    /// or none. Let's make the assignment operator private for now.
-    Lightprofile_impl& operator=( const Lightprofile_impl&);
-
     // All members below are essentially const, but cannot be declared as such due to deserialize().
 
     // Constructor arguments.
@@ -472,41 +445,19 @@ mi::neuraylib::IBuffer* create_buffer_from_lightprofile(
 
 /// Loads a default light profile and stores it in the DB.
 ///
-/// Used by the MDL integration to process light profiles that appear in default arguments
-/// (similar to the texture and BSDF measurement loaders). A fixed mapping from the resolved
-/// filename to DB element name is used to detect already loaded light profiles. In such a case,
-/// the tag of the existing DB element is returned.
-///
-/// \param transaction           The DB transaction to be used.
-/// \param resolved_filename     The resolved filename of the light profile.
-/// \param mdl_file_path         The MDL file path.
-/// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
-///                              hash is not known.
-/// \param shared_proxy          Indicates whether a possibly already existing proxy DB element for
-///                              that resource should simply be reused (the decision is based on
-///                              \c resolved_filename, not on \c impl_hash). Otherwise, an
-///                              independent proxy DB element is created, even if the resource has
-///                              already been loaded.
-/// \return                      The tag of that light profile (invalid in case of failures).
-DB::Tag load_mdl_lightprofile(
-    DB::Transaction* transaction,
-    const std::string& resolved_filename,
-    const std::string& mdl_file_path,
-    const mi::base::Uuid& impl_hash,
-    bool shared_proxy);
-
-/// Loads a default light profile and stores it in the DB.
-///
-/// Used by the MDL integration to process light profiles that appear in default arguments
-/// (similar to the texture and BSDF measurement loaders). A fixed mapping from the container and
-/// member filenames to DB element name is used to detect already loaded light profiles. In such a
-/// case, the tag of the existing DB element is returned.
+/// Used by the MDL integration to process light profiles that appear in default arguments (similar
+/// to the texture and BSDF measurement loaders). A fixed mapping from the filenames to DB element
+/// name is used to detect already loaded light profiles. In such a case, the tag of the existing
+/// DB element is returned (but never for memory-based light profiles).
 ///
 /// \param transaction           The DB transaction to be used.
 /// \param reader                The reader to be used to obtain the light profile. Needs to
 ///                              support absolute access.
-/// \param container_filename    The resolved filename of the container itself.
-/// \param container_membername  The relative filename of the light profile in the container.
+/// \param filename              The resolved filename (for file-based light profiles).
+/// \param container_filename    The resolved filename of the container itself (for container-based
+///                              light profiles).
+/// \param container_membername  The relative filename of the light profile in the container (for
+///                              container-based light profiles).
 /// \param mdl_file_path         The MDL file path.
 /// \param impl_hash             Hash of the data in the implementation DB element. Use {0,0,0,0} if
 ///                              hash is not known.
@@ -519,6 +470,7 @@ DB::Tag load_mdl_lightprofile(
 DB::Tag load_mdl_lightprofile(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
+    const std::string& filename,
     const std::string& container_filename,
     const std::string& container_membername,
     const std::string& mdl_file_path,

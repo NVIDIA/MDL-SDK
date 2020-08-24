@@ -113,7 +113,7 @@ Mdl_compiled_material::Mdl_compiled_material(
 
     const mi::mdl::DAG_call* constructor = instance->get_constructor();
     mi::base::Handle<IExpression> body(
-        converter.mdl_dag_node_to_int_expr(constructor, /*type_int*/ 0));
+        converter.mdl_dag_node_to_int_expr(constructor, /*type_int*/ nullptr));
     ASSERT( M_SCENE, body);
     m_body = body->get_interface<IExpression_direct_call>();
     ASSERT( M_SCENE, m_body);
@@ -124,7 +124,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         std::string name( std::to_string( i));
         const mi::mdl::DAG_node* mdl_temporary = instance->get_temporary_value( i);
         mi::base::Handle<const IExpression> temporary(
-            converter.mdl_dag_node_to_int_expr(mdl_temporary, /*type_int*/ 0));
+            converter.mdl_dag_node_to_int_expr(mdl_temporary, /*type_int*/ nullptr));
         ASSERT( M_SCENE, temporary);
         m_temporaries->add_expression( name.c_str(), temporary.get());
     }
@@ -160,7 +160,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         m_cutout_opacity = v_cutout->get_value();
     }
     if (module_name) {
-        DB::Tag module_tag = transaction->name_to_tag(add_mdl_db_prefix(module_name).c_str());
+        DB::Tag module_tag = transaction->name_to_tag(get_db_name(module_name).c_str());
         DB::Access<Mdl_module> module(module_tag, transaction);
         m_module_idents.insert(Mdl_tag_ident(module_tag, module->get_ident()));
     }
@@ -227,6 +227,13 @@ bool Mdl_compiled_material::depends_on_global_distribution() const
          mi::mdl::IGenerated_code_dag::IMaterial_instance::IP_DEPENDS_ON_GLOBAL_DISTRIBUTION);
 }
 
+bool Mdl_compiled_material::depends_on_uniform_scene_data() const
+{
+    return 0 !=
+        (m_properties &
+            mi::mdl::IGenerated_code_dag::IMaterial_instance::IP_DEPENDS_ON_UNIFORM_SCENE_DATA);
+}
+
 mi::Size Mdl_compiled_material::get_referenced_scene_data_count() const
 {
     return m_referenced_scene_data.size();
@@ -236,7 +243,7 @@ char const *Mdl_compiled_material::get_referenced_scene_data_name(mi::Size index
 {
     if (index < m_referenced_scene_data.size())
         return m_referenced_scene_data[index].c_str();
-    return NULL;
+    return nullptr;
 }
 
 mi::Size Mdl_compiled_material::get_parameter_count() const
@@ -308,7 +315,7 @@ const Resource_tag_tuple *Mdl_compiled_material::get_resource_entry(size_t index
 {
     if (index < m_resource_tag_map.size())
         return &m_resource_tag_map[index];
-    return NULL;
+    return nullptr;
 }
 
 void Mdl_compiled_material::add_resource_tag(
@@ -367,7 +374,7 @@ const IExpression* Mdl_compiled_material::lookup_sub_expression(
     ASSERT( M_SCENE, (!transaction && !tf && !sub_type) || (transaction && tf && sub_type));
 
     const mi::mdl::IType_struct* material_type
-        = tf ? tf->get_predefined_struct( mi::mdl::IType_struct::SID_MATERIAL) : 0;
+        = tf ? tf->get_predefined_struct( mi::mdl::IType_struct::SID_MATERIAL) : nullptr;
 
     return MDL::lookup_sub_expression(
         transaction, m_ef.get(), m_temporaries.get(), material_type, m_body.get(),
@@ -376,7 +383,7 @@ const IExpression* Mdl_compiled_material::lookup_sub_expression(
 
 const IExpression* Mdl_compiled_material::lookup_sub_expression( const char* path) const
 {
-    return lookup_sub_expression( 0, path, 0, 0);
+    return lookup_sub_expression( nullptr, path, nullptr, nullptr);
 }
 
 namespace {
@@ -414,7 +421,7 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     boost::split(path_tokens, parameter_name, boost::is_any_of("."));
 
     // there need to be at least two items, last one is the param name
-    if (path_tokens.size() < 2) 
+    if (path_tokens.size() < 2)
         return DB::Tag();
 
     DB::Tag call_tag = material_instance_tag;
@@ -573,13 +580,13 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
     s << std::boolalpha;
     mi::base::Handle<const mi::IString> tmp;
 
-    tmp = m_vf->dump( transaction, m_arguments.get(), /*name*/ 0);
+    tmp = m_vf->dump( transaction, m_arguments.get(), /*name*/ nullptr);
     s << "Arguments: " << tmp->get_c_str() << std::endl;
 
-    tmp = m_ef->dump( transaction, m_temporaries.get(), /*name*/ 0);
+    tmp = m_ef->dump( transaction, m_temporaries.get(), /*name*/ nullptr);
     s << "Temporaries: " << tmp->get_c_str() << std::endl;
 
-    tmp = m_ef->dump( transaction, m_body.get(), /*name*/ 0);
+    tmp = m_ef->dump( transaction, m_body.get(), /*name*/ nullptr);
     s << "Body: " << tmp->get_c_str() << std::endl;
 
     char buffer[36];
@@ -626,7 +633,7 @@ bool Mdl_compiled_material::is_valid(
         DB::Access<Mdl_module> module(id.first, transaction);
         if (module->get_ident() != id.second) {
             std::string message = "The identifier of the imported module '"
-                + add_mdl_db_prefix(module->get_mdl_name())
+                + get_db_name(module->get_mdl_name())
                 + "' has changed.";
             add_context_error(context, message, -1);
             return false;

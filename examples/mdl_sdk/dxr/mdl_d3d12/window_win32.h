@@ -34,11 +34,18 @@
 #include "common.h"
 #include "window.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace gui
+{
+    class Root;
+}}}
+
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
     class Base_application_message_interface;
     class Texture;
+
+    // ------------------------------------------------------------------------
 
     class Window_win32 : public IWindow
     {
@@ -72,6 +79,9 @@ namespace mdl_d3d12
         // low level interfaces to application window
         HWND get_window_handle() const { return m_window_handle; }
 
+        // get the windows main UI instance
+        mi::examples::gui::Root* get_gui() final { return m_gui; };
+
     private:
         Base_application* m_app;
         Base_application_message_interface& m_message_pump_interface;
@@ -92,6 +102,9 @@ namespace mdl_d3d12
 
         std::vector<std::function<LRESULT(HWND, UINT, WPARAM, LPARAM)>> m_message_callbacks;
         bool m_close;
+
+        mi::examples::gui::Root* m_gui;
     };
-}
+
+}}} // mi::examples::mdl_d3d12
 #endif

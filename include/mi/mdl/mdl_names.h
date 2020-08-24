@@ -69,7 +69,7 @@ public:
     virtual bool is_absolute() const = 0;
 
     /// Set the absolute flag of the qualified name.
-    virtual void set_absolute() = 0;
+    virtual void set_absolute(bool flag = true) = 0;
 
     /// Get the component count.
     virtual int get_component_count() const = 0;
@@ -81,6 +81,9 @@ public:
     ///
     /// param sname  a simple name to add
     virtual void add_component(ISimple_name const *sname) = 0;
+
+    /// Removes all components from this qualified name.
+    virtual void clear_components() = 0;
 
     /// Get the definition for this name if any was set.
     virtual IDefinition const *get_definition() const = 0;
@@ -123,6 +126,9 @@ public:
     /// Get the qualified name.
     /// If the type name is an anonymous tuple return type, this returns NULL.
     virtual IQualified_name *get_qualified_name() const = 0;
+
+    /// Set the qualified name.
+    virtual void set_qualified_name(IQualified_name *name) = 0;
 
     /// Check if this is an array.
     virtual bool is_array() const = 0;

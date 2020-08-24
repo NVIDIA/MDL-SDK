@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 /// \file
-/// \brief      Interfaces, that give access to the MDL execution context and the IMessage class.
+/// \brief      The MDL execution context and the IMessage class.
 
 #ifndef MI_NEURAYLIB_IMDL_EXECUTION_CONTEXT_H
 #define MI_NEURAYLIB_IMDL_EXECUTION_CONTEXT_H
@@ -51,7 +51,7 @@ class IMessage: public
 public:
 
     /// The possible kinds of messages.
-    /// A message can be uniquely identified by the message code and kind, 
+    /// A message can be uniquely identified by the message code and kind,
     /// except for uncategorized messages.
     enum Kind {
 
@@ -78,20 +78,20 @@ public:
 
     /// Returns the severity of the message.
     virtual base::Message_severity get_severity() const = 0;
-    
+
     /// Returns the message string.
     virtual const char* get_string() const = 0;
-    
+
     /// Returns a unique identifier for the message.
     virtual Sint32 get_code() const = 0;
-    
+
     /// Returns the number of notes associated with the message
     ///
     /// Notes can be used to describe an error message further or add additional details.
     virtual Size get_notes_count() const = 0;
-    
-    /// Returns the note at index or NULL, if no such index exists.
-    virtual const IMessage* get_note(Size index) const = 0;
+
+    /// Returns the note at index or \c NULL, if no such index exists.
+    virtual const IMessage* get_note( Size index) const = 0;
 };
 
 /// The execution context can be used to query status information like error
@@ -100,34 +100,47 @@ public:
 /// The context supports the following options:
 ///
 /// Options for module loading
-/// - "internal_space": Set the internal space of the backend. Possible values: "coordinate_world",
-///   "coordinate_object". Default: "coordinate_world".
-/// - "experimental": If \c true, enables undocumented experimental MDL features. Default: false.
+/// - #mi::Sint32 "optimization_level": Sets the optimization level. Possible values: 0 (all
+///   optimizations are disabled), 1 (only intra procedural optimizations are enabled), 2 (intra
+///   and inter procedural optimizations are enabled). Default: 2.
+/// - \c std::string "internal_space": Set the internal space of the backend. Possible values:
+///   \c "coordinate_world", \c "coordinate_object". Default: \c "coordinate_world".
+/// - \c bool "experimental": If \c true, enables undocumented experimental MDL features. Default:
+///   \c false.
 ///
 /// Options for MDL export
-/// - "bundle_resources": If \c true, referenced resources are exported into the same directory as
-///   the module, even if they can be found via the module search path. Default: false.
+/// - \c bool "bundle_resources": If \c true, referenced resources are exported into the same
+///   directory as the module, even if they can be found via the module search path. Default:
+///   \c false.
 ///
 /// Options for material compilation
-/// - "meters_per_scene_unit": The conversion ratio between meters and scene units for this
-///   material. Default: 1.0f.
-/// - "wavelength_min": The smallest supported wavelength. Default: 380.0f.
-/// - "wavelength_max": The largest supported wavelength. Default: 780.0f.
-/// - "fold_ternary_on_df": Fold all ternary operators of *df types, even in class compilation
-///   mode. Default: false.
+/// - \c bool "fold_meters_per_scene_unit": If true, occurrences of the functions
+///   state::meters_per_scene_unit() and state::scene_units_per_meter() will be folded
+///   using the \c meters_per_scene_unit option. Default: \c true
+/// - #mi::Float32 "meters_per_scene_unit": The conversion ratio between meters and scene units for
+///   this material. Only used if folding is enabled. Default: 1.0f.
+/// - #mi::Float32 "wavelength_min": The smallest supported wavelength. Default: 380.0f.
+/// - #mi::Float32 "wavelength_max": The largest supported wavelength. Default: 780.0f.
+/// - #mi::Float32 "fold_ternary_on_df": Fold all ternary operators of *df types, even in class
+///   compilation mode. Default: \c false.
 ///
 /// Options for code generation
-/// - "meters_per_scene_unit": The conversion ratio between meters and scene units for this
-///   material. Default: 1.0f.
-/// - "wavelength_min": The smallest supported wavelength. Default: 380.0f.
-/// - "wavelength_max": The largest supported wavelength. Default: 780.0f.
-/// - "include_geometry_normal": If true, the \c "geometry.normal" field will be applied to the
-///   MDL state prior to evaluation of the given DF. Default: true.
-
+/// - \c bool "fold_meters_per_scene_unit": If true, occurrences of the functions
+///   state::meters_per_scene_unit() and state::scene_units_per_meter() will be folded
+///   using the \c meters_per_scene_unit option. Default: \c true
+/// - #mi::Float32 "meters_per_scene_unit": The conversion ratio between meters and scene units for
+///   this material. Only used if folding is enabled. Default: 1.0f.
+/// - #mi::Float32 "wavelength_min": The smallest supported wavelength. Default: 380.0f.
+/// - #mi::Float32 "wavelength_max": The largest supported wavelength. Default: 780.0f.
+/// - \c bool "include_geometry_normal": If true, the \c "geometry.normal" field will be applied to
+///   the MDL state prior to evaluation of the given DF. Default: \c true.
 class IMdl_execution_context: public
     base::Interface_declare<0x28eb1f99,0x138f,0x4fa2,0xb5,0x39,0x17,0xb4,0xae,0xfb,0x1b,0xca>
 {
 public:
+
+    /// \name Messages
+    //@{
 
     /// Returns the number of messages.
     virtual Size get_messages_count() const = 0;
@@ -135,122 +148,164 @@ public:
     /// Returns the number of error messages.
     virtual Size get_error_messages_count() const = 0;
 
-    /// Returns the message at index or NULL, if no such index exists.
-    virtual const IMessage* get_message(Size index) const = 0;
+    /// Returns the message at index or \c NULL, if no such index exists.
+    virtual const IMessage* get_message( Size index) const = 0;
 
-    /// Returns the error message at index or NULL, if no such index exists.
-    virtual const IMessage* get_error_message(Size index) const = 0;
+    /// Returns the error message at index or \c NULL, if no such index exists.
+    virtual const IMessage* get_error_message( Size index) const = 0;
 
+    /// Clears all messages.
+    virtual void clear_messages() = 0;
+
+    /// Adds a message.
+    virtual void add_message(
+        IMessage::Kind kind,
+        base::Message_severity severity,
+        Sint32 code,
+        const char* message) = 0;
+
+    //@}
+    /// \name Options
+    //@{
 
     /// Returns the number of supported options.
     virtual Size get_option_count() const = 0;
 
     /// Returns the option name at index.
-    virtual const char* get_option_name(Size index) const = 0;
+    virtual const char* get_option_name( Size index) const = 0;
 
     /// Returns the option type name at index.
-    virtual const char* get_option_type(const char* name) const = 0;
+    virtual const char* get_option_type( const char* name) const = 0;
 
-    /// Get a string option.
-    /// \param name     option name
-    /// \param value    pointer the option value is written to.
+    /// Returns a string option.
+    ///
+    /// \param name          The name of the option.
+    /// \param[out] value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    virtual Sint32 get_option(const char* name, const char*& value) const = 0;
+    ///                      -  0: Success.
+    ///                      - -1: Invalid option name.
+    ///                      - -2: The option type does not match the value type.
+    virtual Sint32 get_option( const char* name, const char*& value) const = 0;
 
-    /// Get a float option.
-    /// \param name     option name
-    /// \param value    pointer the option value is written to.
+    /// Returns an int option.
+    ///
+    /// \param name          The name of the option.
+    /// \param[out] value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    virtual Sint32 get_option(const char* name, Float32& value) const = 0;
+    ///                      -  0: Success.
+    ///                      - -1: Invalid option name.
+    ///                      - -2: The option type does not match the value type.
+    virtual Sint32 get_option( const char* name, Sint32& value) const = 0;
 
-    /// Get a bool option.
-    /// \param name     option name
-    /// \param value    pointer the option value is written to.
+    /// Returns a float option.
+    ///
+    /// \param name          The name of the option.
+    /// \param[out] value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    virtual Sint32 get_option(const char* name, bool& value) const = 0;
+    ///                      -  0: Success.
+    ///                      - -1: Invalid option name.
+    ///                      - -2: The option type does not match the value type.
+    virtual Sint32 get_option( const char* name, Float32& value) const = 0;
 
-    /// Get an interface option.
-    /// \param name     option name
-    /// \param value    pointer the option value is written to.
+    /// Returns a bool option.
+    ///
+    /// \param name          The name of the option.
+    /// \param[out] value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    virtual Sint32 get_option(const char* name, base::IInterface** value) const = 0;
+    ///                      -  0: Success.
+    ///                      - -1: Invalid option name.
+    ///                      - -2: The option type does not match the value type.
+    virtual Sint32 get_option( const char* name, bool& value) const = 0;
 
-    /// Get an interface option.
-    /// \param name         option name
+    /// Returns an interface option.
+    ///
+    /// \param name          The name of the option.
+    /// \param[out] value    The value of the option.
+    /// \return
+    ///                      -  0: Success.
+    ///                      - -1: Invalid option name.
+    ///                      - -2: The option type does not match the value type.
+    virtual Sint32 get_option( const char* name, const base::IInterface** value) const = 0;
+
+    /// Returns an interface option.
+    ///
+    /// \param name          The name of the option.
     /// \param return_code
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    /// \return             The interface value or NULL.
+    ///                      -  0: Success.
+    ///                      - -1: Invalid option name.
+    ///                      - -2: The option type does not match the value type.
+    /// \return              The interface value or \c NULL.
     template<typename T>
-    T* get_option(const char* name, Sint32& return_code)
+    const T* get_option( const char* name, Sint32& return_code)
     {
-        base::IInterface* pointer;
-        return_code = get_option(name, &pointer);
-        if (!pointer)
+        const base::IInterface* pointer;
+        return_code = get_option( name, &pointer);
+        if( !pointer)
             return NULL;
 
-        base::Handle<base::IInterface> handle(pointer);
-        base::Handle<T> handle_typed(handle->get_interface<T>());
-        if (!handle_typed)
-        {
+        base::Handle<const base::IInterface> handle( pointer);
+        const T* pointer_T = pointer->get_interface<T>();
+        if( !pointer_T) {
             return_code = -2;
             return NULL;
         }
-        handle->retain(); // use this handle for the retain so T has not to be cast
-        return handle_typed.get();
+
+        return pointer_T;
     }
 
-
-    /// Set a string option.
-    /// \param name     option name
-    /// \param value    option value.
+    /// Sets a string option.
+    ///
+    /// \param name     The name of the option.
+    /// \param value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    virtual Sint32 set_option(const char* name, const char* value) = 0;
+    ///                 -  0: Success.
+    ///                 - -1: Invalid option name.
+    ///                 - -2: The option type does not match the value type.
+    virtual Sint32 set_option( const char* name, const char* value) = 0;
 
-    /// Set a float option.
-    /// \param name     option name
-    /// \param value    option value.
+    /// Sets an int option.
+    ///
+    /// \param name     The name of the option.
+    /// \param value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    virtual Sint32 set_option(const char* name, Float32 value) = 0;
+    ///                 -  0: Success.
+    ///                 - -1: Invalid option name.
+    ///                 - -2: The option type does not match the value type.
+    virtual Sint32 set_option( const char* name, Sint32 value) = 0;
 
-    /// Set a bool option.
-    /// \param name     option name
-    /// \param value    option value.
+    /// Sets a float option.
+    ///
+    /// \param name     The name of the option.
+    /// \param value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    ///                          - -3: The value is invalid in the context of the option.
-    virtual Sint32 set_option(const char* name, bool value) = 0;
+    ///                 -  0: Success.
+    ///                 - -1: Invalid option name.
+    ///                 - -2: The option type does not match the value type.
+    virtual Sint32 set_option( const char* name, Float32 value) = 0;
 
-    /// Set an interface option.
-    /// \param name     option name
-    /// \param value    option value.
+    /// Sets a bool option.
+    ///
+    /// \param name     The name of the option.
+    /// \param value    The value of the option.
     /// \return
-    ///                          -  0: Success.
-    ///                          - -1: Invalid option name.
-    ///                          - -2: The option type does not match the value type.
-    ///                          - -3: The value is invalid in the context of the option.
-    virtual Sint32 set_option(const char* name, base::IInterface* value) = 0;
+    ///                 -  0: Success.
+    ///                 - -1: Invalid option name.
+    ///                 - -2: The option type does not match the value type.
+    ///                 - -3: The value is invalid in the context of the option.
+    virtual Sint32 set_option( const char* name, bool value) = 0;
+
+    /// Sets an interface option.
+    ///
+    /// \param name     The name of the option.
+    /// \param value    The value of the option.
+    /// \return
+    ///                 -  0: Success.
+    ///                 - -1: Invalid option name.
+    ///                 - -2: The option type does not match the value type.
+    ///                 - -3: The value is invalid in the context of the option.
+    virtual Sint32 set_option( const char* name, const base::IInterface* value) = 0;
+
+    //@}
 };
 
 

@@ -157,6 +157,16 @@ private:
     IMDL_comparator_event *m_cb;
 };
 
+/// Compares two modules for equality.
+///
+/// The comparison is performed on a syntactical level, e.g., the order of unrelated
+/// declarations matters (this is important later for function/material/annotation indices in
+/// the DAG representation, which are also used by the DB elements). The comparison might be a
+/// bit stricter than what is actually required, but we prefer to err on the safe side.
+///
+/// All positions are ignored. Imported modules are assumed to be equal.
+bool equal( const mi::mdl::IModule* module_a, const mi::mdl::IModule* module_b);
+    
 }  // mdl
 }  // mi
 

@@ -65,56 +65,6 @@ using mi::mdl::cast;
 
 namespace DETAIL {
 
-bool is_container_member( const char* filename)
-{
-    return filename && (strstr(filename, ".mdr:") != 0 || strstr(filename, ".mdle:") != 0);
-}
-
-
-std::string get_container_filename( const char* filename)
-{
-    if( !filename)
-        return "";
-
-    // archive
-    const char* pos = strstr( filename, ".mdr:");
-    size_t offset = 4;
-
-    // MDLe
-    if ( pos == NULL) {
-        pos = strstr( filename, ".mdle:");
-        offset = 5;
-    }
-
-    // none
-    if( !pos)
-        return "";
-
-    return std::string( filename, pos + offset);
-}
-
-std::string get_container_membername( const char* filename)
-{
-    if( !filename)
-        return "";
-
-    // archive
-    const char* pos = strstr( filename, ".mdr:");
-    size_t offset = 5;
-
-    // MDLe
-    if ( pos == NULL) {
-        pos = strstr(filename, ".mdle:");
-        offset = 6;
-    }
-
-    // none
-    if( !pos)
-        return "";
-
-    return std::string( pos + offset);
-}
-
 namespace {
 
 /// Converts OS-specific directory separators into slashes.
@@ -130,7 +80,7 @@ std::string convert_os_separators_to_slashes( const std::string& s)
 
 /// Calls the MDL entity resolver with the given arguments and returns the file name set, or
 /// \c NULL in case of failure. The flag \c log_messages indicates whether error messages should be
-/// logged.
+/// logged. This method supports all three kinds of resources, including UDIM for textures.
 mi::mdl::IMDL_resource_set* get_resource_set(
     const char* file_path,
     const char* module_file_system_path,
@@ -138,22 +88,22 @@ mi::mdl::IMDL_resource_set* get_resource_set(
     bool log_messages)
 {
     ASSERT( M_SCENE, file_path);
-    ASSERT( M_SCENE, !module_file_system_path || DISK::is_path_absolute( module_file_system_path));
 
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEntity_resolver> resolver(
-        mdl->create_entity_resolver( /*module_cache*/ 0));
+        mdl->get_entity_resolver( /*module_cache*/ nullptr));
     mi::mdl::IMDL_resource_set* res_set = resolver->resolve_resource_file_name(
-        file_path, module_file_system_path, module_name, /*pos*/ 0);
+        file_path, module_file_system_path, module_name, /*pos*/ nullptr);
     if( log_messages)
-        report_messages( resolver->access_messages(), /*out_messages*/ 0);
+        report_messages( resolver->access_messages(), /*out_messages*/ nullptr);
     return res_set;
 }
 
 /// Calls the MDL entity resolver with the given arguments and returns the resulting reader, or
 /// \c NULL in case of failure. The flag \c log_messages indicates whether error messages should be
-/// logged.
+/// logged. This method does not support UDIM for textures. It should only be used for light
+/// profiles and BSDF measurements.
 mi::mdl::IMDL_resource_reader* get_reader(
     const char* file_path,
     const char* module_file_system_path,
@@ -161,17 +111,20 @@ mi::mdl::IMDL_resource_reader* get_reader(
     bool log_messages)
 {
     ASSERT( M_SCENE, file_path);
-    ASSERT( M_SCENE, !module_file_system_path || DISK::is_path_absolute( module_file_system_path));
 
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEntity_resolver> resolver(
-        mdl->create_entity_resolver( /*module_cache*/ 0));
-    mi::mdl::IMDL_resource_reader* reader
-        = resolver->open_resource( file_path, module_file_system_path, module_name, /*pos*/ 0);
+        mdl->get_entity_resolver( /*module_cache*/ nullptr));
+    mi::base::Handle<mi::mdl::IMDL_resource_set> res_set( resolver->resolve_resource_file_name(
+        file_path, module_file_system_path, module_name, /*pos*/ nullptr));
     if( log_messages)
-        report_messages( resolver->access_messages(), /*out_messages*/ 0);
-    return reader;
+        report_messages( resolver->access_messages(), /*out_messages*/ nullptr);
+    if( !res_set)
+        return nullptr;
+    if( res_set->get_count() != 1 || res_set->get_udim_mode() != mi::mdl::NO_UDIM)
+        return nullptr;
+    return res_set->open_reader( 0);
 }
 
 /// Calls the MDL entity resolver with the given arguments and returns the result of
@@ -182,7 +135,6 @@ std::string resolve_resource_filename(
     const char* module_name,
     bool log_messages = false)
 {
-
     mi::base::Handle<mi::mdl::IMDL_resource_set> name_set( get_resource_set(
         file_path, module_file_system_path, module_name, log_messages));
     if( !name_set)
@@ -190,6 +142,37 @@ std::string resolve_resource_filename(
 
     const char* resolved_filename = name_set->get_filename( 0);
     return std::string( resolved_filename);
+}
+
+/// Decomposes a resolved filename of a resource into the various pieces:
+///
+/// - nullptr: memory-based resources, all strings are empty
+/// - not part of a container: file-based resource, returns input in \p filename
+/// - part of a container: container-based resource, splits input into \p container_filename
+///   and \p container_membername
+void decompose_resolved_filename(
+    const char* resolved_filename,
+    std::string& filename,
+    std::string& container_filename,
+    std::string& container_membername)
+{
+    filename.clear();
+    container_filename.clear();
+    container_membername.clear();
+
+    // memory-based resources
+    if( !resolved_filename)
+        return;
+
+    // file-based resources
+    if( !is_container_member( resolved_filename)) {
+        filename = resolved_filename;
+        return;
+    }
+
+    // container-based resources
+    container_filename   = get_container_filename( resolved_filename);
+    container_membername = get_container_membername( resolved_filename);
 }
 
 }
@@ -237,7 +220,7 @@ std::string unresolve_resource_filename(
         return "";
 
     // return absolute MDL file path in case of success
-    ASSERT( M_SCENE, file_path[0] == '/');
+    ASSERT( M_SCENE, is_absolute_mdl_file_path( file_path));
     return file_path;
 }
 
@@ -288,7 +271,7 @@ std::string unresolve_resource_filename(
         return "";
 
     // return absolute MDL file path in case of success
-    ASSERT( M_SCENE, file_path[0] == '/');
+    ASSERT( M_SCENE, is_absolute_mdl_file_path( file_path));
     return file_path;
 }
 
@@ -364,26 +347,27 @@ DB::Tag mdl_texture_to_tag(
     mi::Float32 gamma)
 {
     // we might have UDIM textures here, so load a whole set
-    mi::base::Handle<mi::mdl::IMDL_resource_set> res_set( get_resource_set(
+    mi::base::Handle<mi::mdl::IMDL_resource_set> resource_set( get_resource_set(
         file_path, module_filename, module_name, /*log_messages*/ true));
-    if( !res_set) {
+    if( !resource_set) {
         LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO,
             "Failed to resolve \"%s\" in \"%s\".", file_path, module_name);
         return DB::Tag( 0);
     }
 
-    const char* first_filename = res_set->get_filename(0);
+    const char* first_filename = resource_set->get_filename( 0);
+    if( !first_filename)
+        first_filename = "(no filename)";
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
         "Resolved \"%s\" in \"%s\" to \"%s\"%s.",
         file_path,
         module_name,
         first_filename,
-        res_set->get_count() > 1 ? " ..." : "");
-    ASSERT( M_SCENE, first_filename);
+        resource_set->get_count() > 1 ? " ... " : "");
 
     DB::Tag tag;
-    Mdl_image_set image_set( res_set.get(), file_path, get_container_filename( first_filename));
-    mi::base::Uuid hash = get_hash( res_set.get());
+    Mdl_image_set image_set( resource_set.get(), file_path);
+    mi::base::Uuid hash = get_hash( resource_set.get());
 
     tag = TEXTURE::load_mdl_texture( transaction, &image_set, hash, shared, gamma);
 
@@ -435,30 +419,29 @@ DB::Tag mdl_light_profile_to_tag(
 
     const char* resolved_filename = reader->get_filename();
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
-        "Resolved \"%s\" in \"%s\" to \"%s\".", file_path, module_name, resolved_filename);
-    ASSERT( M_SCENE, resolved_filename);
+        "Resolved \"%s\" in \"%s\" to \"%s\".",
+        file_path, module_name, resolved_filename ? resolved_filename : "(no filename)");
 
     DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
     mi::base::Uuid hash = get_hash( reader.get());
 
-    if( is_container_member( resolved_filename)) {
+    std::string filename;
+    std::string container_filename;
+    std::string container_membername;
+    decompose_resolved_filename(
+        resolved_filename, filename, container_filename, container_membername);
 
-        // Imported resource is in an container
-        const std::string& container_filename = get_container_filename( resolved_filename);
-        const std::string& member_filename  = get_container_membername( resolved_filename);
-
-        File_reader_impl wrapped_reader( reader.get());
-        tag = LIGHTPROFILE::load_mdl_lightprofile(
-            transaction, &wrapped_reader,
-            container_filename, member_filename, absolute_mdl_file_path, hash, shared);
-
-    } else {
-
-        tag = LIGHTPROFILE::load_mdl_lightprofile(
-            transaction, resolved_filename, absolute_mdl_file_path, hash, shared);
-
-    }
+    Resource_reader_impl wrapped_reader( reader.get());
+    tag = LIGHTPROFILE::load_mdl_lightprofile(
+        transaction,
+        &wrapped_reader,
+        filename,
+        container_filename,
+        container_membername,
+        absolute_mdl_file_path,
+        hash,
+        shared);
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
         "... and mapped to lightprofile \"%s\" (tag %u).",
@@ -507,30 +490,29 @@ DB::Tag mdl_bsdf_measurement_to_tag(
 
     const char* resolved_filename = reader->get_filename();
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
-        "Resolved \"%s\" in \"%s\" to \"%s\".", file_path, module_name, resolved_filename);
-    ASSERT( M_SCENE, resolved_filename);
+        "Resolved \"%s\" in \"%s\" to \"%s\".",
+        file_path, module_name, resolved_filename ? resolved_filename : "(no filename)");
 
     DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
     mi::base::Uuid hash = get_hash( reader.get());
 
-    if( is_container_member( resolved_filename)) {
+    std::string filename;
+    std::string container_filename;
+    std::string container_membername;
+    decompose_resolved_filename(
+        resolved_filename, filename, container_filename, container_membername);
 
-        // Imported resource is in an container
-        const std::string& container_filename = get_container_filename( resolved_filename);
-        const std::string& member_filename  = get_container_membername( resolved_filename);
-
-        File_reader_impl wrapped_reader( reader.get());
-        tag = BSDFM::load_mdl_bsdf_measurement(
-            transaction, &wrapped_reader,
-            container_filename, member_filename, absolute_mdl_file_path, hash, shared);
-
-    } else {
-
-        tag = BSDFM::load_mdl_bsdf_measurement(
-            transaction, resolved_filename, absolute_mdl_file_path, hash, shared);
-
-    }
+    Resource_reader_impl wrapped_reader( reader.get());
+    tag = BSDFM::load_mdl_bsdf_measurement(
+        transaction,
+        &wrapped_reader,
+        filename,
+        container_filename,
+        container_membername,
+        absolute_mdl_file_path,
+        hash,
+        shared);
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
         "... and mapped to scene element \"%s\" (tag %u).",
@@ -611,7 +593,7 @@ const mi::mdl::IType_array* Type_binder::get_bound_type( const mi::mdl::IType_ar
     const mi::mdl::IType_array_size* a_size = a_type->get_deferred_size();
     Bind_size_map::const_iterator size_it = m_size_bindings.find( a_size);
     if( size_it == m_size_bindings.end())
-        return 0;
+        return nullptr;
 
     // bind the type
     const mi::mdl::IType* e_type = a_type->get_element_type();
@@ -633,45 +615,77 @@ void Type_binder::bind_param_type(
     m_type_bindings[abs_type] = type;
 }
 
+Input_stream_reader_impl::Input_stream_reader_impl( mi::mdl::IInput_stream* stream)
+  : m_stream( stream, mi::base::DUP_INTERFACE),
+    m_eof( false)
+{
+}
 
-File_reader_impl::File_reader_impl( mi::mdl::IMDL_resource_reader* reader)
+mi::Sint64 Input_stream_reader_impl::read( char* buffer, mi::Sint64 size)
+{
+    mi::Sint64 read_size = 0;
+
+    while( read_size < size) {
+        int c = m_stream->read_char();
+        if( c == -1) {
+            m_eof = true;
+            break;
+        }
+        buffer[read_size++] = c;
+    }
+
+    return read_size;
+}
+
+bool Input_stream_reader_impl::readline( char* buffer, mi::Sint32 size)
+{
+    if( size == 0)
+        return false;
+
+    mi::Sint64 read_size = 0;
+
+    while( read_size < size-1) {
+        int c = m_stream->read_char();
+        if( c == -1) {
+            m_eof = true;
+            break;
+        }
+        buffer[read_size++] = c;
+        if( c == '\n')
+            break;
+    }
+
+    buffer[read_size++] = '\0';
+
+    return true;
+}
+
+Resource_reader_impl::Resource_reader_impl( mi::mdl::IMDL_resource_reader* reader)
   : m_reader( reader, mi::base::DUP_INTERFACE)
 {
 }
 
-mi::Sint32 File_reader_impl::get_error_number() const
-{
-    ASSERT( M_SCENE, false);
-    return 0;
-}
-
-const char* File_reader_impl::get_error_message() const
-{
-    ASSERT( M_SCENE, false);
-    return 0;
-}
-
-bool File_reader_impl::eof() const
+bool Resource_reader_impl::eof() const
 {
     return tell_absolute() == get_file_size();
 }
 
-bool File_reader_impl::rewind()
+bool Resource_reader_impl::rewind()
 {
     return m_reader->seek( 0, mi::mdl::IMDL_resource_reader::MDL_SEEK_SET);
 }
 
-mi::Sint64 File_reader_impl::tell_absolute() const
+mi::Sint64 Resource_reader_impl::tell_absolute() const
 {
     return m_reader->tell();
 }
 
-bool File_reader_impl::seek_absolute( mi::Sint64 pos)
+bool Resource_reader_impl::seek_absolute( mi::Sint64 pos)
 {
     return m_reader->seek( pos, mi::mdl::IMDL_resource_reader::MDL_SEEK_SET);
 }
 
-mi::Sint64 File_reader_impl::get_file_size() const
+mi::Sint64 Resource_reader_impl::get_file_size() const
 {
     mi::Uint64 pos = m_reader->tell();
     m_reader->seek( 0, mi::mdl::IMDL_resource_reader::MDL_SEEK_END);
@@ -680,17 +694,17 @@ mi::Sint64 File_reader_impl::get_file_size() const
     return size;
 }
 
-bool File_reader_impl::seek_end()
+bool Resource_reader_impl::seek_end()
 {
     return m_reader->seek( 0, mi::mdl::IMDL_resource_reader::MDL_SEEK_END);
 }
 
-mi::Sint64 File_reader_impl::read( char* buffer, mi::Sint64 size)
+mi::Sint64 Resource_reader_impl::read( char* buffer, mi::Sint64 size)
 {
     return m_reader->read( buffer, size);
 }
 
-bool File_reader_impl::readline( char* buffer, mi::Sint32 size)
+bool Resource_reader_impl::readline( char* buffer, mi::Sint32 size)
 {
     if( size == 0)
         return false;
@@ -713,6 +727,90 @@ bool File_reader_impl::readline( char* buffer, mi::Sint32 size)
     return true;
 }
 
+Input_stream_impl::Input_stream_impl( mi::neuraylib::IReader* reader, const std::string& filename)
+  : m_reader( reader, mi::base::DUP_INTERFACE),
+    m_filename( filename)
+{
+}
+
+int Input_stream_impl::read_char()
+{
+    char c;
+    mi::Sint64 result = m_reader->read( &c, 1);
+    return result <= 0 ? -1 : c;
+}
+
+const char* Input_stream_impl::get_filename()
+{
+    return !m_filename.empty() ? m_filename.c_str() : nullptr;
+}
+
+Mdle_input_stream_impl::Mdle_input_stream_impl(
+    mi::neuraylib::IReader* reader, const std::string& filename)
+  : Input_stream_impl( reader, filename)
+{
+}
+
+int Mdle_input_stream_impl::read_char()
+{
+    return Input_stream_impl::read_char();
+}
+
+const char* Mdle_input_stream_impl::get_filename()
+{
+    return Input_stream_impl::get_filename();
+}
+
+Mdl_resource_reader_impl::Mdl_resource_reader_impl(
+    mi::neuraylib::IReader* reader,
+    const std::string& file_path,
+    const std::string& filename,
+    const mi::base::Uuid& hash)
+  : m_reader( reader, mi::base::DUP_INTERFACE),
+    m_file_path( file_path),
+    m_filename( filename),
+    m_hash( hash)
+{
+    ASSERT( M_SCENE, reader->supports_absolute_access());
+}
+
+Uint64 Mdl_resource_reader_impl::read( void* ptr, Uint64 size)
+{
+    return m_reader->read( static_cast<char*>( ptr), size);
+}
+
+Uint64 Mdl_resource_reader_impl::tell()
+{
+    return m_reader->tell_absolute();
+}
+
+bool Mdl_resource_reader_impl::seek( Sint64 offset, Position origin)
+{
+    mi::Sint64 position = 0;
+    switch( origin) {
+        case MDL_SEEK_SET: position = 0; break;
+        case MDL_SEEK_CUR: position = m_reader->tell_absolute(); break;
+        case MDL_SEEK_END: position = m_reader->get_file_size(); break;
+    }
+
+    return m_reader->seek_absolute( position + offset);
+}
+
+const char* Mdl_resource_reader_impl::get_filename() const
+{
+    return !m_filename.empty() ? m_filename.c_str() : nullptr;
+}
+
+const char* Mdl_resource_reader_impl::get_mdl_url() const
+{
+    return !m_file_path.empty() ? m_file_path.c_str() : nullptr;
+}
+
+bool Mdl_resource_reader_impl::get_resource_hash( unsigned char hash[16])
+{
+    return convert_hash( m_hash, hash);
+}
+
 mi::neuraylib::IReader* Mdl_container_callback::get_reader(
     const char* container_filename, const char* member_filename)
 {
@@ -720,59 +818,45 @@ mi::neuraylib::IReader* Mdl_container_callback::get_reader(
 
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
-    mi::base::Handle<mi::mdl::IInput_stream> input_stream(NULL);
+    mi::base::Handle<mi::mdl::IInput_stream> input_stream;
 
-    std::string container_filename_str = container_filename;
-    if (container_filename_str.rfind(".mdr") != std::string::npos)
+    if (is_archive_filename(container_filename))
     {
         mi::base::Handle<mi::mdl::IArchive_tool> archive_tool(mdl->create_archive_tool());
         input_stream = archive_tool->get_file_content(container_filename, member_filename);
     }
-    else if (container_filename_str.rfind(".mdle") != std::string::npos)
+    else if (is_mdle_filename(container_filename))
     {
         mi::base::Handle<mi::mdl::IEncapsulate_tool> mdle_tool(mdl->create_encapsulate_tool());
         input_stream = mdle_tool->get_file_content(container_filename, member_filename);
     }
 
     if (!input_stream)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<mi::mdl::IMDL_resource_reader> file_random_access(
         input_stream->get_interface<mi::mdl::IMDL_resource_reader>());
 
     ASSERT( M_SCENE, file_random_access.get());
-    return new File_reader_impl( file_random_access.get());
+    return new Resource_reader_impl( file_random_access.get());
 }
 
-Mdl_image_set::Mdl_image_set(
-    mi::mdl::IMDL_resource_set* set, const std::string& filename, const std::string& container_filename)
+Mdl_image_set::Mdl_image_set( mi::mdl::IMDL_resource_set* set, const std::string& file_path)
   : m_resource_set( set, mi::base::DUP_INTERFACE),
-    m_container_filename( container_filename),
-    m_is_container( !container_filename.empty())
+    m_is_container( false)
 {
-    ASSERT( M_SCENE, set->get_mdl_url(0));
-
-    // TODO
-    if ( set->get_count() > 1)  // uvtile/udim sequence
-    {
-        // construct absolute mdl file path which still contains the uvtile/udim marker
-        // from original filename and the first absolute mdl url in the set
-        const std::string mdl_url = set->get_mdl_url( 0);
-       
-        std::string marker_string;
-        std::size_t p = filename.find_last_of('/');
-        if (p == std::string::npos)
-            marker_string = '/' + filename;
-        else
-            marker_string = filename.substr(p);
-
-        p = mdl_url.find_last_of('/'); 
-        ASSERT(M_SCENE, p != std::string::npos); // there needs to be at least one slash
-        m_mdl_file_path = mdl_url.substr(0, p) + marker_string;
-
+    const char* first_filename = set->get_filename( 0);
+    if( first_filename) {
+        m_container_filename = MDL::get_container_filename( first_filename);
+        m_is_container = !m_container_filename.empty();
     }
-    else
-        m_mdl_file_path = set->get_mdl_url(0);
+
+    m_mdl_file_path = set->get_mdl_url_mask();
+
+    std::string root;
+    HAL::Ospath::splitext( m_mdl_file_path, root, m_file_format);
+    if( !m_file_format.empty() && m_file_format[0] == '.' )
+        m_file_format = m_file_format.substr( 1);
 }
 
 mi::Size Mdl_image_set::get_length() const
@@ -815,7 +899,11 @@ const char* Mdl_image_set::get_mdl_file_path() const
 
 const char* Mdl_image_set::get_resolved_filename( mi::Size i) const
 {
-    return m_is_container ? "" : m_resource_set->get_filename( i);
+    if( m_is_container)
+        return "";
+
+    const char* s = m_resource_set->get_filename( i);
+    return s ? s : "";
 }
 
 const char* Mdl_image_set::get_container_membername( mi::Size i) const
@@ -824,17 +912,9 @@ const char* Mdl_image_set::get_container_membername( mi::Size i) const
         return "";
 
     const char* filename = m_resource_set->get_filename( i);
-
-    const char* p = strstr( filename, ".mdr:");
-    if( p)
-        return p + 5;
-
-    p = strstr( filename, ".mdle:");
-    if( p)
-        return p + 6;
-
-    ASSERT( M_SCENE, false);
-    return "";
+    const char* membername = MDL::get_container_membername( filename);
+    ASSERT( M_SCENE, membername[0] != '\0');
+    return membername;
 }
 
 mi::neuraylib::IReader* Mdl_image_set::open_reader( mi::Size i) const
@@ -842,7 +922,7 @@ mi::neuraylib::IReader* Mdl_image_set::open_reader( mi::Size i) const
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader( m_resource_set->open_reader( i));
     if( !reader)
         return nullptr;
-    return new File_reader_impl( reader.get());
+    return new Resource_reader_impl( reader.get());
 }
 
 mi::neuraylib::ICanvas* Mdl_image_set::get_canvas( mi::Size i) const
@@ -852,95 +932,90 @@ mi::neuraylib::ICanvas* Mdl_image_set::get_canvas( mi::Size i) const
 
 const char* Mdl_image_set::get_image_format() const
 {
-    return "";
+    return m_file_format.c_str();
 }
 
 std::string lookup_thumbnail(
     const std::string& module_filename,
-    const std::string& mdl_name,
+    const std::string& module_name,
+    const std::string& def_simple_name,
     const IAnnotation_block* annotations,
     mi::mdl::IArchive_tool* archive_tool)
 {
-    std::string stripped_mdl_name, def_name, module_name;
-    mi::Size p = mdl_name.find( '(');
-    if( p == std::string::npos) 
-        stripped_mdl_name = mdl_name;
-    else // strip function signature
-        stripped_mdl_name = mdl_name.substr( 0, p);
+    for( mi::Size i = 0; annotations && i < annotations->get_size(); ++i) {
 
-    p = stripped_mdl_name.rfind( "::");
-    if( p == std::string::npos)
-         // invalid mdl name
-        return "";
+        mi::base::Handle<const MI::MDL::IAnnotation> anno( annotations->get_annotation( i));
+        if( !anno)
+            continue;
 
-    def_name = stripped_mdl_name.substr(p + 2);
-    module_name = stripped_mdl_name.substr(0, p);
+        if( strcmp( anno->get_name(), "::anno::thumbnail(string)") != 0)
+            continue;
 
-    if(annotations) {
-        for( mi::Size i=0; i<annotations->get_size(); ++i) {
+         mi::base::Handle<const MI::MDL::IExpression_list> expressions(
+             anno->get_arguments());
+         ASSERT( M_SCENE, expressions->get_size() == 1);
 
-            mi::base::Handle<const MI::MDL::IAnnotation> anno( annotations->get_annotation(i));
-            if( !anno)
-                continue;
-            if( strcmp( anno->get_name(), "::anno::thumbnail(string)") == 0) {
+         mi::base::Handle<const MI::MDL::IExpression_constant> expr(
+             expressions->get_expression<MI::MDL::IExpression_constant>( mi::Size( 0)));
+         if( !expr)
+             break;
 
-                mi::base::Handle<const MI::MDL::IExpression_list> expressions(
-                    anno->get_arguments());
-                ASSERT( M_SCENE, expressions->get_size() == 1);
-                mi::base::Handle<const MI::MDL::IExpression_constant> expr(
-                    mi::base::make_handle(expressions->get_expression( mi::Size(0)))
-                    ->get_interface<const MI::MDL::IExpression_constant>());
-                if( !expr)
-                    break;
-                mi::base::Handle<const MI::MDL::IValue_string> vstr(
-                    expr->get_value<IValue_string>());
-                ASSERT( M_SCENE, vstr.is_valid_interface());
-                // lookup file
-                std::string file = resolve_resource_filename(
-                    vstr->get_value(), module_filename.c_str(),
-                    module_name.c_str(), /*log_messages*/ true);
-                if( !file.empty())
-                    return file;
-                break;
+         mi::base::Handle<const MI::MDL::IValue_string> vstr( expr->get_value<IValue_string>());
+         ASSERT( M_SCENE, vstr.is_valid_interface());
+
+         // lookup file
+         std::string file = resolve_resource_filename(
+             vstr->get_value(), module_filename.c_str(), module_name.c_str(), /*log_messages*/ true);
+         if( !file.empty())
+             return file;
+         break;
+    }
+
+    // construct thumbnail filename according to the "old" convention module_name.def_simple_name.ext
+    const char* ext[] = {"png", "jpg", "jpeg", "PNG", "JPG", "JPEG", nullptr};
+
+    // located in container?
+    if( is_archive_filename( module_filename) || is_mdle_filename( module_filename)) {
+
+        std::string module_container_filename   = get_container_filename( module_filename.c_str());
+        std::string module_container_membername = get_container_membername( module_filename.c_str());
+
+        if (has_mdl_suffix( module_container_membername)) {
+            // remove ".mdl" to obtain module base name
+            std::string module_container_member_basename
+                = strip_dot_mdl_suffix(module_container_membername);
+
+            // construct thumbnail base name
+            std::string thumbnail_container_member_basename
+                = module_container_member_basename + '.' + def_simple_name + '.';
+
+            // check for supported file types
+            for( int i = 0; ext[i] != nullptr; ++i) {
+                std::string thumbnail_container_membername = thumbnail_container_member_basename + ext[i];
+                mi::base::Handle<mi::mdl::IInput_stream> file( archive_tool->get_file_content(
+                    module_container_filename.c_str(), thumbnail_container_membername.c_str()));
+                if( file)
+                    return module_container_filename + ':' + thumbnail_container_membername;
+            }
+        }
+    } else {
+        if (has_mdl_suffix( module_filename)) {
+            // remove ".mdl" to obtain module base name
+            std::string module_basename = strip_dot_mdl_suffix( module_filename);
+            if (!module_basename.empty()) {
+                // construct thumbnail base name
+                std::string thumbnail_basename = module_basename + '.' + def_simple_name + '.';
+
+                // check for supported file types
+                for( int i = 0; ext[i] != nullptr; ++i) {
+                    std::string thumbnail_filename = thumbnail_basename + ext[i];
+                    if( DISK::is_file( thumbnail_filename.c_str()))
+                        return thumbnail_filename;
+                }
             }
         }
     }
 
-    // construct thumbnail filename according to the "old" convention module_name.mdl_name.ext 
-    const char* ext[] = {"png", "jpg", "jpeg", "PNG", "JPG", "JPEG", NULL};
-
-    std::string file_base;
-    std::string container_path;
-
-    mi::Size p_mdr = module_filename.find(".mdr:");
-    mi::Size p_mdl = module_filename.find(".mdl");
-
-    // located in container?
-    if( p_mdr != std::string::npos)
-    {
-        container_path = module_filename.substr( 0, p_mdr + 4);
-        file_base = module_filename.substr( p_mdr + 5, p_mdl - p_mdr - 5) + '.' + def_name + '.';
-
-        // check for supported file types
-        for( int i = 0; ext[i] != NULL; ++i) {
-            std::string file_name = file_base + ext[i];
-            mi::base::Handle<mi::mdl::IInput_stream> file(
-                archive_tool->get_file_content(container_path.c_str(), file_name.c_str()));
-            if( file)
-                return container_path + ':' + file_name;
-        }
-    }
-    else
-    {
-        file_base = module_filename.substr( 0, p_mdl) + '.' + def_name + '.';
-
-        // check for supported file types
-        for( int i = 0; ext[i] != NULL; ++i) {
-            std::string file_name = file_base + ext[i];
-            if( DISK::is_file( file_name.c_str()))
-                return file_name;
-        }
-    }
     return "";
 }
 

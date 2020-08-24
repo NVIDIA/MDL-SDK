@@ -47,7 +47,8 @@ namespace mdlm
     //
     class Search_path
     {
-        mi::base::Handle<mi::neuraylib::IMdl_compiler> m_compiler;
+        mi::base::Handle<mi::neuraylib::IMdl_configuration> m_mdl_config;
+
         std::vector<std::string> m_paths;
 
     public:

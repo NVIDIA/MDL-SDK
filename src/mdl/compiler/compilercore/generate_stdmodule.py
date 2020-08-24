@@ -166,19 +166,28 @@ def generate_cpp_file(files,
         l = len(text)
         kl = len(key)
         target.write("unsigned char const " + block.name + "[%u] = {" % (l))
+        first = False
         if key:
             for i in range(l):
+                first = False
                 if i % 8 == 0:
                     target.write('\n  ')
+                    first = True
                 code = ord(text[i]) ^ ord(key[i % kl]) ^ (i & 0xFF)
                 start = code
-                target.write("0x%02x, " % code)
+                if not first:
+                    target.write(' ')
+                target.write("0x%02x," % code)
             target.write('\n};\n\n');
         else:
             for i in range(l):
+                first = False
                 if i % 8 == 0:
                     target.write('\n  ')
-                target.write("0x%02x, " % ord(text[i]))
+                    first = True
+                if not first:
+                    target.write(' ')
+                target.write("0x%02x," % ord(text[i]))
             target.write('\n};\n\n');
 
     # write footer

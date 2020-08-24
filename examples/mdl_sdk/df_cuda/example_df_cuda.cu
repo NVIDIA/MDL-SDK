@@ -60,6 +60,9 @@
 // Note, this has to match with code backend option "df_handle_slot_mode"
 #define DF_HANDLE_SLOTS DF_HSM_POINTER
 
+// If enabled, math::DX(state::texture_coordinates(0).xy) = float2(1, 0) and
+// math::DY(state::texture_coordinates(0).xy) = float2(0, 1) will be used.
+// #define USE_FAKE_DERIVATIVES
 
 #ifdef ENABLE_DERIVATIVES
 typedef Material_expr_function_with_derivs                  Mat_expr_func;
@@ -332,11 +335,11 @@ __device__ inline float3 cross(const float3 &u, const float3 &v)
 typedef curandStatePhilox4_32_10_t Rand_state;
 
 // direction to environment map texture coordinates
-__device__ inline float2 environment_coords(const float3 &dir)
+__device__ inline float2 environment_coords(const float3 &dir, const Kernel_params& params)
 {
     const float u = atan2f(dir.z, dir.x) * (float)(0.5 / M_PI) + 0.5f;
     const float v = acosf(fmax(fminf(-dir.y, 1.0f), -1.0f)) * (float)(1.0 / M_PI);
-    return make_float2(u, v);
+    return make_float2(fmodf(u + params.env_rotation * 0.5f * M_1_PI, 1.0f), v);
 }
 
 // importance sample the environment
@@ -365,9 +368,9 @@ __device__ inline float3 environment_sample(
 
     // uniformly sample spherical area of pixel
     const float u = (float)(px + xi_y) / (float)params.env_size.x;
-    const float phi = u * (float)(2.0 * M_PI) - (float)M_PI;
+    const float phi = u * (float)(2.0 * M_PI) - (float)M_PI - params.env_rotation;
     float sin_phi, cos_phi;
-    sincosf(phi, &sin_phi, &cos_phi);
+    sincosf(phi > float(-M_PI) ? phi : (phi + (float)(2.0 * M_PI)), &sin_phi, &cos_phi);
     const float step_theta = (float)M_PI / (float)params.env_size.y;
     const float theta0 = (float)(py) * step_theta;
     const float cos_theta = cosf(theta0) * (1.0f - xi.z) + cosf(theta0 + step_theta) * xi.z;
@@ -387,7 +390,7 @@ __device__ inline float3 environment_eval(
     const float3 &dir,
     const Kernel_params &params)
 {
-    const float2 uv = environment_coords(dir);
+    const float2 uv = environment_coords(dir, params);
     const unsigned int x =
         min((unsigned int)(uv.x * (float)params.env_size.x), params.env_size.x - 1);
     const unsigned int y =
@@ -513,8 +516,8 @@ __device__ inline bool intersect_sphere(
     float sp, cp;
     sincosf(phi, &sp, &cp);
     const float st = sinf(theta);
-    out_hit.tangent_u = make_float3(cp * st, 0.0f, -sp * st) * (float) M_PI;
-    out_hit.tangent_v = make_float3(sp * out_hit.normal.y, -st, cp * out_hit.normal.y) * (float) (-M_PI);
+    out_hit.tangent_u = make_float3(cp * st, 0.0f, -sp * st) * (float) M_PI * r;
+    out_hit.tangent_v = make_float3(sp * out_hit.normal.y, -st, cp * out_hit.normal.y) * (float) (-M_PI) * r;
 
     #ifdef ENABLE_DERIVATIVES
         out_hit.texture_coords[0].val = uvw;
@@ -523,7 +526,7 @@ __device__ inline bool intersect_sphere(
     #else
         out_hit.texture_coords[0] = uvw;
     #endif
-    
+
     return true;
 }
 
@@ -601,7 +604,7 @@ __device__ inline bool intersect_geometry(
             if (!intersect_sphere(ray_state, params, out_hit))
                 return false;
             break;
-        case GT_HAIR:        
+        case GT_HAIR:
             if (!intersect_hair(ray_state, params, out_hit))
                 return false;
             break;
@@ -615,6 +618,12 @@ __device__ inline bool intersect_geometry(
     ray_state.pos = out_hit.position.val;
     if (params.use_derivatives && ray_state.intersection == 0)
     {
+#ifdef USE_FAKE_DERIVATIVES
+        out_hit.position.dx = make_float3(1.0f, 0.0f, 0.0f);
+        out_hit.position.dy = make_float3(0.0f, 1.0f, 0.0f);
+        out_hit.texture_coords[0].dx = make_float3(1.0f, 0.0f, 0.0f);
+        out_hit.texture_coords[0].dy = make_float3(0.0f, 1.0f, 0.0f);
+#else
         // compute ray differential for one-pixel offset rays
         // ("Physically Based Rendering", 3rd edition, chapter 10.1.1)
         const float d = dot(out_hit.normal, ray_state.pos);
@@ -673,6 +682,7 @@ __device__ inline bool intersect_geometry(
             out_hit.texture_coords[0].dy.x = inv_det * (A.w * B_y.x - A.z * B_y.y);
             out_hit.texture_coords[0].dy.y = inv_det * (A.x * B_y.y - A.y * B_y.x);
         }
+#endif
     }
     #endif
 
@@ -698,9 +708,9 @@ __device__ bool cull_point_light(
         }
         case GT_HAIR:
             // ignore light sources within the volume
-            return (light_position.x * light_position.x + 
+            return (light_position.x * light_position.x +
                     light_position.z * light_position.z) < GT_SPHERE_RADIUS;
-        default: 
+        default:
             // ignore light from behind
             return dot(light_direction, normal) <= 0.0f;
     }
@@ -773,7 +783,7 @@ __device__ inline uint32_t lpe_transition(
     uint32_t global_tag_id,
     const Kernel_params &params)
 {
-    if(current_state == static_cast<uint32_t>(-1)) 
+    if(current_state == static_cast<uint32_t>(-1))
         return static_cast<uint32_t>(-1);
 
     return params.lpe_state_table[
@@ -834,7 +844,7 @@ __device__ inline bool trace_scene(
     const Kernel_params &params)
 {
     // stop at invalid states
-    if (ray_state.lpe_current_state == static_cast<uint32_t>(-1)) 
+    if (ray_state.lpe_current_state == static_cast<uint32_t>(-1))
         return false;
 
     // intersect with geometry
@@ -842,10 +852,10 @@ __device__ inline bool trace_scene(
     if (!intersect_geometry(ray_state, params, hit)) {
         if (ray_state.intersection == 0 && params.mdl_test_type != MDL_TEST_NO_ENV) {
             // primary ray miss, add environment contribution
-            const float2 uv = environment_coords(ray_state.dir);
+            const float2 uv = environment_coords(ray_state.dir, params);
             const float4 texval = tex2D<float4>(params.env_tex, uv.x, uv.y);
 
-            // add contribution, if `CL` is a valid path 
+            // add contribution, if `CL` is a valid path
             accumulate_contribution(
                 TRANSITION_LIGHT, params.env_gtag /* light group 'env' */,
                 make_float3(texval.x, texval.y, texval.z) * params.env_intensity,
@@ -853,7 +863,7 @@ __device__ inline bool trace_scene(
         }
         return false;
     }
-    
+
     float4 texture_results[16];
 
     // material of the current object
@@ -875,7 +885,8 @@ __device__ inline bool trace_scene(
         NULL,
         identity,
         identity,
-        0
+        0,
+        1.0f
     };
 
     // for evaluating parts of the BSDF individually, e.g. for implementing LPEs
@@ -963,7 +974,7 @@ __device__ inline bool trace_scene(
             eval_data.handle_offset = offset;
         #endif
 
-            // evaluate the materials EDF 
+            // evaluate the materials EDF
             as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
             // iterate over all lobes (tags that appear in the df)
@@ -1070,16 +1081,15 @@ __device__ inline bool trace_scene(
         }
 
         // compute direct lighting for point light
-        Transition_type transition_glossy, transition_diffuse; 
+        Transition_type transition_glossy, transition_diffuse;
         if (params.light_intensity > 0.0f)
         {
             float3 to_light = params.light_pos - ray_state.pos;
             if(!cull_point_light(params, params.light_pos, to_light, hit.normal))
             {
                 const float inv_squared_dist = 1.0f / squared_length(to_light);
-                const float3 f = params.light_color * params.light_intensity * 
+                const float3 f = params.light_color * params.light_intensity *
                                  inv_squared_dist * (float) (0.25 / M_PI);
-
 
                 eval_data.k2 = to_light * sqrtf(inv_squared_dist);
                 #if DF_HANDLE_SLOTS == DF_HSM_POINTER
@@ -1096,7 +1106,7 @@ __device__ inline bool trace_scene(
                     eval_data.handle_offset = offset;
                 #endif
 
-                    // evaluate the materials BSDF 
+                    // evaluate the materials BSDF
                     as_bsdf_evaluate(func_idx)(
                         &eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
@@ -1177,7 +1187,7 @@ __device__ inline bool trace_scene(
                     eval_data.handle_offset = offset;
                 #endif
 
-                    // evaluate the materials BSDF 
+                    // evaluate the materials BSDF
                     as_bsdf_evaluate(func_idx)(
                         &eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
@@ -1270,7 +1280,7 @@ __device__ inline bool trace_scene(
                 #if DF_HANDLE_SLOTS == DF_HSM_NONE
                     // ill-defined case: the LPE machine expects tags but the renderer ignores them
                     // -> the resulting image of LPEs with tags is undefined in this case
-                    params.default_gtag, 
+                    params.default_gtag,
                 #else
                     material.bsdf_mtag_to_gtag_map[sample_data.handle], // sampled lobe
                 #endif
@@ -1356,7 +1366,7 @@ __device__ inline render_result render_scene(
     const float aspect = (float)params.resolution.y / (float)params.resolution.x;
 
     render_result res;
-   clear(res.aux);
+    clear(res.aux);
 
     Ray_state ray_state;
     ray_state.contribution = make_float3(0.0f, 0.0f, 0.0f);
@@ -1378,7 +1388,7 @@ __device__ inline render_result render_scene(
         if (!trace_scene(rand_state, ray_state, params))
             break;
     }
-    
+
     res.beauty =
         isfinite(ray_state.contribution.x) &&
         isfinite(ray_state.contribution.y) &&
@@ -1394,7 +1404,7 @@ __device__ inline unsigned int float3_to_rgba8(float3 val)
     const unsigned int r = (unsigned int) (255.0 * powf(saturate(val.x), 1.0f / 2.2f));
     const unsigned int g = (unsigned int) (255.0 * powf(saturate(val.y), 1.0f / 2.2f));
     const unsigned int b = (unsigned int) (255.0 * powf(saturate(val.z), 1.0f / 2.2f));
-    return 0xff000000 | (r << 16) | (g << 8) | b;
+    return 0xff000000 | (b << 16) | (g << 8) | r;
 }
 
 // exposure + simple Reinhard tonemapper + gamma
@@ -1453,8 +1463,14 @@ extern "C" __global__ void render_scene_kernel(
         float iteration_weight = (float) kernel_params.iteration_num /
             (float) (kernel_params.iteration_start + kernel_params.iteration_num);
 
-        kernel_params.accum_buffer[idx] = kernel_params.accum_buffer[idx] +
+        float3 buffer_val = kernel_params.accum_buffer[idx] +
             (beauty - kernel_params.accum_buffer[idx]) * iteration_weight;
+
+        kernel_params.accum_buffer[idx] =
+            (isinf(buffer_val.x) || isnan(buffer_val.y) || isinf(buffer_val.z) ||
+             isnan(buffer_val.x) || isinf(buffer_val.y) || isnan(buffer_val.z))
+                ? make_float3(0.0f, 0.0f, 1.0e+30f)
+                : buffer_val;
 
         if (kernel_params.enable_auxiliary_output) {
 

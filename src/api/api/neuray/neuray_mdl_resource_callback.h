@@ -54,8 +54,9 @@ namespace MI {
 
 namespace BSDFM { class Bsdf_measurement; }
 namespace DB { class Transaction; }
-namespace IMAGE { class Image_module; }
 namespace DBIMAGE { class Image; }
+namespace IMAGE { class Image_module; }
+namespace MDL { class Execution_context; }
 namespace LIGHTPROFILE { class Lightprofile; }
 
 namespace NEURAY {
@@ -75,9 +76,10 @@ public:
 
     Resource_callback(
         DB::Transaction* transaction,
+        const mi::mdl::IModule* module,
         const char* module_name,
-        const char* module_uri,
-        bool bundle_resources,
+        const char* module_filename,
+        MDL::Execution_context* context,
         mi::neuraylib::IExport_result_ext* result);
 
     ~Resource_callback();
@@ -186,6 +188,9 @@ private:
     /// The DB transaction to be used.
     DB::Transaction* m_transaction;
 
+    /// The MDL module to be exported.
+    mi::base::Handle<const mi::mdl::IModule> m_module;
+
     /// DB name of the MDL module to be exported.
     std::string m_module_name;
 
@@ -194,6 +199,10 @@ private:
 
     /// Flag that indicates whether resources are bundled with the exported MDL module.
     bool m_bundle_resources;
+    
+    /// Flag that indicates whether IValue_resource data should be returned as is (unless
+    /// m_bundle_resources is set).
+    bool m_keep_original_file_paths;
 
     /// Error messages are added to this export result.
     mi::base::Handle<mi::neuraylib::IExport_result_ext> m_result;

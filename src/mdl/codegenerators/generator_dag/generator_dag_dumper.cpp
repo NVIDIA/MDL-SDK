@@ -84,11 +84,11 @@ void DAG_dumper::node_name(DAG_node const *node)
 }
 
 // Print the name of a dependence graph node.
-void DAG_dumper::node_name(char type, int index)
+void DAG_dumper::node_name(char type, size_t index)
 {
     char buf[32];
 
-    snprintf(buf, sizeof(buf), "%c%d", type, index);
+    snprintf(buf, sizeof(buf), "%c%u", type, (unsigned)index);
     buf[sizeof(buf) - 1] = '\0';
     m_printer->print(buf);
 }
@@ -179,7 +179,7 @@ void DAG_dumper::temporary(int index, char const *color)
 // Print a DAG IR argument.
 void DAG_dumper::argument(
     char const *name,
-    int        index,
+    size_t     index,
     char const *color)
 {
     m_printer->print("  ");
@@ -232,7 +232,7 @@ void DAG_dumper::edge(
 // Print a dependency edge.
 void DAG_dumper::edge(
     char           type,
-    int            src,
+    size_t         src,
     DAG_node const *dst,
     char const     *label,
     char const     *color)

@@ -139,30 +139,31 @@ private:
     /// Post-visitor for reference expressions.
     ///
     /// \param expr  the visited expression
-    void post_visit(IExpression_reference *expr) MDL_FINAL
+    IExpression *post_visit(IExpression_reference *expr) MDL_FINAL
     {
         if (expr->is_array_constructor()) {
             // array constructors are predefined, no error
-            return;
+            return expr;
         }
 
         Definition const *def = impl_cast<Definition>(expr->get_definition());
-        if (is_error(def))
-            return;
+        if (is_error(def)) {
+            return expr;
+        }
 
         IDefinition::Kind kind = def->get_kind();
         if (kind == IDefinition::DK_PARAMETER || kind == IDefinition::DK_MEMBER) {
             // access to other parameter/member is ok
-            return;
+            return expr;
         }
 
         if (def->has_flag(Definition::DEF_IS_PREDEFINED)) {
             // no need to export it
-            return;
+            return expr;
         }
         if (def->has_flag(Definition::DEF_IS_IMPORTED)) {
             // there is someone that exports it
-            return;
+            return expr;
         }
 
         if (!def->has_flag(Definition::DEF_IS_EXPORTED)) {
@@ -173,6 +174,7 @@ private:
                     .add_signature(def)
                     .add_signature(m_ent));
         }
+        return expr;
     }
 
 private:
@@ -253,8 +255,9 @@ void Sema_analysis::check_exported_function_completeness(
         IParameter const  *param = func_decl->get_parameter(i);
         IExpression const *init  = param->get_init_expr();
 
-        if (init)
-            checker.visit(init);
+        if (init != NULL) {
+            (void)checker.visit(init);
+        }
 
         IType_name const *t_name = param->get_type_name();
         IType const      *p_type = t_name->get_type();
@@ -287,8 +290,9 @@ void Sema_analysis::check_exported_struct_completeness(
     for (int i = 0, n = struct_decl->get_field_count(); i < n; ++i) {
         IExpression const *init = struct_decl->get_field_init(i);
 
-        if (init)
-            checker.visit(init);
+        if (init != NULL) {
+            (void)checker.visit(init);
+        }
 
         IType_name const *t_name = struct_decl->get_field_type_name(i);
         IType const      *p_type = t_name->get_type();
@@ -319,8 +323,9 @@ void Sema_analysis::check_exported_annotation_completeness(
         IParameter const  *param = anno_decl->get_parameter(i);
         IExpression const *init  = param->get_init_expr();
 
-        if (init)
-            checker.visit(init);
+        if (init != NULL) {
+            (void)checker.visit(init);
+        }
 
         IType_name const *t_name = param->get_type_name();
         IType const      *p_type = t_name->get_type();
@@ -395,18 +400,18 @@ void Sema_analysis::check_exported_completeness()
 // Finds a parameter for the given array size if any.
 Definition const *Sema_analysis::find_parameter_for_array_size(Definition const *arr_size)
 {
-    if (m_curr_entity_decl == NULL)
+    if (m_curr_entity_decl == NULL) {
         return NULL;
+    }
 
     for (int i = 0, n = m_curr_entity_decl->get_parameter_count(); i < n; ++i) {
         IParameter const  *param  = m_curr_entity_decl->get_parameter(i);
         IDefinition const *p_def  = param->get_name()->get_definition();
         IType_array const *p_type = as<IType_array>(p_def->get_type());
 
-        if (p_type == NULL)
+        if (p_type == NULL || p_type->is_immediate_sized()) {
             continue;
-        if (p_type->is_immediate_sized())
-            continue;
+        }
 
         IType_array_size const *size = p_type->get_deferred_size();
         if (size->get_size_symbol() == arr_size->get_sym())
@@ -421,6 +426,11 @@ void Sema_analysis::mark_used(Definition const *def, Position const &pos)
     const_cast<Definition *>(def)->set_flag(Definition::DEF_IS_USED);
 
     if (def->has_flag(Definition::DEF_IS_DEPRECATED)) {
+        // don't report deprecated warning, if the current entity is already deprecated
+        if (m_curr_entity_def && m_curr_entity_def->has_flag(Definition::DEF_IS_DEPRECATED)) {
+            return;
+        }
+
         IValue_string const *msg = m_module.get_deprecated_message(def);
 
         warning(
@@ -441,8 +451,9 @@ void Sema_analysis::report_unused_entities()
 
         void visit(Definition const *def) const MDL_FINAL
         {
-            if (is_error(def))
+            if (is_error(def)) {
                 return;
+            }
             if (def->has_flag(Definition::DEF_IS_USED)) {
                 if (def->has_flag(Definition::DEF_IS_UNUSED)) {
                     // used entity marked as unused
@@ -538,10 +549,11 @@ Stmt_info &Sema_analysis::get_stmt_info(IStatement const *stmt)
 // Enter a statement and put it into the context stack.
 void Sema_analysis::enter_statement(IStatement const *stmt)
 {
-    if (m_context_depth < m_context_stack.size())
+    if (m_context_depth < m_context_stack.size()) {
         m_context_stack[m_context_depth] = stmt;
-    else
+    } else {
         m_context_stack.push_back(stmt);
+    }
     ++m_context_depth;
 }
 
@@ -606,8 +618,9 @@ void Sema_analysis::leave_case(IStatement_case const *stmt)
 // Return the top context stack statement.
 IStatement const *Sema_analysis::get_context_stmt(size_t depth) const
 {
-    if (depth < m_context_depth)
+    if (depth < m_context_depth) {
         return m_context_stack[m_context_depth - 1 - depth];
+    }
     return NULL;
 }
 
@@ -662,8 +675,9 @@ bool Sema_analysis::has_one_case_reachable_exit(
         Stmt_info const &info = get_stmt_info(switch_stmt->get_case(n - 1));
 
         // reachable if we could fall through the last case
-        if (info.m_reachable_exit)
+        if (info.m_reachable_exit) {
             return true;
+        }
     }
 
     IExpression const *cond        = switch_stmt->get_condition();
@@ -720,8 +734,9 @@ bool Sema_analysis::has_one_case_reachable_exit(
 
             // we can exit the switch if the default case has a reachable
             // break or is reachable at exit
-            if (info.m_case_has_break || info.m_reachable_exit)
+            if (info.m_case_has_break || info.m_reachable_exit) {
                 return true;
+            }
         }
     }
     return false;
@@ -730,8 +745,9 @@ bool Sema_analysis::has_one_case_reachable_exit(
 // Returns true if the parent statement is an if (i.e. we are inside a the or an else)
 bool Sema_analysis::inside_if() const
 {
-  if (m_context_depth == 0)
+  if (m_context_depth == 0) {
       return false;
+  }
   return is<IStatement_if>(get_context_stmt(0));
 }
 
@@ -740,21 +756,20 @@ void Sema_analysis::check_if_cascade(IStatement_if const *stmt)
 {
     size_t depth = 0;
 
-    for (IStatement_if const *top = stmt; top != NULL; ++depth)
-    {
+    for (IStatement_if const *top = stmt; top != NULL; ++depth) {
         IStatement const *t = top->get_else_statement();
         top = t != NULL ? as<IStatement_if>(t) : NULL;
     }
 
-    if (depth <= 1)
+    if (depth <= 1) {
         return;
+    }
 
     VLA <IExpression const *> conds(m_module.get_allocator(), depth);
     VLA <size_t>              marker(m_module.get_allocator(), depth);
 
     depth = 0;
-    for (IStatement_if const *top = stmt; top != NULL; ++depth)
-    {
+    for (IStatement_if const *top = stmt; top != NULL; ++depth) {
         conds[depth]  = top->get_condition();
         marker[depth] = 0;
 
@@ -885,8 +900,11 @@ bool Sema_analysis::pre_visit(IStatement_while *stmt)
     // check for useless expression statements
     m_has_side_effect = m_has_call = false;
 
-    IExpression const *cond = stmt->get_condition();
-    visit(cond);
+    IExpression const *cond   = stmt->get_condition();
+    IExpression const *n_cond = visit(cond);
+    if (n_cond != cond) {
+        stmt->set_condition(n_cond);
+    }
 
     IStatement const *body = stmt->get_body();
 
@@ -972,7 +990,11 @@ bool Sema_analysis::pre_visit(IStatement_if *stmt)
                 Error_params(*this).add("if"));
         }
     }
-    visit(expr);
+    IExpression const *n_expr = visit(expr);
+    if (n_expr != expr) {
+        stmt->set_condition(n_expr);
+        expr = n_expr;
+    }
     visit(then_statement);
 
     if (else_statement == NULL) {
@@ -1010,8 +1032,9 @@ bool Sema_analysis::pre_visit(IStatement_if *stmt)
 
     leave_statement(stmt);
 
-    if (!inside_if())
+    if (!inside_if()) {
         check_if_cascade(stmt);
+    }
 
     // do not visit children
     return false;
@@ -1044,9 +1067,9 @@ void Sema_analysis::set_curr_funcname(
             ISymbol const *p_sym;
 
             f_type->get_parameter(i, p_tp, p_sym);
-            if (i > 0)
+            if (i > 0) {
                 m_printer->print(", ");
-
+            }
             m_printer->print(p_tp);
         }
         m_printer->print(')');
@@ -1065,6 +1088,8 @@ bool Sema_analysis::pre_visit(IDeclaration_function *decl)
 
     IDefinition const *def = decl->get_definition();
     if (!is_error(def)) {
+        m_curr_entity_def = impl_cast<Definition>(def);
+
         IType_function const *ftype = cast<IType_function>(def->get_type());
         IType const          *rtype = ftype->get_return_type();
 
@@ -1078,8 +1103,9 @@ bool Sema_analysis::pre_visit(IDeclaration_function *decl)
     IType_name const *rname = decl->get_return_type_name();
     visit(rname);
 
-    if (IAnnotation_block const *ret_anno = decl->get_return_annotations())
+    if (IAnnotation_block const *ret_anno = decl->get_return_annotations()) {
         visit(ret_anno);
+    }
 
     ISimple_name const *sname = decl->get_name();
     visit(sname);
@@ -1098,14 +1124,18 @@ bool Sema_analysis::pre_visit(IDeclaration_function *decl)
         }
 
         // set the current decl only INSIDE the body
-        if (!is_error(def))
+        if (!is_error(def)) {
             m_curr_entity_decl = decl;
+        }
         visit(body);
         m_curr_entity_decl = NULL;
     }
 
-    if (IAnnotation_block const *anno = decl->get_annotations())
+    if (IAnnotation_block const *anno = decl->get_annotations()) {
         visit(anno);
+    }
+
+    m_curr_entity_def = NULL;
 
     // do not visit children, all done already
     return false;
@@ -1146,8 +1176,9 @@ void Sema_analysis::post_visit(IStatement_do_while *stmt)
     if (info.m_reachable_start) {
         // the next statement is reachable if the last statement was reachable
         // or this reachable loop had a reachable break
-        if (info.m_loop_has_break)
+        if (info.m_loop_has_break) {
             m_next_stmt_is_reachable = true;
+        }
     }
     end_statement(info);
 }
@@ -1427,8 +1458,9 @@ void Sema_analysis::post_visit(IDeclaration_function *decl)
                 // all sequences
                 IExpression const *orig_expr = expr;
                 while (IExpression_binary const *bin_expr = as<IExpression_binary>(expr)) {
-                    if (bin_expr->get_operator() != IExpression_binary::OK_SEQUENCE)
+                    if (bin_expr->get_operator() != IExpression_binary::OK_SEQUENCE) {
                         break;
+                    }
 
                     // the left one NEVER has an effect
                     IExpression const *left = bin_expr->get_left_argument();
@@ -1494,8 +1526,9 @@ bool Sema_analysis::identical_expressions(
             IExpression_reference const *l_rhs = cast<IExpression_reference>(rhs);
 
             bool is_arr_constr = l_lhs->is_array_constructor();
-            if (is_arr_constr != l_rhs->is_array_constructor())
+            if (is_arr_constr != l_rhs->is_array_constructor()) {
                 return false;
+            }
 
             return identical_type_names(l_lhs->get_name(), l_rhs->get_name());
         }
@@ -1505,8 +1538,9 @@ bool Sema_analysis::identical_expressions(
             IExpression_unary const *u_lhs = cast<IExpression_unary>(lhs);
             IExpression_unary const *u_rhs = cast<IExpression_unary>(rhs);
 
-            if (u_lhs->get_operator() != u_rhs->get_operator())
+            if (u_lhs->get_operator() != u_rhs->get_operator()) {
                 return false;
+            }
             return identical_expressions(u_lhs->get_argument(), u_rhs->get_argument());
         }
 
@@ -1515,10 +1549,12 @@ bool Sema_analysis::identical_expressions(
             IExpression_binary const *b_lhs = cast<IExpression_binary>(lhs);
             IExpression_binary const *b_rhs = cast<IExpression_binary>(rhs);
 
-            if (b_lhs->get_operator() != b_rhs->get_operator())
+            if (b_lhs->get_operator() != b_rhs->get_operator()) {
                 return false;
-            if (!identical_expressions(b_lhs->get_left_argument(), b_rhs->get_left_argument()))
+            }
+            if (!identical_expressions(b_lhs->get_left_argument(), b_rhs->get_left_argument())) {
                 return false;
+            }
             return identical_expressions(b_lhs->get_right_argument(), b_rhs->get_right_argument());
         }
 
@@ -1527,10 +1563,12 @@ bool Sema_analysis::identical_expressions(
             IExpression_conditional const *c_lhs = cast<IExpression_conditional>(lhs);
             IExpression_conditional const *c_rhs = cast<IExpression_conditional>(rhs);
 
-            if (!identical_expressions(c_lhs->get_condition(), c_rhs->get_condition()))
+            if (!identical_expressions(c_lhs->get_condition(), c_rhs->get_condition())) {
                 return false;
-            if (!identical_expressions(c_lhs->get_true(), c_rhs->get_true()))
+            }
+            if (!identical_expressions(c_lhs->get_true(), c_rhs->get_true())) {
                 return false;
+            }
             return identical_expressions(c_lhs->get_false(), c_rhs->get_false());
         }
 
@@ -1539,18 +1577,21 @@ bool Sema_analysis::identical_expressions(
             IExpression_call const *c_lhs = cast<IExpression_call>(lhs);
             IExpression_call const *c_rhs = cast<IExpression_call>(rhs);
 
-            if (!identical_expressions(c_lhs->get_reference(), c_rhs->get_reference()))
+            if (!identical_expressions(c_lhs->get_reference(), c_rhs->get_reference())) {
                 return false;
+            }
             int arg_count = c_lhs->get_argument_count();
-            if (arg_count != c_rhs->get_argument_count())
+            if (arg_count != c_rhs->get_argument_count()) {
                 return false;
+            }
             for (int i = 0; i < arg_count; ++i) {
                 IArgument const *l_arg = c_lhs->get_argument(i);
                 IArgument const *r_arg = c_rhs->get_argument(i);
 
                 IArgument::Kind kind = l_arg->get_kind();
-                if (kind != r_arg->get_kind())
+                if (kind != r_arg->get_kind()) {
                     return false;
+                }
                 if (kind == IArgument::AK_NAMED) {
                     IArgument_named const *l_n_arg = cast<IArgument_named>(l_arg);
                     IArgument_named const *r_n_arg = cast<IArgument_named>(r_arg);
@@ -1558,11 +1599,15 @@ bool Sema_analysis::identical_expressions(
                     ISimple_name const *l_name = l_n_arg->get_parameter_name();
                     ISimple_name const *r_name = r_n_arg->get_parameter_name();
 
-                    if (l_name->get_symbol() != r_name->get_symbol())
+                    if (l_name->get_symbol() != r_name->get_symbol()) {
                         return false;
+                    }
                 }
-                if (!identical_expressions(l_arg->get_argument_expr(), r_arg->get_argument_expr()))
+                if (!identical_expressions(
+                    l_arg->get_argument_expr(), r_arg->get_argument_expr()))
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -1585,8 +1630,9 @@ bool Sema_analysis::identical_statements(
     IStatement const *rhs) const
 {
     IStatement::Kind kind = lhs->get_kind();
-    if (kind != rhs->get_kind())
+    if (kind != rhs->get_kind()) {
         return false;
+    }
 
     switch (kind) {
     case IStatement::SK_INVALID:
@@ -1599,14 +1645,16 @@ bool Sema_analysis::identical_statements(
             IStatement_compound const *c_rhs = cast<IStatement_compound>(rhs);
 
             int n_stmts = c_lhs->get_statement_count();
-            if (n_stmts != c_rhs->get_statement_count())
+            if (n_stmts != c_rhs->get_statement_count()) {
                 return false;
+            }
             for (int i = 0; i < n_stmts; ++i) {
                 IStatement const *l_sub = c_lhs->get_statement(i);
                 IStatement const *r_sub = c_rhs->get_statement(i);
 
-                if (!identical_statements(l_sub, r_sub))
+                if (!identical_statements(l_sub, r_sub)) {
                     return false;
+                }
             }
             return true;
         }
@@ -1632,19 +1680,23 @@ bool Sema_analysis::identical_statements(
             IStatement_if const *i_lhs = cast<IStatement_if>(lhs);
             IStatement_if const *i_rhs = cast<IStatement_if>(rhs);
 
-            if (!identical_expressions(i_lhs->get_condition(), i_rhs->get_condition()))
+            if (!identical_expressions(i_lhs->get_condition(), i_rhs->get_condition())) {
                 return false;
+            }
 
-            if (!identical_statements(i_lhs->get_then_statement(), i_rhs->get_then_statement()))
+            if (!identical_statements(i_lhs->get_then_statement(), i_rhs->get_then_statement())) {
                 return false;
+            }
 
             IStatement const *e_lhs = i_lhs->get_then_statement();
             IStatement const *e_rhs = i_rhs->get_then_statement();
 
-            if (e_lhs == e_rhs)
+            if (e_lhs == e_rhs) {
                 return true;
-            if (e_lhs == NULL || e_rhs == NULL)
+            }
+            if (e_lhs == NULL || e_rhs == NULL) {
                 return false;
+            }
             return identical_statements(e_lhs, e_rhs);
         }
     case IStatement::SK_CASE:
@@ -1661,19 +1713,22 @@ bool Sema_analysis::identical_statements(
                     return false;
                 }
             } else {
-                if (!identical_expressions(l_expr, r_expr))
+                if (!identical_expressions(l_expr, r_expr)) {
                     return false;
+                }
             }
 
             int n_stmts = c_lhs->get_statement_count();
-            if (n_stmts != c_rhs->get_statement_count())
+            if (n_stmts != c_rhs->get_statement_count()) {
                 return false;
+            }
             for (int i = 0; i < n_stmts; ++i) {
                 IStatement const *l_sub = c_lhs->get_statement(i);
                 IStatement const *r_sub = c_rhs->get_statement(i);
 
-                if (!identical_statements(l_sub, r_sub))
+                if (!identical_statements(l_sub, r_sub)) {
                     return false;
+                }
             }
             return true;
         }
@@ -1682,18 +1737,21 @@ bool Sema_analysis::identical_statements(
             IStatement_switch const *s_lhs = cast<IStatement_switch>(lhs);
             IStatement_switch const *s_rhs = cast<IStatement_switch>(rhs);
 
-            if (!identical_expressions(s_lhs->get_condition(), s_rhs->get_condition()))
+            if (!identical_expressions(s_lhs->get_condition(), s_rhs->get_condition())) {
                 return false;
+            }
             int n_cases = s_lhs->get_case_count();
-            if (n_cases != s_rhs->get_case_count())
+            if (n_cases != s_rhs->get_case_count()) {
                 return false;
+            }
 
             for (int i = 0; i < n_cases; ++i) {
                 IStatement const *l_stmt = s_lhs->get_case(i);
                 IStatement const *r_stmt = s_rhs->get_case(i);
 
-                if (!identical_statements(l_stmt, r_stmt))
+                if (!identical_statements(l_stmt, r_stmt)) {
                     return false;
+                }
             }
             return true;
         }
@@ -1702,8 +1760,9 @@ bool Sema_analysis::identical_statements(
             IStatement_while const *w_lhs = cast<IStatement_while>(lhs);
             IStatement_while const *w_rhs = cast<IStatement_while>(rhs);
 
-            if (!identical_expressions(w_lhs->get_condition(), w_rhs->get_condition()))
+            if (!identical_expressions(w_lhs->get_condition(), w_rhs->get_condition())) {
                 return false;
+            }
             return identical_statements(w_lhs->get_body(), w_rhs->get_body());
         }
     case IStatement::SK_DO_WHILE:
@@ -1711,8 +1770,9 @@ bool Sema_analysis::identical_statements(
             IStatement_do_while const *w_lhs = cast<IStatement_do_while>(lhs);
             IStatement_do_while const *w_rhs = cast<IStatement_do_while>(rhs);
 
-            if (!identical_expressions(w_lhs->get_condition(), w_rhs->get_condition()))
+            if (!identical_expressions(w_lhs->get_condition(), w_rhs->get_condition())) {
                 return false;
+            }
             return identical_statements(w_lhs->get_body(), w_rhs->get_body());
         }
     case IStatement::SK_FOR:
@@ -1730,8 +1790,9 @@ bool Sema_analysis::identical_statements(
                         return false;
                     }
                 } else {
-                    if (!identical_statements(i_lhs, i_rhs))
+                    if (!identical_statements(i_lhs, i_rhs)) {
                         return false;
+                    }
                 }
             }
             {
@@ -1744,8 +1805,9 @@ bool Sema_analysis::identical_statements(
                         return false;
                     }
                 } else {
-                    if (!identical_expressions(e_lhs, e_rhs))
+                    if (!identical_expressions(e_lhs, e_rhs)) {
                         return false;
+                    }
                 }
             }
             {
@@ -1758,8 +1820,9 @@ bool Sema_analysis::identical_statements(
                         return false;
                     }
                 } else {
-                    if (!identical_expressions(n_lhs, n_rhs))
+                    if (!identical_expressions(n_lhs, n_rhs)) {
                         return false;
+                    }
                 }
             }
             return identical_statements(f_lhs->get_body(), f_rhs->get_body());
@@ -1825,26 +1888,30 @@ bool Sema_analysis::identical_declarations(
             IType_name const *l_tp_name = v_lhs->get_type_name();
             IType_name const *r_tp_name = v_rhs->get_type_name();
 
-            if (!identical_type_names(l_tp_name, r_tp_name))
+            if (!identical_type_names(l_tp_name, r_tp_name)) {
                 return false;
+            }
 
             int n_vars = v_lhs->get_variable_count();
-            if (n_vars != v_rhs->get_variable_count())
+            if (n_vars != v_rhs->get_variable_count()) {
                 return false;
+            }
 
             for (int i = 0; i < n_vars; ++i) {
                 ISimple_name const *l_name = v_lhs->get_variable_name(i);
                 ISimple_name const *r_name = v_rhs->get_variable_name(i);
 
-                if (l_name->get_symbol() != r_name->get_symbol())
+                if (l_name->get_symbol() != r_name->get_symbol()) {
                     return false;
+                }
 
                 IExpression const *l_init = v_lhs->get_variable_init(i);
                 IExpression const *r_init = v_rhs->get_variable_init(i);
 
                 if (l_init != NULL && r_init != NULL) {
-                    if (!identical_expressions(l_init, r_init))
+                    if (!identical_expressions(l_init, r_init)) {
                         return false;
+                    }
                 } else {
                     if (l_init != r_init) {
                         // only one has a initializer
@@ -1855,8 +1922,9 @@ bool Sema_analysis::identical_declarations(
                 IAnnotation_block const *l_annos = v_lhs->get_annotations(i);
                 IAnnotation_block const *r_annos = v_rhs->get_annotations(i);
 
-                if (!identical_anno_blocks(l_annos, r_annos))
+                if (!identical_anno_blocks(l_annos, r_annos)) {
                     return false;
+                }
             }
             return true;
         }
@@ -1871,20 +1939,24 @@ bool Sema_analysis::identical_type_names(
     IType_name const *lhs,
     IType_name const *rhs) const
 {
-    if (lhs->is_absolute() != rhs->is_absolute())
+    if (lhs->is_absolute() != rhs->is_absolute()) {
         return false;
-    if (lhs->get_qualifier() != rhs->get_qualifier())
+    }
+    if (lhs->get_qualifier() != rhs->get_qualifier()) {
         return false;
+    }
 
     IQualified_name const *q_lhs = lhs->get_qualified_name();
     IQualified_name const *q_rhs = rhs->get_qualified_name();
 
-    if (!identical_qnames(q_lhs, q_rhs))
+    if (!identical_qnames(q_lhs, q_rhs)) {
         return false;
+    }
 
     bool is_arr = lhs->is_array();
-    if (is_arr != rhs->is_array())
+    if (is_arr != rhs->is_array()) {
         return false;
+    }
 
     if (is_arr) {
         bool is_concrete = lhs->is_concrete_array();
@@ -1892,15 +1964,19 @@ bool Sema_analysis::identical_type_names(
             return false;
 
         bool is_incomplete = lhs->is_incomplete_array();
-        if (is_incomplete != rhs->is_incomplete_array())
+        if (is_incomplete != rhs->is_incomplete_array()) {
             return false;
+        }
         if (is_concrete) {
             if (!is_incomplete &&
                 !identical_expressions(lhs->get_array_size(), rhs->get_array_size()))
+            {
                 return false;
+            }
         } else {
-            if (lhs->get_size_name()->get_symbol() != rhs->get_size_name()->get_symbol())
+            if (lhs->get_size_name()->get_symbol() != rhs->get_size_name()->get_symbol()) {
                 return false;
+            }
         }
     }
     return true;
@@ -1916,8 +1992,9 @@ bool Sema_analysis::identical_anno_blocks(
     }
 
     int n = lhs->get_annotation_count();
-    if (n != rhs->get_annotation_count())
+    if (n != rhs->get_annotation_count()) {
         return false;
+    }
 
     for (int i = 0; i < n; ++i) {
         IAnnotation const *l = lhs->get_annotation(i);
@@ -1926,12 +2003,14 @@ bool Sema_analysis::identical_anno_blocks(
         IQualified_name const *l_name = l->get_name();
         IQualified_name const *r_name = r->get_name();
 
-        if (!identical_qnames(l_name, r_name))
+        if (!identical_qnames(l_name, r_name)) {
             return false;
+        }
 
         int arg_count = l->get_argument_count();
-        if (arg_count != r->get_argument_count())
+        if (arg_count != r->get_argument_count()) {
             return false;
+        }
 
         for (int j = 0; j < arg_count; ++j) {
             IArgument const *l_arg = l->get_argument(j);
@@ -1952,8 +2031,9 @@ bool Sema_analysis::identical_anno_blocks(
                     return false;
                 }
             }
-            if (!identical_expressions(l_arg->get_argument_expr(), r_arg->get_argument_expr()))
+            if (!identical_expressions(l_arg->get_argument_expr(), r_arg->get_argument_expr())) {
                 return false;
+            }
         }
     }
     return true;
@@ -1964,18 +2044,21 @@ bool Sema_analysis::identical_qnames(
     IQualified_name const *lhs,
     IQualified_name const *rhs) const
 {
-    if (lhs->is_absolute() != rhs->is_absolute())
+    if (lhs->is_absolute() != rhs->is_absolute()) {
         return false;
+    }
     int n_comp = lhs->get_component_count();
-    if (n_comp != rhs->get_component_count())
+    if (n_comp != rhs->get_component_count()) {
         return false;
+    }
 
     for (int i = 0; i < n_comp; ++i) {
         ISimple_name const *l_name = lhs->get_component(i);
         ISimple_name const *r_name = rhs->get_component(i);
 
-        if (l_name->get_symbol() != r_name->get_symbol())
+        if (l_name->get_symbol() != r_name->get_symbol()) {
             return false;
+        }
     }
     return true;
 }
@@ -1983,8 +2066,9 @@ bool Sema_analysis::identical_qnames(
 // Returns true if the current statement is unconditional inside a loop.
 bool Sema_analysis::is_loop_unconditional() const
 {
-    if (!inside_loop())
+    if (!inside_loop()) {
         return false;
+    }
 
     for (size_t depth = 0; ; ++depth) {
         IStatement const *ctx_stmt = get_context_stmt(depth);
@@ -2046,9 +2130,10 @@ bool Sema_analysis::pre_visit(IExpression *)
 }
 
 // end of an expression
-void Sema_analysis::post_visit(IExpression *expr)
+IExpression *Sema_analysis::post_visit(IExpression *expr)
 {
     end_expression(expr);
+    return expr;
 }
 
 // start of binary expression
@@ -2200,7 +2285,7 @@ bool Sema_analysis::pre_visit(IExpression_unary *expr)
 }
 
 // end of function call
-void Sema_analysis::post_visit(IExpression_call *expr)
+IExpression *Sema_analysis::post_visit(IExpression_call *expr)
 {
     // record the call
     m_has_call = true;
@@ -2208,9 +2293,9 @@ void Sema_analysis::post_visit(IExpression_call *expr)
     IType const *res_type = expr->get_type();
     bool has_effect = false;
 
-    if (is<IType_error>(res_type))
+    if (is<IType_error>(res_type)) {
         has_effect = true;
-    else {
+    } else {
         // check for functions from the debug module, do NOT optimize them away, so
         // declare these have a side effect
         if (IExpression_reference const *ref = as<IExpression_reference>(expr->get_reference())) {
@@ -2232,8 +2317,9 @@ void Sema_analysis::post_visit(IExpression_call *expr)
             has_effect = true;
     }
 
-    if (has_effect)
+    if (has_effect) {
         m_has_side_effect = true;
+    }
 
     if (IExpression_reference const *ref = as<IExpression_reference>(expr->get_reference())) {
         if (!ref->is_array_constructor()) {
@@ -2272,10 +2358,11 @@ void Sema_analysis::post_visit(IExpression_call *expr)
     }
 
     end_expression(expr);
+    return expr;
 }
 
 // end of reference
-void Sema_analysis::post_visit(IExpression_reference *expr)
+IExpression *Sema_analysis::post_visit(IExpression_reference *expr)
 {
     // get the definition from the type name
     IType_name const      *type_name = expr->get_name();
@@ -2303,10 +2390,11 @@ void Sema_analysis::post_visit(IExpression_reference *expr)
         }
     }
     end_expression(expr);
+    return expr;
 }
 
 // end of a ternary operator
-void Sema_analysis::post_visit(IExpression_conditional *expr)
+IExpression *Sema_analysis::post_visit(IExpression_conditional *expr)
 {
     if (identical_expressions(expr->get_true(), expr->get_false())) {
         warning(
@@ -2323,6 +2411,7 @@ void Sema_analysis::post_visit(IExpression_conditional *expr)
             Error_params(*this).add(IExpression::OK_TERNARY));
     }
     end_expression(expr);
+    return expr;
 }
 
 }  // mdl

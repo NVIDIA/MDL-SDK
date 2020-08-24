@@ -313,7 +313,15 @@ public:
 
     // public API methods
 
+    const char* get_module() const;
+
     const char* get_name() const;
+
+    const char* get_mdl_module_name() const;
+
+    const char* get_mdl_simple_name() const;
+
+    const char* get_mdl_parameter_type_name( Size index) const;
 
     mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const;
 

@@ -78,12 +78,12 @@ public:
 
     /// Get the number of notes attached to this message.
     /// \returns        The number of notes attached to this message.
-    int get_note_count() const MDL_FINAL;
+    size_t get_note_count() const MDL_FINAL;
 
     /// Get the note at index attached to the message at message_index.
     /// \param index    The index of the note to get.
     /// \returns        The note.
-    IMessage const *get_note(int index) const MDL_FINAL;
+    IMessage const *get_note(size_t index) const MDL_FINAL;
 
     /// Get the message class.
     char get_class() const MDL_FINAL;
@@ -91,7 +91,7 @@ public:
     /// Add a note to this message.
     /// \param note     The note to add.
     /// \returns        The index of the added note.
-    int add_note(Message *note);
+    size_t add_note(Message *note);
 
     /// Get the file ID of this message.
     size_t get_filename_id() const { return m_filename_id; }
@@ -158,16 +158,16 @@ class Messages_impl : public Messages {
 public:
 
     /// Get the number of messages.
-    int get_message_count() const MDL_FINAL;
+    size_t get_message_count() const MDL_FINAL;
 
     /// Get the message at index.
-    IMessage const *get_message(int index) const MDL_FINAL;
+    IMessage const *get_message(size_t index) const MDL_FINAL;
 
     /// Get number of error messages.
-    int get_error_message_count() const MDL_FINAL;
+    size_t get_error_message_count() const MDL_FINAL;
 
     /// Get the error message at index.
-    IMessage const *get_error_message(int index) const MDL_FINAL;
+    IMessage const *get_error_message(size_t index) const MDL_FINAL;
 
     /// Add a message.
     ///
@@ -181,7 +181,7 @@ public:
     /// \param end_line        The line on which the message ends.
     /// \param end_column      The column on which the message ends.
     /// \returns               The index of the message.
-    int add_message(
+    size_t add_message(
         IMessage::Severity severity,
         int                code,
         char               msg_class,
@@ -205,8 +205,8 @@ public:
     /// \param end_line        The line on which the message ends.
     /// \param end_column      The column on which the message ends.
     /// \returns               The index of the message.
-    int add_note(
-        int                index,
+    size_t add_note(
+        size_t             index,
         IMessage::Severity severity,
         int                code,
         char               msg_class,
@@ -232,7 +232,7 @@ public:
     /// \param str            message text of the message
     ///
     /// \returns The index of the added message.
-    int add_message(
+    size_t add_message(
         IMessage::Severity sev,
         int                code,
         char               msg_class,
@@ -251,8 +251,8 @@ public:
     /// \param str            message text of the note
     ///
     /// \returns The index of the added note.
-    int add_note(
-        int                message_index,
+    size_t add_note(
+        size_t             message_index,
         IMessage::Severity sev,
         int                code,
         char               msg_class,
@@ -269,7 +269,7 @@ public:
     /// \param str            message text of the message
     ///
     /// \returns The index of the added message.
-    int add_error_message(
+    size_t add_error_message(
         int            code,
         char           msg_class,
         size_t         mod_id,
@@ -285,7 +285,7 @@ public:
     /// \param str            message text of the warning
     ///
     /// \returns The index of the added message.
-    int add_warning_message(
+    size_t add_warning_message(
         int            code,
         char           msg_class,
         size_t         mod_id,
@@ -301,7 +301,7 @@ public:
     /// \param str            message text of the message
     ///
     /// \returns The index of the added message.
-    int add_info_message(
+    size_t add_info_message(
         int            code,
         char           msg_class,
         size_t         mod_id,
@@ -333,8 +333,8 @@ public:
     /// \param msg            the message to add
     /// 
     /// \returns The index of the added msg.
-    int add_imported(
-        int            message_index,
+    size_t add_imported(
+        size_t         message_index,
         size_t         fname_id,
         IMessage const *msg);
 

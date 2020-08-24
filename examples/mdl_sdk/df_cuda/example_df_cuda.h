@@ -156,6 +156,7 @@ struct Kernel_params {
     Env_accel           *env_accel;
     float                env_intensity;         // scaling factor
     uint32_t             env_gtag;              // global light group tag for handle 'env'
+    float                env_rotation;          // rotation of the environment
 
     // point light
     float3 light_pos;

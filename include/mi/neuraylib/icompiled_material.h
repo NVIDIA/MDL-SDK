@@ -169,13 +169,16 @@ public:
     /// Indicates whether this material depends on global distribution (edf).
     virtual bool depends_on_global_distribution() const = 0;
 
+    /// Indicates whether this material depends on uniform scene data.
+    virtual bool depends_on_uniform_scene_data() const = 0;
+
     /// Returns the number of scene data attributes referenced by this instance.
     virtual Size get_referenced_scene_data_count() const = 0;
 
     /// Return the name of a scene data attribute referenced by this instance.
     ///
     /// \param index  the index of the scene data attribute
-    virtual char const *get_referenced_scene_data_name(Size index) const = 0;
+    virtual const char* get_referenced_scene_data_name( Size index) const = 0;
 
     //@}
     /// \name Additional methods related to class compilation
@@ -324,7 +327,7 @@ public:
     ///
     /// \returns true of success, false if the value is not a constant, but depends on parameters
     ///          or complex user expressions
-    virtual bool get_cutout_opacity(Float32 *cutout_opacity) const = 0;
+    virtual bool get_cutout_opacity( Float32* cutout_opacity) const = 0;
 
     /// Returns true, if the compiled material is valid, false otherwise.
     ///
@@ -333,7 +336,7 @@ public:
     ///
     /// A compiled material becomes invalid, if any of the modules it uses definitions from has
     /// has been reloaded.
-    virtual bool is_valid(IMdl_execution_context *context) const = 0;
+    virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     //@}
 };

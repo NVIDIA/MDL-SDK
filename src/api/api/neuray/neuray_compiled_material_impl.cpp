@@ -54,7 +54,7 @@ DB::Element_base* Compiled_material_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new MDL::Mdl_compiled_material;
 }
 
@@ -64,7 +64,7 @@ mi::base::IInterface* Compiled_material_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Compiled_material_impl())->cast_to_major();
 }
 
@@ -124,6 +124,11 @@ bool Compiled_material_impl::depends_on_global_distribution() const
     return get_db_element()->depends_on_global_distribution();
 }
 
+bool Compiled_material_impl::depends_on_uniform_scene_data() const
+{
+    return get_db_element()->depends_on_uniform_scene_data();
+}
+
 mi::Size Compiled_material_impl::get_referenced_scene_data_count() const
 {
     return get_db_element()->get_referenced_scene_data_count();
@@ -181,23 +186,23 @@ const mi::IString* Compiled_material_impl::get_connected_function_db_name(
 
     if (!material_instance_name) {
         *errors = -1;
-        return NULL;
+        return nullptr;
     }
     if (parameter_index >= get_parameter_count()) {
         *errors = -2;
-        return NULL;
+        return nullptr;
     }
-    MI::DB::Transaction* transaction = get_db_transaction();
+    DB::Transaction* transaction = get_db_transaction();
     DB::Tag material_instance_tag = transaction->name_to_tag(material_instance_name);
     if (material_instance_tag.is_invalid()) {
         *errors = -1;
-        return NULL;
+        return nullptr;
     }
     DB::Tag call_tag = get_db_element()->get_connected_function_db_name(
         transaction, material_instance_tag, get_parameter_name(parameter_index));
     if (call_tag.is_invalid()) {
         *errors = -3;
-        return NULL;
+        return nullptr;
     }
     mi::IString* result = new String_impl();
     result->set_c_str(transaction->tag_to_name(call_tag));

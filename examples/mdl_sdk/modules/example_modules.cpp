@@ -33,8 +33,6 @@
 #include <iostream>
 #include <string>
 
-#include <mi/mdl_sdk.h>
-
 #include "example_shared.h"
 
 const char* material_definition_name = "mdl::nvidia::sdk_examples::tutorials::example_material";
@@ -108,8 +106,8 @@ void load_module( mi::neuraylib::INeuray* neuray)
     mi::base::Handle<mi::neuraylib::ITransaction> transaction( scope->create_transaction());
 
     {
-        mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-            neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+        mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+            neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
 
         mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
             neuray->get_api_component<mi::neuraylib::IMdl_factory>());
@@ -118,7 +116,7 @@ void load_module( mi::neuraylib::INeuray* neuray)
             mdl_factory->create_execution_context());
 
         // Load the module "tutorials".
-        check_success( mdl_compiler->load_module(
+        check_success(mdl_impexp_api->load_module(
             transaction.get(), "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
         print_messages( context.get());
 
@@ -258,7 +256,7 @@ void load_module( mi::neuraylib::INeuray* neuray)
                     {
                         const char* system_file_path = mbsdf->get_filename();
                         std::cout << "    resolved_file_path:    " << system_file_path << std::endl;
-                    }                     
+                    }
                     break;
                 }
 
@@ -276,28 +274,32 @@ void load_module( mi::neuraylib::INeuray* neuray)
 int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 {
     // Access the MDL SDK
-    mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    check_success( neuray.is_valid_interface());
+    mi::base::Handle<mi::neuraylib::INeuray> neuray(mi::examples::mdl::load_and_get_ineuray());
+    if (!neuray.is_valid_interface())
+        exit_failure("Failed to load the SDK.");
 
     // Configure the MDL SDK
-    configure( neuray.get());
+    if (!mi::examples::mdl::configure(neuray.get()))
+        exit_failure("Failed to initialize the SDK.");
 
     // Start the MDL SDK
-    mi::Sint32 result = neuray->start();
-    check_start_success( result);
+    mi::Sint32 ret = neuray->start();
+    if (ret != 0)
+        exit_failure("Failed to initialize the SDK. Result code: %d", ret);
 
     // Load an MDL module and dump its contents
     load_module( neuray.get());
 
     // Shut down the MDL SDK
-    check_success( neuray->shutdown() == 0);
-    neuray = 0;
+    if (neuray->shutdown() != 0)
+        exit_failure("Failed to shutdown the SDK.");
 
     // Unload the MDL SDK
-    check_success( unload());
+    neuray = nullptr;
+    if (!mi::examples::mdl::unload())
+        exit_failure("Failed to unload the SDK.");
 
-    keep_console_open();
-    return EXIT_SUCCESS;
+    exit_success();
 }
 
 // Convert command line arguments to UTF8 on Windows

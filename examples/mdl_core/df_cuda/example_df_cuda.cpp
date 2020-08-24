@@ -349,14 +349,22 @@ static void resize_buffers(
     // Register GL display buffer to CUDA
     if (*display_buffer_cuda)
         check_cuda_success(cuGraphicsUnregisterResource(*display_buffer_cuda));
-    check_cuda_success(
-        cuGraphicsGLRegisterBuffer(
-            display_buffer_cuda, display_buffer, CU_GRAPHICS_REGISTER_FLAGS_WRITE_DISCARD));
+
+    if (width == 0 || height == 0)
+        *display_buffer_cuda = 0;
+    else
+        check_cuda_success(
+            cuGraphicsGLRegisterBuffer(
+                display_buffer_cuda, display_buffer, CU_GRAPHICS_REGISTER_FLAGS_WRITE_DISCARD));
 
     // Allocate CUDA accumulation buffer
     if (*accum_buffer_cuda)
         check_cuda_success(cuMemFree(*accum_buffer_cuda));
-    check_cuda_success(cuMemAlloc(accum_buffer_cuda, width * height * sizeof(float3)));
+
+    if (width == 0 || height == 0)
+        *accum_buffer_cuda = 0;
+    else
+        check_cuda_success(cuMemAlloc(accum_buffer_cuda, width * height * sizeof(float3)));
 }
 
 // Helper for create_environment()
@@ -1004,11 +1012,11 @@ static void render_scene(
                     enum_type);
 
                 // Check for annotation info
-                int dag_param_index = cur_inst.get_dag_parameter_index(name);
-                if (dag_param_index >= 0) {
+                size_t dag_param_index = cur_inst.get_dag_parameter_index(name);
+                if (dag_param_index != ~0) {
                     bool has_soft_range = false;
-                    int anno_count = cur_inst.get_dag_parameter_annotation_count(dag_param_index);
-                    for (int anno_ind = 0; anno_ind < anno_count; ++anno_ind) {
+                    size_t anno_count = cur_inst.get_dag_parameter_annotation_count(dag_param_index);
+                    for (size_t anno_ind = 0; anno_ind < anno_count; ++anno_ind) {
                         if (mi::mdl::DAG_call const *anno = mi::mdl::as<mi::mdl::DAG_call>(
                                 cur_inst.get_dag_parameter_annotation(dag_param_index, anno_ind))) {
                             switch (anno->get_semantic()) {
@@ -1083,9 +1091,6 @@ static void render_scene(
 
                 // Poll for events and process them
                 glfwPollEvents();
-                ImGui_ImplOpenGL3_NewFrame();
-                ImGui_ImplGlfw_NewFrame();
-                ImGui::NewFrame();
 
                 // Check if buffers need to be resized
                 int nwidth, nheight;
@@ -1105,6 +1110,17 @@ static void render_scene(
                     kernel_params.resolution.y = height;
                     kernel_params.iteration_start = 0;
                 }
+
+                // Don't render anything, if minimized
+                if (width == 0 || height == 0) {
+                    // Wait until something happens
+                    glfwWaitEvents();
+                    continue;
+                }
+
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplGlfw_NewFrame();
+                ImGui::NewFrame();
 
                 // Create material parameter editor window
                 ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);

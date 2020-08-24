@@ -39,7 +39,6 @@
 #include "neuray_mdl_discovery_api_impl.h"
 #include "neuray_string_impl.h"
 
-#include <mi/mdl_sdk.h>
 #include <mi/mdl/mdl_archiver.h>
 #include <mi/mdl/mdl_entity_resolver.h>
 #include <mi/mdl/mdl_mdl.h>
@@ -569,13 +568,17 @@ Mdl_discovery_api_impl::Mdl_discovery_api_impl(mi::neuraylib::INeuray* neuray)
 
 Mdl_discovery_api_impl::~Mdl_discovery_api_impl()
 {
-    m_neuray = 0;
+    m_neuray = nullptr;
 }
 
 bool Mdl_discovery_api_impl::is_valid_node_name(const char* identifier) const
 {
-    mi::base::Handle<mi::mdl::IMDL> mdl(m_mdlc_module->get_mdl());
-    return MI::MDL::Mdl_module::is_valid_module_name(identifier, mdl.get());
+    if (!identifier)
+        return false;
+
+    std::string s = identifier;
+    s = "::" + s;
+    return MDL::is_valid_module_name(s);
 }
 
 bool Mdl_discovery_api_impl::is_known_search_path(
@@ -940,7 +943,6 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
 const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
     mi::Uint32 filter) const
 {
-    SYSTEM::Access_module<PATH::Path_module> m_path_module(false);
     const std::vector<std::string>& search_paths = m_path_module->get_search_path(PATH::MDL);
 
     mi::base::Handle<Mdl_package_info_impl> root_package(

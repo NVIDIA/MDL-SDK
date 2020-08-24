@@ -69,8 +69,7 @@ public:
     /// The reference is set to a NULL tag.
     Texture();
 
-    /// Copy constructor
-    Texture( const Texture& other);
+    Texture& operator=( const Texture&) = delete;
 
     /// Sets the reference image.
     void set_image( DB::Tag image);

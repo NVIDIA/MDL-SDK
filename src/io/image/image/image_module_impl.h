@@ -75,6 +75,7 @@ public:
         mi::Sint32* errors) const;
 
     IMipmap* create_mipmap(
+        Container_based,
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
@@ -84,8 +85,10 @@ public:
         mi::Sint32* errors) const;
 
     IMipmap* create_mipmap(
+        Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* mdl_file_path,
         mi::Uint32 tile_width,
         mi::Uint32 tile_height,
         bool only_first_level,
@@ -120,6 +123,7 @@ public:
         mi::Sint32* errors) const;
 
     mi::neuraylib::ICanvas* create_canvas(
+        Container_based,
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
@@ -129,8 +133,10 @@ public:
         mi::Sint32* errors) const;
 
     mi::neuraylib::ICanvas* create_canvas(
+        Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* mdl_file_path,
         mi::Uint32 miplevel,
         mi::Uint32 tile_width,
         mi::Uint32 tile_height,

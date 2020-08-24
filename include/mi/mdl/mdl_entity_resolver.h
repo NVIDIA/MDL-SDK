@@ -40,7 +40,7 @@ namespace mdl {
 
 // forward
 class IInput_stream;
-class Thread_context;
+class IThread_context;
 
 // Supported UDIM modes for texture resources.
 enum UDIM_mode {
@@ -122,7 +122,7 @@ public:
     virtual char const *get_file_name() const = 0;
 
     /// Return an input stream to the given entity if found, NULL otherwise.
-    virtual IInput_stream *open(Thread_context &ctx) const = 0;
+    virtual IInput_stream *open(IThread_context *ctx) const = 0;
 };
 
 /// An interface describing an ordered set of resolved resources.
@@ -218,7 +218,11 @@ public:
     /// If \p owner_name and \p owner_file_path are not provided, no relative paths can be
     /// resolved, i.e. \p file_path must be an absolute location.
     ///
-    /// \param file_path         the MDL file path to resolve
+    /// \param file_path         The MDL file path of the resource to resolve. In addition, for
+    ///                          resources from MDLE files, it is also possible to provide the
+    ///                          absolute OS file system path to the MDLE file (with slashes instead
+    ///                          of backslashes on Windows), followed by a colon, followed by the
+    ///                          relative path inside the MDLE container.
     /// \param owner_file_path   if non-NULL, the file path of the owner
     /// \param owner_name        if non-NULL, the absolute name of the owner
     /// \param pos               if non-NULL, the position of the import statement for error
@@ -232,27 +236,9 @@ public:
         char const     *owner_name,
         Position const *pos) = 0;
 
-    /// Opens a resource.
-    ///
-    /// If \p owner_name and \p owner_file_path are not provided, no relative paths can be
-    /// resolved, i.e. \p file_path must be an absolute location.
-    ///
-    /// \param file_path         the MDL file path to resolve
-    /// \param owner_file_path   if non-NULL, the file path of the owner
-    /// \param owner_name        if non-NULL, the absolute name of the owner
-    /// \param pos               if non-NULL, the position of the import statement for error
-    ///                          messages
-    ///
-    /// \return a resource reader for the requested resource or NULL if it could not be resolved
-    virtual IMDL_resource_reader *open_resource(
-        char const     *file_path,
-        char const     *owner_file_path,
-        char const     *owner_name,
-        Position const *pos) = 0;
-
     /// Resolve a module name.
     ///
-    /// \param mdl_name          the (weak-)relative or absolute MDL module name to resolve
+    /// \param module_name       the (weak-)relative or absolute MDL module name to resolve
     /// \param owner_file_path   if non-NULL, the file path of the owner
     /// \param owner_name        if non-NULL, the absolute name of the owner
     /// \param pos               if non-NULL, the position of the import statement for error
@@ -260,7 +246,7 @@ public:
     ///
     /// \return the absolute module name or NULL if this name could not be resolved
     virtual IMDL_import_result *resolve_module(
-        char const     *mdl_name,
+        char const     *module_name,
         char const     *owner_file_path,
         char const     *owner_name,
         Position const *pos) = 0;

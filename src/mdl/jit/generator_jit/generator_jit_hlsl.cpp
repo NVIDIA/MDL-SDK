@@ -702,6 +702,7 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
         ME_TEX,
     } module = ME_OTHER;
 
+    bool can_return_derivs = false;
     IDefinition::Semantics sema = def->get_semantics();
     if (is_tex_semantics(sema)) {
         module_name = "tex";
@@ -721,20 +722,25 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4:
+        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
+        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
+        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
+        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
+            module_name = "scene";
+            module = ME_SCENE;
+            break;
+
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
-        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
-        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
-        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
-        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+            can_return_derivs = true;
             module_name = "scene";
             module = ME_SCENE;
             break;
@@ -755,7 +761,7 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
 
     IModule const *owner = m_compiler->find_builtin_module(string(module_name, get_allocator()));
 
-    if (return_derivs) {
+    if (return_derivs && !can_return_derivs) {
         // create a wrapper which calls the non-derivative runtime function
         // and expands the result to a dual
         LLVM_context_data *ctx_data = get_or_create_context_data(
@@ -846,91 +852,97 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
                 sema != mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID) {
             // the renderer runtime has an additional uniform_lookup parameter instead of
             // two distinct functions. So call them instead and create them if necessary
-            llvm::Function **runtime_func;
-            char const *runtime_func_name;
+
             bool uniform = false;
             switch (sema) {
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+                    uniform = true;
+                    break;
+
+                default:
+                    break;
+            }
+
+            llvm::Function **runtime_func;
+            char const *runtime_func_name;
+            switch (sema) {
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
                     runtime_func = &m_hlsl_func_scene_data_lookup_int;
                     runtime_func_name = "scene_data_lookup_int";
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
                     runtime_func = &m_hlsl_func_scene_data_lookup_int2;
                     runtime_func_name = "scene_data_lookup_int2";
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
                     runtime_func = &m_hlsl_func_scene_data_lookup_int3;
                     runtime_func_name = "scene_data_lookup_int3";
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
                     runtime_func = &m_hlsl_func_scene_data_lookup_int4;
                     runtime_func_name = "scene_data_lookup_int4";
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float;
-                    runtime_func_name = "scene_data_lookup_float";
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+                    if (return_derivs) {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_deriv_float;
+                        runtime_func_name = "scene_data_lookup_deriv_float";
+                    } else {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_float;
+                        runtime_func_name = "scene_data_lookup_float";
+                    }
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float2;
-                    runtime_func_name = "scene_data_lookup_float2";
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+                    if (return_derivs) {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_deriv_float2;
+                        runtime_func_name = "scene_data_lookup_deriv_float2";
+                    } else {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_float2;
+                        runtime_func_name = "scene_data_lookup_float2";
+                    }
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float3;
-                    runtime_func_name = "scene_data_lookup_float3";
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+                    if (return_derivs) {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_deriv_float3;
+                        runtime_func_name = "scene_data_lookup_deriv_float3";
+                    } else {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_float3;
+                        runtime_func_name = "scene_data_lookup_float3";
+                    }
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float4;
-                    runtime_func_name = "scene_data_lookup_float4";
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+                    if (return_derivs) {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_deriv_float4;
+                        runtime_func_name = "scene_data_lookup_deriv_float4";
+                    } else {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_float4;
+                        runtime_func_name = "scene_data_lookup_float4";
+                    }
                     break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_color;
-                    runtime_func_name = "scene_data_lookup_color";
-                    break;
-
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_int;
-                    runtime_func_name = "scene_data_lookup_int";
-                    uniform = true;
-                    break;
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_int2;
-                    runtime_func_name = "scene_data_lookup_int2";
-                    uniform = true;
-                    break;
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_int3;
-                    runtime_func_name = "scene_data_lookup_int3";
-                    uniform = true;
-                    break;
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_int4;
-                    runtime_func_name = "scene_data_lookup_int4";
-                    uniform = true;
-                    break;
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float;
-                    runtime_func_name = "scene_data_lookup_float";
-                    uniform = true;
-                    break;
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float2;
-                    runtime_func_name = "scene_data_lookup_float2";
-                    uniform = true;
-                    break;
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float3;
-                    runtime_func_name = "scene_data_lookup_float3";
-                    uniform = true;
-                    break;
-                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_float4;
-                    runtime_func_name = "scene_data_lookup_float4";
-                    uniform = true;
-                    break;
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
-                    runtime_func = &m_hlsl_func_scene_data_lookup_color;
-                    runtime_func_name = "scene_data_lookup_color";
-                    uniform = true;
+                    if (return_derivs) {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_deriv_color;
+                        runtime_func_name = "scene_data_lookup_deriv_color";
+                    } else {
+                        runtime_func = &m_hlsl_func_scene_data_lookup_color;
+                        runtime_func_name = "scene_data_lookup_color";
+                    }
                     break;
 
                 default:

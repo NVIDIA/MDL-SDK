@@ -100,7 +100,7 @@ public:
     /// \param verbose   if true, write a verbose output the stderr
     ///
     /// \return true on success
-    static bool check(MDL *compiler, Module *module, bool verbose);
+    static bool check(MDL const *compiler, Module const *module, bool verbose);
 
 private:
     /// Constructor.

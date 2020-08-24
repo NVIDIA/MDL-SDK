@@ -31,9 +31,13 @@
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_definitions.h>
+#include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_modules.h>
-#include <mi/neuraylib/ifunction_definition.h>
+#include <mi/neuraylib/imodule.h> // for mi::neuraylib::Mdl_version
+#include <mi/neuraylib/ifunction_definition.h> // for mi::neuraylib::IFunction_definition::Semantic
+
 #include <io/scene/scene/i_scene_scene_element.h>
+
 #include "i_mdl_elements_module.h"
 #include "i_mdl_elements_expression.h" // needed by Visual Studio
 
@@ -76,29 +80,42 @@ public:
     /// \param function_ident         The identifier of this definition will be used to check if it
     ///                               is still valid and has not been removed/altered due to a module
     ///                               reload.
-    /// \param code_dag               The DAG representation of \p module_tag.
+    /// \param module                 The MDL module of this function definition.
+    /// \param code_dag               The DAG representation of the MDL module.
     /// \param function_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
-    /// \param name                   The fully-qualified MDL module name.
+    /// \param module_name            The fully-qualified MDL module name.
     /// \param load_resources         True, if resources are supposed to be loaded into the DB
     ///                               (if referenced in the parameter defaults).
     Mdl_function_definition(
         DB::Transaction* transaction,
         DB::Tag function_tag,
         Mdl_ident function_ident,
+        const mi::mdl::IModule* module,
         const mi::mdl::IGenerated_code_dag* code_dag,
-        mi::Uint32 function_index,
+        mi::Size function_index,
         const char* module_filename,
         const char* module_name,
         bool load_resources);
 
+    Mdl_function_definition& operator=( const Mdl_function_definition&) = delete;
+
     // methods corresponding to mi::neuraylib::IFunction_definition
 
-    DB::Tag get_module(DB::Transaction* transaction) const;
+    DB::Tag get_module( DB::Transaction* transaction) const;
 
     const char* get_mdl_name() const;
 
+    const char* get_mdl_module_name() const;
+
+    const char* get_mdl_simple_name() const;
+
+    const char* get_mdl_parameter_type_name( mi::Size index) const;
+
     DB::Tag get_prototype() const;
+
+    void get_mdl_version(
+        mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const;
 
     mi::neuraylib::IFunction_definition::Semantics get_semantic() const;
 
@@ -130,7 +147,7 @@ public:
 
     const IAnnotation_list* get_parameter_annotations() const;
 
-    const IExpression_direct_call* get_body( DB::Transaction* transaction) const;
+    const IExpression* get_body( DB::Transaction* transaction) const;
 
     mi::Size get_temporary_count( DB::Transaction* transaction) const;
 
@@ -143,7 +160,7 @@ public:
     Mdl_function_call* create_function_call(
        DB::Transaction* transaction,
        const IExpression_list* arguments,
-       mi::Sint32* errors = 0) const;
+       mi::Sint32* errors = nullptr) const;
 
     // internal methods
 
@@ -163,7 +180,7 @@ public:
        const IExpression_list* arguments,
        bool allow_ek_parameter,
        bool immutable,
-       mi::Sint32* errors = 0) const;
+       mi::Sint32* errors = nullptr) const;
 
     /// Internal variant of #create_function_call(), special case for cast operators
     ///
@@ -173,7 +190,7 @@ public:
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool immutable,
-        mi::Sint32* errors = 0) const;
+        mi::Sint32* errors = nullptr) const;
 
     /// Internal variant of #create_function_call(), special case for ternary operators
     ///
@@ -183,7 +200,7 @@ public:
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool immutable,
-        mi::Sint32* errors = 0) const;
+        mi::Sint32* errors = nullptr) const;
 
     /// Internal variant of #create_function_call(), special case for index operators
     ///
@@ -193,7 +210,7 @@ public:
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool immutable,
-        mi::Sint32* errors = 0) const;
+        mi::Sint32* errors = nullptr) const;
 
     /// Internal variant of #create_function_call(), special case for array length operators
     ///
@@ -203,7 +220,7 @@ public:
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool immutable,
-        mi::Sint32* errors = 0) const;
+        mi::Sint32* errors = nullptr) const;
 
     /// Internal variant of #create_function_call(), special case for array constructors
     ///
@@ -213,7 +230,7 @@ public:
        DB::Transaction* transaction,
        const IExpression_list* arguments,
        bool immutable,
-       mi::Sint32* errors = 0) const;
+       mi::Sint32* errors = nullptr) const;
 
     /// Returns the MDL semantic of this definition.
     mi::mdl::IDefinition::Semantics get_mdl_semantic() const;
@@ -235,11 +252,12 @@ public:
     const mi::mdl::IType* get_mdl_parameter_type(
         DB::Transaction* transaction, mi::Uint32 index) const;
 
+    /// Returns the MDL name without parameter types, i.e.,, the MDL module name plus "::" plus the
+    /// simple name.
+    std::string get_mdl_name_without_parameter_types() const;
+
     /// Returns the original function name (or \c NULL if this definition is not re-exported).
     const char* get_mdl_original_name() const;
-
-    /// Returns the name of the module this definition belongs to.
-    const char* get_module_name() const;
 
     /// Returns the database name of the module this definition belongs to.
     const char* get_module_db_name() const;
@@ -258,6 +276,20 @@ public:
     /// Returns the identifier of this function definition.
     Mdl_ident get_ident() const;
 
+    /// Computes the MDL versions in m_since_version and m_removed_version.
+    void compute_mdl_version( const mi::mdl::IModule* module);
+
+    /// Returns the MDL version when this function definition was added and removed.
+    ///
+    /// \param[out] since     The MDL version in which this function definition was added. If the
+    ///                       function definition does not belong to the standard library, the
+    ///                       MDL version of the module is returned.
+    /// \param[out] removed   The MDL version in which this function definition was removed, or
+    ///                       mi_mdl_IMDL_MDL_VERSION_INVALID if the function has not been
+    ///                       removed so far or does not belong to the standard library.
+    void get_mdl_version(
+        mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const;
+
     /// Improved version of SERIAL::Serializable::dump().
     ///
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
@@ -269,7 +301,7 @@ public:
 
     SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
 
-    void dump() const { dump( /*transaction*/ 0); }
+    void dump() const { dump( /*transaction*/ nullptr); }
 
     // methods of DB::Element_base
 
@@ -291,24 +323,29 @@ private:
 
 private:
 
-    mi::base::Handle<IType_factory> m_tf;        ///< The type factory.
-    mi::base::Handle<IValue_factory> m_vf;       ///< The value factory.
-    mi::base::Handle<IExpression_factory> m_ef;  ///< The expression factory.
+    mi::base::Handle<IType_factory> m_tf;         ///< The type factory.
+    mi::base::Handle<IValue_factory> m_vf;        ///< The value factory.
+    mi::base::Handle<IExpression_factory> m_ef;   ///< The expression factory.
 
-    std::string m_module_db_name;                ///< The DB name of the corresponding module.
-    DB::Tag m_function_tag;                      ///< The tag of this function definition.
-    Mdl_ident m_function_ident;                  ///< The identifier of this function definition.
+    std::string m_module_mdl_name;                ///< The MDL name of the corresponding module.
+    std::string m_module_db_name;                 ///< The DB name of the corresponding module.
+    DB::Tag m_function_tag;                       ///< The tag of this function definition.
+    Mdl_ident m_function_ident;                   ///< The identifier of this function definition.
     mi::mdl::IDefinition::Semantics m_mdl_semantic;  ///< The MDL semantic.
     mi::neuraylib::IFunction_definition::Semantics m_semantic;  ///< The semantic.
-    std::string m_name;                          ///< The MDL name of this function definition.
-    std::string m_db_name;                       ///< The DB name of this function definition.
-    std::string m_original_name;                 ///< The original MDL function name (or empty).
-    std::string m_thumbnail;                     ///< The thumbnail image for this definition.
-    DB::Tag m_prototype_tag;                     ///< The prototype of this fct. def. (or inv. tag).
-    bool m_is_exported;                          ///< The export flag.
-    bool m_is_uniform;                           ///< The uniform flag.
+    std::string m_name;                           ///< The MDL name of this function definition.
+    std::string m_simple_name;                    ///< The simple MDL name of this function definition.
+    std::string m_db_name;                        ///< The DB name of this function definition.
+    std::string m_original_name;                  ///< The original MDL function name (or empty).
+    std::string m_thumbnail;                      ///< The thumbnail image for this definition.
+    DB::Tag m_prototype_tag;                      ///< The prototype of this fct. def. (or inv. tag).
+    bool m_is_exported;                           ///< The export flag.
+    bool m_is_uniform;                            ///< The uniform flag.
+    mi::mdl::IMDL::MDL_version m_since_version;   ///< The version when this def. was added.
+    mi::mdl::IMDL::MDL_version m_removed_version; ///< The version when this def. was removed.
 
     mi::base::Handle<IType_list> m_parameter_types;
+    std::vector<std::string> m_parameter_type_names; ///< The MDL parameter type names.
     mi::base::Handle<const IType> m_return_type;
     mi::base::Handle<IExpression_list> m_defaults;
     mi::base::Handle<IAnnotation_block> m_annotations;
@@ -317,7 +354,7 @@ private:
     mi::base::Handle<IExpression_list> m_enable_if_conditions;
     std::vector< std::vector<mi::Sint32> > m_enable_if_users;
 
-    mi::base::Uuid m_function_hash;             ///< The function hash if any.
+    mi::base::Uuid m_function_hash;               ///< The function hash if any.
 };
 
 } // namespace MDL

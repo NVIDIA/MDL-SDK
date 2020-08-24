@@ -97,6 +97,7 @@ HLSLWriterPass::HLSLWriterPass(
 , m_cur_data_layout(nullptr)
 , m_ref_fnames(0, Ref_fname_id_map::hasher(), Ref_fname_id_map::key_equal(), alloc)
 , m_struct_dbg_info(0, Struct_info_map::hasher(), Struct_info_map::key_equal(), alloc)
+, m_next_unique_name_id(0)
 {
 }
 
@@ -311,6 +312,9 @@ void HLSLWriterPass::translate_function(llvm::hlsl::ASTFunction const *ast_func)
     hlsl::Type          *ret_type  = func_type->get_return_type();
     hlsl::Type          *out_type  = NULL;
 
+    // reset the name IDs
+    m_next_unique_name_id = 0;
+
     if (hlsl::is<hlsl::Type_void>(ret_type) &&
         !func->getFunctionType()->getReturnType()->isVoidTy())
     {
@@ -408,7 +412,8 @@ void HLSLWriterPass::translate_function(llvm::hlsl::ASTFunction const *ast_func)
             decl_func->add_param(decl_param);
         }
 
-        // all local variables will be declared in the first block of the function
+        // local variables possibly used in outer scopes will be declared in the
+        // first block of the function
         m_cur_start_block = m_stmt_factory.create_compound(zero_loc);
 
         hlsl::Stmt *stmt = translate_region(ast_func->getBody());
@@ -509,6 +514,19 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
 
                     // mark to enforce materializing loads
                     dirty_base_pointers.insert(base_pointer);
+                } else {
+                    // for other functions, check whether any pointers are provided to
+                    // non-readonly parameters
+                    for (unsigned i = 0; i < call->getNumArgOperands(); ++i) {
+                        llvm::Value *arg = call->getArgOperand(i);
+                        if (arg->getType()->isPointerTy() &&
+                                !called_func->hasParamAttribute(i, llvm::Attribute::ReadOnly)) {
+                            llvm::Value *base_pointer = get_base_pointer(arg);
+
+                            // mark to enforce materializing loads
+                            dirty_base_pointers.insert(base_pointer);
+                        }
+                    }
                 }
             }
         }
@@ -531,6 +549,11 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
 
         // don't generate statements for getelementptr, as there are no pointers in HLSL
         if (llvm::isa<llvm::GetElementPtrInst>(value)) {
+            continue;
+        }
+
+        // PHI nodes are handled specially
+        if (llvm::isa<llvm::PHINode>(value)) {
             continue;
         }
 
@@ -653,8 +676,10 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
 
             // only add to generate set, if it's really an instruction
             if (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
-                // still don't generate statements for getelementptr
-                if (llvm::isa<llvm::GetElementPtrInst>(cur_inst)) {
+                // still don't generate statements for getelementptr, alloca and phis
+                if (llvm::isa<llvm::GetElementPtrInst>(cur_inst) ||
+                        llvm::isa<llvm::AllocaInst>(cur_inst) ||
+                        llvm::isa<llvm::PHINode>(value)) {
                     continue;
                 }
 
@@ -671,9 +696,6 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
     // check for phis and assign to their in-variables from the predecessor blocks to
     // the out-variables at the beginning of this block
     for (llvm::PHINode &phi : bb->phis()) {
-        // skip PHI nodes with just one incoming value
-        if (phi.getNumIncomingValues() == 1)
-            continue;
         auto phi_in_out_vars = get_phi_vars(&phi);
         hlsl::Expr *phi_in_expr = create_reference(phi_in_out_vars.first);
         stmts.push_back(create_assign_stmt(phi_in_out_vars.second, phi_in_expr));
@@ -691,10 +713,9 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
             continue;
         }
 
-        hlsl::Def_variable *var_def = create_local_var(value, /*do_not_register=*/true);
-
         if (llvm::SelectInst *sel = llvm::dyn_cast<llvm::SelectInst>(value)) {
             if (llvm::isa<llvm::StructType>(sel->getType())) {
+                hlsl::Def_variable *var_def = create_local_var(value, /*do_not_register=*/true);
                 hlsl::Stmt *stmt = translate_struct_select(sel, var_def);
                 stmts.push_back(stmt);
                 if (var_def != nullptr) {
@@ -704,34 +725,31 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
             }
         }
 
-        hlsl::Expr *res  = translate_expr(value, var_def);
+        hlsl::Def_variable *var_def = create_local_var(
+            value, /*do_not_register=*/ true, /*add_decl_statement=*/ false);
 
+        hlsl::Expr *res = translate_expr(value);
         if (var_def != nullptr) {
+            // don't initialize with itself
+            if (!is_ref_to_def(res, var_def)) {
+                // set variable initializer
+                hlsl::Declaration_variable *decl_var = var_def->get_declaration();
+                for (hlsl::Init_declarator &init_decl : *decl_var) {
+                    if (init_decl.get_name()->get_symbol() == var_def->get_symbol()) {
+                        init_decl.set_initializer(res);
+                    }
+                }
+
+                // insert variable declaration here
+                stmts.push_back(m_stmt_factory.create_declaration(decl_var));
+            }
+
             // register now
             m_local_var_map[value] = var_def;
-        }
+        } else {
+            // for void calls, var_def is nullptr
+            MDL_ASSERT(hlsl::is<hlsl::Expr_call>(res));
 
-        // we cannot assign compound expressions, so we need to assign the elements one-by-one
-        bool single_stmt = true;
-        if (var_def != nullptr && hlsl::is<hlsl::Expr_binary>(res)) {
-            hlsl::Expr *rhs = hlsl::cast<hlsl::Expr_binary>(res)->get_right_argument();
-            if (hlsl::Expr_compound *compound = hlsl::as<hlsl::Expr_compound>(rhs)) {
-                for (size_t i = 0, n = compound->get_element_count(); i < n; ++i) {
-                    hlsl::Expr *var        = create_reference(var_def);
-                    hlsl::Expr *index_expr = m_expr_factory.create_literal(
-                        zero_loc,
-                        m_value_factory.get_uint32(uint32_t(i)));
-                    hlsl::Expr *lval = m_expr_factory.create_binary(
-                        Expr_binary::OK_ARRAY_SUBSCRIPT, var, index_expr);
-                    hlsl::Type_compound *comp_type =
-                        hlsl::cast<hlsl::Type_compound>(compound->get_type());
-                    lval->set_type(get_compound_sub_type(comp_type, i));
-                    stmts.push_back(create_assign_stmt(lval, compound->get_element(i)));
-                }
-                single_stmt = false;
-            }
-        }
-        if (single_stmt) {
             // ignore reference expressions
             if (!hlsl::is<hlsl::Expr_ref>(res)) {
                 stmts.push_back(m_stmt_factory.create_expression(res->get_location(), res));
@@ -742,18 +760,11 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
     // check for phis in successor blocks and assign to their in-variables at the end of this block
     for (llvm::BasicBlock *succ_bb : bb->getTerminator()->successors()) {
         for (llvm::PHINode &phi : succ_bb->phis()) {
-            // skip PHI nodes with just one incoming value
-            if (phi.getNumIncomingValues() == 1)
-                continue;
-
             for (unsigned i = 0, n = phi.getNumIncomingValues(); i < n; ++i) {
                 if (phi.getIncomingBlock(i) == bb) {
                     hlsl::Def_variable *phi_in_var = get_phi_in_var(&phi);
-                    hlsl::Expr         *res        = translate_expr(
-                        phi.getIncomingValue(i), phi_in_var);
-
-                    hlsl::Stmt *stmt = m_stmt_factory.create_expression(res->get_location(), res);
-                    stmts.push_back(stmt);
+                    hlsl::Expr         *res        = translate_expr(phi.getIncomingValue(i));
+                    stmts.push_back(create_assign_stmt(phi_in_var, res));
                 }
             }
         }
@@ -777,6 +788,9 @@ hlsl::Stmt *HLSLWriterPass::translate_natural(llvm::hlsl::RegionNaturalLoop cons
     hlsl::Stmt         *body_stmt = translate_region(body);
     hlsl::Expr         *cond      = nullptr;
 
+    // TODO: currently disabled because of variable declaration at assignment
+    //       (see deriv_tests::test_math_emission_color_2 with enabled derivatives)
+#if 0
     // check if we can transform it into a do-while loop
     if (hlsl::Stmt_compound *c_body = hlsl::as<hlsl::Stmt_compound>(body_stmt)) {
         if (hlsl::Stmt *last = c_body->back()) {
@@ -801,6 +815,7 @@ hlsl::Stmt *HLSLWriterPass::translate_natural(llvm::hlsl::RegionNaturalLoop cons
             }
         }
     }
+#endif
 
     if (cond == nullptr) {
         // create endless loop
@@ -816,7 +831,7 @@ hlsl::Stmt *HLSLWriterPass::translate_if_then(llvm::hlsl::RegionIfThen const *re
     hlsl::Stmt *head_stmt = translate_region(head);
 
     llvm::BranchInst *branch = llvm::cast<llvm::BranchInst>(region->get_terminator_inst());
-    hlsl::Expr *cond_expr = translate_expr(branch->getCondition(), nullptr);
+    hlsl::Expr *cond_expr = translate_expr(branch->getCondition());
 
     if (region->isNegated()) {
         cond_expr = m_expr_factory.create_unary(
@@ -838,7 +853,7 @@ hlsl::Stmt *HLSLWriterPass::translate_if_then_else(llvm::hlsl::RegionIfThenElse 
     hlsl::Stmt *head_stmt = translate_region(head);
 
     llvm::BranchInst *branch = llvm::cast<llvm::BranchInst>(region->get_terminator_inst());
-    hlsl::Expr *cond_expr = translate_expr(branch->getCondition(), nullptr);
+    hlsl::Expr *cond_expr = translate_expr(branch->getCondition());
 
     if (region->isNegated()) {
         MDL_ASSERT(!"if-then-else regions should not use negated");
@@ -878,14 +893,13 @@ hlsl::Stmt *HLSLWriterPass::translate_return(llvm::hlsl::RegionReturn const *reg
 
     hlsl::Expr *hlsl_ret_expr = nullptr;
     if (ret_val != nullptr) {
-        hlsl_ret_expr = translate_expr(ret_val, m_out_def);
+        hlsl_ret_expr = translate_expr(ret_val);
     }
 
     hlsl::Stmt *ret_stmt = nullptr;
-    if (m_out_def != nullptr) {
+    if (m_out_def != nullptr && hlsl_ret_expr != nullptr) {
         // return through an out parameter
-        hlsl::Stmt *expr_stmt = m_stmt_factory.create_expression(
-            hlsl_ret_expr->get_location(), hlsl_ret_expr);
+        hlsl::Stmt *expr_stmt = create_assign_stmt(m_out_def, hlsl_ret_expr);
         ret_stmt = m_stmt_factory.create_return(convert_location(ret_inst), /*expr=*/nullptr);
         ret_stmt = join_statements(expr_stmt, ret_stmt);
     } else {
@@ -1023,7 +1037,7 @@ hlsl::Expr *HLSLWriterPass::create_compound_elem_expr(
     Type_walk_stack &stack,
     llvm::Value     *base_pointer)
 {
-    hlsl::Expr *cur_expr = translate_expr(base_pointer, nullptr);
+    hlsl::Expr *cur_expr = translate_expr(base_pointer);
     hlsl::Type *cur_type = cur_expr->get_type()->skip_type_alias();
 
     // start after base element
@@ -1046,11 +1060,11 @@ hlsl::Expr *HLSLWriterPass::create_compound_elem_expr(
             } else {
                 hlsl::Expr *array_index;
                 if (stack[i].field_index_val) {
-                    array_index = translate_expr(stack[i].field_index_val, nullptr);
+                    array_index = translate_expr(stack[i].field_index_val);
                     if (stack[i].field_index_offs != 0) {
                         hlsl::Expr *offs = m_expr_factory.create_literal(
                             zero_loc,
-                            m_value_factory.get_uint32(uint32_t(stack[i].field_index_offs)));
+                            m_value_factory.get_int32(int32_t(stack[i].field_index_offs)));
                         array_index = m_expr_factory.create_binary(
                             Expr_binary::OK_PLUS,
                             array_index,
@@ -1058,7 +1072,7 @@ hlsl::Expr *HLSLWriterPass::create_compound_elem_expr(
                     }
                 } else {
                     array_index = m_expr_factory.create_literal(
-                        zero_loc, m_value_factory.get_uint32(uint32_t(stack[i].field_index_offs)));
+                        zero_loc, m_value_factory.get_int32(int32_t(stack[i].field_index_offs)));
                 }
                 cur_expr = m_expr_factory.create_binary(
                     Expr_binary::OK_ARRAY_SUBSCRIPT, cur_expr, array_index);
@@ -1318,16 +1332,16 @@ hlsl::Stmt *HLSLWriterPass::translate_struct_select(
     llvm::SelectInst *select,
     hlsl::Def_variable *dst_var)
 {
-    hlsl::Expr *cond       = translate_expr(select->getCondition(), nullptr);
-    hlsl::Expr *true_expr  = translate_expr(select->getTrueValue(), dst_var);
-    hlsl::Expr *false_expr = translate_expr(select->getFalseValue(), dst_var);
+    hlsl::Expr *cond       = translate_expr(select->getCondition());
+    hlsl::Expr *true_expr  = translate_expr(select->getTrueValue());
+    hlsl::Expr *false_expr = translate_expr(select->getFalseValue());
 
     hlsl::Location loc = convert_location(select);
     hlsl::Stmt *res = m_stmt_factory.create_if(
         loc,
         cond,
-        m_stmt_factory.create_expression(loc, true_expr),
-        m_stmt_factory.create_expression(loc, false_expr));
+        create_assign_stmt(dst_var, true_expr),
+        create_assign_stmt(dst_var, false_expr));
     return res;
 }
 
@@ -1370,7 +1384,7 @@ hlsl::Expr *HLSLWriterPass::convert_to(llvm::Value *val, llvm::Type *dest_type)
 
     if ((src_type->isIntegerTy() && dest_type->isFloatingPointTy()) ||
             (src_type->isFloatingPointTy() && dest_type->isIntegerTy())) {
-        hlsl::Expr *hlsl_val = translate_expr(val, nullptr);
+        hlsl::Expr *hlsl_val = translate_expr(val);
         hlsl::Type *hlsl_dest_type = convert_type(dest_type);
         return convert_to(hlsl_val, hlsl_dest_type);
     }
@@ -1405,7 +1419,7 @@ void HLSLWriterPass::translate_store(
     if (target_size == 0) {
         // no bitcasts, so we can do a direct assignment
         hlsl::Expr *lvalue = translate_lval_expression(pointer);
-        stmts.push_back(create_assign_stmt(lvalue, translate_expr(value, nullptr)));
+        stmts.push_back(create_assign_stmt(lvalue, translate_expr(value)));
         return;
     }
 
@@ -1430,7 +1444,7 @@ void HLSLWriterPass::translate_store(
     hlsl::Type  *expr_elem_type = nullptr;
 
     if (llvm::isa<llvm::VectorType>(value->getType())) {
-        expr = translate_expr(value, nullptr);
+        expr = translate_expr(value);
         if (hlsl::Type_vector *vt = hlsl::as<hlsl::Type_vector>(expr->get_type())) {
             expr_elem_type = vt->get_element_type();
         }
@@ -1463,7 +1477,7 @@ void HLSLWriterPass::translate_store(
                         m_value_factory.get_zero_initializer(lhs->get_type()));
                 } else {
                     rhs = create_vector_access(expr, cur_vector_index++);
-                    expr = translate_expr(value, nullptr);   // create new AST for the expression
+                    expr = translate_expr(value);   // create new AST for the expression
                 }
                 stmts.push_back(create_assign_stmt(lhs, rhs));
             }
@@ -1477,7 +1491,7 @@ void HLSLWriterPass::translate_store(
             } else {
                 MDL_ASSERT(expr_elem_type == lval->get_type());
                 rhs = create_vector_access(expr, cur_vector_index++);
-                expr = translate_expr(value, nullptr);   // create new AST for the expression
+                expr = translate_expr(value);   // create new AST for the expression
             }
 
             stmts.push_back(create_assign_stmt(lval, rhs));
@@ -1532,8 +1546,8 @@ hlsl::Value *HLSLWriterPass::translate_constant_int(llvm::ConstantInt *ci)
     case 32:
         // TODO: sign
         return m_value_factory.get_int32(int32_t(ci->getSExtValue()));
-    case 64:  // always cast to unsigned 32-bit, used by array indices
-        return m_value_factory.get_uint32(uint32_t(ci->getZExtValue()));
+    case 64:  // TODO: always treat as 32-bit, maybe not a good idea
+        return m_value_factory.get_int32(int32_t(ci->getZExtValue()));
     }
     MDL_ASSERT(!"unexpected LLVM integer type");
     return m_value_factory.get_bad();
@@ -1598,11 +1612,11 @@ hlsl::Value *HLSLWriterPass::translate_constant_data_vector(llvm::ConstantDataVe
                         int32_t(cv->getElementAsAPInt(i).getSExtValue()));
                 }
                 break;
-            case 64:  // always cast to unsigned 32-bit
-                hlsl_type = m_type_factory.get_vector(m_type_factory.get_uint(), num_elems);
+            case 64:  // always cast to signed 32-bit
+                hlsl_type = m_type_factory.get_vector(m_type_factory.get_int(), num_elems);
                 for (size_t i = 0; i < num_elems; ++i) {
-                    values[i] = m_value_factory.get_uint32(
-                        uint32_t(cv->getElementAsAPInt(i).getZExtValue()));
+                    values[i] = m_value_factory.get_int32(
+                        int32_t(cv->getElementAsAPInt(i).getZExtValue()));
                 }
                 break;
             default:
@@ -1685,13 +1699,13 @@ hlsl::Expr *HLSLWriterPass::translate_constant_data_array(llvm::ConstantDataArra
                             int32_t(cv->getElementAsAPInt(i).getSExtValue())));
                 }
                 break;
-            case 64:  // always cast to unsigned 32-bit
-                hlsl_type = m_type_factory.get_vector(m_type_factory.get_uint(), num_elems);
+            case 64:  // always cast to signed 32-bit
+                hlsl_type = m_type_factory.get_vector(m_type_factory.get_int(), num_elems);
                 for (size_t i = 0; i < num_elems; ++i) {
                     values[i] = m_expr_factory.create_literal(
                         zero_loc,
-                        m_value_factory.get_uint32(
-                            uint32_t(cv->getElementAsAPInt(i).getZExtValue())));
+                        m_value_factory.get_int32(
+                            int32_t(cv->getElementAsAPInt(i).getZExtValue())));
                 }
                 break;
             default:
@@ -1952,18 +1966,12 @@ hlsl::Expr *HLSLWriterPass::translate_constant_expr(llvm::Constant *c, bool is_g
 }
 
 // Translate an LLVM value to an HLSL expression.
-hlsl::Expr *HLSLWriterPass::translate_expr(
-    llvm::Value      *value,
-    hlsl::Definition *dst_var)
+hlsl::Expr *HLSLWriterPass::translate_expr(llvm::Value *value)
 {
     // check whether a local variable was generated for this instruction
     auto it = m_local_var_map.find(value);
     if (it != m_local_var_map.end()) {
-        auto result = create_reference(it->second);
-
-        if (dst_var != nullptr && it->second != dst_var)
-            return create_assign_expr(dst_var, result);
-        return result;
+        return create_reference(it->second);
     }
 
     if (llvm::Instruction *inst = llvm::dyn_cast<llvm::Instruction>(value)) {
@@ -1971,17 +1979,11 @@ hlsl::Expr *HLSLWriterPass::translate_expr(
             llvm::isa<llvm::ICmpInst>(inst) ||
             llvm::isa<llvm::FCmpInst>(inst))
         {
-            auto result = translate_expr_bin(inst);
-            if (dst_var != nullptr)
-                return create_assign_expr(dst_var, result);
-            return result;
+            return translate_expr_bin(inst);
         }
 
         if (inst->isCast()) {
-            auto result = translate_expr_cast(llvm::cast<llvm::CastInst>(inst));
-            if (dst_var != nullptr)
-                return create_assign_expr(dst_var, result);
-            return result;
+            return translate_expr_cast(llvm::cast<llvm::CastInst>(inst));
         }
 
         hlsl::Expr *result = nullptr;
@@ -2011,21 +2013,21 @@ hlsl::Expr *HLSLWriterPass::translate_expr(
                 MDL_ASSERT(gep->hasAllZeroIndices());
 
                 // treat as pointer cast, skip it
-                return translate_expr(gep->getOperand(0), dst_var);
+                return translate_expr(gep->getOperand(0));
             }
 
 
         case llvm::Instruction::PHI:
             {
                 llvm::PHINode *phi = llvm::cast<llvm::PHINode>(inst);
-                MDL_ASSERT(phi->getNumIncomingValues() == 1 &&
-                    "unexpected PHI node with more than one incoming value");
-                // skip the PHI node
-                return translate_expr(phi->getIncomingValue(0), dst_var);
+                MDL_ASSERT(!"unexpected PHI node, a local variable should have been registered");
+
+                hlsl::Def_variable *phi_out_var = get_phi_out_var(phi);
+                return create_reference(phi_out_var);
             }
 
         case llvm::Instruction::Call:
-            return translate_expr_call(llvm::cast<llvm::CallInst>(inst), dst_var);
+            return translate_expr_call(llvm::cast<llvm::CallInst>(inst), nullptr);
 
         case llvm::Instruction::Select:
             result = translate_expr_select(llvm::cast<llvm::SelectInst>(inst));
@@ -2067,8 +2069,6 @@ hlsl::Expr *HLSLWriterPass::translate_expr(
         }
 
         if (result != nullptr) {
-            if (dst_var != nullptr)
-                return create_assign_expr(dst_var, result);
             return result;
         }
     }
@@ -2079,17 +2079,10 @@ hlsl::Expr *HLSLWriterPass::translate_expr(
         if (llvm::ArrayType *a_type = llvm::dyn_cast<llvm::ArrayType>(ci->getType())) {
             if (!is_matrix_type(a_type)) {
                 hlsl::Def_variable *var = create_local_const(ci);
-
-                auto result = create_reference(var);
-                if (dst_var != nullptr)
-                    return create_assign_expr(dst_var, result);
-                return result;
+                return create_reference(var);
             }
         }
-        auto result = translate_constant_expr(ci, /*is_global=*/ false);
-        if (dst_var != nullptr)
-            return create_assign_expr(dst_var, result);
-        return result;
+        return translate_constant_expr(ci, /*is_global=*/ false);
     }
     MDL_ASSERT(!"unexpected LLVM value");
     return m_expr_factory.create_invalid(zero_loc);
@@ -2167,8 +2160,8 @@ hlsl::Type *HLSLWriterPass::to_unsigned_type(hlsl::Type *type)
 // Translate a binary LLVM instruction to an HLSL expression.
 hlsl::Expr *HLSLWriterPass::translate_expr_bin(llvm::Instruction *inst)
 {
-    hlsl::Expr *left  = translate_expr(inst->getOperand(0), nullptr);
-    hlsl::Expr *right = translate_expr(inst->getOperand(1), nullptr);
+    hlsl::Expr *left  = translate_expr(inst->getOperand(0));
+    hlsl::Expr *right = translate_expr(inst->getOperand(1));
 
     hlsl::Expr_binary::Operator hlsl_op;
 
@@ -2211,14 +2204,29 @@ hlsl::Expr *HLSLWriterPass::translate_expr_bin(llvm::Instruction *inst)
         hlsl_op = hlsl::Expr_binary::OK_SHIFT_RIGHT;
         break;
     case llvm::Instruction::And:
-        hlsl_op = hlsl::Expr_binary::OK_BITWISE_AND;
+        if (hlsl::is<hlsl::Type_bool>(left->get_type()->skip_type_alias()) &&
+            hlsl::is<hlsl::Type_bool>(right->get_type()->skip_type_alias()))
+        {
+            // map bitwise AND on boolean values to logical and
+            hlsl_op = hlsl::Expr_binary::OK_LOGICAL_AND;
+        } else {
+            hlsl_op = hlsl::Expr_binary::OK_BITWISE_AND;
+        }
         break;
     case llvm::Instruction::Or:
-        hlsl_op = hlsl::Expr_binary::OK_BITWISE_OR;
+        if (hlsl::is<hlsl::Type_bool>(left->get_type()->skip_type_alias()) &&
+            hlsl::is<hlsl::Type_bool>(right->get_type()->skip_type_alias()))
+        {
+            // map bitwise OR on boolean values to logical OR
+            hlsl_op = hlsl::Expr_binary::OK_LOGICAL_OR;
+        } else {
+            hlsl_op = hlsl::Expr_binary::OK_BITWISE_OR;
+        }
         break;
     case llvm::Instruction::Xor:
         if (hlsl::is<hlsl::Type_bool>(left->get_type()->skip_type_alias()) &&
-                hlsl::is<hlsl::Type_bool>(right->get_type()->skip_type_alias())) {
+            hlsl::is<hlsl::Type_bool>(right->get_type()->skip_type_alias()))
+        {
             // map XOR on boolean values to NOT-EQUAL to be compatible to SLANG
             hlsl_op = hlsl::Expr_binary::OK_NOT_EQUAL;
         } else
@@ -2381,9 +2389,9 @@ hlsl::Definition *HLSLWriterPass::find_parameter_of_type(llvm::Type *t)
 // Translate an LLVM select instruction to an HLSL expression.
 hlsl::Expr *HLSLWriterPass::translate_expr_select(llvm::SelectInst *select)
 {
-    hlsl::Expr *cond       = translate_expr(select->getCondition(), nullptr);
-    hlsl::Expr *true_expr  = translate_expr(select->getTrueValue(), nullptr);
-    hlsl::Expr *false_expr = translate_expr(select->getFalseValue(), nullptr);
+    hlsl::Expr *cond       = translate_expr(select->getCondition());
+    hlsl::Expr *true_expr  = translate_expr(select->getTrueValue());
+    hlsl::Expr *false_expr = translate_expr(select->getFalseValue());
     hlsl::Expr *res        = m_expr_factory.create_conditional(cond, true_expr, false_expr);
 
     res->set_location(convert_location(select));
@@ -2502,7 +2510,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
         }
 
         if (arg_expr == nullptr) {
-            arg_expr = translate_expr(arg, nullptr);
+            arg_expr = translate_expr(arg);
         }
         args[i++] = arg_expr;
     }
@@ -2530,7 +2538,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
 // Translate an LLVM cast instruction to an HLSL expression.
 hlsl::Expr *HLSLWriterPass::translate_expr_cast(llvm::CastInst *inst)
 {
-    hlsl::Expr *expr = translate_expr(inst->getOperand(0), nullptr);
+    hlsl::Expr *expr = translate_expr(inst->getOperand(0));
 
     llvm::Type *src_type = inst->getSrcTy();
     llvm::Type *dest_type = inst->getDestTy();
@@ -2687,9 +2695,16 @@ hlsl::Expr *HLSLWriterPass::translate_expr_cast(llvm::CastInst *inst)
 // Creates a HLSL cast expression to the given destination type.
 hlsl::Expr *HLSLWriterPass::create_cast(hlsl::Type *dst_type, hlsl::Expr *expr)
 {
+    // only use C-style cast for non-scalar types to simplify string manipulations
+    // on generated code
+    hlsl::Expr *res;
     hlsl::Expr *dest_type_ref = create_reference(
         get_type_name(dst_type), dst_type);
-    hlsl::Expr *res = m_expr_factory.create_typecast(dest_type_ref, expr);
+    if (!hlsl::is<hlsl::Type_scalar>(dst_type)) {
+        res = m_expr_factory.create_typecast(dest_type_ref, expr);
+    } else {
+        res = m_expr_factory.create_call(dest_type_ref, { expr });
+    }
     res->set_type(dst_type);
     return res;
 }
@@ -2788,7 +2803,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_store(llvm::StoreInst *inst)
     hlsl::Expr *lvalue   = translate_lval_expression(pointer);
 
     llvm::Value *value   = inst->getValueOperand();
-    hlsl::Expr  *expr    = translate_expr(value, nullptr);
+    hlsl::Expr  *expr    = translate_expr(value);
 
     return m_expr_factory.create_binary(hlsl::Expr_binary::OK_ASSIGN, lvalue, expr);
 }
@@ -2836,7 +2851,7 @@ hlsl::Expr *HLSLWriterPass::translate_lval_expression(llvm::Value *pointer)
                     llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(gep_index);
                     cur_expr = create_vector_access(cur_expr, unsigned(idx->getZExtValue()));
                 } else {
-                    hlsl::Expr *array_index = translate_expr(gep_index, nullptr);
+                    hlsl::Expr *array_index = translate_expr(gep_index);
                     cur_expr = m_expr_factory.create_binary(
                         Expr_binary::OK_ARRAY_SUBSCRIPT, cur_expr, array_index);
                 }
@@ -2914,7 +2929,7 @@ static hlsl::Expr_call *as_vector_constructor_call(hlsl::Expr *expr)
 // Translate an LLVM shufflevector instruction to an HLSL expression.
 hlsl::Expr *HLSLWriterPass::translate_expr_shufflevector(llvm::ShuffleVectorInst *inst)
 {
-    hlsl::Expr *v1_expr = translate_expr(inst->getOperand(0), nullptr);
+    hlsl::Expr *v1_expr = translate_expr(inst->getOperand(0));
 
     // is this shuffle a swizzle?
     if (llvm::isa<llvm::UndefValue>(inst->getOperand(1))) {
@@ -2976,7 +2991,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_shufflevector(llvm::ShuffleVectorInst
 
     // no, use constructor for translation
     // collect elements from both LLVM values via the shuffle matrix
-    hlsl::Expr *v2_expr = translate_expr(inst->getOperand(1), nullptr);
+    hlsl::Expr *v2_expr = translate_expr(inst->getOperand(1));
 
     uint64_t num_elems = inst->getType()->getNumElements();
     int v1_size = inst->getOperand(0)->getType()->getVectorNumElements();
@@ -3041,7 +3056,7 @@ hlsl::Expr *HLSLWriterPass::create_vector_access(hlsl::Expr *vec, unsigned index
     } else {
         hlsl::Expr *index_expr = m_expr_factory.create_literal(
             zero_loc,
-            m_value_factory.get_uint32(index));
+            m_value_factory.get_int32(index));
         res = m_expr_factory.create_binary(Expr_binary::OK_ARRAY_SUBSCRIPT, vec, index_expr);
     }
 
@@ -3069,7 +3084,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertelement(llvm::InsertElementInst
                 return m_expr_factory.create_invalid(zero_loc);
             }
             if (vec_elems[index_val] == nullptr) {
-                vec_elems[index_val] = translate_expr(cur_insert->getOperand(1), nullptr);
+                vec_elems[index_val] = translate_expr(cur_insert->getOperand(1));
 
                 // all vector element initializers found?
                 if (--remaining_elems == 0)
@@ -3092,10 +3107,10 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertelement(llvm::InsertElementInst
             for (uint64_t i = 0; i < num_elems; ++i) {
                 if (vec_elems[i] != nullptr)
                     continue;
-                vec_elems[i] = translate_expr(cv->getOperand(unsigned(i)), nullptr);
+                vec_elems[i] = translate_expr(cv->getOperand(unsigned(i)));
             }
         } else {
-            hlsl::Expr *base_expr = translate_expr(cur_value, nullptr);
+            hlsl::Expr *base_expr = translate_expr(cur_value);
             for (uint64_t i = 0; i < num_elems; ++i) {
                 if (vec_elems[i] != nullptr)
                     continue;
@@ -3157,9 +3172,10 @@ public:
     /// \param base_expr  an expression to use, when the expression for this object has not been set
     hlsl::Expr *translate(IAllocator *alloc, HLSLWriterPass *writer, hlsl::Expr *base_expr)
     {
+        if (m_expr)
+            return m_expr;
+
         if (m_children.size() == 0) {
-            if (m_expr)
-                return m_expr;
             return base_expr;
         }
 
@@ -3211,7 +3227,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertvalue(llvm::InsertValueInst *in
 
         // only overwrite the value, if it has not been set, yet (here or in a parent level)
         if (!cur_obj->has_expr()) {
-            hlsl::Expr *cur_expr = translate_expr(cur_insert->getInsertedValueOperand(), nullptr);
+            hlsl::Expr *cur_expr = translate_expr(cur_insert->getInsertedValueOperand());
             cur_obj->set_expr(cur_expr);
         }
 
@@ -3222,7 +3238,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertvalue(llvm::InsertValueInst *in
     }
 
     // translate collected values into an expression
-    hlsl::Expr *base_expr = translate_expr(cur_value, nullptr);
+    hlsl::Expr *base_expr = translate_expr(cur_value);
     hlsl::Expr *res = root.translate(m_alloc, this, base_expr);
     return res;
 }
@@ -3230,7 +3246,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertvalue(llvm::InsertValueInst *in
 // Translate an LLVM ExtractElement instruction to an HLSL expression.
 hlsl::Expr *HLSLWriterPass::translate_expr_extractelement(llvm::ExtractElementInst *extract)
 {
-    hlsl::Expr  *expr  = translate_expr(extract->getVectorOperand(), nullptr);
+    hlsl::Expr  *expr  = translate_expr(extract->getVectorOperand());
     llvm::Value *index = extract->getIndexOperand();
 
     hlsl::Type *res_type = convert_type(extract->getType());
@@ -3241,7 +3257,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractelement(llvm::ExtractElementIn
         res = m_expr_factory.create_binary(
             Expr_binary::OK_SELECT, expr, index_ref);
     } else {
-        hlsl::Expr *index_expr = translate_expr(index, nullptr);
+        hlsl::Expr *index_expr = translate_expr(index);
         res = m_expr_factory.create_binary(
             Expr_binary::OK_ARRAY_SUBSCRIPT, expr, index_expr);
     }
@@ -3255,7 +3271,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractelement(llvm::ExtractElementIn
 // Translate an LLVM ExtractValue instruction to an HLSL expression.
 hlsl::Expr *HLSLWriterPass::translate_expr_extractvalue(llvm::ExtractValueInst *extract)
 {
-    hlsl::Expr *res = translate_expr(extract->getAggregateOperand(), nullptr);
+    hlsl::Expr *res = translate_expr(extract->getAggregateOperand());
     hlsl::Type *cur_type = res->get_type()->skip_type_alias();
 
     for (unsigned i : extract->getIndices()) {
@@ -3264,7 +3280,7 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractvalue(llvm::ExtractValueInst *
         {
             hlsl::Expr *index_expr = m_expr_factory.create_literal(
                 zero_loc,
-                m_value_factory.get_uint32(i));
+                m_value_factory.get_int32(i));
             res = m_expr_factory.create_binary(
                 Expr_binary::OK_ARRAY_SUBSCRIPT, res, index_expr);
         } else if (hlsl::is<hlsl::Type_vector>(cur_type)) {
@@ -3754,6 +3770,7 @@ hlsl::Type_struct *HLSLWriterPass::create_state_core_struct_type(
         "world_to_object",
         "object_to_world",
         "object_id",
+        "meters_per_scene_unit",
         "arg_block_offset",
     };
 
@@ -4115,6 +4132,7 @@ hlsl::Symbol *HLSLWriterPass::get_unique_hlsl_sym(
     char const *templ)
 {
     bool valid = true;
+    char const *name = str;
 
     if (!isalpha(str[0]) && str[0] != '_') {
         valid = false;
@@ -4129,32 +4147,35 @@ hlsl::Symbol *HLSLWriterPass::get_unique_hlsl_sym(
 
     if (!valid) {
         str = templ;
+        name = nullptr;  // skip lookup and append id before trying
     }
 
     // check scope
     hlsl::Symbol *sym = nullptr;
 
     char buffer[65];
-    char const *name = str;
-    for (unsigned cnt = 1; ; ++cnt) {
-        sym = m_symbol_table.lookup_symbol(name);
-        if (sym == nullptr) {
-            // this is the first occurrence of this symbol
-            sym = m_symbol_table.get_symbol(name);
-            break;
-        }
-        size_t id = sym->get_id();
-        if (id >= Symbol::SYM_USER && m_def_tab.get_definition(sym) == nullptr) {
-            // symbol exists, but is user defined and no definition in this scope, good
-            break;
+    while (true) {
+        if (name != nullptr) {
+            sym = m_symbol_table.lookup_symbol(name);
+            if (sym == nullptr) {
+                // this is the first occurrence of this symbol
+                sym = m_symbol_table.get_symbol(name);
+                break;
+            }
+            size_t id = sym->get_id();
+            if (id >= Symbol::SYM_USER && m_def_tab.get_definition(sym) == nullptr) {
+                // symbol exists, but is user defined and no definition in this scope, good
+                break;
+            }
         }
 
         // rename it and try again
         strncpy(buffer, str, 58);
         buffer[58] = '\0';
-        snprintf(buffer + strlen(buffer), 6, "%u", cnt);
+        snprintf(buffer + strlen(buffer), 6, "%u", m_next_unique_name_id);
         buffer[64] = '\0';
         name = buffer;
+        ++m_next_unique_name_id;
     }
     return sym;
 }
@@ -4494,7 +4515,7 @@ hlsl::Expr *HLSLWriterPass::create_array_access(hlsl::Expr *array, unsigned inde
 
     hlsl::Expr *index_expr = m_expr_factory.create_literal(
         zero_loc,
-        m_value_factory.get_uint32(uint32_t(index)));
+        m_value_factory.get_int32(int32_t(index)));
     hlsl::Expr *res = m_expr_factory.create_binary(
         Expr_binary::OK_ARRAY_SUBSCRIPT, array, index_expr);
     res->set_type(type->get_element_type());
@@ -4519,7 +4540,7 @@ hlsl::Expr *HLSLWriterPass::create_matrix_access(hlsl::Expr *matrix, unsigned in
 
     hlsl::Expr *index_expr = m_expr_factory.create_literal(
         zero_loc,
-        m_value_factory.get_uint32(uint32_t(index)));
+        m_value_factory.get_int32(int32_t(index)));
     hlsl::Expr *res = m_expr_factory.create_binary(
         Expr_binary::OK_ARRAY_SUBSCRIPT, matrix, index_expr);
     res->set_type(type->get_element_type());
@@ -4553,8 +4574,9 @@ hlsl::Stmt *HLSLWriterPass::create_assign_stmt(
 {
     hlsl::Expr *assign = m_expr_factory.create_binary(
         hlsl::Expr_binary::OK_ASSIGN, lvalue, expr);
+    assign->set_location(lvalue->get_location());
     assign->set_type(expr->get_type());
-    return m_stmt_factory.create_expression(zero_loc, assign);
+    return m_stmt_factory.create_expression(lvalue->get_location(), assign);
 }
 
 // Create an assign expression, assigning an expression to a variable.
@@ -4567,7 +4589,6 @@ hlsl::Expr *HLSLWriterPass::create_assign_expr(
         hlsl::Expr_binary::OK_ASSIGN, lvalue, expr);
     assign->set_location(expr->get_location());
     assign->set_type(expr->get_type());
-
     return assign;
 }
 
@@ -4601,7 +4622,7 @@ void HLSLWriterPass::add_array_specifiers(Decl_type *decl, hlsl::Type *type)
 // Get the constructor for the given HLSL type.
 hlsl::Def_function *HLSLWriterPass::lookup_constructor(hlsl::Type *type)
 {
-    // FIXME: this implementation is wrong, it works only for the fake fillPredefEntities()
+    // FIXME: this implementation is wrong, it works only for the fake fillPredefinedEntities()
     if (hlsl::Def_function *def = hlsl::as_or_null<hlsl::Def_function>(
         m_def_tab.get_predef_scope()->find_definition_in_scope(type->get_sym())))
     {
@@ -4681,7 +4702,8 @@ hlsl::Expr *HLSLWriterPass::create_constructor_call(
 // Generates a new local variable for an HLSL symbol and an LLVM type.
 hlsl::Def_variable *HLSLWriterPass::create_local_var(
     hlsl::Symbol *var_sym,
-    llvm::Type   *type)
+    llvm::Type   *type,
+    bool          add_decl_statement)
 {
     hlsl::Type      *var_type      = convert_type(type);
     hlsl::Type_name *var_type_name = get_type_name(var_type);
@@ -4699,8 +4721,10 @@ hlsl::Def_variable *HLSLWriterPass::create_local_var(
     var_def->set_declaration(decl_var);
     var_name->set_definition(var_def);
 
-    // so far, add all declarations to the function scope
-    m_cur_start_block->add_stmt(m_stmt_factory.create_declaration(decl_var));
+    if (add_decl_statement) {
+        // so far, add all declarations to the function scope
+        m_cur_start_block->add_stmt(m_stmt_factory.create_declaration(decl_var));
+    }
 
     return var_def;
 }
@@ -4708,7 +4732,8 @@ hlsl::Def_variable *HLSLWriterPass::create_local_var(
 // Generates a new local variable.
 hlsl::Def_variable *HLSLWriterPass::create_local_var(
     llvm::Value *value,
-    bool        do_not_register)
+    bool        do_not_register,
+    bool        add_decl_statement)
 {
     llvm::Type *type = value->getType();
     if (llvm::isa<llvm::AllocaInst>(value)) {
@@ -4728,7 +4753,7 @@ hlsl::Def_variable *HLSLWriterPass::create_local_var(
 
     hlsl::Symbol *var_sym = get_unique_hlsl_sym(value->getName(), "tmp");
 
-    hlsl::Def_variable *var_def = create_local_var(var_sym, type);
+    hlsl::Def_variable *var_def = create_local_var(var_sym, type, add_decl_statement);
 
     if (!do_not_register) {
         m_local_var_map[value] = var_def;
@@ -4828,7 +4853,7 @@ std::pair<hlsl::Def_variable *, hlsl::Def_variable *> HLSLWriterPass::get_phi_va
     // TODO: arrays?
     llvm::Type *type = phi->getType();
     hlsl::Def_variable *phi_in_def  = create_local_var(in_sym, type);
-    hlsl::Def_variable *phi_out_def = create_local_var(out_sym, type);
+    hlsl::Def_variable *phi_out_def = create_local_var(out_sym, type, true);
 
     auto res = std::make_pair(phi_in_def, phi_out_def);
     m_phi_var_in_out_map[phi] = res;

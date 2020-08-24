@@ -33,19 +33,31 @@
 
 #include "common.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace gui
+{
+    class Root;
+}}}
+
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Texture;
+
+    // ------------------------------------------------------------------------
 
     class IWindow
     {
     public:
+
+        // --------------------------------------------------------------------
+
         enum class Mode
         {
             Windowed,
             Fullsceen,
             // Borderless_windowed /*not implemented*/
         };
+
+        // --------------------------------------------------------------------
 
         virtual ~IWindow() = default;
 
@@ -72,6 +84,10 @@ namespace mdl_d3d12
 
         virtual void set_window_mode(Mode mode) = 0;
         virtual Mode get_window_mode() const = 0;
+
+        // get the windows main UI instance
+        virtual mi::examples::gui::Root* get_gui() = 0;
     };
-}
+
+}}} // mi::examples::mdl_d3d12
 #endif

@@ -28,7 +28,7 @@
 
 # name of the target and the resulting library
 set(PROJECT_NAME imgui)
-set(PROJECT_VERSION 1.70) # ef7c58cc54007ef4c80150a4b3ba783575cd9790
+set(PROJECT_VERSION 1.75) # 58b3e02b95b4c7c5bb9128a28c6d55546501bf93
 
 # collect sources
 set(PROJECT_SOURCES
@@ -62,6 +62,9 @@ if(WINDOWS)
             "imgui_impl_dx12.cpp"
             "imgui_impl_dx12.h"
         )
+		include_directories(
+			AFTER ${MDL_DEPENDENCY_D3D12_INCLUDE} ${MDL_DEPENDENCY_DXGI_INCLUDE}
+		)
     endif()
 endif()
 
@@ -87,6 +90,7 @@ create_from_base_preset(
     NAMESPACE ${PROJECT_NAME}
     VERSION ${PROJECT_VERSION}
     SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
 )
 
 if(MDL_ENABLE_OPENGL_EXAMPLES)

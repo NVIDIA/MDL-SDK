@@ -271,6 +271,9 @@ enum Attr_resv_id {
                                 //------------------ object, no inheritance ---
     OBJ_TEXTURE,		///< Scalar[]    first texture space
     OBJ_TEXTURE_NUM	= 256,	///<             number of texture spaces
+
+    OBJ_USER        = OBJ_TEXTURE + OBJ_TEXTURE_NUM,  ///< Scalar[]    first user space
+    OBJ_USER_NUM    = 16,                             ///<             number of user spaces
                                 //------------------ deprecated ---------------
                                 //		fix neuray sources, then remove
     SAMPLE_MIN		= OPT_SAMPLES_MIN,
@@ -281,8 +284,8 @@ enum Attr_resv_id {
     SAMPLE_MOTION	= OPT_SAMPLES_MOTION,
                                 //------------------ summaries ----------------
     LAST_NONTEXTURE_ID	= OBJ_TEXTURE - 1,		  ///< texture is this+1
-    N_IDS		= OBJ_TEXTURE + OBJ_TEXTURE_NUM,  ///< last reserved ID+1
-    N_IDS_SIMPLE	= N_IDS - OBJ_TEXTURE_NUM - N_MAXFLAGS	///< non-flags & non-arrays
+    N_IDS		= OBJ_USER + OBJ_USER_NUM,  ///< last reserved ID+1
+    N_IDS_SIMPLE	= N_IDS - OBJ_TEXTURE_NUM - OBJ_USER_NUM - N_MAXFLAGS	///< non-flags & non-arrays
 };
 
 }

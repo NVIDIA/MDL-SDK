@@ -72,20 +72,25 @@
 #include <mi/neuraylib/imaterial_instance.h>
 #include <mi/neuraylib/imatrix.h>
 #include <mi/neuraylib/imdl_archive_api.h>
+#include <mi/neuraylib/imdl_backend.h>
+#include <mi/neuraylib/imdl_backend_api.h>
 #include <mi/neuraylib/imdl_compatibility_api.h>
-#include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/imdl_compiler.h>
-#include <mi/neuraylib/imdl_execution_context.h>
+#include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/imdl_discovery_api.h>
 #include <mi/neuraylib/imdl_entity_resolver.h>
 #include <mi/neuraylib/imdl_evaluator_api.h>
+#include <mi/neuraylib/imdl_execution_context.h>
 #include <mi/neuraylib/imdl_factory.h>
 #include <mi/neuraylib/imdl_i18n_configuration.h>
+#include <mi/neuraylib/imdl_impexp_api.h>
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
-#include <mi/neuraylib/imodule.h>
+#include <mi/neuraylib/imdl_module_transformer.h>
 #include <mi/neuraylib/imdle_api.h>
+#include <mi/neuraylib/imodule.h>
 #include <mi/neuraylib/ineuray.h>
 #include <mi/neuraylib/inumber.h>
+#include <mi/neuraylib/iplugin_configuration.h>
 #include <mi/neuraylib/ipointer.h>
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/ireader_writer_base.h>
@@ -106,10 +111,12 @@
 #include <mi/neuraylib/ivector.h>
 #include <mi/neuraylib/iversion.h>
 #include <mi/neuraylib/iwriter.h>
+#include <mi/neuraylib/matrix_typedefs.h>
 #include <mi/neuraylib/set_get.h>
 #include <mi/neuraylib/target_code_types.h>
-#include <mi/neuraylib/typedefs.h>
 #include <mi/neuraylib/type_traits.h>
+#include <mi/neuraylib/typedefs.h>
+#include <mi/neuraylib/vector_typedefs.h>
 #include <mi/neuraylib/version.h>
 
 namespace mi {

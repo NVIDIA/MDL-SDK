@@ -86,34 +86,34 @@ class Scope
     /// of calling this method is temporary or not temporary. Note that a scope that is not
     /// temporary can not be created as the child of a scope that is temporary.
     ///
-    /// \param level			Privacy level for the new scope.
+    /// \param level                    Privacy level for the new scope.
     /// \param is_temporary             A bool indicating if the new scope is temporary
-    /// \param name             	The name of the scope. If empty the scope is unnamed.
-    /// \return				The created child scope. Can be NULL, if creation failed.
+    /// \param name                     The name of the scope. If empty the scope is unnamed.
+    /// \return                         The created child scope. Can be NULL, if creation failed.
     virtual Scope *create_child(
-	Privacy_level level,
+        Privacy_level level,
         bool is_temporary = false,
-	const std::string& name = "")= 0;
+        const std::string& name = "")= 0;
 
     /// Get the id of a scope. This needs to be in the interface because for some applications the
     /// id of a scope needs to be stored in database elements.
     ///
-    /// \return				The scope id of this scope.
+    /// \return                         The scope id of this scope.
     virtual Scope_id get_id() = 0;
 
     /// Get the name of a scope. An unnamed scope returns the empty string.
     ///
-    /// \return				The name of the scope.
+    /// \return                         The name of the scope.
     virtual const std::string& get_name() const = 0;
 
     /// Get the direct parent of this scope
     ///
-    /// \return				The parent of this scope.
+    /// \return                         The parent of this scope.
     virtual Scope* get_parent() = 0;
 
     /// Get the privacy level of the scope
     ///
-    /// \return				The privacy level of this scope.
+    /// \return                         The privacy level of this scope.
     virtual Privacy_level get_level() = 0;
 
     /// Start a transaction. This is part of the scope interface because each transaction belongs to
@@ -121,7 +121,7 @@ class Scope
     /// in transactions created within this scope. This may involve network operations and thus may
     /// take a while. The call will not return before the transaction is created.
     ///
-    /// \return				The created transaction
+    /// \return                         The created transaction
     virtual Transaction *start_transaction() = 0;
 
   protected:

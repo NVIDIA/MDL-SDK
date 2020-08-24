@@ -65,10 +65,10 @@ mi::Sint32 Debug_configuration_impl::set_option( const char* option)
 const mi::IString* Debug_configuration_impl::get_option( const char* key) const
 {
     if( !key)
-        return 0;
+        return nullptr;
     std::string value = m_config_module->get_config_value_as_string( key);
     if( value.empty())
-        return 0;
+        return nullptr;
     mi::IString* istring = new String_impl();
     istring->set_c_str( value.c_str());
     return istring;

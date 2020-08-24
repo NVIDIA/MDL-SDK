@@ -34,11 +34,18 @@
 #include "common.h"
 #include "window.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace gui
+{
+    class Root;
+}}}
+
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
     class Base_application_message_interface;
     class Texture;
+
+    // ------------------------------------------------------------------------
 
     class Window_image_file : public IWindow
     {
@@ -46,7 +53,7 @@ namespace mdl_d3d12
 
     public:
         explicit Window_image_file(
-            Base_application_message_interface& message_pump_interface, 
+            Base_application_message_interface& message_pump_interface,
             std::string file_path,
             size_t iteration_count);
 
@@ -74,6 +81,8 @@ namespace mdl_d3d12
         void set_window_mode(IWindow::Mode mode) override { };
         IWindow::Mode get_window_mode() const override { return IWindow::Mode::Windowed; }
 
+        // get the windows main UI instance
+        mi::examples::gui::Root* get_gui() final { return nullptr; };
 
     private:
         Base_application* m_app;
@@ -93,5 +102,6 @@ namespace mdl_d3d12
 
         bool m_close;
     };
-}
+
+}}} // mi::examples::mdl_d3d12
 #endif

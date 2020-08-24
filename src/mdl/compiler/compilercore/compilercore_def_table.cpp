@@ -246,6 +246,8 @@ bool Definition::get_property(Property prop) const
         return has_flag(Definition::DEF_IS_CONST_EXPR);
     case DP_USES_DERIVATIVES:
         return has_flag(Definition::DEF_USES_DERIVATIVES);
+    case DP_USES_SCENE_DATA:
+        return has_flag(Definition::DEF_USES_SCENE_DATA);
     }
     return false;
 }
@@ -254,6 +256,12 @@ bool Definition::get_property(Property prop) const
 Position const *Definition::get_position() const
 {
     return m_pos;
+}
+
+// Set the position of this definition if any.
+void Definition::set_position(Position const *pos)
+{
+    m_pos = pos;
 }
 
 // Return the mask specifying which parameters of a function are derivable.

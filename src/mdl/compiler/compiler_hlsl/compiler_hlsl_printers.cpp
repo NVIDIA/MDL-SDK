@@ -1364,7 +1364,7 @@ void Printer::print_decl(
 
                 if (Expr const *init = pdecl->get_default_argument()) {
                     print(" = ");
-                    print(init);
+                    print(init, get_priority(Expr::OK_ASSIGN));
                 }
             } else {
                 push_color(C_COMMENT);
@@ -1738,13 +1738,7 @@ void Printer::print(Init_declarator const *init)
 
     if (Expr const *expr = init->get_initializer()) {
         print(" = ");
-
-        if (Expr_literal const *lit = as<Expr_literal>(expr)) {
-            Value *v = lit->get_value();
-            print_value(v);
-        } else {
-            print(expr);
-        }
+        print(expr, get_priority(Expr::OK_ASSIGN));
     }
 }
 

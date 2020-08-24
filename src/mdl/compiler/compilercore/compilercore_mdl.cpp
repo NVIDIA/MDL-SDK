@@ -33,9 +33,12 @@
 
 #include <mi/base/lock.h>
 
+#include <mi/mdl/mdl_translator_plugin.h>
+
 #include "compilercore_cc_conf.h"
 #include "compilercore_mdl.h"
 #include "compilercore_allocator.h"
+#include "compilercore_analysis.h"
 #include "compilercore_debug_tools.h"
 #include "compilercore_encapsulator.h"
 #include "compilercore_factories.h"
@@ -82,9 +85,21 @@ char const *MDL::option_limits_float_max              = MDL_OPTION_LIMITS_FLOAT_
 char const *MDL::option_limits_double_min             = MDL_OPTION_LIMITS_DOUBLE_MIN;
 char const *MDL::option_limits_double_max             = MDL_OPTION_LIMITS_DOUBLE_MAX;
 char const *MDL::option_state_wavelength_base_max     = MDL_OPTION_STATE_WAVELENGTH_BASE_MAX;
+char const *MDL::option_keep_original_resource_file_paths
+                                                  = MDL_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS;
 
 // forward
 class Jitted_code;
+
+extern ICode_generator *create_code_generator_dag(IAllocator *alloc, MDL *mdl);
+extern void serialize_code_dag(
+    IGenerated_code_dag const *code,
+    ISerializer               *is,
+    MDL_binary_serializer     &bin_serializer);
+extern IGenerated_code_dag const *deserialize_code_dag(
+    IDeserializer           *ds,
+    MDL_binary_deserializer &bin_deserializer,
+    MDL                     *compiler);
 
 extern ICode_generator *create_code_generator_jit(IAllocator *alloc, MDL *mdl);
 extern ICode_generator *create_code_generator_glsl(IAllocator *alloc, MDL *mdl);
@@ -111,11 +126,6 @@ public:
     /// \param col   the start column of the syntax error
     /// \param s     the human readable error message
     void Warning(int line, int col, wchar_t const *s) MDL_FINAL;
-
-    /// Report a syntax warning.
-    ///
-    /// \param s     the human readable error message
-    void Warning(wchar_t const *s) MDL_FINAL;
 
     /// Report an error at given line, column pair.
     ///
@@ -174,13 +184,6 @@ void Syntax_error::Warning(int line, int col, wchar_t const *s)
 {
     string tmp(m_builder.get_allocator());
     Position_impl pos(line, col, line, col);
-    m_msg.add_warning_message(SYNTAX_ERROR, MESSAGE_CLASS, 0, &pos, wchar_to_utf8(tmp, s));
-}
-
-void Syntax_error::Warning(wchar_t const *s)
-{
-    string tmp(m_builder.get_allocator());
-    Position_impl pos(-1, -1, -1, -1);
     m_msg.add_warning_message(SYNTAX_ERROR, MESSAGE_CLASS, 0, &pos, wchar_to_utf8(tmp, s));
 }
 
@@ -302,7 +305,7 @@ void Scanner::enable_native_keyword(bool flag)
 
 void Scanner::set_mdl_version(int major, int minor)
 {
-#define HAS_VERSION(x, y) (major > x || (major == x && minor >= y))
+#define HAS_VERSION(x, y) (major > (x) || (major == (x) && minor >= (y)))
 
     if (HAS_VERSION(1, 1)) {
         // enable MDL 1.1 keywords
@@ -381,6 +384,7 @@ MDL::MDL(IAllocator *alloc)
 , m_weak_module_lock()
 , m_predefined_types_build(false)
 , m_jitted_code(NULL)
+, m_translator_list(alloc)
 {
     create_options();
     create_builtin_semantics();
@@ -532,6 +536,7 @@ MDL::MDL(IAllocator *alloc)
         // takes ownership
         register_builtin_module(base_mod);
     }
+
 }
 
 // Destructor.
@@ -1022,6 +1027,9 @@ void MDL::create_options()
         "The number of wavelengths returned in the result of wavelength base()");
 
 
+    m_options.add_option(option_keep_original_resource_file_paths, "false",
+        "Keep original resource file paths as is.");
+
 #undef _STR
 #undef STR
 }
@@ -1082,10 +1090,11 @@ Module *MDL::load_module(
         if (imdle_s.is_valid_interface()) {
             // this module was loaded from an mdle, compute function hashes
             module->m_is_hashed = true;
+            module->m_is_mdle   = true;
         }
     }
 
-    module->analyze(cache, ctx, get_compiler_bool_option(ctx, option_resolve_resources, true));
+    module->analyze(cache, ctx);
     return module;
 }
 
@@ -1111,12 +1120,19 @@ Module const *MDL::load_module(
     // create the standard modules lazy
     register_builtin_module_at_cache(cache);
 
-    Module const *res = compile_module(*ctx, module_name, cache);
+    Module const *res = NULL;
+
+    if (IMDL_foreign_module_translator *translator = is_foreign_module(module_name)) {
+        res = compile_foreign_module(*translator, *ctx, module_name, cache);
+    } else {
+        res = compile_module(*ctx, module_name, cache);
+    }
 
     // copy the messages from the module to the context, so they are available over both
     // access paths
-    if (context != NULL)
+    if (context != NULL) {
         copy_message(ctx->access_messages_impl(), res);
+    }
     return res;
 }
 
@@ -1166,8 +1182,9 @@ IModule const *MDL::load_module_from_stream(
 
     // copy the messages from the module to the context, so they are available over both
     // access paths
-    if (context != NULL)
+    if (context != NULL) {
         copy_message(ctx->access_messages_impl(), res);
+    }
     return res;
 }
 
@@ -1175,35 +1192,31 @@ namespace
 {
     // report success or failure of the loading process to the application
     void report_module_loading_result(
-        Module *mod, 
-        IModule_cache *module_cache,
-        IModule_cache_lookup_handle *cache_lookup_handle)
+        Module          *mod,
+        Module_callback &cb)
     {
         // only if there is a module cache
-        if (!module_cache) 
+        if (!cb.is_valid()) {
             return;
-        // ... and a registered callback
-        IModule_loaded_callback *cb = module_cache->get_module_loading_callback();
-        if (!cb)
-            return;
+        }
 
-        MDL_ASSERT(cache_lookup_handle && cache_lookup_handle->is_processing() &&
-                   "Module is not supposed to be processed in this context");
+        MDL_ASSERT(cb.is_processing() &&
+                   "Module is supposed to be processed in this context");
 
         // notify waiting threads about success or failure
-        if (!mod || !mod->is_valid()) {
+        if (mod == NULL || !mod->is_valid()) {
             // notify about failure
-            cb->module_loading_failed(*cache_lookup_handle);
+            cb.module_loading_failed();
         } else {
-            MDL_ASSERT(std::strcmp(mod->get_name(), cache_lookup_handle->get_lookup_name()) == 0 &&
-                        "The Module name and the cache lookup name do not match.");
+            MDL_ASSERT(strcmp(mod->get_name(), cb.get_lookup_name()) == 0 &&
+                        "module name and the cache lookup name do not match");
 
             // add an entry to the database
-            if (!cb->register_module(mod)) {
+            if (!cb.register_module(mod)) {
                 // there is a problem with this module outside of MDL Core, e.g. DB name clashes
                 mod->access_messages_impl().add_error_message(
                     EXTERNAL_APPLICATION_ERROR, 'C', 0, 0,
-                    "Module loading callback reported a registration failure.");
+                    "Module loading callback reported a registration failure");
             }
         }
     }
@@ -1247,21 +1260,15 @@ Module const *MDL::compile_module(
         return std_mod;
     }
 
-    // if the module was resolved successful and there is a cache, 
-    // announce that this module is now created or wait for another thread that currently processes 
+    // if the module was resolved successful and there is a cache,
+    // announce that this module is now created or wait for another thread that currently processes
     // this module and then continue returning the cached module (processed by the other thread)
-    IModule_loaded_callback *cb = module_cache ? module_cache->get_module_loading_callback() : NULL;
-    IModule_cache_lookup_handle* cache_lookup_handle = cb 
-        ? module_cache->create_lookup_handle() : NULL;
+    Module_callback cb(module_cache);
 
     if (module_cache != NULL) {
-        Module const *cached_mod = impl_cast<Module>(
-            module_cache->lookup(mname.c_str(), cache_lookup_handle));
+        Module const *cached_mod = impl_cast<Module>(module_cache->lookup(mname.c_str(), cb));
 
         if (cached_mod != NULL) {
-            // free the handle 
-            module_cache->free_lookup_handle(cache_lookup_handle);
-
             if (!cached_mod->is_analyzed()) {
                 // We found a not analyzed module. This can only happen if we
                 // import something that is not processed because we have a dependency
@@ -1270,36 +1277,28 @@ Module const *MDL::compile_module(
                 return NULL;
             }
             return cached_mod;
-        }
-        // loading failed on different thread
-        else if(cache_lookup_handle && !cache_lookup_handle->is_processing()) {
+        } else if (cb.is_valid() && !cb.is_processing()) {
+            // loading failed on different thread
             ctx.access_messages_impl().add_error_message(
                 ERRONEOUS_IMPORT, 'C', 0, 0,
                 "Loading module failed on a different context.");
-
-            // free the handle 
-            module_cache->free_lookup_handle(cache_lookup_handle);
             return NULL;
         }
         // continue with loading the module on this context
     }
 
-    mi::base::Handle<IInput_stream> input(result->open(ctx));
+    mi::base::Handle<IInput_stream> input(result->open(&ctx));
 
     if (!input) {
         // FIXME: add an error ??
 
         // If the top module can not be opened, notify all other waiting threads
-        if (module_cache != NULL) {
-            MDL_ASSERT(cache_lookup_handle->is_processing() &&
+        if (cb.is_valid()) {
+            MDL_ASSERT(cb.is_processing() &&
                 "Module is not supposed to be processed in this context");
 
             // notify via callback
-            if (cb)
-                cb->module_loading_failed(*cache_lookup_handle);
-
-            // free the handle 
-            module_cache->free_lookup_handle(cache_lookup_handle);
+            cb.module_loading_failed();
         }
         return NULL;
     }
@@ -1308,13 +1307,54 @@ Module const *MDL::compile_module(
     Module *mod = load_module(module_cache, &ctx, mname.c_str(), input.get(), Module::MF_STANDARD);
 
     // notify waiting threads about success or failure
-    report_module_loading_result(mod, module_cache, cache_lookup_handle);
-
-    // free the handle 
-    if (module_cache && cache_lookup_handle)
-        module_cache->free_lookup_handle(cache_lookup_handle);
+    report_module_loading_result(mod, cb);
 
     // any error was already handled by load_module() above
+    return mod;
+}
+
+// Compile a foreign module with a given name.
+Module const *MDL::compile_foreign_module(
+    IMDL_foreign_module_translator &translator,
+    Thread_context                 &ctx,
+    char const                     *module_name,
+    IModule_cache                  *module_cache)
+{
+    // if the module was resolved successful and there is a cache,
+    // announce that this module is now created or wait for another thread that currently processes
+    // this module and then continue returning the cached module (processed by the other thread)
+    Module_callback cb(module_cache);
+
+    if (module_cache != NULL) {
+        Module const *cached_mod = impl_cast<Module>(module_cache->lookup(module_name, cb));
+
+        if (cached_mod != NULL) {
+            if (!cached_mod->is_analyzed()) {
+                // We found a not analyzed module. This can only happen if we
+                // import something that is not processed because we have a dependency
+                // loop in the import tree. This is not allowed.
+                cached_mod->release();
+                return NULL;
+            }
+            return cached_mod;
+        } else if (cb.is_valid() && !cb.is_processing()) {
+            // loading failed on different thread
+            ctx.access_messages_impl().add_error_message(
+                ERRONEOUS_IMPORT, 'C', 0, 0,
+                "Loading module failed on a different context.");
+            return NULL;
+        }
+        // continue with loading the module on this context
+    }
+
+    // load and translate the foreign module
+    Module const *mod =
+        impl_cast<Module>(translator.compile_foreign_module(&ctx, module_name, module_cache));
+
+    // notify waiting threads about success or failure
+    report_module_loading_result(const_cast<Module *>(mod), cb);
+
+    // any error was already handled by compile_foreign_module() above
     return mod;
 }
 
@@ -1355,18 +1395,12 @@ Module const *MDL::compile_module_from_stream(
     // if the module was resolved successful and there is a cache, 
     // announce that this module is now created or wait for another thread that currently processes 
     // this module and then continue returning the cached module (processed by the other thread)
-    IModule_loaded_callback *cb = module_cache ? module_cache->get_module_loading_callback() : NULL;
-    IModule_cache_lookup_handle* cache_lookup_handle = cb
-        ? module_cache->create_lookup_handle() : NULL;
+    Module_callback cb(module_cache);
 
     if (module_cache != NULL) {
-        Module const *cached_mod = impl_cast<Module>(
-            module_cache->lookup(module_name, cache_lookup_handle));
+        Module const *cached_mod = impl_cast<Module>(module_cache->lookup(module_name, cb));
 
         if (cached_mod != NULL) {
-            // free the handle 
-            module_cache->free_lookup_handle(cache_lookup_handle);
-
             // already exists, overwrite is not allowed
             cached_mod->release();
             return NULL;
@@ -1378,11 +1412,7 @@ Module const *MDL::compile_module_from_stream(
         module_cache, &ctx, module_name, input, Module::MF_STANDARD, msg_name);
 
     // notify waiting threads about success or failure
-    report_module_loading_result(mod, module_cache, cache_lookup_handle);
-
-    // free the handle 
-    if (module_cache && cache_lookup_handle)
-        module_cache->free_lookup_handle(cache_lookup_handle);
+    report_module_loading_result(mod, cb);
 
     // any error was already handled by load_module() above
     return mod;
@@ -1392,8 +1422,7 @@ Module const *MDL::compile_module_from_stream(
 ICode_generator *MDL::load_code_generator(const char *target_language)
 {
     if (strcmp(target_language, "dag") == 0) {
-        return m_builder.create<Code_generator_dag>(
-            m_builder.get_allocator(), this);
+        return create_code_generator_dag(m_builder.get_allocator(), this);
     } else if (strcmp(target_language, "glsl") == 0) {
         return create_code_generator_glsl(m_builder.get_allocator(), this);
     } else if (strcmp(target_language, "jit") == 0) {
@@ -1422,6 +1451,22 @@ IExpression const *MDL::parse_expression(
 
     parser.set_module(module, enable_experimental_features);
     return parser.parse_expression();
+}
+
+// Check if the given module name names a foreign module.
+IMDL_foreign_module_translator *MDL::is_foreign_module(
+    char const     *module_name)
+{
+    for (Translator_list::iterator it(m_translator_list.begin()), end(m_translator_list.end());
+        it != end;
+        ++it)
+    {
+        IMDL_foreign_module_translator *translator = it->get();
+
+        if (translator->is_foreign_module(module_name))
+            return translator;
+    }
+    return NULL;
 }
 
 // Create a printer.
@@ -1509,7 +1554,7 @@ void MDL::serialize_module(
 }
 
 // Deserialize a module from a given deserializer.
-IModule const *MDL::deserialize_module(IDeserializer *ds)
+Module const *MDL::deserialize_module(IDeserializer *ds)
 {
     MDL_binary_deserializer bin_deserializer(get_allocator(), ds, this);
 
@@ -1592,16 +1637,14 @@ IInput_stream *MDL::create_file_input_stream(char const *filename) const
     return NULL;
 }
 
+
 // Serialize a code DAG to the given serializer.
 void MDL::serialize_code_dag(
     IGenerated_code_dag const *code,
     ISerializer               *is) const
 {
     MDL_binary_serializer bin_serializer(get_allocator(), this, is);
-
-    Generated_code_dag const *cod = impl_cast<Generated_code_dag>(code);
-
-    cod->serialize(is, &bin_serializer);
+    mi::mdl::serialize_code_dag(code, is, bin_serializer);
 }
 
 // Deserialize a code DAG from a given deserializer.
@@ -1609,29 +1652,7 @@ IGenerated_code_dag const *MDL::deserialize_code_dag(IDeserializer *ds)
 {
     MDL_binary_deserializer bin_deserializer(get_allocator(), ds, this);
 
-    Tag_t t;
-
-    // currently we support only binaries, no single units
-    t = bin_deserializer.read_section_tag();
-    MDL_ASSERT(t == Serializer::ST_DAG_START);
-    DOUT(("Starting DAG Deserialization\n")); INC_SCOPE();
-
-    mi::base::Handle<IGenerated_code_dag const> code;
-    for (;;) {
-        code = mi::base::make_handle(
-            Generated_code_dag::deserialize(ds, &bin_deserializer, this));
-        t = bin_deserializer.read_section_tag();
-        if (t != Serializer::ST_DAG_END) {
-        } else {
-            MDL_ASSERT(t == Serializer::ST_DAG_END);
-            DEC_SCOPE(); DOUT(("DAG Deserialization Finished\n\n"));
-            break;
-        }
-    }
-
-    if (code.is_valid_interface())
-        code->retain();
-    return code.get();
+    return mi::mdl::deserialize_code_dag(ds, bin_deserializer, this);
 }
 
 // Create a new MDL lambda function.
@@ -1753,6 +1774,27 @@ Thread_context *MDL::create_thread_context()
     return m_builder.create<Thread_context>(get_allocator(), &m_options);
 }
 
+// Creates a new thread context from current analysis settings.
+Thread_context *MDL::create_thread_context(
+    Analysis const &ana,
+    char const    *front_path)
+{
+    Thread_context *ctx = m_builder.create<Thread_context>(get_allocator(), &m_options);
+
+    ctx->set_front_path(front_path);
+
+    ctx->access_options().set_option(
+        MDL::option_strict,
+        ana.strict_mode() ? "true" : "false");
+    ctx->access_options().set_option(
+        MDL::option_experimental_features,
+        ana.enable_experimental_features() ? "true" : "false");
+    ctx->access_options().set_option(
+        MDL::option_resolve_resources,
+        ana.resolve_resources() ? "true" : "false");
+    return ctx;
+}
+
 // Create an MDL exporter.
 MDL_exporter *MDL::create_exporter() const
 {
@@ -1838,7 +1880,7 @@ bool MDL::valid_mdl_identifier(char const *ident)
         if (p[1] == 'e') {
             FORBIDDEN("delete", 2);
         } else if (p[1] == 'o') {
-            if (p[2] != '\0')
+            if (p[2] == '\0')
                 return false;
             FORBIDDEN("double",    2);
             FORBIDDEN("double2",   2);
@@ -2067,6 +2109,18 @@ IEntity_resolver *MDL::create_entity_resolver(
         m_search_path);
 }
 
+/// Return the current MDL entity resolver.
+IEntity_resolver *MDL::get_entity_resolver(
+    IModule_cache *module_cache) const
+{
+    if (m_external_resolver) {
+        m_external_resolver->retain();
+        return m_external_resolver.get();
+    }
+
+    return create_entity_resolver(module_cache);
+}
+
 // Create an MDL archive tool using this compiler.
 IArchive_tool *MDL::create_archive_tool()
 {
@@ -2104,6 +2158,35 @@ IMDL_module_transformer *MDL::create_module_transformer()
 void MDL::set_external_entity_resolver(IEntity_resolver *resolver)
 {
     m_external_resolver = mi::base::make_handle_dup(resolver);
+}
+
+// Check if an external entity resolver is installed.
+bool MDL::uses_external_entity_resolver() const
+{
+    return m_external_resolver.is_valid_interface();
+}
+
+// Add a foreign module translator.
+void MDL::add_foreign_module_translator(
+    IMDL_foreign_module_translator *translator)
+{
+    m_translator_list.push_back(mi::base::make_handle_dup(translator));
+}
+
+// Remove a foreign module translator.
+bool MDL::remove_foreign_module_translator(
+    IMDL_foreign_module_translator *translator)
+{
+    for (Translator_list::iterator it(m_translator_list.begin()), end(m_translator_list.end());
+        it != end;
+        ++it)
+    {
+        if ((*it).get() == translator) {
+            m_translator_list.erase(it);
+            return true;
+        }
+    }
+    return false;
 }
 
 // Check if the compiler supports a requested MDL version.

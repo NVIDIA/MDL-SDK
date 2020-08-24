@@ -65,6 +65,8 @@ public:
     /// No dummy BSDF data is set for reflection and transmission.
     Bsdf_measurement();
 
+    Bsdf_measurement& operator=( const Bsdf_measurement&) = delete;
+
     // methods of mi::neuraylib::IBsdf_measurement
 
     /// Imports a BSDF measurement from a file.
@@ -91,35 +93,16 @@ public:
     ///                              - -3: Invalid file format.
     Sint32 reset_reader( DB::Transaction* transaction, mi::neuraylib::IReader* reader);
 
-    /// Imports a BSDF measurement from a file (used by MDL integration).
-    ///
-    /// \param transaction           The DB transaction to be used (to create the implementation
-    ///                              class in the DB).
-    /// \param resolved_filename     The resolved filename of the BSDF measurement. The MDL
-    ///                              integration passes an already resolved filename here since it
-    ///                              uses its own filename resolution rules.
-    /// \param mdl_file_path         The MDL file path.
-    /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
-    ///                              hash is not known.
-    /// \return
-    ///                              -  0: Success.
-    ///                              - -2: Failure to resolve the given filename, e.g., the file
-    ///                                    does not exist.
-    ///                              - -3: Invalid file format or invalid filename extension (only
-    ///                                    \c .mbsdf is supported).
-    Sint32 reset_file_mdl(
-        DB::Transaction* transaction,
-        const std::string& resolved_filename,
-        const std::string& mdl_file_path,
-        const mi::base::Uuid& impl_hash);
-
-    /// Imports a BSDF measurement from a container (used by MDL integration).
+    /// Imports a BSDF measurement from a reader (used by MDL integration).
     ///
     /// \param transaction           The DB transaction to be used (to create the implementation
     ///                              class in the DB).
     /// \param reader                The reader for the BSDF measurement.
-    /// \param container_filename    The resolved container filename.
-    /// \param container_membername  The resolved container member name.
+    /// \param filename              The resolved filename (for file-based BSDF measurements).
+    /// \param container_filename    The resolved filename of the container itself (for container-based
+    ///                              BSDF measurements).
+    /// \param container_membername  The relative filename of the BSDF measuement in the container (for
+    ///                              container-based BSDF measurements).
     /// \param mdl_file_path         The MDL file path.
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
@@ -127,9 +110,10 @@ public:
     ///                              -  0: Success.
     ///                              - -3: Invalid file format or invalid filename extension (only
     ///                                    \c .mbsdf is supported).
-    Sint32 reset_container_mdl(
-       DB::Transaction* transaction,
-       mi::neuraylib::IReader* reader,
+    Sint32 reset_mdl(
+        DB::Transaction* transaction,
+        mi::neuraylib::IReader* reader,
+        const std::string& filename,
         const std::string& container_filename,
         const std::string& container_membername,
         const std::string& mdl_file_path,
@@ -239,11 +223,6 @@ private:
     /// Set up all cached values based on the values in \p impl.
     void setup_cached_values( const Bsdf_measurement_impl* impl);
 
-    /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
-    /// But the assignment operator is not implemented, although usually, they are implemented both
-    /// or none. Let's make the assignment operator private for now.
-    Bsdf_measurement& operator=( const Bsdf_measurement&);
-
     /// The file (or MDL file path) that contains the data of this DB element.
     ///
     /// Non-empty for file-based BSDF measurements.
@@ -319,6 +298,8 @@ public:
     /// generates the default copy constructor as soon as it is needed *inline*).
     Bsdf_measurement_impl( const Bsdf_measurement_impl& other);
 
+    Bsdf_measurement_impl& operator=( const Bsdf_measurement_impl&) = delete;
+
     /// Destructor.
     ///
     /// Explicit trivial destructor because the implicitly generated one requires the full
@@ -383,11 +364,6 @@ public:
 
 
 private:
-    /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
-    /// But the assignment operator is not implemented, although usually, they are implemented both
-    /// or none. Let's make the assignment operator private for now.
-    Bsdf_measurement_impl& operator=( const Bsdf_measurement_impl&);
-
     /// Serializes an instance of #mi::neuraylib::IBsdf_isotropic_data.
     static void serialize_bsdf_data(
         SERIAL::Serializer* serializer, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data);
@@ -431,23 +407,6 @@ bool import_from_reader(
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission);
 
-/// Imports BSDF data from a reader.
-///
-/// \param reader               The reader to import from.
-/// \param container_filename   The resolved filename of the container itself.
-/// \param container_membername The relative filename of the BSDF measurement in the container.
-/// \param[out] reflection      The imported BSDF data for the reflection (or \c NULL if there is no
-///                             BSDF data for the reflection.
-/// \param[out] transmission    The imported BSDF data for the reflection (or \c NULL if there is no
-///                             BSDF data for the transmission.
-/// \return                     \c true in case of success, \c false otherwise.
-bool import_from_reader(
-    mi::neuraylib::IReader* reader,
-    const std::string& container_filename,
-    const std::string& container_membername,
-    mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
-    mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission);
-
 /// Exports the BSDF data to a file.
 ///
 /// \param reflection     The BSDF data to export for the reflection. Can be \p NULL.
@@ -468,44 +427,21 @@ mi::neuraylib::IBuffer* create_buffer_from_bsdf_measurement(
     const mi::neuraylib::IBsdf_isotropic_data* reflection,
     const mi::neuraylib::IBsdf_isotropic_data* transmission);
 
-
 /// Loads a default BSDF measurement and stores it in the DB.
 ///
 /// Used by the MDL integration to process BSDF measurements that appear in default arguments
-/// (similar to the texture and light profile loaders). A fixed mapping from the resolved filename
-/// to DB element name is used to detect already loaded BSDF measurements. In such a case, the tag
-/// of the existing DB element is returned.
-///
-/// \param transaction           The DB transaction to be used.
-/// \param resolved_filename     The resolved filename of the BSDF measurement.
-/// \param mdl_file_path         The MDL file path.
-/// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
-///                              hash is not known.
-/// \param shared_proxy          Indicates whether a possibly already existing proxy DB element for
-///                              that resource should simply be reused (the decision is based on
-///                              \c resolved_filename, not on \c impl_hash). Otherwise, an
-///                              independent proxy DB element is created, even if the resource has
-///                              already been loaded.
-/// \return                      The tag of that BSDF measurement (invalid in case of failures).
-DB::Tag load_mdl_bsdf_measurement(
-    DB::Transaction* transaction,
-    const std::string& resolved_filename,
-    const std::string& mdl_file_path,
-    const mi::base::Uuid& impl_hash,
-    bool shared_proxy);
-
-/// Loads a default BSDF measurement and stores it in the DB.
-///
-/// Used by the MDL integration to process BSDF measurements that appear in default arguments
-/// (similar to the texture and light profile loaders). A fixed mapping from the container and
-/// member filenames to DB element name is used to detect already loaded BSDF measurements.
-/// In such a case, the tag of the existing DB element is returned.
+/// (similar to the texture and light profile loaders). A fixed mapping from the filenames to DB
+/// element name is used to detect already loaded BSDF measurements. In such a case, the tag of the
+/// existing DB element is returned (but never for memory-based BSDF measurements).
 ///
 /// \param transaction           The DB transaction to be used.
 /// \param reader                The reader to be used to obtain the BSDF measurement. Needs to
 ///                              support absolute access.
-/// \param container_filename    The resolved filename of the container itself.
-/// \param container_membername  The relative filename of the BSDF measurement in the container.
+/// \param filename              The resolved filename (for file-based BSDF measurements).
+/// \param container_filename    The resolved filename of the container itself (for container-based
+///                              BSDF measurements).
+/// \param container_membername  The relative filename of the BSDF measuement in the container (for
+///                              container-based BSDF measurements).
 /// \param mdl_file_path         The MDL file path.
 /// \param impl_hash             Hash of the data in the implementation DB element. Use {0,0,0,0} if
 ///                              hash is not known.
@@ -518,6 +454,7 @@ DB::Tag load_mdl_bsdf_measurement(
 DB::Tag load_mdl_bsdf_measurement(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
+    const std::string& filename,
     const std::string& container_filename,
     const std::string& container_membername,
     const std::string& mdl_file_path,

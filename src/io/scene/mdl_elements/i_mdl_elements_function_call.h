@@ -67,6 +67,7 @@ public:
     /// Constructor.
     Mdl_function_call(
         DB::Tag module_tag,
+        const char* module_db_name,
         DB::Tag definition_tag,
         Mdl_ident definition_ident,
         IExpression_list* arguments,
@@ -79,6 +80,8 @@ public:
 
     // Copy constructor
     Mdl_function_call( const Mdl_function_call& other);
+
+    Mdl_function_call& operator=( const Mdl_function_call&) = delete;
 
     // methods corresponding to mi::neuraylib::IFunction_call
 
@@ -174,7 +177,7 @@ public:
         mi::Float32 mdl_meters_per_scene_unit,
         mi::Float32 mdl_wavelength_min,
         mi::Float32 mdl_wavelength_max,
-        Sint32* errors = 0) const;
+        Sint32* errors = nullptr) const;
 
     /// Improved version of SERIAL::Serializable::dump().
     ///
@@ -215,7 +218,7 @@ public:
 
     SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
 
-    void dump() const { dump( /*transaction*/ 0); }
+    void dump() const { dump( /*transaction*/ nullptr); }
 
     // methods of DB::Element_base
 
@@ -242,6 +245,7 @@ private:
     DB::Tag m_definition_tag;                    ///< The corresponding function definition.
     Mdl_ident m_definition_ident;                ///< The corresponding function definition identifier.
     mi::mdl::IDefinition::Semantics m_mdl_semantic; ///< The MDL semantic. (*)
+    std::string m_module_db_name;                ///< The DB name of the module. (*)
     std::string m_definition_name;               ///< The MDL name of the function definition. (*)
     std::string m_definition_db_name;            ///< The DB name of the function definition. (*)
     bool m_immutable;                            ///< The immutable flag (set for defaults).

@@ -49,6 +49,14 @@ namespace mdl {
 
 typedef ptr_hash_set<IDefinition const>::Type Def_set;
 
+/// An interface that decides whether to inline a given module.
+class IInline_import_callback
+{
+public:
+    /// Return whether to inline the given module or not.
+    virtual bool inline_import(IModule const *module) = 0;
+};
+
 /// Traverses a module and copies all entities into the target module.
 class Module_inliner : protected Module_visitor, public IClone_modifier
 {
@@ -62,22 +70,24 @@ public:
     /// \param alloc               The allocator.
     /// \param module              The current module.
     /// \param target_module       The target module.
+    /// \param inline_imports      The callback that decides whether to inline a given module.
+    /// \param omit_anno_origin    True, if no ::anno::origin annotations should be added.
     /// \param is_root_module      True, if 'module' is the root module of the traversal.
-    /// \param inline_mdle         True, if only MDLE definitions should be inlined.
     /// \param references          A map holding the references that have already been cloned.
     /// \param imports             A set holding standard modules to be imported.
     /// \param visible_definitions Definitions visible at the interface of the root module.
-    /// \param resource_cb         Called, when a resource is encountered.
+    /// \param counter             Used to generate unique names.
     Module_inliner(
         IAllocator                                *alloc,
         Module const                              *module,
         Module                                    *target_module,
+        IInline_import_callback                   *inline_imports,
+        bool                                      omit_anno_origin,
         bool                                      is_root_module,
-        bool                                      inline_mdle,
         Reference_map                             &references,
         Import_set                                &imports,
         Def_set                                   &visible_definitions,
-        int&                                      counter
+        size_t                                    &counter
     );
 
     ~Module_inliner();
@@ -89,7 +99,18 @@ public:
     /// by a reference to the inlined function.
     IExpression *clone_expr_reference(IExpression_reference const *ref) MDL_FINAL;
 
-    // Clone a call.
+    /// Creates a reference to an imported entity.
+    ///
+    /// \param imported_def  the definition of the imported entity
+    /// \param orig_def      the original definition (from the owner module)
+    ///
+    /// \note We always create fully specified imports in the module inliner, hence the created
+    ///       reference uses a full qualified name here
+    IExpression *create_imported_reference(
+        Definition const *imported_def,
+        Definition const *orig_def);
+
+    /// Clone a call.
     IExpression *clone_expr_call(IExpression_call const *c_expr) MDL_FINAL;
 
     /// Clone a literal.
@@ -97,6 +118,24 @@ public:
 
     /// Clone a qualified name.
     IQualified_name *clone_name(IQualified_name const *qname) MDL_FINAL;
+
+    /// Promote a call from a MDL version to the target MDL version.
+    ///
+    /// \param[in]  mod       the target module
+    /// \param[in]  major     the major version of the source module (that owns the call)
+    /// \param[in]  minor     the major version of the source module (that owns the call)
+    /// \param[in]  ref       the callee reference
+    /// \param[in]  modifier  a clone modifier for cloning expressions
+    /// \param[out] rules     output: necessary rules to modify the arguments of the call
+    ///
+    /// \return the (potentially modified) callee reference
+    static IExpression_reference const *promote_call_reference(
+        Module                      &mod,
+        int                         major,
+        int                         minor,
+        IExpression_reference const *ref,
+        IClone_modifier             *modifier,
+        unsigned                     &rules);
 
 protected:
 
@@ -108,9 +147,9 @@ protected:
     ///
     /// If the referenced element originates from a different module, its
     /// declaration is traversed and eventually copied.
-    void post_visit(IExpression_reference *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_reference *expr) MDL_FINAL;
 
-    void post_visit(IExpression_literal *lit) MDL_FINAL;
+    IExpression *post_visit(IExpression_literal *lit) MDL_FINAL;
 
     void post_visit(IType_name *tn) MDL_FINAL;
 
@@ -124,8 +163,7 @@ protected:
                 decl,
                 m_target_module->clone_name(decl->get_name()),
                 decl->is_exported()));
-        }
-        else {
+        } else {
             IDefinition const *def = decl->get_definition();
             MDL_ASSERT(m_references.find(def) == m_references.end());
 
@@ -164,6 +202,12 @@ protected:
     /// Clones the given declaration and puts it into the reference map.
     void post_visit(IDeclaration_annotation *decl) MDL_FINAL;
 
+    /// Checks, if the non-root declaration has already been copied.
+    bool pre_visit(IDeclaration_constant *decl) MDL_FINAL;
+
+    /// Clones the given declaration and puts it into the reference map.
+    void post_visit(IDeclaration_constant *decl) MDL_FINAL;
+
 private:
 
     /// Generates a call to the cloned constructor from the values of the original compound.
@@ -171,8 +215,10 @@ private:
         IValue_compound const *vs_ori,
         ISymbol const         *new_sym);
 
-    /// Generates a new name from a simple name and a module name.
-    ISimple_name const *generate_name(ISimple_name const *sn, char const* prefix);
+    /// Generates a new name from a simple name and a prefix.
+    ISimple_name const *generate_name(
+        ISimple_name const *sn,
+        char const         *prefix);
 
     /// Clones a statement.
     IStatement *clone_statement(IStatement const *stmt);
@@ -260,6 +306,16 @@ private:
         ISimple_name const            *anno_name,
         bool                          is_exported);
 
+    /// Clones a constant declaration.
+    ///
+    /// \param decl             The declaration to clone.
+    /// \param prefix           The new name prefix.
+    ///
+    /// \return The cloned declaration.
+    void clone_declaration(
+        IDeclaration_constant *decl,
+        char const            *prefix);
+
     /// Creates a reference from a simple name.
     IExpression_reference *simple_name_to_reference(
         ISimple_name const* name);
@@ -277,7 +333,14 @@ private:
         char const *value) const;
 
     /// Adds the given entity to the import set.
-    void register_import(char const *module_name, char const *symbol_name);
+    ///
+    /// \param module_name  the imported module name
+    /// \param symbol_name  the name of the imported entity
+    void register_import(
+        char const *module_name,
+        char const *symbol_name);
+
+    void register_child_types(IType const *tp);
 
     /// Handles a type.
     void do_type(IType const *t);
@@ -291,11 +354,14 @@ private:
     /// The target module.
     base::Handle<Module> m_target_module;
 
+    /// Callback to decide whether a given module is inlined.
+    IInline_import_callback *m_inline_imports;
+
+    /// True, if no ::anno::origin annotations should be added.
+    bool m_omit_anno_origin;
+
     /// True, if the current module is the root of the traversal.
     bool m_is_root;
-
-    /// True, if only MDLE definitions are supposed to be inlined.
-    bool m_inline_mdle;
 
     /// Map holding the inlined functions and its new symbol.
     Reference_map &m_references;
@@ -317,42 +383,45 @@ private:
     IName_factory        &m_nf;
     IValue_factory       &m_vf;
 
-    /// True, if non-root definition parameter defaults are to be kept
-    bool m_keep_non_root_parameter_defaults;
+    /// Current counter for adding number suffixes to unique symbols.
+    size_t &m_counter;
 
-    int& m_counter;
+    /// True, if non-root definition parameter defaults are to be kept.
+    bool m_keep_non_root_parameter_defaults;
 };
 
 /// Helper class which traverses a module to find all imported entities
 /// that require to be exported from the module.
-class Exports_collector : public Module_visitor
+class Exports_collector : protected Module_visitor
 {
 public:
     /// Constructor.
     ///
-    /// \param module       current module.
-    /// \param def_set      definition set to fill
-    /// \param is_root      true, if the given module is at the root of the traversal.
+    /// \param[in]  module       current module.
+    /// \param[out] def_set      definition set to fill
+    /// \param[in]  is_root      true, if the given module is at the root of the traversal.
     Exports_collector(
         Module const *module,
         Def_set      &def_set,
         bool         is_root);
 
+    ///
+    void collect();
+
+private:
     bool pre_visit(IDeclaration_function *decl) MDL_FINAL;
 
     bool pre_visit(IParameter *param) MDL_FINAL;
 
     bool pre_visit(IDeclaration_type_struct *decl) MDL_FINAL;
-        
+
     void post_visit(IAnnotation *anno) MDL_FINAL;
 
-    void post_visit(IExpression_reference *ref) MDL_FINAL;
+    IExpression *post_visit(IExpression_reference *ref) MDL_FINAL;
 
     void post_visit(IType_name *tn) MDL_FINAL;
 
-    void post_visit(IExpression_literal *lit) MDL_FINAL;
-
-private:
+    IExpression *post_visit(IExpression_literal *lit) MDL_FINAL;
 
     /// Collect user type definition.
     ///
@@ -426,6 +495,12 @@ protected:
     /// \param params  additional parameters
     void warning(int code, Error_params const &params);
 
+    /// Compute the resulting MDL version.
+    ///
+    /// \param root  the root module
+    IMDL::MDL_version compute_mdl_version(
+        Module const *root);
+
     /// Inlines the given module.
     ///
     /// \param module       the module
@@ -441,7 +516,7 @@ private:
     Messages_impl m_msg_list;
 
     /// Last message index.
-    int m_last_msg_idx;
+    size_t m_last_msg_idx;
 };
 
 }  // mdl

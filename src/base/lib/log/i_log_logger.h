@@ -209,7 +209,7 @@ public:
         va_list args;
         va_start( args, fmt);
         fatal( mod.name(), cat, det, fmt, args);
-        va_end( args);
+        va_end( args); //-V779
     }
 
     void fatal( const Module_name& mod, Category cat, const char* fmt, ...) PRINTFLIKE4
@@ -217,7 +217,7 @@ public:
         va_list args;
         va_start( args, fmt);
         fatal( mod.name(), cat, Det{}, fmt, args);
-        va_end( args);
+        va_end( args); //-V779
     }
 
     void error(
@@ -380,7 +380,7 @@ public:
         va_list args;
         va_start( args, fmt);
         fatal( SYSTEM::Module::id_to_name( mod), cat, Det{}.code(code), fmt, args);
-        va_end( args);
+        va_end( args); //-V779
     }
 
     void error(

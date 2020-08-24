@@ -122,6 +122,11 @@ public:
     }
 
     /// Write an unsigned.
+    void write_encoded(size_t i) {
+        write_encoded_tag(i);
+    }
+
+    /// Write an unsigned.
     void write_encoded(unsigned i) {
         write_unsigned(i);
     }
@@ -278,6 +283,12 @@ inline string DAG_deserializer::read_encoded() {
 template<>
 inline int DAG_deserializer::read_encoded() {
     return read_int();
+}
+
+/// Read an size_t.
+template<>
+inline size_t DAG_deserializer::read_encoded() {
+    return read_size_t();
 }
 
 /// Read an unsigned.

@@ -545,7 +545,7 @@ class Type_factory : public IType_factory
                         size_t n_params = size_t(ft->get_parameter_count());
 
                         size_t t = ret_type - (IType const *)0;
-                        t = ((t) >> 3) ^ (t >> 16) ^
+                        t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
                             size_t(KEY_FUNC_TYPE) ^ n_params;
 
                         for (size_t i = 0; i < n_params; ++i) {
@@ -564,7 +564,7 @@ class Type_factory : public IType_factory
                 case KEY_FUNC_KEY:
                     {
                         size_t t = key.type - (IType const *)0;
-                        t = ((t) >> 3) ^ (t >> 16) ^
+                        t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
                             size_t(KEY_FUNC_TYPE) ^ key.u.func.n_params;
 
                         IType_factory::Function_parameter const *p = key.u.func.params;
@@ -582,7 +582,7 @@ class Type_factory : public IType_factory
                         return ((t) >> 3) ^ (t >> 16) ^
                             size_t(key.kind) ^
                             ((char *)key.u.alias.sym - (char *)0) ^
-                            key.u.alias.mod;
+                            size_t(key.u.alias.mod);
                     }
                 case KEY_SIZED_ARRAY:
                     {

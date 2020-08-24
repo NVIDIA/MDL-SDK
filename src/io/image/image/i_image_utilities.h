@@ -39,6 +39,14 @@ namespace MI {
 
 namespace IMAGE {
 
+/// Dummy type to select the overload/constructor for container-based images.
+struct Container_based_helper {};
+typedef const Container_based_helper* Container_based;
+
+// Dummy type to select the overload/constructor for memory-based images.
+struct Memory_based_helper {};
+typedef const Memory_based_helper* Memory_based;
+
 const mi::Uint32 default_tile_width  = 64;
 const mi::Uint32 default_tile_height = 64;
 

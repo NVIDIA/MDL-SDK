@@ -40,6 +40,7 @@
 #include "../view_model/view_model.h"
 
 #include <mi/base/handle.h>
+#include <utils/io.h>
 namespace mi
 {
     namespace neuraylib
@@ -62,17 +63,38 @@ struct Mdl_browser_callbacks
 
 struct Mdl_qt_plugin_context
 {
-    // top level interface of the MDL SDK.
-    mi::base::Handle<mi::neuraylib::INeuray> neuray;
+    // constructor.
+    explicit Mdl_qt_plugin_context(
+        mi::neuraylib::INeuray* neuray,
+        mi::neuraylib::ITransaction* transaction)
+        : m_neuray(neuray, mi::base::DUP_INTERFACE)
+        , m_transaction(transaction, mi::base::DUP_INTERFACE)
+    {
+    }
 
-    // transaction to use while generating the cache.
-    mi::base::Handle<mi::neuraylib::ITransaction> transaction;
+    // destructor.
+    ~Mdl_qt_plugin_context()
+    {
+        m_transaction = nullptr;
+        m_neuray = nullptr;
+    }
 
     // Force to cache to rebuild.
     bool rebuild_module_cache = false;
 
     // callbacks for mdl browser events.
-    Mdl_browser_callbacks mdl_browser;
+    Mdl_browser_callbacks* get_mdl_browser_callbacks() { return &m_mdl_browser; }
+
+    // top level interface of the MDL SDK.
+    mi::neuraylib::INeuray* get_neuray() { return m_neuray.get(); }
+
+    // transaction to use while generating the cache.
+    mi::neuraylib::ITransaction* get_transaction() { return m_transaction.get(); }
+
+private:
+    Mdl_browser_callbacks m_mdl_browser;
+    mi::base::Handle<mi::neuraylib::INeuray> m_neuray;
+    mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
 };
 
 // used with non-qt applications
@@ -116,8 +138,7 @@ public:
         {
             // user provided path that contains the module folder, 
             // which contains the plugin dll and the qmldir
-            std::string plugin_path_s(plugin_path);
-            std::replace(plugin_path_s.begin(), plugin_path_s.end(), '\\', '/');
+            std::string plugin_path_s = mi::examples::io::normalize(std::string(plugin_path));
             if (plugin_path_s.back() == '/')
                 plugin_path_s = plugin_path_s.substr(0, plugin_path_s.length() - 1);
 
@@ -128,26 +149,35 @@ public:
             // assuming the working directory contains the module folder
             path = QString("MdlQtPlugin/mdl_qt_plugin") + fileSuffix;
         }
-        
+
         QPluginLoader* loader = new QPluginLoader(path);
 
-        loader->load();
-        if (loader->isLoaded())
+        try
         {
-            plugin_interface = qobject_cast<Mdl_qt_plugin_interface*>(loader->instance());
-            if (!plugin_interface->initialize(loader))
+            if (loader->load() && loader->isLoaded())
             {
-                qDebug() << "[error] Failed to init the Mdl_qt_plugin.";
-                loader->unload();
-                return nullptr;
-            }
+                plugin_interface = qobject_cast<Mdl_qt_plugin_interface*>(loader->instance());
+                if (!plugin_interface->initialize(loader))
+                {
+                    qDebug() << "[error] Failed to init the Mdl_qt_plugin.";
+                    qDebug() << "Location: " << path << "\n";
+                    loader->unload();
+                    return nullptr;
+                }
 
-            qDebug() << "Plugin: loaded MdlQtPlugin v.1.0\n";
-            qDebug() << "Location: " << loader->fileName() << "\n";
+                qDebug() << "Plugin: loaded MdlQtPlugin v.1.0\n";
+                qDebug() << "Location: " << loader->fileName() << "\n";
+            }
+            else
+            {
+                qDebug() << "[error] while opening plugin: " << loader->errorString() << "\n";
+                qDebug() << "Location: " << path << "\n";
+            }
         }
-        else
+        catch (std::exception & ex)
         {
-            qDebug() << "[error] while opening plugin: " << loader->errorString() << "\n";
+            qDebug() << "[error] exception while opening plugin: " << ex.what() << "\n";
+            qDebug() << "Location: " << path << "\n";
         }
 
         return plugin_interface;
@@ -155,13 +185,17 @@ public:
 
     // connect the plugin with the MDL SDK instances of the application.
     // meant to be used with Qt-based applications.
-    virtual bool set_context(QQmlApplicationEngine* engine, Mdl_qt_plugin_context* context) = 0;
+    virtual bool set_context(
+        QQmlApplicationEngine* engine,
+        Mdl_qt_plugin_context* context) = 0;
 
     // in case the application is not based on qt, the browser can be used as standalone window.
     // meant to be used for non-Qt-based applications.
-    virtual void show_select_material_dialog(Mdl_qt_plugin_context* context, Mdl_qt_plguin_browser_handle& out_handle) = 0;
+    virtual void show_select_material_dialog(
+        Mdl_qt_plugin_context* context,
+        Mdl_qt_plguin_browser_handle* out_handle) = 0;
 
-    // to be called from the application to unload the plugin and free it's resources.
+    // to be called from the application to unload the plugin and free its resources.
     virtual void unload() = 0;
 
 protected:

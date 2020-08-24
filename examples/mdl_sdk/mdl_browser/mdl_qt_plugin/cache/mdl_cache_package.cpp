@@ -75,7 +75,10 @@ bool Mdl_cache_package::update(mi::neuraylib::INeuray* neuray,
                 IMdl_cache_item* child = get_child(key);
                 if (!child)
                 {
-                    child = get_cache()->create(CK_PACKAGE, c_discovery->get_qualified_name());
+                    std::string qualified_name = c_discovery->get_qualified_name();
+                    std::string simple_name = c_discovery->get_simple_name();
+                    child = get_cache()->create(
+                        CK_PACKAGE, simple_name.c_str(), simple_name.c_str(), qualified_name.c_str());
                     add_child(child);
                 }
 
@@ -99,7 +102,10 @@ bool Mdl_cache_package::update(mi::neuraylib::INeuray* neuray,
                 IMdl_cache_item* child = get_child(key);
                 if(!child)
                 {
-                    child = get_cache()->create(CK_MODULE, c_discovery->get_qualified_name());
+                    std::string qualified_name = c_discovery->get_qualified_name();
+                    std::string simple_name = c_discovery->get_simple_name();
+                    child = get_cache()->create(
+                        CK_MODULE, simple_name.c_str(), simple_name.c_str(), qualified_name.c_str());
                     add_child(child);
                 }
 

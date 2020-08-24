@@ -72,13 +72,16 @@
 #ifndef IO_IMAGE_IMAGE_I_IMAGE_H
 #define IO_IMAGE_IMAGE_I_IMAGE_H
 
-#include <mi/base/handle.h>
-#include <mi/base/interface_declare.h>
-#include <string>
-#include <vector>
+#include "i_image_utilities.h"
+
 #include <base/system/main/i_module.h>
 
-#include "i_image_utilities.h"
+#include <mi/base/handle.h>
+#include <mi/base/interface_declare.h>
+
+#include <string>
+#include <vector>
+
 
 namespace mi {
 
@@ -189,6 +192,7 @@ public:
     /// \return                   The requested mipmap, or a dummy mipmap with a 1x1 pink pixel in
     ///                           case of errors.
     virtual IMipmap* create_mipmap(
+        Container_based,
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
@@ -202,6 +206,8 @@ public:
     /// \param reader             The reader to be used to obtain the mipmap. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
+    /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
+    ///                           or \c NULL in other contexts.
     /// \param tile_width         The desired tile width. The special value 0 implies an
     ///                           implementation-defined default.
     /// \param tile_height        The desired tile height. The special value 0 implies an
@@ -218,8 +224,10 @@ public:
     /// \return                   The requested mipmap, or a dummy mipmap with a 1x1 pink pixel in
     ///                           case of errors.
     virtual IMipmap* create_mipmap(
+        Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* mdl_file_path = nullptr,
         mi::Uint32 tile_width = 0,
         mi::Uint32 tile_height = 0,
         bool only_first_level = true,
@@ -324,6 +332,7 @@ public:
     /// \return                   The requested canvas, or a dummy canvas with a 1x1 pink pixel in
     ///                           case of errors.
     virtual mi::neuraylib::ICanvas* create_canvas(
+        Container_based,
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
@@ -341,6 +350,8 @@ public:
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
+    /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
+    ///                           or \c NULL in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
     /// \param tile_width         The desired tile width. The special value 0 implies an
@@ -357,8 +368,10 @@ public:
     /// \return                   The requested canvas, or a dummy canvas with a 1x1 pink pixel in
     ///                           case of errors.
     virtual mi::neuraylib::ICanvas* create_canvas(
+        Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* mdl_file_path = nullptr,
         mi::Uint32 miplevel = 0,
         mi::Uint32 tile_width = 0,
         mi::Uint32 tile_height = 0,

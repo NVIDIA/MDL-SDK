@@ -75,14 +75,14 @@ public:
     /// like the set of possible overloads or the location of a previous definition.
     /// An application can suppress the output of notes, but typically they deliver
     /// viable information for the user.
-    virtual int get_note_count() const = 0;
+    virtual size_t get_note_count() const = 0;
 
     /// Get the note attached at index.
     ///
     /// \param index  The index of the attached note.
     ///
     /// \returns      The attached note or NULL if the index does not exists.
-    virtual IMessage const *get_note(int index) const = 0;
+    virtual IMessage const *get_note(size_t index) const = 0;
 
     /// Get the message class.
     ///
@@ -98,16 +98,16 @@ public:
 class Messages : public Interface_owned {
 public:
     /// Get the number of messages.
-    virtual int get_message_count() const = 0;
+    virtual size_t get_message_count() const = 0;
 
     /// Get the message at index.
-    virtual IMessage const *get_message(int index) const = 0;
+    virtual IMessage const *get_message(size_t index) const = 0;
 
     /// Get number of error messages.
-    virtual int get_error_message_count() const = 0;
+    virtual size_t get_error_message_count() const = 0;
 
     /// Get the error message at index.
-    virtual IMessage const *get_error_message(int index) const = 0;
+    virtual IMessage const *get_error_message(size_t index) const = 0;
 
     /// Add a message.
     ///
@@ -122,7 +122,7 @@ public:
     /// \param end_column      The column on which the message ends.
     ///
     /// \returns               The current index of the message.
-    virtual int add_message(
+    virtual size_t add_message(
         IMessage::Severity severity,
         int                code,
         char               msg_class,
@@ -147,8 +147,8 @@ public:
     /// \param end_column      The column on which the message ends.
     ///
     /// \returns               The index of the note.
-    virtual int add_note(
-        int                index,
+    virtual size_t add_note(
+        size_t             index,
         IMessage::Severity severity,
         int                code,
         char               msg_class,

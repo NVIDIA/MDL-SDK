@@ -62,16 +62,16 @@ private:
 
 static bool need_vertical_params(
     IGenerated_code_dag const *code_dag,
-    int                       idx,
-    int                       n_params)
+    size_t                    idx,
+    size_t                    n_params)
 {
     if (n_params > 3) {
         // more than three parameters
         return true;
     }
-    if (idx < 0) {
-        idx = -(idx + 1);
-        for (int i = 0; i < n_params; ++i) {
+    if (idx & 1) {
+        idx = idx >> 1;
+        for (size_t i = 0; i < n_params; ++i) {
              if (code_dag->get_function_parameter_annotation_count(idx, i) > 0) {
                  // has annotations
                  return true;
@@ -82,7 +82,8 @@ static bool need_vertical_params(
              }
         }
     } else {
-        for (int i = 0; i < n_params; ++i) {
+        idx = idx >> 1;
+        for (size_t i = 0; i < n_params; ++i) {
              if (code_dag->get_material_parameter_annotation_count(idx, i) > 0) {
                  // has annotations
                  return true;
@@ -113,10 +114,10 @@ void DAG_code_printer::print(Printer *printer, mi::base::IInterface const *code)
     printer->printf(" \"%s\";\n", code_dag->get_module_name());
 
     // print imports
-    int import_count = code_dag->get_import_count();
+    size_t import_count = code_dag->get_import_count();
     if (import_count > 0) {
         print("\n");
-        for (int i = 0; i < import_count; ++i) {
+        for (size_t i = 0; i < import_count; ++i) {
             keyword("import");
             print(" \"");
             print(code_dag->get_import(i));
@@ -124,11 +125,11 @@ void DAG_code_printer::print(Printer *printer, mi::base::IInterface const *code)
         }
     }
 
-    if (int annotation_count = code_dag->get_module_annotation_count()) {
+    if (size_t annotation_count = code_dag->get_module_annotation_count()) {
         print("\nmodule [[\n");
-        for (int i = 0; i < annotation_count; ++i) {
+        for (size_t i = 0; i < annotation_count; ++i) {
             indent(1);
-            print_exp(1, code_dag.get(), -(i+1), code_dag->get_module_annotation(i));
+            print_exp(1, code_dag.get(), 2 * i + 1, code_dag->get_module_annotation(i));
             if (i < annotation_count - 1)
                 print(", ");
             print("\n");
@@ -158,7 +159,7 @@ static bool is_material_constructor_call(DAG_call const *call)
 void DAG_code_printer::print_exp(
     int                       depth,
     IGenerated_code_dag const *dag,
-    int                       def_index,
+    size_t                    def_index,
     DAG_node const            *node) const
 {
     switch(node->get_kind()) {
@@ -168,17 +169,19 @@ void DAG_code_printer::print_exp(
     case DAG_node::EK_TEMPORARY:
         {
             DAG_temporary const *temporary = cast<DAG_temporary>(node);
-            int index = temporary->get_index();
+            size_t index = temporary->get_index();
             char const *name;
-            if (def_index < 0)
-                name = dag->get_function_temporary_name(-(def_index+1),index);
-            else
-                name = dag->get_material_temporary_name(def_index,index);
+            if (def_index & 1) {
+                name = dag->get_function_temporary_name(def_index >> 1, index);
+            } else {
+                name = dag->get_material_temporary_name(def_index >> 1, index);
+            }
             push_color(IPrinter::C_ENTITY);
-            if (*name)
+            if (*name) {
                 m_printer->print(name);
-            else
-                m_printer->printf("t_%d", index);
+            } else {
+                m_printer->printf("t_" FMT_SIZE_T, index);
+            }
             pop_color();
         }
         break;
@@ -201,7 +204,7 @@ void DAG_code_printer::print_exp(
                 indent(depth+1);
                 print(call->get_parameter_name(i));
                 print(": ");
-                print_exp(depth+1,dag,def_index,call->get_argument(i));
+                print_exp(depth+1, dag, def_index, call->get_argument(i));
                 if (i < count - 1)
                     print(", ");
             }
@@ -212,10 +215,11 @@ void DAG_code_printer::print_exp(
         {
             int index = cast<DAG_parameter>(node)->get_index();
             push_color(IPrinter::C_ENTITY);
-            if (def_index < 0)
-                print(dag->get_function_parameter_name(-(def_index+1),index));
-            else
-                print(dag->get_material_parameter_name(def_index,index));
+            if (def_index & 1) {
+                print(dag->get_function_parameter_name(def_index >> 1, index));
+            } else {
+                print(dag->get_material_parameter_name(def_index >> 1, index));
+            }
             pop_color();
         }
         break;
@@ -642,8 +646,8 @@ void DAG_code_printer::print_mdl_type(
 // Print all types of the code dag.
 void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
 {
-    int types_count = code_dag->get_type_count();
-    for (int i = 0; i < types_count; ++i) {
+    size_t types_count = code_dag->get_type_count();
+    for (size_t i = 0; i < types_count; ++i) {
         IType const *type = code_dag->get_type(i);
 
         print("\n");
@@ -661,11 +665,11 @@ void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
         print(" ");
         print_mdl_type(type, /*full=*/true);
 
-        int sub_count = code_dag->get_type_sub_entity_count(i);
+        size_t sub_count = code_dag->get_type_sub_entity_count(i);
         if (sub_count >= 0) {
             print(" {\n");
 
-            for (int j = 0; j < sub_count; ++j) {
+            for (size_t j = 0; j < sub_count; ++j) {
                 indent(1);
 
                 if (IType const *e_tp = code_dag->get_type_sub_entity_type(i, j)) {
@@ -677,11 +681,11 @@ void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
                 print(code_dag->get_type_sub_entity_name(i, j));
                 pop_color();
 
-                if (int annotation_count = code_dag->get_type_sub_entity_annotation_count(i, j)) {
+                if (size_t annotation_count = code_dag->get_type_sub_entity_annotation_count(i, j)) {
                     print('\n');
                     indent(1);
                     print("[[\n");
-                    for (int k = 0; k < annotation_count; ++k) {
+                    for (size_t k = 0; k < annotation_count; ++k) {
                         indent(2);
                         print_exp(
                             2, code_dag, 0, code_dag->get_type_sub_entity_annotation(i, j, k));
@@ -701,9 +705,9 @@ void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
             print('}');
         }
 
-        if (int annotation_count = code_dag->get_type_annotation_count(i)) {
+        if (size_t annotation_count = code_dag->get_type_annotation_count(i)) {
             print("\n[[\n");
-            for (int k = 0; k < annotation_count; ++k) {
+            for (size_t k = 0; k < annotation_count; ++k) {
                 indent(1);
                 print_exp(1, code_dag, 0, code_dag->get_type_annotation(i, k));
                 if (k < annotation_count - 1)
@@ -719,11 +723,11 @@ void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
 // Print all constants of the code dag.
 void DAG_code_printer::print_constants(IGenerated_code_dag const *code_dag) const
 {
-    int constants_count = code_dag->get_constant_count();
+    size_t constants_count = code_dag->get_constant_count();
     if (constants_count > 0)
         print("\n");
 
-    for (int i = 0; i < constants_count; ++i) {
+    for (size_t i = 0; i < constants_count; ++i) {
         const char         *constant_name = code_dag->get_constant_name(i);
         DAG_constant const *init          = code_dag->get_constant_value(i);
         IType const        *type          = init->get_type();
@@ -736,9 +740,9 @@ void DAG_code_printer::print_constants(IGenerated_code_dag const *code_dag) cons
         print(" = ");
         print_exp(1, code_dag, 0, init);
 
-        if (int annotation_count = code_dag->get_constant_annotation_count(i)) {
+        if (size_t annotation_count = code_dag->get_constant_annotation_count(i)) {
             print("\n[[\n");
-            for (int k = 0; k < annotation_count; ++k) {
+            for (size_t k = 0; k < annotation_count; ++k) {
                 indent(1);
                 print_exp(1, code_dag, 0, code_dag->get_constant_annotation(i, k));
                 if (k < annotation_count - 1)
@@ -754,8 +758,8 @@ void DAG_code_printer::print_constants(IGenerated_code_dag const *code_dag) cons
 // Print all functions of the code dag.
 void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) const
 {
-    int function_count = code_dag->get_function_count();
-    for (int i = 0; i < function_count; ++i) {
+    size_t function_count = code_dag->get_function_count();
+    for (size_t i = 0; i < function_count; ++i) {
         print("\n");
         IDefinition::Semantics sema = code_dag->get_function_semantics(i);
         print_sema(sema);
@@ -783,12 +787,12 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
             pop_color();
         }
 
-        int n_refs = code_dag->get_function_references_count(i);
+        size_t n_refs = code_dag->get_function_references_count(i);
         if (n_refs > 0) {
             push_color(ISyntax_coloring::C_COMMENT);
             print("// Cross references:\n");
 
-            for (int j = 0; j < n_refs; ++j) {
+            for (size_t j = 0; j < n_refs; ++j) {
                 char const *ref = code_dag->get_function_reference(i, j);
                 print("//   '");
                 print(ref);
@@ -809,13 +813,13 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
 
         IType const *return_type = code_dag->get_function_return_type(i);
         print(return_type);
-        if (int annotation_count = code_dag->get_function_return_annotation_count(i)) {
+        if (size_t annotation_count = code_dag->get_function_return_annotation_count(i)) {
             print(" [[\n");
-            for (int k = 0; k < annotation_count; ++k) {
+            for (size_t k = 0; k < annotation_count; ++k) {
                 indent(1);
                 print_exp(
-                    1, code_dag, -(i+1), code_dag->get_function_return_annotation(i, k));
-                if(k < annotation_count - 1)
+                    1, code_dag, 2 * i + 1, code_dag->get_function_return_annotation(i, k));
+                if (k < annotation_count - 1)
                     print(", ");
                 print("\n");
             }
@@ -826,8 +830,8 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
         char const *function_name = code_dag->get_function_name(i);
         print(function_name);
         print("'(");
-        int parameter_count = code_dag->get_function_parameter_count(i);
-        bool vertical = need_vertical_params(code_dag, -(i+1), parameter_count);
+        size_t parameter_count = code_dag->get_function_parameter_count(i);
+        bool vertical = need_vertical_params(code_dag, 2 * i + 1, parameter_count);
 
         int depth = 0;
         if (vertical) {
@@ -852,9 +856,9 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
 
             char const *parameter_name = code_dag->get_function_parameter_name(i, k);
             print(parameter_name);
-            if (int annotation_count = code_dag->get_function_parameter_annotation_count(i, k)) {
+            if (size_t annotation_count = code_dag->get_function_parameter_annotation_count(i, k)) {
                 print(" [[\n");
-                for (int l = 0; l < annotation_count; ++l) {
+                for (size_t l = 0; l < annotation_count; ++l) {
                     DAG_call const *anno =
                         cast<DAG_call>(code_dag->get_function_parameter_annotation(i, k, l));
 
@@ -865,10 +869,10 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
                         print_exp(
                             depth,
                             code_dag,
-                            -(i + 1),
+                            2 * i + 1,
                             code_dag->get_function_parameter_enable_if_condition(i, k));
                     } else {
-                        print_exp(depth, code_dag, -(i + 1), anno);
+                        print_exp(depth, code_dag, 2 * i + 1, anno);
                     }
 
                     if (l < annotation_count - 1)
@@ -881,18 +885,18 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
 
             if (DAG_node const *init = code_dag->get_function_parameter_default(i, k)) {
                 print(" = ");
-                print_exp(depth, code_dag, -(i+1), init);
+                print_exp(depth, code_dag, 2 * i + 1, init);
             }
         }
         print(")");
         if (vertical)
             --depth;
 
-        if (int annotation_count = code_dag->get_function_annotation_count(i)) {
+        if (size_t annotation_count = code_dag->get_function_annotation_count(i)) {
             print("\n[[\n");
-            for (int k = 0; k < annotation_count; ++k) {
+            for (size_t k = 0; k < annotation_count; ++k) {
                 indent(1);
-                print_exp(1, code_dag, -(i+1), code_dag->get_function_annotation(i, k));
+                print_exp(1, code_dag, 2 * i + 1, code_dag->get_function_annotation(i, k));
                 if (k < annotation_count - 1)
                     print(", ");
                 print("\n");
@@ -902,10 +906,10 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
 
         if (DAG_node const *body = code_dag->get_function_body(i)) {
             print(" = ");
-            if (int temporary_count = code_dag->get_function_temporary_count(i)) {
+            if (size_t temporary_count = code_dag->get_function_temporary_count(i)) {
                 keyword("let");
                 print(" {\n");
-                for (int k = 0; k < temporary_count; k++) {
+                for (size_t k = 0; k < temporary_count; k++) {
                     Indent_scope scope(depth);
 
                     indent(depth);
@@ -915,7 +919,7 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
                         m_printer->printf("%s = ", name);
                     else
                        m_printer->printf("t_%d = ", k);
-                    print_exp(depth, code_dag, -(i+1), temporary);
+                    print_exp(depth, code_dag, 2 * i + 1, temporary);
                     print(";\n");
                 }
                 indent(depth);
@@ -923,7 +927,7 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
                 keyword("in");
                 print(" ");
             }
-            print_exp(depth, code_dag, -(i+1), body);
+            print_exp(depth, code_dag, 2 * i + 1, body);
         }
         print(";\n");
     }
@@ -932,8 +936,8 @@ void DAG_code_printer::print_functions(IGenerated_code_dag const *code_dag) cons
 // Print all materials of the code dag.
 void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) const
 {
-    int material_count = code_dag->get_material_count();
-    for (int mat_idx = 0; mat_idx < material_count; ++mat_idx) {
+    size_t material_count = code_dag->get_material_count();
+    for (size_t mat_idx = 0; mat_idx < material_count; ++mat_idx) {
         print("\n");
 
         char const *orig_name = code_dag->get_original_material_name(mat_idx);
@@ -969,8 +973,8 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
         const char *material_name = code_dag->get_material_name(mat_idx);
         print(material_name);
         print("(");
-        int parameter_count = code_dag->get_material_parameter_count(mat_idx);
-        bool vertical = need_vertical_params(code_dag, mat_idx, parameter_count);
+        size_t parameter_count = code_dag->get_material_parameter_count(mat_idx);
+        bool vertical = need_vertical_params(code_dag, 2 * mat_idx, parameter_count);
 
         int depth = 0;
         if (vertical) {
@@ -978,7 +982,7 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
             print("\n");
             indent(depth);
         }
-        for (int k = 0; k < parameter_count; ++k) {
+        for (size_t k = 0; k < parameter_count; ++k) {
             if (k > 0) {
                 if (vertical) {
                     print(",\n");
@@ -994,9 +998,9 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
             char const *p_name = code_dag->get_material_parameter_name(mat_idx, k);
             print(p_name);
 
-            if (int n_annos = code_dag->get_material_parameter_annotation_count(mat_idx, k)) {
+            if (size_t n_annos = code_dag->get_material_parameter_annotation_count(mat_idx, k)) {
                 print(" [[\n");
-                for (int l = 0; l < n_annos; ++l) {
+                for (size_t l = 0; l < n_annos; ++l) {
                     DAG_call const *anno = cast<DAG_call>(
                         code_dag->get_material_parameter_annotation(mat_idx, k, l));
 
@@ -1008,13 +1012,13 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
                         print_exp(
                             depth,
                             code_dag,
-                            mat_idx,
+                            2 * mat_idx,
                             code_dag->get_material_parameter_enable_if_condition(mat_idx, k));
                     } else {
                         print_exp(
                             depth,
                             code_dag,
-                            mat_idx,
+                            2 * mat_idx,
                             anno);
                     }
                     if (l < n_annos - 1)
@@ -1026,17 +1030,17 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
             }
             if (DAG_node const *init = code_dag->get_material_parameter_default(mat_idx, k)) {
                 print(" = ");
-                print_exp(depth, code_dag, mat_idx, init);
+                print_exp(depth, code_dag, 2 * mat_idx, init);
             }
         }
         print(")\n");
         if (vertical)
             --depth;
         print("= ");
-        if (int temporary_count = code_dag->get_material_temporary_count(mat_idx)) {
+        if (size_t temporary_count = code_dag->get_material_temporary_count(mat_idx)) {
             keyword("let");
             print(" {\n");
-            for (int k = 0; k < temporary_count; k++) {
+            for (size_t k = 0; k < temporary_count; k++) {
                 Indent_scope scope(depth);
 
                 indent(depth);
@@ -1046,7 +1050,7 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
                     m_printer->printf("%s = ", name);
                 else
                    m_printer->printf("t_%d = ", k);
-                print_exp(depth, code_dag, mat_idx, temporary);
+                print_exp(depth, code_dag, 2 * mat_idx, temporary);
                 print(";\n");
             }
             indent(depth);
@@ -1054,12 +1058,13 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
             keyword("in");
             print(" ");
         }
-        print_exp(depth, code_dag, mat_idx, code_dag->get_material_value(mat_idx));
-        if (int n_annos = code_dag->get_material_annotation_count(mat_idx)) {
+        print_exp(depth, code_dag, 2 * mat_idx, code_dag->get_material_value(mat_idx));
+        if (size_t n_annos = code_dag->get_material_annotation_count(mat_idx)) {
             print("\n[[\n");
-            for (int k = 0; k < n_annos; ++k) {
+            for (size_t k = 0; k < n_annos; ++k) {
                 indent(depth);
-                print_exp(depth, code_dag, mat_idx, code_dag->get_material_annotation(mat_idx,k));
+                print_exp(
+                    depth, code_dag, 2 * mat_idx, code_dag->get_material_annotation(mat_idx,k));
                 if (k < n_annos - 1)
                     print(", ");
                 print("\n");
@@ -1073,8 +1078,8 @@ void DAG_code_printer::print_materials(IGenerated_code_dag const *code_dag) cons
 // Print all annotations of the code dag.
 void DAG_code_printer::print_annotations(IGenerated_code_dag const *code_dag) const
 {
-    int annotation_count = code_dag->get_annotation_count();
-    for (int i = 0; i < annotation_count; ++i) {
+    size_t annotation_count = code_dag->get_annotation_count();
+    for (size_t i = 0; i < annotation_count; ++i) {
         print("\n");
         IDefinition::Semantics sema = code_dag->get_annotation_semantics(i);
         print_sema(sema);
@@ -1105,8 +1110,8 @@ void DAG_code_printer::print_annotations(IGenerated_code_dag const *code_dag) co
         char const *annotation_name = code_dag->get_annotation_name(i);
         print(annotation_name);
         print("'(");
-        int parameter_count = code_dag->get_annotation_parameter_count(i);
-        bool vertical = need_vertical_params(code_dag, -(i + 1), parameter_count);
+        size_t parameter_count = code_dag->get_annotation_parameter_count(i);
+        bool vertical = need_vertical_params(code_dag, 2 * i + 1, parameter_count);
 
         int depth = 0;
         if (vertical) {
@@ -1115,7 +1120,7 @@ void DAG_code_printer::print_annotations(IGenerated_code_dag const *code_dag) co
             indent(depth);
         }
 
-        for (int k = 0; k < parameter_count; ++k) {
+        for (size_t k = 0; k < parameter_count; ++k) {
             if (k > 0) {
                 if (vertical) {
                     print(",\n");
@@ -1134,18 +1139,18 @@ void DAG_code_printer::print_annotations(IGenerated_code_dag const *code_dag) co
 
             if (DAG_node const *init = code_dag->get_annotation_parameter_default(i, k)) {
                 print(" = ");
-                print_exp(depth, code_dag, -(i + 1), init);
+                print_exp(depth, code_dag, 2 * i + 1, init);
             }
         }
         print(")");
         if (vertical)
             --depth;
 
-        if (int annotation_count = code_dag->get_annotation_annotation_count(i)) {
+        if (size_t annotation_count = code_dag->get_annotation_annotation_count(i)) {
             print("\n[[\n");
-            for (int k = 0; k < annotation_count; ++k) {
+            for (size_t k = 0; k < annotation_count; ++k) {
                 indent(1);
-                print_exp(1, code_dag, -(i + 1), code_dag->get_annotation_annotation(i, k));
+                print_exp(1, code_dag, 2 * i + 1, code_dag->get_annotation_annotation(i, k));
                 if (k < annotation_count - 1)
                     print(", ");
                 print("\n");

@@ -35,7 +35,6 @@
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_evaluator_api.h>
-#include <mi/neuraylib/imdl_compiler.h>
 
 #include <base/system/main/access_module.h>
 

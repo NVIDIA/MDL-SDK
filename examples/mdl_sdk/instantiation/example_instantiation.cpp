@@ -33,8 +33,6 @@
 #include <iostream>
 #include <string>
 
-#include <mi/mdl_sdk.h>
-
 #include "example_shared.h"
 
 const char* material_definition_name = "mdl::nvidia::sdk_examples::tutorials::example_material";
@@ -68,8 +66,8 @@ void dump_instance(
 void instantiate_definitions(
     mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransaction* transaction)
 {
-    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+    mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+        neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
 
     mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
         neuray->get_api_component<mi::neuraylib::IMdl_factory>());
@@ -81,8 +79,8 @@ void instantiate_definitions(
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
         mdl_factory->create_execution_context());
 
-    // Load the module "example" and access it from the DB.
-    check_success( mdl_compiler->load_module(
+    // Load the module "tutorials" and access it from the DB.
+    check_success( mdl_impexp_api->load_module(
         transaction, "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
     print_messages( context.get());
 
@@ -218,20 +216,12 @@ void print_annotations(
 
     for( mi::Size a = 0; a < annotations.get_annotation_count(); ++a)
     {
-        std::string signature( annotations.get_annotation_name( a));
-
-        // strip signature
-        size_t p = signature.find( '(');
-        std::string name;
-        if( p != std::string::npos)
-            name = signature.substr( 0, p);
-
-        p = name.find_last_of( ':');
-        if( p != std::string::npos)
-            name = name.substr( p + 1);
-
+        mi::base::Handle<const mi::neuraylib::IAnnotation> anno(anno_block->get_annotation(a));
+        mi::base::Handle<const mi::neuraylib::IAnnotation_definition> anno_def(anno->get_definition());
+        std::string name = anno_def->get_mdl_simple_name();
         std::cout << "    \"" << name << "\" with "
             << annotations.get_annotation_param_count( a) << " parameter(s):\n";
+
         for( mi::Size p = 0; p < annotations.get_annotation_param_count( a); ++p)
         {
             mi::base::Handle<const mi::neuraylib::IType> type_handle(
@@ -381,23 +371,26 @@ void create_variant( mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransaction
     dump_instance( expression_factory.get(), material_instance.get(), std::cout);
 
     // Export the variant.
-    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
-    check_success( mdl_compiler->export_module( transaction, "mdl::variants", "variants.mdl") == 0);
+    mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+        neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
+    check_success( mdl_impexp_api->export_module( transaction, "mdl::variants", "variants.mdl") == 0);
 }
 
 int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 {
     // Access the MDL SDK
-    mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    check_success( neuray.is_valid_interface());
+    mi::base::Handle<mi::neuraylib::INeuray> neuray(mi::examples::mdl::load_and_get_ineuray());
+    if (!neuray.is_valid_interface())
+        exit_failure("Failed to load the SDK.");
 
     // Configure the MDL SDK
-    configure( neuray.get());
+    if (!mi::examples::mdl::configure(neuray.get()))
+        exit_failure("Failed to initialize the SDK.");
 
     // Start the MDL SDK
-    mi::Sint32 result = neuray->start();
-    check_start_success( result);
+    mi::Sint32 ret = neuray->start();
+    if (ret != 0)
+        exit_failure("Failed to initialize the SDK. Result code: %d", ret);
 
     {
         mi::base::Handle<mi::neuraylib::IDatabase> database(
@@ -420,14 +413,15 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
     }
 
     // Shut down the MDL SDK
-    check_success( neuray->shutdown() == 0);
-    neuray = 0;
+    if (neuray->shutdown() != 0)
+        exit_failure("Failed to shutdown the SDK.");
 
     // Unload the MDL SDK
-    check_success( unload());
+    neuray = nullptr;
+    if (!mi::examples::mdl::unload())
+        exit_failure("Failed to unload the SDK.");
 
-    keep_console_open();
-    return EXIT_SUCCESS;
+    exit_success();
 }
 
 // Convert command line arguments to UTF8 on Windows

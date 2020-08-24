@@ -34,10 +34,12 @@
 #include "common.h"
 #include "base_application.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
     class Fence;
+
+    // --------------------------------------------------------------------------------------------
 
     class Command_queue
     {
@@ -78,6 +80,8 @@ namespace mdl_d3d12
         std::queue<D3DCommandList*> m_free_command_list_queue;
     };
 
+    // --------------------------------------------------------------------------------------------
+
     class Fence
     {
     public:
@@ -96,6 +100,6 @@ namespace mdl_d3d12
         HANDLE m_fence_event;
         UINT64 m_fence_value;
     };
-}
 
+}}} // mi::examples::mdl_d3d12
 #endif

@@ -90,61 +90,158 @@ color gltf_perpare_emission(uniform texture_2d texture, int coord_index, color e
 
 export material gltf_material(
     // base color
-    uniform texture_2d base_color_texture = texture_2d(),
-    uniform int base_color_texture_coord_index = 0,
-    uniform color base_color_factor = color(1.0), 
+    uniform color base_color_factor = color(1.0)
+    [[
+        anno::in_group("PBR Metallic Roughness"),
+        anno::display_name("Base color factor"),
+        anno::description("The base color of the material. Multiplied to the base color texture if available.")
+    ]],
+    uniform texture_2d base_color_texture = texture_2d()
+    [[
+        anno::in_group("PBR Metallic Roughness"),
+        anno::display_name("Base color texture"),
+        anno::description("The base color of the material. Influenced by the base color factor.")
+    ]],
+    uniform int base_color_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // metallic roughness
-    uniform texture_2d metallic_roughness_texture = texture_2d(),
-    uniform int metallic_roughness_texture_coord_index = 0,
     uniform float metallic_factor = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("PBR Metallic Roughness"),
+        anno::display_name("Metallic factor"),
+        anno::description("The metalness of the material. Select between dielectric (0.0) and metallic (1.0). Multiplied to the base metallic texture value if available.")
     ]],
 
     uniform float roughness_factor = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("PBR Metallic Roughness"),
+        anno::display_name("Roughness factor"),
+        anno::description("The roughness of the material. Select between very glossy (0.0) and dull (1.0). Multiplied to the base roughness texture value if available.")
     ]],
+    uniform texture_2d metallic_roughness_texture = texture_2d()
+    [[
+        anno::in_group("PBR Metallic Roughness"),
+        anno::display_name("Metal/rough texture"),
+        anno::description("Metallic in the red or blue component and roughness in the green component. Influenced by the metallic and roughness factors."),
+        anno::enable_if("metallic_factor>0.0 || roughness_factor>0.0")
+    ]],
+    uniform int metallic_roughness_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // normal map
-    uniform texture_2d normal_texture = texture_2d(),
-    uniform int normal_texture_coord_index = 0,
-    uniform int normal_texture_tangent_index = 0,
+    uniform texture_2d normal_texture = texture_2d()
+    [[
+        anno::in_group("Normal mapping"),
+        anno::display_name("Normal texture"),
+        anno::description("Base layer normal map. Influenced by the normal scale factor.")
+    ]],
+    uniform int normal_texture_coord_index = 0 [[ anno::hidden() ]],
+    uniform int normal_texture_tangent_index = 0 [[ anno::hidden() ]],
     uniform float normal_scale_factor = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Normal mapping"),
+        anno::display_name("Normal scale factor"),
+        anno::description("Strength of the base layer normal mapping."),
+        anno::enable_if("::tex::texture_isvalid(normal_texture)")
     ]],
+
+    // clear coat
+    uniform float clearcoat_factor = 0.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Clearcoat"),
+        anno::display_name("Clearcoat factor"),
+        anno::description("Strength of the clearcoat. Multiplied to the clearcoat texture if available.")
+    ]],
+    uniform texture_2d clearcoat_texture = texture_2d()
+    [[
+        anno::in_group("Clearcoat"),
+        anno::display_name("Clearcoat texture"),
+        anno::description("Strength of the clearcoat. Influenced by the clearcoat factor."),
+        anno::enable_if("clearcoat_factor>0")
+    ]],
+    uniform int clearcoat_texture_coord_index = 0 [[ anno::hidden() ]],
+    uniform float clearcoat_roughness_factor = 0.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Clearcoat"),
+        anno::display_name("Clearcoat Roughness Factor"),
+        anno::enable_if("clearcoat_factor>0.0")
+    ]],
+    uniform texture_2d clearcoat_roughness_texture = texture_2d()
+    [[
+        anno::in_group("Clearcoat"),
+        anno::display_name("Clearcoat Roughness Texture"),
+        anno::enable_if("clearcoat_factor>0.0 && clearcoat_roughness_factor>0.0")
+    ]],
+    uniform int clearcoat_roughness_texture_coord_index = 0 [[ anno::hidden() ]],
+    uniform texture_2d clearcoat_normal_texture = texture_2d()
+    [[
+        anno::in_group("Clearcoat"),
+        anno::display_name("Clearcoat Normal"),
+        anno::enable_if("clearcoat_factor>0.0")
+    ]],
+    uniform int clearcoat_normal_texture_coord_index = 0 [[ anno::hidden() ]],
+    uniform int clearcoat_normal_texture_tangent_index = 0 [[ anno::hidden() ]],
 
     // emission
-    uniform texture_2d emissive_texture = texture_2d(),
-    uniform int emissive_texture_coord_index = 0,
-    uniform color emissive_factor = color(1.0),
+    uniform color emissive_factor = color(1.0)
+    [[
+        anno::in_group("Emission"),
+        anno::display_name("Emission factor")
+    ]],
+    uniform texture_2d emissive_texture = texture_2d()
+    [[
+        anno::in_group("Emission"),
+        anno::display_name("Emission texture"),
+        anno::enable_if("::math::average(emissive_factor)>0.0")
+    ]],
+    uniform int emissive_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // ambient occlusion
-    uniform texture_2d occlusion_texture = texture_2d(),
-    uniform int occlusion_texture_coord_index = 0,
+    uniform texture_2d occlusion_texture = texture_2d()
+    [[
+        anno::in_group("Occlusion"),
+        anno::display_name("Occlusion texture")
+    ]],
     uniform float occlusion_strength = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Occlusion"),
+        anno::display_name("Occlusion strength"),
+        anno::enable_if("::tex::texture_isvalid(occlusion_texture)")
     ]],
+    uniform int occlusion_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // alpha
+    uniform gltf_alpha_mode alpha_mode = opaque
+    [[
+        anno::in_group("Opacity"),
+        anno::display_name("Alpha mode"),
+        anno::description("Select how to interpret the alpha value.")
+    ]],
     uniform float base_alpha = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Opacity"),
+        anno::display_name("Base Alpha"),
+        anno::description("Select between transparent (0.0) and opaque (1.0). Multiplied to the base color texture alpha channel if available."),
+        anno::enable_if("alpha_mode!=opaque")
     ]],
-
     // alpha for gltf_alpha_mode::mask
     uniform float alpha_cutoff  = 0.5
     [[
-        anno::hard_range(0.0, 1.0)
-    ]],
-    uniform gltf_alpha_mode alpha_mode = opaque
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Opacity"),
+        anno::display_name("Alpha cutoff"),
+        anno::description("Threshold to decide between fully transparent and fully opaque when alpha mode is 'mask'."),
+        anno::enable_if("alpha_mode==mask")
+    ]]
 ) [[
     anno::author("NVIDIA Corporation"),
-    anno::display_name("GLTF Material"),
-    anno::hidden(),
+    anno::display_name("GLTF Material - Metallic-Roughness"),
     anno::description("Metallic-Roughness Material that takes the GLTF pbr model parameters as input.")
 ]] = let {
 
@@ -163,6 +260,14 @@ export material gltf_material(
     float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_texture_coord_index, occlusion_strength);
     color emissive_color = gltf_perpare_emission(emissive_texture, emissive_texture_coord_index, emissive_factor);
 
+    // clearcoat
+    // ------------------------------------------------------------------------
+    float clearcoat_blend = gltf_prepare_tex_float3(clearcoat_texture, clearcoat_texture_coord_index).x * clearcoat_factor;
+    float clearcoat_roughness = gltf_prepare_tex_float3(clearcoat_roughness_texture, clearcoat_roughness_texture_coord_index).y * clearcoat_roughness_factor;
+    float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
+    float3 clearcoat_normal = gltf_prepare_normal(clearcoat_normal_texture, clearcoat_normal_texture_coord_index, clearcoat_normal_texture_tangent_index, 1.0f);
+    float grazing_refl_coat = math::max((1.0 - clearcoat_roughness), 0.0);
+
     // metallic roughness model
     // ------------------------------------------------------------------------
 
@@ -176,42 +281,50 @@ export material gltf_material(
     // for the dielectric component we layer the glossy component on top of the diffuse one,
     // the glossy layer has no color tint
     bsdf dielectric_component = df::custom_curve_layer(
-        weight: grazing_refl, // roughness is used to weight between diffuse and glossy
-        normal_reflectivity: 0.08,
+        weight: 1.0, // roughness is used to weight between diffuse and glossy
+        normal_reflectivity: 0.04,
         grazing_reflectivity: grazing_refl,
         layer: df::microfacet_ggx_vcavities_bsdf(roughness_u: roughness2),
-        base: df::diffuse_reflection_bsdf(tint: base_color * occlusion)
+        base: df::diffuse_reflection_bsdf(tint: base_color * occlusion),
+        normal: normal
         );
 
     // the metallic component doesn't have a diffuse component, 
-    // it's only glossy base_color is applied to tint it
+    // its only glossy base_color is applied to tint it
     bsdf metallic_component = df::microfacet_ggx_vcavities_bsdf(
         tint: base_color * occlusion, 
         roughness_u: roughness2);
 
     // final BSDF is a linear blend between dielectric and metallic component
-    bsdf dielectric_metal_mix = df::normalized_mix(
-        components:
-            df::bsdf_component[](
-                df::bsdf_component(
-                    component: metallic_component,
-                    weight: metallic),
-                df::bsdf_component(
-                    component: dielectric_component,
-                    weight: 1.0-metallic)
-            )
-        );
+    bsdf dielectric_metal_mix = df::weighted_layer(
+        weight: metallic,
+        base: dielectric_component,
+        layer: metallic_component,
+        normal: normal);
+
+    bsdf clearcoated = df::custom_curve_layer(
+        weight: clearcoat_blend,
+        normal_reflectivity: 0.04,
+        grazing_reflectivity: grazing_refl_coat,
+        layer: df::microfacet_ggx_vcavities_bsdf(
+            mode: df::scatter_reflect,
+            roughness_u: clearcoat_roughness2,
+            tint: color(1.0)),
+        base: df::weighted_layer(
+            weight: 1.0,
+            layer: dielectric_metal_mix,
+            normal: normal),
+        normal: clearcoat_normal);
 
 } in material(
     surface: material_surface(
-        scattering: dielectric_metal_mix,
+        scattering: clearcoated,
         emission:  material_emission (
             emission: df::diffuse_edf(),
-            intensity: emissive_color
+            intensity: emissive_color * ::math::PI
         )
     ),
     geometry: material_geometry(
-        normal: normal,
         cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff) 
     )
 );
@@ -219,61 +332,117 @@ export material gltf_material(
 
 export material gltf_material_khr_specular_glossiness(
     // diffuse color
-    uniform texture_2d diffuse_texture = texture_2d(),
-    uniform int diffuse_texture_coord_index = 0,
-    uniform color diffuse_factor = color(1.0), 
+    uniform color diffuse_factor = color(1.0)
+    [[
+        anno::in_group("PBR Specular Glossiness"),
+        anno::display_name("Diffuse factor"),
+        anno::description("The diffuse color of the material. Multiplied to the diffuse texture if available.")
+    ]],
+    uniform texture_2d diffuse_texture = texture_2d()
+    [[
+        anno::in_group("PBR Specular Glossiness"),
+        anno::display_name("Diffuse texture"),
+        anno::description("The diffuse color of the material. Influenced by the diffuse factor.")
+    ]],
+    uniform int diffuse_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // specular glossiness
-    uniform texture_2d specular_glossiness_texture = texture_2d(),
-    uniform int specular_glossiness_texture_coord_index = 0,
-    uniform color specular_factor = color(1.0)
+    uniform color specular_factor = 1.0
     [[
-        anno::hard_range(color(0.0), color(1.0))
+        anno::in_group("PBR Specular Glossiness"),
+        anno::display_name("Specular factor"),
+        anno::description("The specular color of the material. Multiplied to the rgb values of the specular glossy texture if available.")
     ]],
-
     uniform float glossiness_factor = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("PBR Specular Glossiness"),
+        anno::display_name("Glossiness factor"),
+        anno::description("The glossiness of the material. Select between diffuse (0.0) and nearly specular (1.0). Multiplied to the alpha values of the specular glossy texture if available.")
     ]],
+    uniform texture_2d specular_glossiness_texture = texture_2d()
+    [[
+        anno::in_group("PBR Specular Glossiness"),
+        anno::display_name("Specular Glossy texture"),
+        anno::description("The diffuse color of the material. Influenced by the diffuse factor.")
+    ]],
+    uniform int specular_glossiness_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // normal map
-    uniform texture_2d normal_texture = texture_2d(),
-    uniform int normal_texture_coord_index = 0,
-    uniform int normal_texture_tangent_index = 0,
+    uniform texture_2d normal_texture = texture_2d()
+    [[
+        anno::in_group("Normal mapping"),
+        anno::display_name("Normal texture"),
+        anno::description("Base layer normal map. Influenced by the normal scale factor.")
+    ]],
+    uniform int normal_texture_coord_index = 0 [[ anno::hidden() ]],
+    uniform int normal_texture_tangent_index = 0 [[ anno::hidden() ]],
     uniform float normal_scale_factor = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Normal mapping"),
+        anno::display_name("Normal scale factor"),
+        anno::description("Strength of the base layer normal mapping."),
+        anno::enable_if("::tex::texture_isvalid(normal_texture)")
     ]],
-
+    
     // emission
-    uniform texture_2d emissive_texture = texture_2d(),
-    uniform int emissive_texture_coord_index = 0,
-    uniform color emissive_factor = color(1.0),
+    uniform color emissive_factor = color(1.0)
+    [[
+        anno::in_group("Emission"),
+        anno::display_name("Emission factor")
+    ]],
+    uniform texture_2d emissive_texture = texture_2d()
+    [[
+        anno::in_group("Emission"),
+        anno::display_name("Emission texture"),
+        anno::enable_if("::math::average(emissive_factor)>0.0")
+    ]],
+    uniform int emissive_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // ambient occlusion
-    uniform texture_2d occlusion_texture = texture_2d(),
-    uniform int occlusion_texture_coord_index = 0,
+    uniform texture_2d occlusion_texture = texture_2d()
+    [[
+        anno::in_group("Occlusion"),
+        anno::display_name("Occlusion texture")
+    ]],
     uniform float occlusion_strength = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Occlusion"),
+        anno::display_name("Occlusion strength"),
+        anno::enable_if("::tex::texture_isvalid(occlusion_texture)")
     ]],
+    uniform int occlusion_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // alpha
+    uniform gltf_alpha_mode alpha_mode = opaque
+    [[
+        anno::in_group("Opacity"),
+        anno::display_name("Alpha mode"),
+        anno::description("Select how to interpret the alpha value.")
+    ]],
     uniform float base_alpha = 1.0
     [[
-        anno::hard_range(0.0, 1.0)
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Opacity"),
+        anno::display_name("Base Alpha"),
+        anno::description("Select between transparent (0.0) and opaque (1.0). Multiplied to the base color texture alpha channel if available."),
+        anno::enable_if("alpha_mode!=opaque")
     ]],
-
     // alpha for gltf_alpha_mode::mask
     uniform float alpha_cutoff  = 0.5
     [[
-        anno::hard_range(0.0, 1.0)
-    ]],
-    uniform gltf_alpha_mode alpha_mode = opaque
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Opacity"),
+        anno::display_name("Alpha cutoff"),
+        anno::description("Threshold to decide between fully transparent and fully opaque when alpha mode is 'mask'."),
+        anno::enable_if("alpha_mode==mask")
+    ]]
 ) [[
     anno::author("NVIDIA Corporation"),
     anno::display_name("GLTF Material"),
-    anno::hidden(),
+    anno::display_name("GLTF Material - Specular-Glossiness"),
     anno::description("Specular-Glossiness Material that takes the GLTF KHR extension parameters as input.")
 ]] = let {
 
@@ -328,7 +497,7 @@ export material gltf_material_khr_specular_glossiness(
         scattering: diffuse_specular_mix,
         emission:  material_emission (
             emission: df::diffuse_edf(),
-            intensity: emissive_color
+            intensity: emissive_color * ::math::PI
         )
     ),
     geometry: material_geometry(

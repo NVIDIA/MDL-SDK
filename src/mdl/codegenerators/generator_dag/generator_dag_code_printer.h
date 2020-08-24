@@ -69,7 +69,7 @@ private:
     void print_exp(
         int                       depth,
         IGenerated_code_dag const *dag,
-        int                       def_index,
+        size_t                    def_index,
         DAG_node const            *node) const;
 
     /// Print the semantics if known as a comment.

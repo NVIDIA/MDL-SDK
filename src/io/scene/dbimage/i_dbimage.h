@@ -108,7 +108,7 @@ public:
     /// Returns \c NULL if not supported.
     virtual mi::neuraylib::ICanvas* get_canvas( mi::Size i) const = 0;
 
-    /// Returns the image format, or \c NULL if not available.
+    /// Returns the image format, or the empy string if not available.
     virtual const char* get_image_format() const = 0;
 
     /// Creates a mipmap for the i'th uv-tile.
@@ -215,6 +215,8 @@ public:
     ///       a 1x1 canvas with a pink pixel (same as after default construction). See
     ///       #mi::neuraylib::IImage for the rationale.
     Image( const Image& other);
+
+    Image& operator=( const Image&) = delete;
 
     /// Destructor.
     ///
@@ -401,7 +403,7 @@ public:
     /// Indicates whether a hash for the implementation class is available.
     bool is_impl_hash_valid() const { return m_impl_hash != mi::base::Uuid{0,0,0,0}; }
 
-    /// Returns the hash of the implementation class (or default-constructed hash if invalid).
+    /// Returns the hash of the implementation class (or zero-initialized hash if invalid).
     const mi::base::Uuid& get_impl_hash() const { return m_impl_hash; }
 
     /// Access to low level tile mapping, used by material converter
@@ -412,11 +414,6 @@ public:
         mi::Sint32& offset_v) const;
 
 private:
-    /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
-    /// But the assignment operator is not implemented, although usually, they are implemented both
-    /// or none. Let's make the assignment operator private for now.
-    Image& operator=( const Image&);
-
     /// Searches for files matching the given path or udim/uv-tile pattern
     ///
     /// \param path path to resolve
@@ -504,6 +501,8 @@ public:
     ///       default-constructed instance. See #mi::neuraylib::IImage for the rationale.
     Image_impl( const Image_impl& other);
 
+    Image_impl& operator=( const Image_impl&) = delete;
+
     /// Destructor.
     ///
     /// Explicit trivial destructor because the implicitly generated one requires the full
@@ -589,11 +588,6 @@ public:
         mi::Sint32& offset_v) const;
 
 private:
-    /// Comments on DB::Element_base and DB::Element say that the copy constructor is needed.
-    /// But the assignment operator is not implemented, although usually, they are implemented both
-    /// or none. Let's make the assignment operator private for now.
-    Image_impl& operator=( const Image_impl&);
-
     // All members below are essentially const, but cannot be declared as such due to deserialize().
 
     /// Indicates whether the image is valid (not default- or copy-constructed, nor deserialized

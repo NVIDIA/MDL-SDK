@@ -139,6 +139,9 @@ public:
     /// Retrieve the current module.
     Module const &get_module() const { return m_module; }
 
+    /// Enable all warnings.
+    void enable_all_warning(bool flag) { m_all_warnings_are_off = !flag; }
+
     /// Creates a new error.
     ///
     /// \param code    the error code
@@ -219,6 +222,16 @@ public:
     ///
     /// \param def  the definition of a function
     static IType const *get_result_type(IDefinition const *def);
+
+    /// If true, compile in strict mode.
+    bool strict_mode() const { return m_strict_mode; }
+
+    /// If true, experimental MDL features are enable.
+    bool enable_experimental_features() const { return m_enable_experimental_features; }
+
+    /// If true, resolve resources and generate errors if resources are missing.
+    bool resolve_resources() const { return m_resolve_resources; }
+
 
 protected:
     /// Enter an imported definition.
@@ -419,6 +432,10 @@ protected:
         int              param_idx) const;
 
     /// Constructor.
+    ///
+    /// \param compiler   the MDL compiler
+    /// \param module     the module to analyze
+    /// \param ctx        the current thread context
     Analysis(
         MDL            *compiler,
         Module         &module,
@@ -460,10 +477,10 @@ protected:
     Definition_table *m_def_tab;
 
     /// set if we inside a select expression lookup
-    const IType *m_in_select;
+    IType const *m_in_select;
 
     /// The index of the last generated message, used to add a note.
-    int m_last_msg_idx;
+    size_t m_last_msg_idx;
 
     /// The current match restriction.
     Match_restriction m_curr_restriction;
@@ -489,11 +506,17 @@ protected:
     /// If true, all warnings are errors.
     bool m_all_warnings_are_errors;
 
+    /// If true, all warnings are off.
+    bool m_all_warnings_are_off;
+
     /// If true, compile in strict mode.
     bool m_strict_mode;
 
     /// If true, compile with experimental MDL features.
     bool m_enable_experimental_features;
+
+    /// If true, resolve resources and generate errors if resources are missing.
+    bool m_resolve_resources;
 
 
     typedef map<size_t, size_t>::Type Module_2_file_id_map;
@@ -1589,7 +1612,9 @@ private:
     /// Handle resource constructors.
     ///
     /// \param call_expr  a call representing an resource constructor call
-    void handle_resource_constructor(IExpression_call *call_expr);
+    ///
+    /// \return the associated resource value
+    IExpression *handle_resource_constructor(IExpression_call *call_expr);
 
     /// Process a resource url.
     ///
@@ -1675,7 +1700,7 @@ private:
     /// \param prerelease  the pre-release string
     /// \param pos         the position of the annotation
     ///
-    /// \return the posiotion of a previous set semantic number or NULL
+    /// \return the position of a previous set semantic number or NULL
     Position const *set_module_sem_version(
         Module         &module,
         int            major,
@@ -1789,23 +1814,23 @@ private:
 
     void post_visit(IStatement_return *ret_stmt) MDL_OVERRIDE;
 
-    void post_visit(IExpression_invalid *inv_expr) MDL_OVERRIDE;
+    IExpression *post_visit(IExpression_invalid *inv_expr) MDL_OVERRIDE;
 
-    void post_visit(IExpression_literal *lit) MDL_OVERRIDE;
+    IExpression *post_visit(IExpression_literal *lit) MDL_OVERRIDE;
 
-    void post_visit(IExpression_reference *ref) MDL_OVERRIDE;
+    IExpression *post_visit(IExpression_reference *ref) MDL_OVERRIDE;
 
-    void post_visit(IExpression_unary *un_expr) MDL_OVERRIDE;
+    IExpression *post_visit(IExpression_unary *un_expr) MDL_OVERRIDE;
 
     bool pre_visit(IExpression_binary *bin_expr) MDL_OVERRIDE;
-    void post_visit(IExpression_binary *bin_expr) MDL_OVERRIDE;
+    IExpression *post_visit(IExpression_binary *bin_expr) MDL_OVERRIDE;
 
-    void post_visit(IExpression_conditional *cond_expr) MDL_OVERRIDE;
+    IExpression *post_visit(IExpression_conditional *cond_expr) MDL_OVERRIDE;
 
     bool pre_visit(IExpression_let *let_expr) MDL_OVERRIDE;
 
     bool pre_visit(IExpression_call *call_expr) MDL_OVERRIDE;
-    void post_visit(IExpression_call *call_expr) MDL_OVERRIDE;
+    IExpression *post_visit(IExpression_call *call_expr) MDL_OVERRIDE;
 
     void post_visit(IQualified_name *qual_name) MDL_OVERRIDE;
 
@@ -1821,8 +1846,7 @@ public:
         MDL              *compiler,
         Module           &module,
         Thread_context   &ctx,
-        IModule_cache    *cache,
-        bool             resolve_resources);
+        IModule_cache    *cache);
 
 private:
     /// The currently processed "preset-overload".
@@ -1867,6 +1891,9 @@ private:
     /// If set, the call graph will be dumped.
     bool m_opt_dump_cg;
 
+    /// If set, resource file paths are kept as is (and are not converted to absolute file paths).
+    bool m_opt_keep_original_resource_file_paths;
+
     /// If set, we are visiting an annotation on the current module.
     bool m_is_module_annotation;
 
@@ -1875,9 +1902,6 @@ private:
 
     /// If true, the current module has the array assignment operator.
     bool m_has_array_assignment;
-
-    /// If true, resolve resources and generate errors if resources are missing.
-    bool m_resolve_resources;
 
 
     /// The current module cache.
@@ -2251,12 +2275,12 @@ private:
     void post_visit(IDeclaration_function *decl) MDL_FINAL;
 
     bool pre_visit(IExpression *expr) MDL_FINAL;
-    void post_visit(IExpression *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression *expr) MDL_FINAL;
     bool pre_visit(IExpression_binary *expr) MDL_FINAL;
     bool pre_visit(IExpression_unary *expr) MDL_FINAL;
-    void post_visit(IExpression_call *expr) MDL_FINAL;
-    void post_visit(IExpression_reference *expr) MDL_FINAL;
-    void post_visit(IExpression_conditional *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_call *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_reference *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_conditional *expr) MDL_FINAL;
 
     /// Set the current function name from a (valid) function definition.
     ///
@@ -2283,8 +2307,11 @@ private:
     /// If set, the current assigned definition.
     Definition const *m_curr_assigned_def;
 
-    /// If set, the we are inside the body of a function/material declaration.
+    /// If set, we are inside the body of a function/material declaration.
     IDeclaration_function const *m_curr_entity_decl;
+
+    /// If set, we are inside a function/material declaration.
+    Definition const *m_curr_entity_def;
 
     /// The context stack.
     vector<IStatement const *>::Type m_context_stack;
@@ -2454,7 +2481,7 @@ private:
 
     bool pre_visit(IExpression_call *expr) MDL_FINAL;
 
-    void post_visit(IExpression_reference *ref) MDL_FINAL;
+    IExpression *post_visit(IExpression_reference *ref) MDL_FINAL;
 
     bool pre_visit(IParameter *param) MDL_FINAL;
 
@@ -2529,7 +2556,7 @@ public:
 
 private:
     void post_visit(IStatement *stmt) MDL_FINAL;
-    void post_visit(IExpression *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression *expr) MDL_FINAL;
     void post_visit(IDeclaration *decl) MDL_FINAL;
 
 private:

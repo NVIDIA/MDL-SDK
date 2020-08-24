@@ -191,13 +191,19 @@ private:
     ///                  MDL search path and supporting MDL archives
     void load_image(mi::mdl::IEntity_resolver *resolver)
     {
-        mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(resolver->open_resource(
-            m_path.c_str(),
-            /*owner_file_path=*/ nullptr,
-            /*owner_name=*/ nullptr,
-            /*pos=*/ nullptr));
-        if (!reader)
+        mi::base::Handle<mi::mdl::IMDL_resource_set> resource_set(
+            resolver->resolve_resource_file_name(
+                m_path.c_str(),
+                /*owner_file_path=*/ nullptr,
+                /*owner_name=*/ nullptr,
+                /*pos=*/ nullptr));
+        if (!resource_set)
             return;
+        
+        if (resource_set->get_udim_mode() != mi::mdl::NO_UDIM || resource_set->get_count() != 1)
+            return;
+
+        mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(resource_set->open_reader(0));
 
         FreeImageIO io;
         io.read_proc = read_handler;
@@ -370,8 +376,9 @@ public:
     /// Called for an enumerated texture resource.
     /// Registers the texture in this collection and in the current lambda, if set.
     ///
-    /// \param t  the texture resource or an invalid_ref
-    virtual void texture(mi::mdl::IValue const *t) override
+    /// \param t          the texture resource or an invalid_ref
+    /// \param tex_usage  the potential usage of the texture
+    virtual void texture(mi::mdl::IValue const *t, Texture_usage tex_usage) override
     {
         texture_impl(t);
     }
@@ -1519,6 +1526,13 @@ public:
         // the generated "evaluate" and "auxiliary" functions and how the data is passed.
         options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, df_handle_mode.c_str());
 
+        // Option "jit_scene_data_names": Default is "".
+        // Uncomment the line below to enable calling the scene data runtime functions
+        // for any scene data names or specify a comma-separated list of names for which
+        // you may provide scene data. The example runtime functions always return the
+        // default values, which is the same as not supporting any scene data.
+        //     options.set_option(MDL_JIT_OPTION_SCENE_DATA_NAMES, "*");
+
         // After we set the options, we can create a link unit
         m_link_unit = mi::base::make_handle(m_jit_be->create_link_unit(
             mi::mdl::ICode_generator_jit::CM_PTX,
@@ -1684,7 +1698,7 @@ void Material_ptx_compiler::collect_material_argument_resources(
 
         switch (value->get_kind()) {
         case mi::mdl::IValue::VK_TEXTURE:
-            m_res_col.texture(vf->import(value));
+            m_res_col.texture(vf->import(value), 0);
             break;
         case mi::mdl::IValue::VK_LIGHT_PROFILE:
             m_res_col.light_profile(vf->import(value));

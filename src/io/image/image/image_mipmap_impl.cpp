@@ -169,6 +169,7 @@ Mipmap_impl::Mipmap_impl(
 }
 
 Mipmap_impl::Mipmap_impl(
+    Container_based,
     mi::neuraylib::IReader* reader,
     const std::string& archive_filename,
     const std::string& member_filename,
@@ -235,8 +236,15 @@ Mipmap_impl::Mipmap_impl(
     m_levels.resize( m_nr_of_levels);
 
     for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
-        m_levels[i] = new Canvas_impl( reader, archive_filename, member_filename,
-            i, tile_width, tile_height, image_file.get());
+        m_levels[i] = new Canvas_impl(
+            Container_based(),
+            reader,
+            archive_filename,
+            member_filename,
+            i,
+            tile_width,
+            tile_height,
+            image_file.get());
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
@@ -247,8 +255,10 @@ Mipmap_impl::Mipmap_impl(
 }
 
 Mipmap_impl::Mipmap_impl(
+    Memory_based,
     mi::neuraylib::IReader* reader,
     const char* image_format,
+    const char* mdl_file_path,
     mi::Uint32 tile_width,
     mi::Uint32 tile_height,
     bool only_first_level,
@@ -307,8 +317,15 @@ Mipmap_impl::Mipmap_impl(
     m_levels.resize( m_nr_of_levels);
 
     for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
-        m_levels[i] = new Canvas_impl( reader, image_format,
-            i, tile_width, tile_height, image_file.get());
+        m_levels[i] = new Canvas_impl(
+            Memory_based(),
+            reader,
+            image_format,
+            mdl_file_path,
+            i,
+            tile_width,
+            tile_height,
+            image_file.get());
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());

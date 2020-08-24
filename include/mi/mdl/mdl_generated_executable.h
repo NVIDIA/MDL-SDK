@@ -300,13 +300,15 @@ public:
     /// \param dist_kind        the kind of distribution to add
     /// \param func_kind        the kind of the function to add
     /// \param arg_block_index  the argument block index for this function or ~0 if not used
+    /// \param state_usage      the state usage of the function to add
     ///
     /// \returns the function index of the added function
     virtual size_t add_function_info(
         char const *name,
         Distribution_kind dist_kind,
         Function_kind func_kind,
-        size_t arg_block_index) = 0;
+        size_t arg_block_index,
+        IGenerated_code_executable::State_usage state_usage) = 0;
 
     /// Get the number of distribution function handles referenced by a function.
     ///
@@ -334,6 +336,13 @@ public:
     virtual size_t add_function_df_handle(
         size_t func_index,
         char const *handle_name) = 0;
+
+    /// Get the state properties used by a function.
+    ///
+    /// \param func_index     The index of the function.
+    ///
+    /// \return The state usage or 0, if the \p func_index was invalid.
+    virtual State_usage get_function_state_usage(size_t func_index) const = 0;
 };
 
 /// A handler for MDL runtime exceptions.

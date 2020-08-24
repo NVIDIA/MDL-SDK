@@ -145,6 +145,8 @@ public:
         MF_IS_DEBUG   = 1 << 3, ///< This is the debug module.
         MF_IS_NATIVE  = 1 << 4, ///< This module is native.
         MF_IS_HASHED  = 1 << 5, ///< This module has function hashes.
+        MF_IS_MDLE    = 1 << 6, ///< This is an MDLE module.
+        MF_IS_FOREIGN = 1 << 7, ///< This module is converted from a foreign language.
     };  // can be or'ed
 
     typedef set<Function_hash>::Type Function_hash_set;
@@ -365,6 +367,9 @@ public:
     /// Returns true if this is a module is the one and only builtins module.
     bool is_builtins() const MDL_FINAL;
 
+    /// Returns true if this is an MDLE module.
+    bool is_mdle() const MDL_FINAL;
+
     /// Returns the amount of used memory by this module.
     size_t get_memory_size() const MDL_FINAL;
 
@@ -380,17 +385,18 @@ public:
     /// \note Note that modules with missing import entries cannot be compiled.
     bool restore_import_entries(IModule_cache *cache) const MDL_FINAL;
 
-    /// Lookup a function definition given by its name and a comma separated list
-    /// of (positional) parameter types.
-    /// Apply overload rules.
+    /// Lookup a function definition given by its name and an array of (positional) parameter
+    /// types. Apply overload rules.
     ///
-    /// \param func_name   the name of the function
-    /// \param param_sig   a comma separated list of MDL types, NULL means NO parameter
+    /// \param func_name              the name of the function
+    /// \param param_type_names       the parameter type names
+    /// \param num_param_type_names   the number of parameter type names
     ///
     /// \return the found overload set if there is at least one match, NULL otherwise
     IOverload_result_set const *find_overload_by_signature(
-        char const *func_name,
-        char const *param_sig) const MDL_FINAL;
+        char const         *func_name,
+        char const * const param_type_names[],
+        size_t             num_param_type_names) const MDL_FINAL;
 
     /// Returns the mangled MDL name of a definition that is owned by the current module
     /// if one exists.
@@ -416,31 +422,34 @@ public:
         IDefinition const *def,
         IThread_context   *context) const MDL_FINAL;
 
-    /// Lookup an exact annotation definition given by its name and a comma separated list
-    /// of all (positional) parameter types.
+    /// Lookup an exact annotation definition given by its name and an array of of all (positional
+    /// parameter types.
     ///
-    /// \param anno_name   the name of the annotation
-    /// \param param_sig   a comma separated list of MDL types, NULL means NO parameter
+    /// \param anno_name              the name of the annotation
+    /// \param param_type_names       the parameter type names
+    /// \param num_param_type_names   the number of parameter type names
     ///
     /// \return the definition of the function if there is exactly one match, NULL otherwise
     ///
     /// \note This method currently does not support the lookup of annotations with deferred size
     ///       parameters.
     IDefinition const *find_annotation(
-        char const *anno_name,
-        char const *param_sig) const MDL_FINAL;
+        char const         *anno_name,
+        char const * const param_type_names[],
+        size_t             num_param_type_names) const MDL_FINAL;
 
-    /// Lookup an annotation definition given by its name and a comma separated list
-    /// of (positional) parameter types.
-    /// Apply overload rules.
+    /// Lookup an annotation definition given by its name and an array of (positional) parameter
+    /// types. Apply overload rules.
     ///
-    /// \param anno_name   the name of the annotation
-    /// \param param_sig   a comma separated list of MDL types, NULL means NO parameter
+    /// \param anno_name              the name of the annotation
+    /// \param param_type_names       the parameter type names
+    /// \param num_param_type_names   the number of parameter type names
     ///
     /// \return the found overload set if there is at least one match, NULL otherwise
     IOverload_result_set const *find_annotation_by_signature(
-        char const *anno_name,
-        char const *param_sig) const MDL_FINAL;
+        char const         *anno_name,
+        char const * const param_type_names[],
+        size_t             num_param_type_names) const MDL_FINAL;
 
     /// Get the module declaration of this module if any.
     ///
@@ -953,20 +962,6 @@ public:
         int              param_index,
         unsigned         rules);
 
-    /// Analyze the module.
-    ///
-    /// \param cache              if non-NULL, a cache of already loaded modules
-    /// \param ctx                the thread context
-    /// \param resolve_resources  if true, the compiler will resolve all referenced resourced
-    ///
-    /// \returns      True if the module is valid and false otherwise.
-    ///
-    /// This runs the MDL compiler's semantical analysis on this module.
-    bool analyze(
-        IModule_cache   *cache,
-        IThread_context *ctx,
-        bool            resolve_resources);
-
     /// Clear all function hashes.
     void clear_function_hashes() { m_func_hashes.clear(); }
 
@@ -1098,20 +1093,22 @@ private:
     /// \returns the import entry, NULL if idx is out of range.
     Import_entry const *get_import_entry(size_t idx) const;
 
-    /// Get the import index for a given (already imported) module.
+    /// Get the import index plus 1 for a given (already imported) module.
     ///
     /// \param mod  the imported module
     ///
-    /// \returns the import index, 0 if mod is not part of the import table.
+    /// \returns the import index plus 1, or 0 if mod is not part of the import table.
     size_t get_import_index(Module const *mod) const;
 
-    /// Get the import index for a given (already imported) module.
+public:
+    /// Get the import index plus 1 for a given (already imported) module.
     ///
     /// \param abs_name  the absolute module name of the imported module
     ///
-    /// \returns the import index, 0 if abs_name is not part of the import table.
+    /// \returns the import index plus 1, or 0 if abs_name is not part of the import table.
     size_t get_import_index(char const *abs_name) const;
 
+private:
     /// Get the unique id of the original owner module of a definition.
     ///
     /// \param def  the definition, must be owned by this module
@@ -1167,7 +1164,8 @@ private:
     /// Helper function to parse definition and the parameter types from a signature.
     Definition const *parse_annotation_params(
         char const                  *anno_name,
-        char const                  *param_sig,
+        char const * const          param_type_names[],
+        int                         num_param_type_names,
         vector<IType const *>::Type &arg_types) const;
 
     /// Check all referenced resources by this module for restrictions.
@@ -1237,6 +1235,9 @@ private:
 
     /// Set if this module is the one and only builtins module.
     bool m_is_builtins;
+
+    /// Set if this is an MDLE module.
+    bool m_is_mdle;
 
     /// Set if this module is native.
     bool m_is_native;

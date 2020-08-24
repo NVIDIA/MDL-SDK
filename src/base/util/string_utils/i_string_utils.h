@@ -97,8 +97,12 @@ std::string to_upper(
 //@}
 
 /// Convert the given char input of UTF-8 format into a wchar.
+///
+/// Code points beyong U+FFFF are replaced by '?', even if the underlying implementation of wchar
+/// (e.g. 4 byte on Linux) could handle that code point.
 std::wstring utf8_to_wchar(
     const char* str);
+
 #ifdef WIN_NT
 /// Convert the given wchar string input into a multibyte char string output.
 std::string wchar_to_mbs(

@@ -114,7 +114,7 @@ public:
 
     // Set the deserializer to use the given buffer for input
     void reset(
-	Uint8* buffer,					// the buffer
+	const Uint8* buffer,				// the buffer
 	size_t buffer_size);				// the size of the buffer
 
     // Deserialize from a buffer of known size

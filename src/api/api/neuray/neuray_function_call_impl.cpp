@@ -54,7 +54,7 @@ DB::Element_base* Function_call_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new MDL::Mdl_function_call;
 }
 
@@ -64,7 +64,7 @@ mi::base::IInterface* Function_call_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Function_call_impl())->cast_to_major();
 }
 
@@ -78,7 +78,7 @@ const char* Function_call_impl::get_function_definition() const
     DB::Transaction* db_transaction = get_db_transaction();
     DB::Tag tag = get_db_element()->get_function_definition(db_transaction);
     if (!tag.is_valid())
-        return 0;
+        return nullptr;
     return db_transaction->tag_to_name( tag);
 }
 

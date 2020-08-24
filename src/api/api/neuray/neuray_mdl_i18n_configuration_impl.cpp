@@ -102,14 +102,14 @@ mi::Sint32 Mdl_i18n_configuration_impl::set_locale( const char* locale)
 
 const char* Mdl_i18n_configuration_impl::get_locale() const
 {
-    return m_locale.empty() ? NULL : m_locale.c_str();
+    return m_locale.empty() ? nullptr : m_locale.c_str();
 }
 
 const char* Mdl_i18n_configuration_impl::get_system_locale() const
 {
     // NOTE TODO: setlocal() fails to return the value of LC_ALL env var, not sure why
     // Get the env variable using getenv() instead for the time being
-    const char * locale_set = NULL;
+    const char * locale_set = nullptr;
     //locale_set = setlocale(LC_ALL, NULL);
     //if (locale_set == NULL)
     //{
@@ -119,11 +119,11 @@ const char* Mdl_i18n_configuration_impl::get_system_locale() const
     locale_set = getenv("LC_ALL");
     if (!locale_set)
     {
-        return NULL;
+        return nullptr;
     }
     if (string(locale_set) == "C")
     {
-        return NULL;
+        return nullptr;
     }
     return locale_set;
 }

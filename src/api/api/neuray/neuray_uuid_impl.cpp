@@ -44,7 +44,7 @@ mi::base::IInterface* Uuid_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new Uuid_impl();
 }
 

@@ -36,8 +36,8 @@ set(PROJECT_HEADERS
     "backends_target_code.h"
     )
 
-set(PROJECT_SOURCES 
-    "backends_backends.cpp" 
+set(PROJECT_SOURCES
+    "backends_backends.cpp"
     "backends_target_code.cpp"
     ${PROJECT_HEADERS}
     )
@@ -49,7 +49,10 @@ create_from_base_preset(
 )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
+        mdl::base-system-version
+        mdl::base-data-serial
+        mdl::base-system-version
     )

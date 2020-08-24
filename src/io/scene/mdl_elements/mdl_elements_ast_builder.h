@@ -91,27 +91,24 @@ public:
         const mi::base::Handle<IExpression_list const>& args,
         Name_mangler& name_mangler);
 
-    /// Create a qualified name from a string.
+    /// Create a simple name from a string without signature.
+    ///
+    /// \param name  the name
+    const mi::mdl::ISimple_name* create_simple_name( const std::string& name);
+
+    /// Create a qualified name from a string without signature.
     ///
     /// \param name  the name
     ///
     /// \note Handle :: as scope operator
-    mi::mdl::IQualified_name* create_qualified_name(
-        const std::string& name);
-
-    /// Create a simple name from a string.
-    ///
-    /// \param name  the name
-    const mi::mdl::ISimple_name* create_simple_name(
-        const char* name);
+    mi::mdl::IQualified_name* create_qualified_name( const std::string& name);
 
     /// Create a qualified name (containing the scope) from a string.
     ///
     /// \param name  the name
     ///
     /// \note Handle :: as scope operator, might create a qualified name without a component
-    mi::mdl::IQualified_name* create_scope_name(
-        const std::string& name);
+    mi::mdl::IQualified_name* create_scope_name( const std::string& name);
 
     /// Construct a Type_name AST element for a neuray type.
     ///
@@ -183,7 +180,7 @@ public:
     /// \param type   if non-NULL, the MDL type
     mi::mdl::IExpression_reference* to_reference(
         mi::mdl::IQualified_name* qname,
-        const mi::mdl::IType* type = NULL);
+        const mi::mdl::IType* type = nullptr);
 
     /// Create a reference expression for a given Symbol.
     ///
@@ -206,13 +203,6 @@ public:
 
     /// Get the list of used user types.
     const User_type_list& get_used_user_types() const { return m_used_user_types; }
-
-    /// Un-mangle a DAG mangled name.
-    ///
-    /// \param name  a DAG mangled name
-    ///
-    /// \note does not remove a $mdl_version suffix on deprecated symbols
-    std::string dag_unmangle(char const *name);
 
 private:
     /// The MDL module that will own the newly constructed entities.

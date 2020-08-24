@@ -352,7 +352,7 @@ void *DebugMallocAllocator::objalloc(char const *cls_name, Size size)
     if (h == NULL && size != 0) {
         os_printf("*** Memory exhausted (after " PRT_SIZE "Mb).\n",
             m_allocated_size >> size_t(20));
-        abort();
+        abort(); //-V2014
     }
 
     m_allocated_size += size;
@@ -538,7 +538,7 @@ DebugMallocAllocator::~DebugMallocAllocator()
         // abort in debug mode, so unit test will fail if they have memory errors
         os_printf("*** Memory errors found, aborting ...\n");
         fflush(stderr);
-        abort();
+        abort(); //-V2014
     }
 }
 

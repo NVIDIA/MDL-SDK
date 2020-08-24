@@ -42,24 +42,23 @@ StructuredBuffer<Environment_sample_data> environment_sample_buffer : register(t
 [shader("miss")]
 void RadianceMissProgram(inout RadianceHitInfo payload : SV_RayPayload)
 {
-    float pdf;
+    float light_pdf;
     float3 radiance = environment_evaluate( // (see common.hlsl)
         environment_texture,                // assuming lat long map
         environment_sample_buffer,          // importance sampling data of the environment map
         WorldRayDirection(),                // assuming WorldRayDirection() to be normalized
-        pdf);
+        light_pdf);
 
     // to incorporate the point light selection probability
     if (point_light_enabled == 1)
-        pdf *= 0.5f;
+        light_pdf *= 0.5f;
 
-    if (payload.last_pdf > 0.0f)
-    {
-        float mis_weight = payload.last_pdf / (payload.last_pdf + pdf);
-        radiance *= mis_weight;
-    }
+    // MIS weight for non-specular BSDF events
+    const float mis_weight = (payload.last_bsdf_pdf == DIRAC)
+        ? 1.0f
+        : payload.last_bsdf_pdf / (payload.last_bsdf_pdf + light_pdf);
 
-    payload.contribution += payload.weight * radiance;
+    payload.contribution += payload.weight * radiance * mis_weight;
     add_flag(payload.flags, FLAG_DONE);
 }
 

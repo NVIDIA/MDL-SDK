@@ -120,28 +120,30 @@ public:
     /// State fields.
     enum State_field {
         // Environment context
-        STATE_ENV_DIRECTION,            ///< Result of state::direction().
-        STATE_ENV_RO_DATA_SEG,          ///< Pointer to the read only data segment.
+        STATE_ENV_DIRECTION,                ///< Result of state::direction().
+        STATE_ENV_RO_DATA_SEG,              ///< Pointer to the read only data segment.
 
         // Core context
-        STATE_CORE_NORMAL,              ///< Result of state::normal().
-        STATE_CORE_GEOMETRY_NORMAL,     ///< Result of state::geometry_normal().
-        STATE_CORE_POSITION,            ///< Result of state::position().
-        STATE_CORE_ANIMATION_TIME,      ///< Result of state::animation_time().
-        STATE_CORE_TEXTURE_COORDINATE,  ///< Array of texture_coordinates.
-        STATE_CORE_TANGENT_U,           ///< Array to tangent_u.
-        STATE_CORE_TANGENT_V,           ///< Array to tangent_v.
-        STATE_CORE_BITANGENTS,          ///< Array to compute tangents from.
-        STATE_CORE_TEXT_RESULTS,        ///< texture results lookup table.
-        STATE_CORE_RO_DATA_SEG,         ///< Pointer to the read only data segment.
+        STATE_CORE_NORMAL,                  ///< Result of state::normal().
+        STATE_CORE_GEOMETRY_NORMAL,         ///< Result of state::geometry_normal().
+        STATE_CORE_POSITION,                ///< Result of state::position().
+        STATE_CORE_ANIMATION_TIME,          ///< Result of state::animation_time().
+        STATE_CORE_TEXTURE_COORDINATE,      ///< Array of texture_coordinates.
+        STATE_CORE_TANGENT_U,               ///< Array to tangent_u.
+        STATE_CORE_TANGENT_V,               ///< Array to tangent_v.
+        STATE_CORE_BITANGENTS,              ///< Array to compute tangents from.
+        STATE_CORE_TEXT_RESULTS,            ///< texture results lookup table.
+        STATE_CORE_RO_DATA_SEG,             ///< Pointer to the read only data segment.
 
         // the following fields are available if the uniform state is included only
-        STATE_CORE_W2O_TRANSFORM,       ///< The world-to-object transform matrix.
-        STATE_CORE_O2W_TRANSFORM,       ///< The object-to-world transform matrix.
-        STATE_CORE_OBJECT_ID,           ///< Result of state::object_id().
+        STATE_CORE_W2O_TRANSFORM,           ///< The world-to-object transform matrix.
+        STATE_CORE_O2W_TRANSFORM,           ///< The object-to-world transform matrix.
+        STATE_CORE_OBJECT_ID,               ///< Result of state::object_id().
+        STATE_CORE_METERS_PER_SCENE_UNIT,   ///< Result of state::meters_per_scene_unit()
+                                            ///< and reciprocal of state::scene_units_per_meter().
 
         // only available for HLSL
-        STATE_CORE_ARG_BLOCK_OFFSET,    ///< The argument block offset.
+        STATE_CORE_ARG_BLOCK_OFFSET,        ///< The argument block offset.
     };
 
     /// Exception state access index.
@@ -186,6 +188,21 @@ public:
         THV_bsdf_measurement_sample,        ///< df_bsdf_measurement_sample()
         THV_bsdf_measurement_pdf,           ///< df_bsdf_measurement_pdf()
         THV_bsdf_measurement_albedos,       ///< df_bsdf_measurement_albedos()
+        THV_scene_data_isvalid,             ///< scene_data_isvalid()
+        THV_scene_data_lookup_float,        ///< scene_data_lookup_float()
+        THV_scene_data_lookup_float2,       ///< scene_data_lookup_float2()
+        THV_scene_data_lookup_float3,       ///< scene_data_lookup_float3()
+        THV_scene_data_lookup_float4,       ///< scene_data_lookup_float4()
+        THV_scene_data_lookup_int,          ///< scene_data_lookup_int()
+        THV_scene_data_lookup_int2,         ///< scene_data_lookup_int2()
+        THV_scene_data_lookup_int3,         ///< scene_data_lookup_int3()
+        THV_scene_data_lookup_int4,         ///< scene_data_lookup_int4()
+        THV_scene_data_lookup_color,        ///< scene_data_lookup_color()
+        THV_scene_data_lookup_deriv_float,  ///< scene_data_lookup_deriv_float()
+        THV_scene_data_lookup_deriv_float2, ///< scene_data_lookup_deriv_float2()
+        THV_scene_data_lookup_deriv_float3, ///< scene_data_lookup_deriv_float3()
+        THV_scene_data_lookup_deriv_float4, ///< scene_data_lookup_deriv_float4()
+        THV_scene_data_lookup_deriv_color,  ///< scene_data_lookup_deriv_color()
         THV_LAST
     };
 
@@ -336,6 +353,12 @@ public:
     /// \param type  the MDL type
     mi::mdl::IType const *skip_deriv_type(mi::mdl::IType const *type) const;
 
+    /// Skip to the base value LLVM type of a derivative LLVM type or just return the type itself
+    /// for non-derivative types.
+    ///
+    /// \param type  the LLVM type
+    llvm::Type *skip_deriv_type(llvm::Type *type) const;
+
     /// Checks if a given MDL type needs struct return calling convention.
     ///
     /// \param type  the type to check
@@ -426,6 +449,12 @@ public:
     /// Get the LLVM int[3] * type.
     llvm::PointerType *get_arr_int_3_ptr_type() const { return get_ptr(m_type_arr_int_3); }
 
+    /// Get the LLVM int[4] type.
+    llvm::ArrayType *get_arr_int_4_type() const { return m_type_arr_int_4; }
+
+    /// Get the LLVM int[4] * type.
+    llvm::PointerType *get_arr_int_4_ptr_type() const { return get_ptr(m_type_arr_int_4); }
+
     /// Get the LLVM float[2] type.
     llvm::ArrayType *get_arr_float_2_type() const { return m_type_arr_float_2; }
 
@@ -444,6 +473,9 @@ public:
     /// Get the LLVM (float[4]) * type.
     llvm::PointerType *get_arr_float_4_ptr_type() const { return get_ptr(m_type_arr_float_4); }
 
+    /// Get the LLVM derivative type for float.
+    llvm::Type *get_deriv_float_type() const { return m_type_deriv_float; }
+
     /// Get the LLVM derivative type for float2.
     llvm::StructType *get_deriv_float2_type() const { return m_type_deriv_float2; }
 
@@ -452,6 +484,12 @@ public:
 
     /// Get the LLVM derivative type for float3.
     llvm::StructType *get_deriv_float3_type() const { return m_type_deriv_float3; }
+
+    /// Get the LLVM derivative type for float[3].
+    llvm::StructType *get_deriv_arr_float_3_type() const { return m_type_deriv_arr_float_3; }
+
+    /// Get the LLVM derivative type for float[4].
+    llvm::StructType *get_deriv_arr_float_4_type() const { return m_type_deriv_arr_float_4; }
 
     /// Get the LLVM float3x3 type.
     llvm::Type *get_float3x3_type() const { return m_type_float3x3; }
@@ -670,15 +708,18 @@ private:
 
     llvm::ArrayType   *m_type_arr_int_2;
     llvm::ArrayType   *m_type_arr_int_3;
+    llvm::ArrayType   *m_type_arr_int_4;
 
     llvm::ArrayType   *m_type_arr_float_2;
     llvm::ArrayType   *m_type_arr_float_3;
     llvm::ArrayType   *m_type_arr_float_4;
 
+    llvm::StructType  *m_type_deriv_float;
     llvm::StructType  *m_type_deriv_float2;
     llvm::StructType  *m_type_deriv_float3;
     llvm::StructType  *m_type_deriv_arr_float_2;
     llvm::StructType  *m_type_deriv_arr_float_3;
+    llvm::StructType  *m_type_deriv_arr_float_4;
 
     llvm::Type        *m_type_float2x2;
     llvm::Type        *m_type_float3x2;

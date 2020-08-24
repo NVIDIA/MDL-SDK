@@ -56,27 +56,27 @@ public:
     explicit View_model(mi::neuraylib::INeuray* neuray,
                         mi::neuraylib::ITransaction* transaction,
                         Mdl_browser_callbacks* callbacks,
-                        bool cache_rebuild, 
+                        bool cache_rebuild,
                         const char* application_folder);
 
     virtual ~View_model();
 
-    // navigation component 
-    Q_PROPERTY(VM_nav_stack* navigation             READ get_navigation 
+    // navigation component
+    Q_PROPERTY(VM_nav_stack* navigation             READ get_navigation
                                                     NOTIFY navigation_changed)
         VM_nav_stack* get_navigation() const { return m_navigation; }
 
     // selection component
-    Q_PROPERTY(VM_sel_proxy_model* selectionModel   READ get_selection_model 
+    Q_PROPERTY(VM_sel_proxy_model* selectionModel   READ get_selection_model
                                                     NOTIFY selection_model_changed)
         VM_sel_proxy_model* get_selection_model() const { return m_selection_proxy_model; }
 
     // persistent application settings
-    Q_PROPERTY(Mdl_browser_settings* settings       READ get_settings 
+    Q_PROPERTY(Mdl_browser_settings* settings       READ get_settings
                                                     NOTIFY settings_changed)
         Mdl_browser_settings* get_settings() { return &m_settings; }
 
-    // navigation component 
+    // navigation component
     Q_PROPERTY(QString application_folder          READ get_application_folder
                NOTIFY navigation_changed)
         QString get_application_folder() const { return m_application_folder; }
@@ -102,7 +102,7 @@ public:
     // called when a selection was made
     Q_INVOKABLE void accept();
 
-    // called when the browser was closed without accepting 
+    // called when the browser was closed without accepting
     Q_INVOKABLE void reject();
 
 signals:

@@ -1,0 +1,100 @@
+/******************************************************************************
+ * Copyright 2020 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_code_gen Example for Generating Shader Code for an MDL Material
+
+<div align="right">
+    [\link mi_neuray_example_compilation Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_execution_native Next\endlink]
+</div>
+
+This example illustrates the necessary steps from loading an MDL module and processing a material up
+to the point where shader code is generated and potentially serialized. 
+In addition to the more complex \ref mi_neuray_example_dxr
+and \ref mi_neuray_example_df_cuda, this example focuses only on the key steps required for code 
+generation without any renderer specific work in order to provide a quick and precise overview. 
+
+\section example_code_gen_new New Topics
+
+  - Different compilation modes and options between
+  - Target code generation for a material with multiple functions
+  - Target code serialization
+
+\section example_code_gen_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Different compilation modes and options between
+    </b></dt>
+    <dd><br>
+        Please refer to \ref mi_neuray_compilation_modes and the \ref mi_neuray_example_compilation 
+        for an introduction in instance and class compilation modes.
+
+        When in class compilation mode, there are options to enable individual optimizations to
+        narrow the performance gap towards instance compilation while sacrificing parts of the 
+        real-time parameter edits.
+
+        \c fold_ternary_on_df, \c fold_all_bool_parameters, and \c fold_all_enum_parameters reduce
+        branching within the material by evaluating the corresponding conditions during compilation.
+        The unused cases are not handled by the generated code anymore and therefore require
+        recompilation and code regeneration whenever such a condition variable changed.
+        The benefit of these optimizations are twofold, less branching for faster execution times
+        and smaller generated code which potentially reduces the compile time of the generated code 
+        as well. 
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Target code generation for a material with multiple functions
+    </b></dt>
+    <dd><br>
+        Depending on the renderer, code for multiple functions of an MDL material needs to be
+        generated in order to produce a full-featured rendering.
+        
+        When integrating MDL into a renderer one would start with the \c "surface.scattering" 
+        expression which is responsible for the scattering behavior and thereby the most important 
+        aspect of the visual appearance. In addition to that, \c "geometry.cutout_opacity" is 
+        required the handle transparent or semi-transparent surfaces like leafs of a plant or wire 
+        fences. There are more expressions to account for and the example shows how to select them 
+        and how to register them at a link unit for code generation. 
+        For the actual use in a renderer please have a look at the more complex examples mentioned 
+        above.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Target code serialization
+    </b></dt>
+    <dd><br>
+        The target code can also be serialized for later reuse. This can reduce the startup time 
+        for larger scenes that have been loaded before or for materials that are very likely to 
+        appear in a lot of scenes. The glTF-support materials used by the example DXR
+        could be good candidates for such likely used materials.
+
+        When deserializing a previously serialized target code object the entire code generation can
+        be skipped. Additional time can be saved when also storing the compiled shaders along with
+        the target code. See \ref mi_neuray_example_dxr which makes use of this feature when 
+        enabled using the CLI or the user interface. 
+
+        The hash of the #mi::neuraylib::ICompiled_material is used as an identifer to
+        store the information during serialization and to select to stored data when loading.
+        Changes in MDL SDK version for instance are detected during deserializing. 
+        This helps to avoid problems with outdated cached data.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_code_gen Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/code_gen/example_code_gen.cpp</tt>
+
+\include code_gen/example_code_gen.cpp
+
+<div align="right">
+    [\link mi_neuray_example_compilation Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_execution_native Next\endlink]
+</div>
+
+*/

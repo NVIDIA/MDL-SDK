@@ -1,7 +1,167 @@
 Change Log
 ==========
-MDL SDK 2020.0.2 (327300.6313): 28 May 2020
+MDL SDK 2020.1 (334300.2228): 11 Aug 2020
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2020.1 (334300.2228) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.6 Language Specification
+
+    - Hyperlinks have been added to the MDL Specification PDF document.
+
+- General
+
+    - Enabled support for MDL modules whose names contains parentheses, brackets, or commas.
+    - The interface `IMdl_entity_resolver` has been redesigned. Support for resolving resources has
+      been added.
+    - The new interface `IMdl_module_transformer` allows to apply certain transformations on MDL
+      modules.
+    - Various API methods have been added in order to reduce the error-prone parsing of MDL-related
+      names: To retrieve DB names from MDL names use `get_db_module_name()` and
+      `get_db_definition_name()` on `IMdl_factory`. To retrieve parts of the MDL name from the
+      corresponding DB element use `get_mdl_package_component_count()`,
+      `get_mdl_package_component_name()`, and `get_mdl_simple_name()` on `IModule`;
+      `get_mdl_module_name()`, `get_mdl_simple_name()` on `IMaterial_definition`; and
+      `get_mdl_module_name()`, `get_mdl_simple_name()`, and `get_mdl_parameter_type_name()` on
+      `IFunction_definition` and `IAnnotation_definition`.
+    - Added a new overload of `IModule::get_function_overloads()` that accepts a simple name
+      and an array of parameter type names instead of two strings. This avoids the ambiguity when
+      parsing parentheses and commas. The old overload is deprecated and still available if
+      `MI_NEURAYLIB_DEPRECATED_11_1` is defined.
+    - Improved recursive MDL module reloading: changed the traversal order from pre-order to
+      post-order traversal, avoid flagging a module as changed if it did not change at all.
+    - Improved `Definition_wrapper`: the creation of functions calls for template-like MDL
+      functions requires now an actual argument list since the dummy defaults for such functions
+      easily lead to function calls with the wrong types in the signature.
+    - Added more options to control the generation of compiled materials in class compilation mode:
+      Folding of enum and bool parameters, folding of individual parameters, folding of cutout
+      opacity, and folding of transparent layers.
+    - Added methods to retrieve the MDL version of modules, and the MDL version when a particular
+      function or material definition was added to (and, if applicable, removed from) the MDL
+      specification.
+    - Added methods to retrieve the MDL system and user paths.
+    - The legacy behavior of `df::simple_glossy_bsdf` can now be controlled via the interface
+      `IMdl_configuration`.
+    - The return type of `IFunction_definition::get_body()` has been changed from 
+      `const IExpression_direct_call*` to `const IExpression*`.
+
+- MDL Compiler and Backends
+
+    - Added support for target code serialization in the HLSL and PTX backends. See the new
+      methods `get_backend_kind()`, `supports_serialization()`, `serialize()`, and
+      `get_argument_layout_count()` on `ITarget_code`, and
+      `IMdl_backend::deserialize_target_code()`. The new context option
+      `"serialize_class_instance_data"` for `ITarget_code::serialize()` controls whether
+      per-instance data or only per-class data is serialized.
+    - Allow total internal reflection for glossy BSDFs with mode `df::scatter_transmit` (libbsdf).
+    - When derivatives are enabled, `state::position()` is now derivable. Thus, the `"position"`
+      field of `Shading_state_material_with_derivs` is now a derivative type.
+    - Added `"meters_per_scene_unit"` field to `Shading_state_material`. It is used, when folding
+      of `state::meters_per_scene_unit()` and `state::scene_units_per_meter()` has been disabled
+      via the new `IMdl_execution_context` `"fold_meters_per_scene_unit"` option.
+    - Added derivative support for matrices.
+    - Added derivative support for scene data functions. Requires new texture runtime functions
+      `scene_data_lookup_deriv_float`, `scene_data_lookup_deriv_float2`,
+      `scene_data_lookup_deriv_float3`, `scene_data_lookup_deriv_float4`, and
+      `scene_data_lookup_deriv_color` (see `texture_support_cuda.h` in the MDL SDK examples
+      for the prototypes).
+    - Added `mi::neuraylib::ICompiled_material::depends_on_uniform_scene_data()` analyzing
+      whether any `scene::data_lookup_uniform_*()` functions are called by a material instance.
+    - Implemented per function render state usage in `ITarget_code`.
+    - Avoid reporting deprecated warnings, if current entity is already deprecated.
+
+- MDL SDK examples
+
+    - Examples Shared
+        - Added utility headers for strings, enums, I/O, OS, and MDL specific tasks to be used in
+          the examples. Updated examples to make use of the new utility headers.
+        - Added GUI classes to illustrate MDL parameter editing and to unify user interfaces in
+          examples in the future.
+
+    - Example DXR
+        - Added a new more structured user interface with various new features including the
+          loading of scenes and environments from the menu, the replacement of materials,
+          compilation and parameter folding options, and parameter editing in instance compilation
+          mode.
+        - Integrated the MDL browser (if built) for the replacement of a selected material.
+        - Added shader caching to improve loading times (has to be enabled with option
+          `--enable_shader_cache`).
+
+    - GLTF Support
+        - Added `KHR_materials_clearcoat` support, also in Example DXR.
+
+    - MDL plugin for Arnold
+        - Added a new example to illustrate the integration of MDL into an existing advanced CPU
+          renderer.
+
+    - Example Code Generation
+        - Added a new example to illustrate HLSL and PTX code generation.
+
+    - Example OptiX 7
+        - Added a new example to illustrate the use MDL code as OptiX callable programs in a
+          closest hit shader, and alternatively, how to link the MDL code directly into a
+          per-material closest hit shader for better runtime performance.
+
+    - Example Native
+        - Added missing scene data functions of custom texture runtime.
+
+**Fixed Bugs**
+
+- General
+
+    - Fixed documentation of `Bsdf_evaluate_data` structs: eval function results are output-only,
+      not input/output.
+    - Fixed compilation of materials using the array length operator.
+    - Fixed crash on CentOS 7.1 when importing non-trivial MDL modules.
+    - Fixed incorrect behavior during function call creation when implicit casts were enabled.
+
+- MDL Compiler and Backends
+
+    - Fixed file resolution during re-export of MDLE modules.
+    - Fixed missing clearing of context messages when creating a link unit.
+    - Fixed detection of absolute file names on Windows for MDLEs on a network share.
+    - Fixed support for the read-only segment and resources inside function bodies when compiling
+      for the native target.
+    - Fixed rare crash/memory corruption than could occur on MDLE creation.
+    - Fixed possible crash when inlining a function containing a `for (i = ...)` loop statement.
+    - Fixed potential crash in the auto importer when imports of the current module are erroneous.
+    - Fixed handling of suppressed warnings if notes are attached to them, previously these were
+      attached to other messages.
+    - Fixed possible crash in generating MDLE when array types are involved.
+    - Fixed printing of initializers containing sequence expressions, it is `T v = (a,b);`, not `T
+      v = a, b;`.
+    - Improved AST optimizer:
+        - Write optimized `if` conditions back.
+        - Write optimized sub-expressions of binary expressions back.
+        - Handle `constant && x`, `constant || x`, `x && constant`, `x || constant`.
+    - Fixed folding of calls to `state::meters_per_scene_unit()` and
+      `state::scene_units_per_meter()` in non-inlined functions.
+    - Fixed wrong code generation for int to float conversions with derivatives.
+    - Fixed a bug in the generated HLSL code that caused wrong calculations because loads were
+      erroneously placed after calls modifying memory.
+    - Fixed checking of valid MDL identifiers (names starting with `"do"` were treated as keywords,
+      but not `"do"` itself).
+    - Fixed overload resolution for MDL operators.
+    - Fixed crash in MDL runtime when using nonexistent image files with MDL.
+    - Fixed invalid translation of `int` to `float` conversion with derivatives enabled.
+    - Fixed broken `math::sincos()` on vectors.
+    - Fixed failing MDLE creation due to several missing or non-exported entities (constants,
+      annotations).
+    - Fixed failing MDLE creation if the main module was < MDL 1.6, but imported an MDL 1.6 module.
+    - Fixed failing MDLE creation if non-absolute imports of `::base` were used.
+    - Fixed rare crashes occurring when the array constructor is used in annotations.
+    - Fixed lost enumeration of BSDF data textures used by the libbsdf multiscatter.
+
+- MDL SDK examples
+
+    - Examples Shared
+        - Fixed failing CUDA checks when minimizing application.
+
+MDL SDK 2020.0.2 (327300.6313): 28 May 2020
+-------------------------------------------
 
 ABI compatible with the MDL SDK 2020.0.2 (327300.6313) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
@@ -622,7 +782,7 @@ ABI compatible with the MDL SDK 2019 (314800.830) binary release
     - Wrong error messages `"varying call from uniform function"` have been fixed, which were generated by the MDL compiler under rare circumstances for struct declarations.
     - Wrong error messages `"function preset's return type must be 'uniform T' not 'T'"` have been fixed, which were generated by the MDL compiler for function variants if the original function always returns a uniform result but its return type was not declared as uniform T.
     - A discrepancy between code execution on CPU and GPU for constant folding of
-    `tt sqrt(c) (c < 0)` has been fixed. Now `NaN` is computed for both.
+    `sqrt(c)` for  `c < 0` has been fixed. Now `NaN` is computed for both.
 
 
 MDL SDK 2018.1.2 (312200.1281): 11 Dec 2018

@@ -59,6 +59,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
@@ -66,6 +67,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/MutexGuard.h>
 #include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Transforms/IPO.h>
@@ -952,6 +954,72 @@ Call_dag_expr const *impl_cast(ICall_expr const *expr) {
 }
 
 
+// ------------------------------- State usage analysis ------------------------------
+
+// Constructor.
+State_usage_analysis::State_usage_analysis(LLVM_code_generator &code_gen)
+: m_code_gen(code_gen)
+, m_arena(code_gen.get_allocator())
+, m_arena_builder(m_arena)
+, m_module_state_usage(0)
+, m_func_state_usage_info_map(code_gen.get_allocator())
+{
+}
+
+// Register a function to take part in the analysis.
+void State_usage_analysis::register_function(llvm::Function *func)
+{
+    Function_state_usage_info *info =
+        m_arena_builder.create<Function_state_usage_info>(&m_arena);
+    m_func_state_usage_info_map[func] = info;
+}
+
+// Add a state usage flag to the currently compiled function.
+void State_usage_analysis::add_state_usage(llvm::Function *func, State_usage flag_to_add)
+{
+    m_module_state_usage |= flag_to_add;
+
+    Function_state_usage_info_map::iterator it = m_func_state_usage_info_map.find(func);
+    if (it == m_func_state_usage_info_map.end()) {
+        MDL_ASSERT(!"Function not registered for state usage info");
+        return;
+    }
+
+    it->second->state_usage |= flag_to_add;
+}
+
+// Add a call to the call graph.
+void State_usage_analysis::add_call(llvm::Function *caller, llvm::Function *callee)
+{
+    Function_state_usage_info_map::iterator it = m_func_state_usage_info_map.find(caller);
+    if (it == m_func_state_usage_info_map.end()) {
+        MDL_ASSERT(!"Function not registered for state usage info");
+        return;
+    }
+
+    it->second->called_funcs.insert(callee);
+}
+
+// Updates the state usage of the exported functions of the code generator.
+void State_usage_analysis::update_exported_functions_state_usage()
+{
+    for (LLVM_code_generator::Exported_function &exported_func : m_code_gen.m_exported_func_list) {
+        llvm::SmallPtrSet<llvm::Function *, 16> visited;
+        llvm::SmallVector<llvm::Function *, 16> worklist;
+        worklist.push_back(exported_func.func);
+
+        while (!worklist.empty()) {
+            llvm::Function *cur = worklist.pop_back_val();
+            if (visited.count(cur))
+                continue;
+            visited.insert(cur);
+            Function_state_usage_info const *info = m_func_state_usage_info_map[cur];
+            exported_func.state_usage |= info->state_usage;
+            worklist.append(info->called_funcs.begin(), info->called_funcs.end());
+        }
+    }
+}
+
 
 // ------------------------------- LLVM code generator -------------------------------
 
@@ -996,6 +1064,10 @@ LLVM_code_generator::LLVM_code_generator(
 , m_llvm_context(context)
 , m_state_mode(state_mode)
 , m_internal_space(options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE))
+, m_fold_meters_per_scene_unit(options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT))
+, m_meters_per_scene_unit(options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT))
+, m_wavelength_min(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN))
+, m_wavelength_max(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX))
 , m_res_manager(res_manag)
 , m_texture_table(jitted_code->get_allocator())
 , m_light_profile_table(jitted_code->get_allocator())
@@ -1007,12 +1079,15 @@ LLVM_code_generator::LLVM_code_generator(
 , m_module(NULL)
 , m_exported_func_list(jitted_code->get_allocator())
 , m_user_state_module(options.get_binary_option(MDL_JIT_BINOPTION_LLVM_STATE_MODULE))
+, m_renderer_module(options.get_binary_option(MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE))
+, m_visible_functions(options.get_string_option(MDL_JIT_OPTION_VISIBLE_FUNCTIONS))
 , m_func_pass_manager()
 , m_fast_math(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH))
 , m_enable_ro_segment(
     target_lang == TL_HLSL || options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT))
 , m_finite_math(false)
 , m_reciprocal_math(false)
+, m_always_inline(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY))
 , m_hlsl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA))
 , m_in_intrinsic_generator(false)
 , m_runtime(create_mdl_runtime(
@@ -1022,6 +1097,7 @@ LLVM_code_generator::LLVM_code_generator(
     m_fast_math,
     has_tex_handler,
     m_internal_space))
+, m_has_res_handler(has_tex_handler)
 , m_di_builder(NULL)
 , m_di_file()
 , m_world_to_object(NULL)
@@ -1081,6 +1157,11 @@ LLVM_code_generator::LLVM_code_generator(
 , m_hlsl_func_scene_data_lookup_float3(NULL)
 , m_hlsl_func_scene_data_lookup_float4(NULL)
 , m_hlsl_func_scene_data_lookup_color(NULL)
+, m_hlsl_func_scene_data_lookup_deriv_float(NULL)
+, m_hlsl_func_scene_data_lookup_deriv_float2(NULL)
+, m_hlsl_func_scene_data_lookup_deriv_float3(NULL)
+, m_hlsl_func_scene_data_lookup_deriv_float4(NULL)
+, m_hlsl_func_scene_data_lookup_deriv_color(NULL)
 , m_resource_tag_map(NULL)
 , m_opt_level(unsigned(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL)))
 , m_jit_dbg_mode(JDBG_NONE)
@@ -1088,7 +1169,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_num_texture_results(num_texture_results)
 , m_sm_version(target_lang == TL_PTX ? sm_version : 0)
 , m_min_ptx_version(0)
-, m_render_state_usage(0)
+, m_state_usage_analysis(*this)
 , m_target_lang(target_lang)
 , m_enable_full_debug(enable_debug)
 , m_enable_type_debug(target_lang == TL_HLSL)
@@ -2011,6 +2092,9 @@ llvm::Function  *LLVM_code_generator::compile_const_lambda(
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
 
+    if (is_always_inline_enabled())
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+
     m_exported_func_list.push_back(
         Exported_function(
             get_allocator(),
@@ -2190,6 +2274,9 @@ llvm::Function *LLVM_code_generator::compile_switch_lambda(
     LLVM_context_data *ctx_data = get_or_create_context_data(&lambda);
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
+
+    if (is_always_inline_enabled())
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
 
     m_exported_func_list.push_back(
         Exported_function(
@@ -2386,6 +2473,9 @@ llvm::Function *LLVM_code_generator::compile_lambda(
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
 
+    if (is_always_inline_enabled())
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+
     m_exported_func_list.push_back(
         Exported_function(
             get_allocator(),
@@ -2482,6 +2572,7 @@ LLVM_context_data::Flags LLVM_code_generator::get_function_flags(IDefinition con
         flags |= LLVM_context_data::FL_HAS_STATE;
 
     if (def->get_property(mi::mdl::IDefinition::DP_USES_TEXTURES) ||
+        def->get_property(mi::mdl::IDefinition::DP_USES_SCENE_DATA) ||
         def->get_property(mi::mdl::IDefinition::DP_READ_TEX_ATTR) ||
         def->get_property(mi::mdl::IDefinition::DP_READ_LP_ATTR))
     {
@@ -2511,6 +2602,19 @@ LLVM_context_data::Flags LLVM_code_generator::get_function_flags(IDefinition con
     }
 
     return flags;
+}
+
+// Set LLVM function attributes which need to be consistent to avoid loosing
+// them during inlining (e.g. for fast math).
+void LLVM_code_generator::set_llvm_function_attributes(llvm::Function *func)
+{
+    if (is_fast_math_enabled())
+        func->addFnAttr("unsafe-fp-math", "true");
+
+    if (is_finite_math_enabled()) {
+        func->addFnAttr("no-infs-fp-math", "true");
+        func->addFnAttr("no-nans-fp-math", "true");
+    }
 }
 
 // Declares an LLVM function from a MDL function instance.
@@ -2591,6 +2695,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
     if (target_uses_resource_data_parameter() &&
         (
             def->get_property(mi::mdl::IDefinition::DP_USES_TEXTURES) ||
+            def->get_property(mi::mdl::IDefinition::DP_USES_SCENE_DATA) ||
             def->get_property(mi::mdl::IDefinition::DP_READ_TEX_ATTR) ||
             def->get_property(mi::mdl::IDefinition::DP_READ_LP_ATTR)
         ))
@@ -2681,6 +2786,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         linkage,
         func_name.c_str(),
         m_module);
+    set_llvm_function_attributes(func);
 
     if (is_entry_point)
         func->setCallingConv(llvm::CallingConv::C);
@@ -2760,6 +2866,8 @@ LLVM_context_data *LLVM_code_generator::declare_function(
     } else {
         // put this function on the wait queue
         m_functions_q.push(Wait_entry(owner, inst));
+
+        m_state_usage_analysis.register_function(func);
     }
 
     return m_arena_builder.create<LLVM_context_data>(func, real_ret_tp, flags);
@@ -2852,6 +2960,8 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
         linkage,
         lambda->get_name(),
         m_module);
+    set_llvm_function_attributes(func);
+    m_state_usage_analysis.register_function(func);
 
     if (is_entry_point)
         func->setCallingConv(llvm::CallingConv::C);
@@ -3022,6 +3132,11 @@ LLVM_context_data *LLVM_code_generator::declare_internal_function(
         is_prototype ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::InternalLinkage,
         int_func->get_mangled_name(),
         m_module);
+
+    set_llvm_function_attributes(func);
+
+    if (is_always_inline_enabled())
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
 
     if (is_entry_point)
         func->setCallingConv(llvm::CallingConv::C);
@@ -4376,10 +4491,6 @@ Expression_result LLVM_code_generator::translate_expression(
 {
     ctx.set_curr_pos(expr->access_position());
 
-    // matrices currently don't support derivatives
-    if (is<IType_matrix>(expr->get_type()->skip_type_alias()))
-        return_derivs = false;
-
     Expression_result res = Expression_result::unset();
 
     switch (expr->get_kind()) {
@@ -4936,12 +5047,44 @@ llvm::Value *LLVM_code_generator::translate_unary(
                     v = ctx->CreateInsertValue(v, tmp, idxs);
                 }
             } else if (m_type_mapper.is_deriv_type(arg_tp)) {
-                // note: neg is not allowed on arrays and derivatives are not supported on
-                //   matrices right now, so this can only be an atomic or a vector
-                v = ctx.get_dual(
-                    ctx->CreateFNeg(ctx.get_dual_val(arg)),
-                    ctx->CreateFNeg(ctx.get_dual_dx(arg)),
-                    ctx->CreateFNeg(ctx.get_dual_dy(arg)));
+                // note: neg is not allowed on arrays, so this can only be an atomic, a vector
+                // or a matrix
+
+                llvm::Type *base_type = m_type_mapper.get_deriv_base_type(arg_tp);
+                if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(base_type)) {
+                    // small vector mode or all atomic mode for matrices
+                    MDL_ASSERT(arr_tp->getElementType()->isFPOrFPVectorTy());
+
+                    llvm::Value *arg_val = ctx.get_dual_val(arg);
+                    llvm::Value *arg_dx  = ctx.get_dual_dx(arg);
+                    llvm::Value *arg_dy  = ctx.get_dual_dy(arg);
+
+                    llvm::Value *v_val = llvm::ConstantAggregateZero::get(arr_tp);
+                    llvm::Value *v_dx  = v_val;
+                    llvm::Value *v_dy  = v_val;
+
+                    for (unsigned i = 0, n = unsigned(arr_tp->getNumElements()); i < n; ++i) {
+                        unsigned idxs[1] = { i };
+                        llvm::Value *tmp_val = ctx->CreateExtractValue(arg_val, idxs);
+                        llvm::Value *tmp_dx  = ctx->CreateExtractValue(arg_dx,  idxs);
+                        llvm::Value *tmp_dy  = ctx->CreateExtractValue(arg_dy,  idxs);
+
+                        tmp_val = ctx->CreateFNeg(tmp_val);
+                        tmp_dx  = ctx->CreateFNeg(tmp_dx);
+                        tmp_dy  = ctx->CreateFNeg(tmp_dy);
+
+                        v_val = ctx->CreateInsertValue(v_val, tmp_val, idxs);
+                        v_dx  = ctx->CreateInsertValue(v_dx,  tmp_dx,  idxs);
+                        v_dy  = ctx->CreateInsertValue(v_dy,  tmp_dy,  idxs);
+                    }
+                    v = ctx.get_dual(v_val, v_dx, v_dy);
+                } else {
+                    // big vector mode for matrices or vector/atomic
+                    v = ctx.get_dual(
+                            ctx->CreateFNeg(ctx.get_dual_val(arg)),
+                            ctx->CreateFNeg(ctx.get_dual_dx(arg)),
+                            ctx->CreateFNeg(ctx.get_dual_dy(arg)));
+                }
             } else if (arg_tp->isFPOrFPVectorTy()) {
                 v = ctx->CreateFNeg(arg);
             } else {
@@ -5312,8 +5455,44 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
     llvm::Value *l = translate_expression_value(ctx, lhs, return_derivs);
     llvm::Value *r = translate_expression_value(ctx, rhs, return_derivs);
 
-    llvm::Type *res_type = lookup_type(call->get_type());
-    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
+    llvm::Type *res_type = lookup_type_or_deriv_type(ctx, call);
+    if (m_type_mapper.is_deriv_type(res_type)) {
+        llvm::Type *res_val_type = m_type_mapper.get_deriv_base_type(res_type);
+        if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_val_type)) {
+            // assume element-wise operation
+            res = llvm::UndefValue::get(a_tp);
+            llvm::Value *res_dx = res;
+            llvm::Value *res_dy = res;
+
+            bool l_is_arr = m_type_mapper.skip_deriv_type(l->getType())->isArrayTy();
+            bool r_is_arr = m_type_mapper.skip_deriv_type(r->getType())->isArrayTy();
+
+            for (size_t i = 0, n = a_tp->getArrayNumElements(); i < n; ++i) {
+                llvm::Value *l_elem = l;
+                if (l_is_arr) {
+                    l_elem = ctx.extract_dual(l, unsigned(i));
+                }
+
+                llvm::Value *r_elem = r;
+                if (r_is_arr) {
+                    r_elem = ctx.extract_dual(r, unsigned(i));
+                }
+
+                llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, call_pos);
+                if (tmp == NULL) {
+                    res = NULL;
+                    break;
+                }
+                res    = ctx.create_insert(res,    ctx.get_dual_val(tmp), unsigned(i));
+                res_dx = ctx.create_insert(res_dx, ctx.get_dual_dx(tmp),  unsigned(i));
+                res_dy = ctx.create_insert(res_dy, ctx.get_dual_dy(tmp),  unsigned(i));
+            }
+            res = ctx.get_dual(res, res_dx, res_dy);
+        } else {
+            // not array typed (and derivable, thus not integer-based)
+            res = translate_binary_basic(ctx, op, l, r, call_pos);
+        }
+    } else if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
         res_type = a_tp->getArrayElementType();
 
         // assume element-wise operation
@@ -5491,9 +5670,43 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
     mi::mdl::Position const *bin_expr_pos = bin_expr->get_position();
 
     llvm::Type *res_type = lookup_type(bin_expr->get_type());
-    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
-        res_type = a_tp->getArrayElementType();
+    if (m_type_mapper.is_deriv_type(res_type)) {
+        llvm::Type *res_val_type = m_type_mapper.get_deriv_base_type(res_type);
+        if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_val_type)) {
+            // assume element-wise operation
+            res = llvm::UndefValue::get(a_tp);
+            llvm::Value *res_dx = res;
+            llvm::Value *res_dy = res;
 
+            bool l_is_arr = m_type_mapper.skip_deriv_type(l->getType())->isArrayTy();
+            bool r_is_arr = m_type_mapper.skip_deriv_type(r->getType())->isArrayTy();
+
+            for (size_t i = 0, n = a_tp->getArrayNumElements(); i < n; ++i) {
+                llvm::Value *l_elem = l;
+                if (l_is_arr) {
+                    l_elem = ctx.extract_dual(l, unsigned(i));
+                }
+
+                llvm::Value *r_elem = r;
+                if (r_is_arr) {
+                    r_elem = ctx.extract_dual(r, unsigned(i));
+                }
+
+                llvm::Value *tmp = translate_binary_basic(ctx, op, l_elem, r_elem, bin_expr_pos);
+                if (tmp == NULL) {
+                    res = NULL;
+                    break;
+                }
+                res    = ctx.create_insert(res,    ctx.get_dual_val(tmp), unsigned(i));
+                res_dx = ctx.create_insert(res_dx, ctx.get_dual_dx(tmp),  unsigned(i));
+                res_dy = ctx.create_insert(res_dy, ctx.get_dual_dy(tmp),  unsigned(i));
+            }
+            res = ctx.get_dual(res, res_dx, res_dy);
+        } else {
+            // not array typed
+            res = translate_binary_basic(ctx, op, l, r, bin_expr_pos);
+        }
+    } else if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_type)) {
         // assume element-wise operation
         unsigned idxes[1];
         res = llvm::ConstantAggregateZero::get(a_tp);
@@ -5780,179 +5993,102 @@ llvm::Value *LLVM_code_generator::translate_multiply(
 {
     llvm::Value *res = NULL;
 
-    l_type   = l_type->skip_type_alias();
-    r_type   = r_type->skip_type_alias();
+    l_type = m_type_mapper.skip_deriv_type(l_type->skip_type_alias());
+    r_type = m_type_mapper.skip_deriv_type(r_type->skip_type_alias());
 
     if (m_type_mapper.is_deriv_type(res_llvm_type)) {
-        if (is<mi::mdl::IType_matrix>(l_type)) {
-            // matrix * vector, matrix does not have derivatives
-            llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(res_llvm_type);
+        // compute WITH derivatives
+        if (mi::mdl::IType_matrix const *L_type = as<mi::mdl::IType_matrix>(l_type)) {
+            if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
+                // matrix * matrix
+                res = do_matrix_multiplication_MxM_deriv(
+                    ctx,
+                    res_llvm_type,
+                    l,
+                    r,
+                    L_type->get_element_type()->get_size(),
+                    L_type->get_columns(),
+                    R_type->get_columns());
+            } else if (is<mi::mdl::IType_vector>(r_type)) {
+                // matrix * vector
+                int rows = L_type->get_element_type()->get_size();
+                int cols = L_type->get_columns();
 
-            mi::mdl::IType_matrix const *L_type = cast<mi::mdl::IType_matrix>(l_type);
-            llvm::Value *val = do_matrix_multiplication_MxV(
-                ctx,
-                elem_type,
-                l,
-                ctx.get_dual_val(r),
-                L_type->get_element_type()->get_size(),
-                L_type->get_columns());
+                res = do_matrix_multiplication_MxV_deriv(
+                    ctx, res_llvm_type, l, r, rows, cols);
+            } else {
+                // matrix * scalar element-wise multiplication
+                res = do_matrix_multiplication_MxS_deriv(
+                    ctx, res_llvm_type, l, r);
+            }
+        } else if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
+            if (is<mi::mdl::IType_vector>(l_type)) {
+                // vector * matrix
+                int rows = R_type->get_element_type()->get_size();
+                int cols = R_type->get_columns();
 
-            llvm::Value *dx = do_matrix_multiplication_MxV(
-                ctx,
-                elem_type,
-                l,
-                ctx.get_dual_dx(r),
-                L_type->get_element_type()->get_size(),
-                L_type->get_columns());
-
-            llvm::Value *dy = do_matrix_multiplication_MxV(
-                ctx,
-                elem_type,
-                l,
-                ctx.get_dual_dy(r),
-                L_type->get_element_type()->get_size(),
-                L_type->get_columns());
-
-            res = ctx.get_dual(val, dx, dy);
-        } else if (is<mi::mdl::IType_matrix>(r_type)) {
-            // vector * matrix, matrix does not have derivatives
-            llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(res_llvm_type);
-
-            mi::mdl::IType_matrix const *R_type = cast<mi::mdl::IType_matrix>(r_type);
-            llvm::Value *val = do_matrix_multiplication_VxM(
-                ctx,
-                elem_type,
-                ctx.get_dual_val(l),
-                r,
-                R_type->get_element_type()->get_size(),
-                R_type->get_columns());
-
-            llvm::Value *dx = do_matrix_multiplication_VxM(
-                ctx,
-                elem_type,
-                ctx.get_dual_dx(l),
-                r,
-                R_type->get_element_type()->get_size(),
-                R_type->get_columns());
-
-            llvm::Value *dy = do_matrix_multiplication_VxM(
-                ctx,
-                elem_type,
-                ctx.get_dual_dy(l),
-                r,
-                R_type->get_element_type()->get_size(),
-                R_type->get_columns());
-
-            res = ctx.get_dual(val, dx, dy);
+                res = do_matrix_multiplication_VxM_deriv(
+                    ctx, res_llvm_type, l, r, rows, cols);
+            } else {
+                // matrix * scalar element-wise multiplication
+                res = do_matrix_multiplication_MxS_deriv(
+                    ctx, res_llvm_type, r, l);
+            }
         } else {
             llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(res_llvm_type);
             res = ctx.create_deriv_mul(elem_type, l, r);
         }
-    } else if (is<mi::mdl::IType_color>(l_type)) {
-        // color * color or color * scalar element-wise multiplication
-        res = ctx.create_mul(res_llvm_type, l, r);
-    } else if (is<mi::mdl::IType_vector>(l_type)) {
-        if (is<mi::mdl::IType_matrix>(r_type)) {
-            // vector * matrix
-            mi::mdl::IType_matrix const *R_type = cast<mi::mdl::IType_matrix>(r_type);
-            res = do_matrix_multiplication_VxM(
-                ctx,
-                res_llvm_type,
-                l,
-                r,
-                R_type->get_element_type()->get_size(),
-                R_type->get_columns());
-        } else {
-            // vector * vector or vector * scalar element-wise multiplication
-            res = ctx.create_mul(res_llvm_type, l, r);
-        }
-    } else if (is<mi::mdl::IType_matrix>(l_type)) {
-        if (is<mi::mdl::IType_matrix>(r_type)) {
-            // matrix * matrix
-            mi::mdl::IType_matrix const *L_type = cast<mi::mdl::IType_matrix>(l_type);
-            mi::mdl::IType_matrix const *R_type = cast<mi::mdl::IType_matrix>(r_type);
-            res = do_matrix_multiplication(
-                ctx,
-                res_llvm_type,
-                l,
-                r,
-                L_type->get_element_type()->get_size(),
-                L_type->get_columns(),
-                R_type->get_columns());
-        } else if (is<mi::mdl::IType_vector>(r_type)) {
-            // matrix * vector
-            mi::mdl::IType_matrix const *L_type = cast<mi::mdl::IType_matrix>(l_type);
-            res = do_matrix_multiplication_MxV(
-                ctx,
-                res_llvm_type,
-                l,
-                r,
-                L_type->get_element_type()->get_size(),
-                L_type->get_columns());
-        } else {
-            // matrix * scalar element-wise multiplication
-            llvm::Type *m_tp = res_llvm_type;
-
-            if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(m_tp)) {
-                // matrices represented as vectors
-                res = ctx.create_mul(v_tp, l, ctx.create_vector_splat(v_tp, r));
-            } else {
-                llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(m_tp);
-                llvm::Type      *e_tp = a_tp->getElementType();
-
-                res = llvm::ConstantAggregateZero::get(a_tp);
-                if (e_tp->isVectorTy()) {
-                    // matrices represented as arrays of (row-)vectors
-                    r = ctx.create_vector_splat(llvm::cast<llvm::VectorType>(e_tp), r);
-                } else {
-                    // matrices represented as arrays of scalars, do nothing
-                }
-
-                unsigned idxes[1];
-                for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
-                    idxes[0] = i;
-                    llvm::Value *elem = ctx->CreateExtractValue(l, idxes);
-
-                    elem = ctx.create_mul(e_tp, elem, r);
-
-                    res = ctx->CreateInsertValue(res, elem, idxes);
-                }
-            }
-        }
     } else {
-        if (is<mi::mdl::IType_matrix>(r_type)) {
-            // scalar * matrix
-            llvm::Type *m_tp = res_llvm_type;
-
-            if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(m_tp)) {
-                // matrices represented as vectors
-                res = ctx.create_mul(v_tp, ctx.create_vector_splat(v_tp, l), r);
+        // do not compute derivatives
+        if (is<mi::mdl::IType_color>(l_type)) {
+            // color * color or color * scalar element-wise multiplication
+            res = ctx.create_mul(res_llvm_type, l, r);
+        } else if (is<mi::mdl::IType_vector>(l_type)) {
+            if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
+                // vector * matrix
+                res = do_matrix_multiplication_VxM(
+                    ctx,
+                    res_llvm_type,
+                    l,
+                    r,
+                    R_type->get_element_type()->get_size(),
+                    R_type->get_columns());
             } else {
-                llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(m_tp);
-                llvm::Type      *e_tp = a_tp->getElementType();
-
-                res = llvm::ConstantAggregateZero::get(a_tp);
-
-                if (e_tp->isVectorTy()) {
-                    // matrices represented as arrays of (row-)vectors
-                    l = ctx.create_vector_splat(llvm::cast<llvm::VectorType>(e_tp), l);
-                } else {
-                    // matrices represented as arrays of scalars, do nothing
-                }
-
-                unsigned idxes[1];
-                for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
-                    idxes[0] = i;
-                    llvm::Value *elem = ctx->CreateExtractValue(r, idxes);
-
-                    elem = ctx.create_mul(e_tp, l, elem);
-
-                    res = ctx->CreateInsertValue(res, elem, idxes);
-                }
+                // vector * vector or vector * scalar element-wise multiplication
+                res = ctx.create_mul(res_llvm_type, l, r);
+            }
+        } else if (mi::mdl::IType_matrix const *L_type = as<mi::mdl::IType_matrix>(l_type)) {
+            if (mi::mdl::IType_matrix const *R_type = as<mi::mdl::IType_matrix>(r_type)) {
+                // matrix * matrix
+                res = do_matrix_multiplication_MxM(
+                    ctx,
+                    res_llvm_type,
+                    l,
+                    r,
+                    L_type->get_element_type()->get_size(),
+                    L_type->get_columns(),
+                    R_type->get_columns());
+            } else if (is<mi::mdl::IType_vector>(r_type)) {
+                // matrix * vector
+                res = do_matrix_multiplication_MxV(
+                    ctx,
+                    res_llvm_type,
+                    l,
+                    r,
+                    L_type->get_element_type()->get_size(),
+                    L_type->get_columns());
+            } else {
+                // matrix * scalar element-wise multiplication
+                res = do_matrix_multiplication_MxS(ctx, res_llvm_type, l, r);
             }
         } else {
-            // scalar * vector or scalar * color or scalar * scalar element-wise multiplication
-            res = ctx.create_mul(res_llvm_type, l, r);
+            if (is<mi::mdl::IType_matrix>(r_type)) {
+                // scalar * matrix element-wise multiplication
+                res = do_matrix_multiplication_MxS(ctx, res_llvm_type, r, l);
+            } else {
+                // scalar * vector or scalar * color or scalar * scalar element-wise multiplication
+                res = ctx.create_mul(res_llvm_type, l, r);
+            }
         }
     }
 
@@ -5966,7 +6102,7 @@ llvm::Value *LLVM_code_generator::translate_multiply(
 // Translate a multiplication expression to LLVM IR.
 llvm::Value *LLVM_code_generator::translate_multiply(
     Function_context           &ctx,
-    llvm::Type *res_llvm_type,
+    llvm::Type                 *res_llvm_type,
     mi::mdl::IExpression const *lhs,
     mi::mdl::IExpression const *rhs,
     bool                       return_derivs)
@@ -5977,6 +6113,107 @@ llvm::Value *LLVM_code_generator::translate_multiply(
     llvm::Value          *r      = translate_expression_value(ctx, rhs, return_derivs);
 
     return translate_multiply(ctx, res_llvm_type, l_type, l, r_type, r);
+}
+
+// Create a matrix by scalar multiplication.
+llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxS(
+    Function_context &ctx,
+    llvm::Type       *res_llvm_type,
+    llvm::Value      *l,
+    llvm::Value      *r)
+{
+    llvm::Type *m_tp = res_llvm_type;
+
+    if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(m_tp)) {
+        // matrices represented as vectors
+        return ctx.create_mul(v_tp, l, ctx.create_vector_splat(v_tp, r));
+    }
+
+    llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(m_tp);
+    llvm::Type      *e_tp = a_tp->getElementType();
+
+    llvm::Value *res = llvm::ConstantAggregateZero::get(a_tp);
+    if (e_tp->isVectorTy()) {
+        // matrices represented as arrays of (row-)vectors
+        r = ctx.create_vector_splat(llvm::cast<llvm::VectorType>(e_tp), r);
+    } else {
+        // matrices represented as arrays of scalars, do nothing
+    }
+
+    unsigned idxes[1];
+    for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
+        idxes[0] = i;
+        llvm::Value *elem = ctx->CreateExtractValue(l, idxes);
+
+        elem = ctx.create_mul(e_tp, elem, r);
+
+        res = ctx->CreateInsertValue(res, elem, idxes);
+    }
+
+    return res;
+}
+
+// Create a matrix by scalar multiplication with derivation.
+llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxS_deriv(
+    Function_context &ctx,
+    llvm::Type *res_llvm_type,
+    llvm::Value *l,
+    llvm::Value *r)
+{
+    // (A + Bx + Cy)(d + ex + fy) = Ad + (Ae + Bd)x + (Af + Cd)y
+
+    llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(res_llvm_type);
+
+    llvm::Value *val = do_matrix_multiplication_MxS(
+        ctx, elem_type, ctx.get_dual_val(l), ctx.get_dual_val(r));
+
+    llvm::Value *dx_1 = do_matrix_multiplication_MxS(
+        ctx, elem_type, ctx.get_dual_val(l), ctx.get_dual_dx(r));
+    llvm::Value *dx_2 = do_matrix_multiplication_MxS(
+        ctx, elem_type, ctx.get_dual_dx(l), ctx.get_dual_val(r));
+    llvm::Value *dx = do_matrix_addition(ctx, elem_type, dx_1, dx_2);
+
+    llvm::Value *dy_1 = do_matrix_multiplication_MxS(
+        ctx, elem_type, ctx.get_dual_val(l), ctx.get_dual_dy(r));
+    llvm::Value *dy_2 = do_matrix_multiplication_MxS(
+        ctx, elem_type, ctx.get_dual_dy(l), ctx.get_dual_val(r));
+    llvm::Value *dy = do_matrix_addition(ctx, elem_type, dy_1, dy_2);
+
+    return ctx.get_dual(val, dx, dy);
+}
+
+// Create a matrix by matrix addition.
+llvm::Value *LLVM_code_generator::do_matrix_addition(
+    Function_context &ctx,
+    llvm::Type *res_llvm_type,
+    llvm::Value *l,
+    llvm::Value *r)
+{
+    llvm::Type *m_tp = res_llvm_type;
+
+    if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(m_tp)) {
+        // matrices represented as vectors
+        return ctx.create_add(v_tp, l, r);
+    }
+
+    llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(m_tp);
+    llvm::Type      *e_tp = a_tp->getElementType();
+
+    llvm::Value *res = llvm::ConstantAggregateZero::get(a_tp);
+    // matrices represented as arrays of (row-)vectors or of scalars
+
+    unsigned idxes[1];
+    for (unsigned i = 0, n = unsigned(a_tp->getNumElements()); i < n; ++i) {
+        idxes[0] = i;
+        llvm::Value *elem_l = ctx->CreateExtractValue(l, idxes);
+        llvm::Value *elem_r = ctx->CreateExtractValue(r, idxes);
+
+        llvm::Value *elem = ctx.create_add(e_tp, elem_l, elem_r);
+
+        res = ctx->CreateInsertValue(res, elem, idxes);
+    }
+
+    return res;
 }
 
 // Translate an assign expression to LLVM IR.
@@ -6655,7 +6892,8 @@ Expression_result LLVM_code_generator::translate_call(
             }
         }
 
-        if (m_target_lang != TL_HLSL) {
+        if (m_target_lang != TL_HLSL && m_target_lang != TL_PTX &&
+                !(m_target_lang == TL_NATIVE && !m_has_res_handler)) {
             // TODO: implement calling renderer runtime. For now just return false
             return Expression_result::value(ctx.get_constant(false));
         }
@@ -6691,7 +6929,8 @@ Expression_result LLVM_code_generator::translate_call(
             }
         }
 
-        if (m_target_lang != TL_HLSL) {
+        if (m_target_lang != TL_HLSL && m_target_lang != TL_PTX &&
+                !(m_target_lang == TL_NATIVE && !m_has_res_handler)) {
             // TODO: implement calling renderer runtime. For now just return second argument
             return call_expr->translate_argument(*this, ctx, 1, return_derivs);
         }
@@ -6838,7 +7077,9 @@ llvm::Value *LLVM_code_generator::translate_call_user_defined_function(
     }
 
     // get the callee
-    llvm::Value *callee = p_data->get_function();
+    llvm::Function *callee = p_data->get_function();
+
+    m_state_usage_analysis.add_call(ctx.get_function(), callee);
 
     // prepare arguments
     llvm::SmallVector<llvm::Value *, 8> args;
@@ -6980,7 +7221,8 @@ Expression_result LLVM_code_generator::translate_transform_call(
     ICall_expr const       *call_expr)
 {
     // will potentially use the transforms
-    m_render_state_usage |= IGenerated_code_executable::SU_TRANSFORMS;
+    m_state_usage_analysis.add_state_usage(
+        ctx.get_function(), IGenerated_code_executable::SU_TRANSFORMS);
 
     llvm::Type  *ret_tp = lookup_type(call_expr->get_type());
     llvm::Value *from   =
@@ -7328,7 +7570,8 @@ Expression_result LLVM_code_generator::translate_object_id_call(
     Function_context       &ctx)
 {
     // uses the object ID
-    m_render_state_usage |= IGenerated_code_executable::SU_OBJECT_ID;
+    m_state_usage_analysis.add_state_usage(
+        ctx.get_function(), IGenerated_code_executable::SU_OBJECT_ID);
 
     llvm::Value *res = ctx.get_object_id_value();
     return Expression_result::value(res);
@@ -7343,20 +7586,25 @@ Expression_result LLVM_code_generator::translate_conversion(
 
     mi::mdl::IType const *res_type  = call_expr->get_type()->skip_type_alias();
     mi::mdl::IType const *arg_type  = call_expr->get_argument_type(0)->skip_type_alias();
+    mi::mdl::IType const *arg_noderiv_type = m_type_mapper.skip_deriv_type(arg_type);
+    mi::mdl::IType const *res_noderiv_type = m_type_mapper.skip_deriv_type(res_type);
 
     bool return_derivs = call_expr->returns_derivatives(*this);
-    llvm::Value *v = call_expr->translate_argument_value(*this, ctx, 0, return_derivs);
+
+    // we only need derivatives for the argument, if the conversion results should be derivable
+    // and the argument type supports it
+    bool arg_derivs = return_derivs && m_type_mapper.is_floating_point_based_type(arg_noderiv_type);
+
+    llvm::Value *v = call_expr->translate_argument_value(*this, ctx, 0, arg_derivs);
 
     llvm::Value *res;
 
-    mi::mdl::IType const *res_noderiv_type = m_type_mapper.skip_deriv_type(res_type);
-
     // will the conversion result in a dual value?
     if (return_derivs && m_type_mapper.is_floating_point_based_type(res_noderiv_type)) {
+
         // is the translated argument a dual value?
         if (m_type_mapper.is_deriv_type(v->getType())) {
             // dual -> dual: convert the dual component-wise
-            mi::mdl::IType const *arg_noderiv_type = m_type_mapper.skip_deriv_type(arg_type);
 
             llvm::Value *val = translate_conversion(
                 ctx, res_noderiv_type, arg_noderiv_type, ctx.get_dual_val(v));
@@ -7368,19 +7616,16 @@ Expression_result LLVM_code_generator::translate_conversion(
             res = ctx.get_dual(val, dx, dy);
         } else {
             // non-dual -> dual: convert, then get dual
-            res = translate_conversion(ctx, res_noderiv_type, arg_type, v);
+            res = translate_conversion(ctx, res_noderiv_type, arg_noderiv_type, v);
+            res = ctx.get_dual(res);
         }
     } else if (m_type_mapper.is_deriv_type(v->getType())) {
         // dual -> non-dual: strip dual, then convert
-        mi::mdl::IType const *arg_noderiv_type = m_type_mapper.skip_deriv_type(arg_type);
         res = translate_conversion(ctx, res_noderiv_type, arg_noderiv_type, ctx.get_dual_val(v));
     } else {
         // non-dual -> non-dual: just convert
-        res = translate_conversion(ctx, res_noderiv_type, arg_type, v);
+        res = translate_conversion(ctx, res_noderiv_type, arg_noderiv_type, v);
     }
-
-    if (return_derivs && !m_type_mapper.is_deriv_type(res->getType()))
-        res = ctx.get_dual(res);
 
     return Expression_result::value(res);
 }
@@ -7680,101 +7925,90 @@ Expression_result LLVM_code_generator::translate_elemental_constructor(
     mi::mdl::ICall_expr const *call_expr)
 {
     llvm::Type *type = lookup_type_or_deriv_type(ctx, call_expr);
+    llvm::Type *non_deriv_type = m_type_mapper.skip_deriv_type(type);
+    bool return_derivs = call_expr->returns_derivatives(*this);
 
     mi::mdl::IType const *res_type = call_expr->get_type()->skip_type_alias();
-    llvm::Value *agg = llvm::ConstantAggregateZero::get(type);
+    mi::mdl::IType const *res_non_deriv_type = m_type_mapper.skip_deriv_type(res_type);
 
-    if (llvm::isa<llvm::VectorType>(type)) {
-        // TODO: deriv
-        if (mi::mdl::IType_matrix const *m_tp = as<mi::mdl::IType_matrix>(res_type)) {
-            // matrix types are represented as vectors, need extra handling here because
-            // the arguments of the matrix constructors are vectors
-            mi::mdl::IType_vector const *v_tp = m_tp->get_element_type();
+    llvm::Value *agg = llvm::UndefValue::get(type);
 
-            int n_cols = m_tp->get_columns();
-            int n_rows = v_tp->get_size();
+    if (mi::mdl::IType_matrix const *m_tp = as<mi::mdl::IType_matrix>(res_non_deriv_type)) {
+        // need extra handling here because the arguments of the matrix constructors are vectors
+        mi::mdl::IType_vector const *v_tp = m_tp->get_element_type();
+
+        int n_cols = m_tp->get_columns();
+        int n_rows = v_tp->get_size();
+
+        MDL_ASSERT(n_cols == call_expr->get_argument_count());
+
+        if (llvm::isa<llvm::VectorType>(non_deriv_type)
+                || !non_deriv_type->getArrayElementType()->isVectorTy()) {
+            // matrix types are represented as vectors or as arrays of scalars
             int i = 0;
 
-            MDL_ASSERT(n_cols == call_expr->get_argument_count());
+            if (return_derivs) {
+                llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(type);
+                llvm::Value *agg_val = llvm::UndefValue::get(elem_type);
+                llvm::Value *agg_dx = llvm::UndefValue::get(elem_type);
+                llvm::Value *agg_dy = llvm::UndefValue::get(elem_type);
 
-            for (int col = 0; col < n_cols; ++col) {
-                llvm::Value *vec =
-                    call_expr->translate_argument_value(*this, ctx, col, /*return_derivs=*/ false);
-
-                for (int row = 0; row < n_rows; ++row) {
-                    llvm::Value *row_v = ctx.get_constant(row);
-                    llvm::Value *v     = ctx->CreateExtractElement(vec, row_v);
-
-                    llvm::Value *idx = ctx.get_constant(i++);
-                    agg = ctx->CreateInsertElement(agg, v, idx);
-                }
-            }
-        } else {
-            for (size_t i = 0, n = call_expr->get_argument_count(); i < n; ++i) {
-                llvm::Value *v   =
-                    call_expr->translate_argument_value(*this, ctx, i, /*return_derivs=*/ false);
-                llvm::Value *idx = ctx.get_constant(int(i));
-
-                agg = ctx->CreateInsertElement(agg, v, idx);
-            }
-        }
-    } else {
-        if (mi::mdl::IType_matrix const *m_tp = as<mi::mdl::IType_matrix>(res_type)) {
-            // TODO: deriv
-            llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(type);
-            llvm::Type      *e_tp = a_tp->getArrayElementType();
-
-            if (!e_tp->isVectorTy()) {
-                // matrices are represented as arrays of scalars
-                int n_cols = m_tp->get_columns();
-                int n_rows = m_tp->get_element_type()->get_size();
-
-                MDL_ASSERT(n_cols == call_expr->get_argument_count());
-
-                unsigned idxes[1];
-                int i = 0;
                 for (int col = 0; col < n_cols; ++col) {
-                    llvm::Value *arr_v = call_expr->translate_argument_value(
-                        *this, ctx, col, /*return_derivs=*/ false);
+                    llvm::Value *vec = call_expr->translate_argument_value(
+                        *this, ctx, col, return_derivs);
+                    llvm::Value *vec_val = ctx.get_dual_val(vec);
+                    llvm::Value *vec_dx  = ctx.get_dual_dx(vec);
+                    llvm::Value *vec_dy  = ctx.get_dual_dy(vec);
 
                     for (int row = 0; row < n_rows; ++row) {
-                        idxes[0] = unsigned(row);
-
-                        llvm::Value *v = ctx->CreateExtractValue(arr_v, idxes);
-
-                        idxes[0] = unsigned(i++);
-                        agg = ctx->CreateInsertValue(agg, v, idxes);
+                        agg_val = ctx.create_insert(
+                            agg_val, ctx.create_extract(vec_val, unsigned(row)), unsigned(i));
+                        agg_dx  = ctx.create_insert(
+                            agg_dx,  ctx.create_extract(vec_dx,  unsigned(row)), unsigned(i));
+                        agg_dy  = ctx.create_insert(
+                            agg_dy,  ctx.create_extract(vec_dy,  unsigned(row)), unsigned(i));
+                        ++i;
                     }
                 }
-                return Expression_result::value(agg);
+                agg = ctx.get_dual(agg_val, agg_dx, agg_dy);
+            } else {
+                for (int col = 0; col < n_cols; ++col) {
+                    llvm::Value *vec = call_expr->translate_argument_value(
+                        *this, ctx, col, return_derivs);
+
+                    for (int row = 0; row < n_rows; ++row) {
+                        llvm::Value *v = ctx.create_extract(vec, unsigned(row));
+                        agg = ctx.create_insert(agg, v, unsigned(i++));
+                    }
+                }
             }
-            // fall through into default case
+            return Expression_result::value(agg);
         }
 
-        // default code handles structs and natural (i.e. arrays of vectors) matrices
-        if (m_type_mapper.is_deriv_type(type)) {
-            llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(type);
-            llvm::Value *agg_val = llvm::UndefValue::get(elem_type);
-            llvm::Value *agg_dx = llvm::ConstantAggregateZero::get(elem_type);
-            llvm::Value *agg_dy = llvm::ConstantAggregateZero::get(elem_type);
+        // matrices are arrays of vectors, fall through into default case
+    }
 
-            for (size_t i = 0, n = call_expr->get_argument_count(); i < n; ++i) {
-                llvm::Value *v = call_expr->translate_argument_value(
-                    *this, ctx, i, /*return_derivs=*/ true);
-                agg_val = ctx.create_insert(agg_val, ctx.get_dual_val(v), unsigned(i));
-                agg_dx  = ctx.create_insert(agg_dx,  ctx.get_dual_dx(v),  unsigned(i));
-                agg_dy  = ctx.create_insert(agg_dy,  ctx.get_dual_dy(v),  unsigned(i));
-            }
-            agg = ctx.get_dual(agg_val, agg_dx, agg_dy);
-        } else {
-            for (size_t i = 0, n = call_expr->get_argument_count(); i < n; ++i) {
-                llvm::Value *v = call_expr->translate_argument_value(
-                    *this, ctx, i, /*return_derivs=*/ false);
+    // default code handles structs and natural (i.e. arrays of vectors) matrices
+    if (return_derivs) {
+        llvm::Type *elem_type = m_type_mapper.get_deriv_base_type(type);
+        llvm::Value *agg_val = llvm::UndefValue::get(elem_type);
+        llvm::Value *agg_dx = llvm::UndefValue::get(elem_type);
+        llvm::Value *agg_dy = llvm::UndefValue::get(elem_type);
 
-                agg = ctx->CreateInsertValue(agg, v, { uint32_t(i) });
-            }
+        for (size_t i = 0, n = call_expr->get_argument_count(); i < n; ++i) {
+            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
+            agg_val = ctx.create_insert(agg_val, ctx.get_dual_val(v), unsigned(i));
+            agg_dx  = ctx.create_insert(agg_dx,  ctx.get_dual_dx(v),  unsigned(i));
+            agg_dy  = ctx.create_insert(agg_dy,  ctx.get_dual_dy(v),  unsigned(i));
+        }
+        agg = ctx.get_dual(agg_val, agg_dx, agg_dy);
+    } else {
+        for (size_t i = 0, n = call_expr->get_argument_count(); i < n; ++i) {
+            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
+            agg = ctx.create_insert(agg, v, unsigned(i));
         }
     }
+
     return Expression_result::value(agg);
 }
 
@@ -7783,62 +8017,101 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
     Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
+    llvm::Type *res_tp = lookup_type_or_deriv_type(ctx, call_expr);
+    bool return_derivs = call_expr->returns_derivatives(*this);
+
+    llvm::Value *matrix = llvm::ConstantAggregateZero::get(res_tp);
+
+    mi::mdl::IType const *res_mdl_type = call_expr->get_type()->skip_type_alias();
+
     mi::mdl::IType_matrix const *m_type =
-        cast<mi::mdl::IType_matrix>(call_expr->get_type()->skip_type_alias());
+        cast<mi::mdl::IType_matrix>(m_type_mapper.skip_deriv_type(res_mdl_type));
+
     mi::mdl::IType_vector const *v_type = m_type->get_element_type();
 
     int n_col = m_type->get_columns();
     int n_row = v_type->get_size();
+    MDL_ASSERT(n_col * n_row == call_expr->get_argument_count());
 
-    llvm::Type *res_tp = lookup_type(m_type);
-    llvm::Value *matrix = llvm::ConstantAggregateZero::get(res_tp);
+    if (return_derivs) {
+        llvm::Type *value_tp = m_type_mapper.get_deriv_base_type(res_tp);
+        llvm::Value *matrix_val = llvm::UndefValue::get(value_tp);
+        llvm::Value *matrix_dx = llvm::UndefValue::get(value_tp);
+        llvm::Value *matrix_dy = llvm::UndefValue::get(value_tp);
 
-    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_tp)) {
-        llvm::Type *e_tp = a_tp->getArrayElementType();
+        if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(value_tp)) {
+            llvm::Type *e_tp = a_tp->getArrayElementType();
 
-        if (e_tp->isVectorTy()) {
-            // matrices are represented as arrays of vectors
-            llvm::Value *vector = llvm::ConstantAggregateZero::get(lookup_type(v_type));
+            if (e_tp->isVectorTy()) {
+                // matrices are represented as arrays of vectors
+                llvm::Type *vector_type = lookup_type(v_type);
+                llvm::Value *vector_val = llvm::UndefValue::get(vector_type);
+                llvm::Value *vector_dx = llvm::UndefValue::get(vector_type);
+                llvm::Value *vector_dy = llvm::UndefValue::get(vector_type);
 
-            MDL_ASSERT(n_col * n_row == call_expr->get_argument_count());
+                unsigned idx[1];
 
-            unsigned idx[1];
+                size_t i = 0;
+                for (int c = 0; c < n_col; ++c) {
+                    for (int r = 0; r < n_row; ++r) {
+                        llvm::Value *v   = call_expr->translate_argument_value(
+                            *this, ctx, i++, return_derivs);
+                        llvm::Value *idx = ctx.get_constant(r);
 
-            size_t i = 0;
-            for (int c = 0; c < n_col; ++c) {
-                for (int r = 0; r < n_row; ++r) {
-                    llvm::Value *v   = call_expr->translate_argument_value(
-                        *this, ctx, i++, /*return_derivs=*/ false);
-                    llvm::Value *idx = ctx.get_constant(r);
-
-                    vector = ctx->CreateInsertElement(vector, v, idx);
+                        vector_val = ctx->CreateInsertElement(vector_val, ctx.get_dual_val(v), idx);
+                        vector_dx  = ctx->CreateInsertElement(vector_dx,  ctx.get_dual_dx(v),  idx);
+                        vector_dy  = ctx->CreateInsertElement(vector_dy,  ctx.get_dual_dy(v),  idx);
+                    }
+                    idx[0] = unsigned(c);
+                    matrix_val = ctx->CreateInsertValue(matrix_val, vector_val, idx);
+                    matrix_dx  = ctx->CreateInsertValue(matrix_dx,  vector_dx,  idx);
+                    matrix_dy  = ctx->CreateInsertValue(matrix_dy,  vector_dy,  idx);
                 }
-                idx[0] = unsigned(c);
-                matrix = ctx->CreateInsertValue(matrix, vector, idx);
-            }
-        } else {
-            // matrices are represented as arrays of scalars
-            MDL_ASSERT(n_col * n_row == call_expr->get_argument_count());
-
-            unsigned idxes[1];
-            for (int i = 0; i < n_col * n_row; ++i) {
-                llvm::Value *v = call_expr->translate_argument_value(
-                    *this, ctx, i, /*return_derivs=*/ false);
-
-                idxes[0] = unsigned(i);
-                matrix = ctx->CreateInsertValue(matrix, v, idxes);
+                matrix = ctx.get_dual(matrix_val, matrix_dx, matrix_dy);
+                return Expression_result::value(matrix);
             }
         }
-    } else {
-        // matrix types are represented as plain vectors
-        MDL_ASSERT(n_col * n_row == call_expr->get_argument_count());
 
+        // matrices are represented as arrays of scalars or as plain vectors
         for (int i = 0; i < n_col * n_row; ++i) {
-            llvm::Value *v   = call_expr->translate_argument_value(
-                *this, ctx, i, /*return_derivs=*/ false);
-            llvm::Value *idx = ctx.get_constant(i);
+            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
 
-            matrix = ctx->CreateInsertElement(matrix, v, idx);
+            matrix_val = ctx.create_insert(matrix_val, ctx.get_dual_val(v), unsigned(i));
+            matrix_dx  = ctx.create_insert(matrix_dx,  ctx.get_dual_dx(v),  unsigned(i));
+            matrix_dy  = ctx.create_insert(matrix_dy,  ctx.get_dual_dy(v),  unsigned(i));
+        }
+        matrix = ctx.get_dual(matrix_val, matrix_dx, matrix_dy);
+    } else {
+        if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_tp)) {
+            llvm::Type *e_tp = a_tp->getArrayElementType();
+
+            if (e_tp->isVectorTy()) {
+                // matrices are represented as arrays of vectors
+                llvm::Value *vector = llvm::ConstantAggregateZero::get(lookup_type(v_type));
+
+                unsigned idx[1];
+
+                size_t i = 0;
+                for (int c = 0; c < n_col; ++c) {
+                    for (int r = 0; r < n_row; ++r) {
+                        llvm::Value *v   = call_expr->translate_argument_value(
+                            *this, ctx, i++, return_derivs);
+                        llvm::Value *idx = ctx.get_constant(r);
+
+                        vector = ctx->CreateInsertElement(vector, v, idx);
+                    }
+                    idx[0] = unsigned(c);
+                    matrix = ctx->CreateInsertValue(matrix, vector, idx);
+                }
+                return Expression_result::value(matrix);
+            }
+        }
+
+        // matrices are represented as arrays of scalars or as plain vectors
+        for (int i = 0; i < n_col * n_row; ++i) {
+            llvm::Value *v = call_expr->translate_argument_value(*this, ctx, i, return_derivs);
+
+            matrix = ctx.create_insert(matrix, v, unsigned(i));
         }
     }
     return Expression_result::value(matrix);
@@ -7851,59 +8124,86 @@ Expression_result LLVM_code_generator::translate_matrix_diagonal_constructor(
 {
     MDL_ASSERT(call_expr->get_argument_count() == 1);
 
+    llvm::Type *res_tp = lookup_type_or_deriv_type(ctx, call_expr);
+    bool return_derivs = call_expr->returns_derivatives(*this);
+    llvm::Value *matrix = llvm::ConstantAggregateZero::get(res_tp);
+
+    mi::mdl::IType const *res_mdl_type = call_expr->get_type()->skip_type_alias();
+
     mi::mdl::IType_matrix const *m_type =
-        cast<mi::mdl::IType_matrix>(call_expr->get_type()->skip_type_alias());
+        cast<mi::mdl::IType_matrix>(m_type_mapper.skip_deriv_type(res_mdl_type));
+
     mi::mdl::IType_vector const *v_type = m_type->get_element_type();
-    mi::mdl::IType_atomic const *a_type = v_type->get_element_type();
 
-    bool is_float = a_type->get_kind() == mi::mdl::IType::TK_FLOAT;
-
-    llvm::Value *v = call_expr->translate_argument_value(*this, ctx, 0, /*return_derivs=*/ false);
-    llvm::Value *z = is_float ? ctx.get_constant(0.0f) : ctx.get_constant(0.0);
+    llvm::Value *v = call_expr->translate_argument_value(*this, ctx, 0, return_derivs);
 
     int n_col = m_type->get_columns();
     int n_row = v_type->get_size();
 
-    llvm::Type *res_tp = lookup_type(m_type);
+    if (return_derivs) {
+        llvm::Value *v_val = ctx.get_dual_val(v);
+        llvm::Value *v_dx  = ctx.get_dual_dx(v);
+        llvm::Value *v_dy  = ctx.get_dual_dy(v);
 
-    llvm::Value *matrix = llvm::ConstantAggregateZero::get(res_tp);
+        llvm::Type *value_tp = m_type_mapper.get_deriv_base_type(res_tp);
 
-    if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_tp)) {
-        llvm::Type *e_tp = a_tp->getArrayElementType();
+        llvm::Value *matrix_val = llvm::ConstantAggregateZero::get(value_tp);
+        llvm::Value *matrix_dx = llvm::ConstantAggregateZero::get(value_tp);
+        llvm::Value *matrix_dy = llvm::ConstantAggregateZero::get(value_tp);
 
-        if (e_tp->isVectorTy()) {
-            // matrices are represented as arrays of vectors
-            llvm::Value *vector = llvm::ConstantAggregateZero::get(lookup_type(v_type));
+        if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(value_tp)) {
+            llvm::Type *e_tp = a_tp->getArrayElementType();
 
-            unsigned idx[1];
-            for (int c = 0; c < n_col; ++c) {
-                for (int r = 0; r < n_row; ++r) {
-                    llvm::Value *idx = ctx.get_constant(r);
+            if (e_tp->isVectorTy()) {
+                // matrices are represented as arrays of vectors
+                llvm::Type *vector_type = lookup_type(v_type);
 
-                    vector = ctx->CreateInsertElement(vector, c == r ? v : z, idx);
+                for (int i = 0; i < n_col && i < n_row; ++i) {
+                    llvm::Value *vector_val = llvm::ConstantAggregateZero::get(vector_type);
+                    llvm::Value *vector_dx = llvm::ConstantAggregateZero::get(vector_type);
+                    llvm::Value *vector_dy = llvm::ConstantAggregateZero::get(vector_type);
+
+                    vector_val = ctx.create_insert(vector_val, v_val, unsigned(i));
+                    vector_dx  = ctx.create_insert(vector_dx,  v_dx,  unsigned(i));
+                    vector_dy  = ctx.create_insert(vector_dy,  v_dy,  unsigned(i));
+
+                    matrix_val = ctx.create_insert(matrix_val, vector_val, unsigned(i));
+                    matrix_dx  = ctx.create_insert(matrix_dx,  vector_dx,  unsigned(i));
+                    matrix_dy  = ctx.create_insert(matrix_dy,  vector_dy,  unsigned(i));
                 }
-                idx[0] = unsigned(c);
-                matrix = ctx->CreateInsertValue(matrix, vector, idx);
-            }
-        } else {
-            // matrices are represented as arrays of scalars
-            unsigned idxes[1];
-            int i = 0;
-            for (int c = 0; c < n_col; ++c) {
-                for (int r = 0; r < n_row; ++r) {
-                    idxes[0] = unsigned(i++);
-                    matrix = ctx->CreateInsertValue(matrix, c == r ? v : z, idxes);
-                }
+                matrix = ctx.get_dual(matrix_val, matrix_dx, matrix_dy);
+                return Expression_result::value(matrix);
             }
         }
+
+        // matrices are represented as arrays of scalars or as plain vectors
+        for (int i = 0; i < n_col && i < n_row; ++i) {
+            unsigned idx = unsigned(i * n_row + i);
+            matrix_val = ctx.create_insert(matrix_val, v_val, idx);
+            matrix_dx  = ctx.create_insert(matrix_dx,  v_dx,  idx);
+            matrix_dy  = ctx.create_insert(matrix_dy,  v_dy,  idx);
+        }
+        matrix = ctx.get_dual(matrix_val, matrix_dx, matrix_dy);
     } else {
-        // matrix types are represented as plain vectors
-        int i = 0;
-        for (int c = 0; c < n_col; ++c) {
-            for (int r = 0; r < n_row; ++r) {
-                llvm::Value *idx = ctx.get_constant(i++);
-                matrix = ctx->CreateInsertElement(matrix, c == r ? v : z, idx);
+        if (llvm::ArrayType *a_tp = llvm::dyn_cast<llvm::ArrayType>(res_tp)) {
+            llvm::Type *e_tp = a_tp->getArrayElementType();
+
+            if (e_tp->isVectorTy()) {
+                // matrices are represented as arrays of vectors
+                llvm::Type *vector_type = lookup_type(v_type);
+
+                for (int i = 0; i < n_col && i < n_row; ++i) {
+                    llvm::Value *vector = llvm::ConstantAggregateZero::get(vector_type);
+                    vector = ctx.create_insert(vector, v, unsigned(i));
+                    matrix = ctx.create_insert(matrix, vector, unsigned(i));
+                }
             }
+            return Expression_result::value(matrix);
+        }
+
+        // matrices are represented as arrays of scalars or as plain vectors
+        for (int i = 0; i < n_col && i < n_row; ++i) {
+            matrix = ctx.create_insert(matrix, v, i * n_row + i);
         }
     }
     return Expression_result::value(matrix);
@@ -8004,7 +8304,7 @@ Expression_result LLVM_code_generator::translate_let(
 }
 
 // Create a matrix by matrix multiplication.
-llvm::Value *LLVM_code_generator::do_matrix_multiplication(
+llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM(
     Function_context &ctx,
     llvm::Type       *res_type,
     llvm::Value      *l,
@@ -8082,6 +8382,155 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication(
     return res;
 }
 
+// Create a matrix by matrix multiplication with derivatives.
+llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM_deriv(
+    Function_context &ctx,
+    llvm::Type       *res_type,
+    llvm::Value      *l,
+    llvm::Value      *r,
+    int              N,
+    int              M,
+    int              K)
+{
+    llvm::Value *l_val = ctx.get_dual_val(l);
+    llvm::Value *l_dx  = ctx.get_dual_dx(l);
+    llvm::Value *l_dy  = ctx.get_dual_dy(l);
+
+    llvm::Value *r_val = ctx.get_dual_val(r);
+    llvm::Value *r_dx  = ctx.get_dual_dx(r);
+    llvm::Value *r_dy  = ctx.get_dual_dy(r);
+
+    llvm::Type  *res_val_type = m_type_mapper.get_deriv_base_type(res_type);
+    llvm::Value *res_val = llvm::UndefValue::get(res_val_type);
+    llvm::Value *res_dx  = res_val;
+    llvm::Value *res_dy  = res_val;
+
+    if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(res_val_type)) {
+        llvm::Type *e_tp   = arr_tp->getElementType();
+
+        if (llvm::isa<llvm::VectorType>(e_tp)) {
+            // small vector mode
+            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            for (unsigned k = 0; k < (unsigned)K; ++k) {
+                unsigned k_idxes[] = { unsigned(k) };
+
+                llvm::Value *res_col_val = llvm::UndefValue::get(e_tp);
+                llvm::Value *res_col_dx  = res_col_val;
+                llvm::Value *res_col_dy  = res_col_val;
+
+                llvm::Value *b_col_val = ctx->CreateExtractValue(r_val, k_idxes);
+                llvm::Value *b_col_dx  = ctx->CreateExtractValue(r_dx,  k_idxes);
+                llvm::Value *b_col_dy  = ctx->CreateExtractValue(r_dy,  k_idxes);
+
+                for (unsigned n = 0; n < (unsigned)N; ++n) {
+                    llvm::Value *tmp_val = llvm::Constant::getNullValue(vt_e_tp);
+                    llvm::Value *tmp_dx  = tmp_val;
+                    llvm::Value *tmp_dy  = tmp_val;
+
+                    for (int m = 0; m < M; ++m) {
+                        unsigned m_idxes[] = { unsigned(m) };
+
+                        llvm::Value *a_col_val = ctx->CreateExtractValue(l_val, m_idxes);
+                        llvm::Value *a_col_dx  = ctx->CreateExtractValue(l_dx,  m_idxes);
+                        llvm::Value *a_col_dy  = ctx->CreateExtractValue(l_dy,  m_idxes);
+
+                        llvm::Value *a_val = ctx->CreateExtractElement(a_col_val, n);
+                        llvm::Value *a_dx  = ctx->CreateExtractElement(a_col_dx,  n);
+                        llvm::Value *a_dy  = ctx->CreateExtractElement(a_col_dy,  n);
+
+                        llvm::Value *b_val = ctx->CreateExtractElement(b_col_val, m);
+                        llvm::Value *b_dx  = ctx->CreateExtractElement(b_col_dx,  m);
+                        llvm::Value *b_dy  = ctx->CreateExtractElement(b_col_dy,  m);
+
+                        tmp_val = ctx->CreateFAdd(tmp_val, ctx->CreateFMul(a_val, b_val));
+
+                        tmp_dx = ctx->CreateFAdd(tmp_dx, ctx->CreateFMul(a_val, b_dx));
+                        tmp_dx = ctx->CreateFAdd(tmp_dx, ctx->CreateFMul(a_dx, b_val));
+
+                        tmp_dy = ctx->CreateFAdd(tmp_dy, ctx->CreateFMul(a_val, b_dy));
+                        tmp_dy = ctx->CreateFAdd(tmp_dy, ctx->CreateFMul(a_dy, b_val));
+                    }
+                    res_col_val = ctx->CreateInsertElement(res_col_val, tmp_val, n);
+                    res_col_dx  = ctx->CreateInsertElement(res_col_dx,  tmp_dx,  n);
+                    res_col_dy  = ctx->CreateInsertElement(res_col_dy,  tmp_dy,  n);
+                }
+                res_val = ctx->CreateInsertValue(res_val, res_col_val, k_idxes);
+                res_dx  = ctx->CreateInsertValue(res_dx,  res_col_dx,  k_idxes);
+                res_dy  = ctx->CreateInsertValue(res_dy,  res_col_dy,  k_idxes);
+            }
+        } else {
+            // all atomic mode
+            for (unsigned n = 0; n < (unsigned)N; ++n) {
+                for (unsigned k = 0; k < (unsigned)K; ++k) {
+                    llvm::Value *tmp_val = llvm::Constant::getNullValue(e_tp);
+                    llvm::Value *tmp_dx  = tmp_val;
+                    llvm::Value *tmp_dy  = tmp_val;
+
+                    for (int m = 0; m < M; ++m) {
+                        unsigned l_idx[1] = { n + m * N };
+                        llvm::Value *a_val = ctx->CreateExtractValue(l_val, l_idx);
+                        llvm::Value *a_dx  = ctx->CreateExtractValue(l_dx, l_idx);
+                        llvm::Value *a_dy  = ctx->CreateExtractValue(l_dy, l_idx);
+
+                        unsigned r_idx[1] = { m + k * M };
+                        llvm::Value *b_val = ctx->CreateExtractValue(r_val, r_idx);
+                        llvm::Value *b_dx  = ctx->CreateExtractValue(r_dx, r_idx);
+                        llvm::Value *b_dy  = ctx->CreateExtractValue(r_dy, r_idx);
+
+                        tmp_val = ctx->CreateFAdd(tmp_val, ctx->CreateFMul(a_val, b_val));
+
+                        tmp_dx = ctx->CreateFAdd(tmp_dx, ctx->CreateFMul(a_val, b_dx));
+                        tmp_dx = ctx->CreateFAdd(tmp_dx, ctx->CreateFMul(a_dx, b_val));
+
+                        tmp_dy = ctx->CreateFAdd(tmp_dy, ctx->CreateFMul(a_val, b_dy));
+                        tmp_dy = ctx->CreateFAdd(tmp_dy, ctx->CreateFMul(a_dy, b_val));
+                    }
+                    unsigned idx[1] = { n + k * N };
+                    res_val = ctx->CreateInsertValue(res_val, tmp_val, idx);
+                    res_dx  = ctx->CreateInsertValue(res_dx, tmp_dx, idx);
+                    res_dy  = ctx->CreateInsertValue(res_dy, tmp_dy, idx);
+                }
+            }
+        }
+    } else {
+        // "big vectors" mode naive implementation
+        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_val_type);
+        llvm::Type       *e_tp = v_tp->getElementType();
+
+        for (int n = 0; n < N; ++n) {
+            for (int k = 0; k < K; ++k) {
+                llvm::Value *tmp_val = llvm::Constant::getNullValue(e_tp);
+                llvm::Value *tmp_dx  = tmp_val;
+                llvm::Value *tmp_dy  = tmp_val;
+                for (int m = 0; m < M; ++m) {
+                    llvm::Value *l_idx = ctx.get_constant(n + m * N);
+                    llvm::Value *a_val = ctx->CreateExtractElement(l_val, l_idx);
+                    llvm::Value *a_dx  = ctx->CreateExtractElement(l_dx, l_idx);
+                    llvm::Value *a_dy  = ctx->CreateExtractElement(l_dy, l_idx);
+
+                    llvm::Value *r_idx = ctx.get_constant(m + k * M);
+                    llvm::Value *b_val = ctx->CreateExtractElement(r_val, r_idx);
+                    llvm::Value *b_dx  = ctx->CreateExtractElement(r_dx, r_idx);
+                    llvm::Value *b_dy  = ctx->CreateExtractElement(r_dy, r_idx);
+
+                    tmp_val = ctx->CreateFAdd(tmp_val, ctx->CreateFMul(a_val, b_val));
+
+                    tmp_dx = ctx->CreateFAdd(tmp_dx, ctx->CreateFMul(a_val, b_dx));
+                    tmp_dx = ctx->CreateFAdd(tmp_dx, ctx->CreateFMul(a_dx, b_val));
+
+                    tmp_dy = ctx->CreateFAdd(tmp_dy, ctx->CreateFMul(a_val, b_dy));
+                    tmp_dy = ctx->CreateFAdd(tmp_dy, ctx->CreateFMul(a_dy, b_val));
+                }
+                llvm::Value *idx = ctx.get_constant(n + k * N);
+                res_val = ctx->CreateInsertElement(res_val, tmp_val, idx);
+                res_dx  = ctx->CreateInsertElement(res_dx,  tmp_dx,  idx);
+                res_dy  = ctx->CreateInsertElement(res_dy,  tmp_dy,  idx);
+            }
+        }
+    }
+    return ctx.get_dual(res_val, res_dx, res_dy);
+}
+
 // Create a vector by matrix multiplication.
 llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM(
     Function_context &ctx,
@@ -8092,9 +8541,10 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM(
     int              K)
 {
     llvm::Value *res = llvm::UndefValue::get(res_type);
+    llvm::Type  *e_tp;
 
     if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(r->getType())) {
-        llvm::Type      *e_tp   = arr_tp->getElementType();
+        e_tp   = arr_tp->getElementType();
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
             llvm::Type *vt_e_tp = e_tp->getVectorElementType();
@@ -8111,43 +8561,98 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM(
                 }
                 res = ctx->CreateInsertElement(res, tmp, k);
             }
-        } else {
-            for (unsigned k = 0; k < (unsigned)K; ++k) {
-                llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
-                for (unsigned m = 0; m < (unsigned)M; ++m) {
-                    unsigned l_idx[1] = { m };
-                    llvm::Value *a = ctx->CreateExtractValue(l, l_idx);
-
-                    unsigned r_idx[1] = { m + k * M };
-                    llvm::Value *b = ctx->CreateExtractValue(r, r_idx);
-
-                    tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a, b));
-                }
-                unsigned idx[1] = { k };
-                res = ctx->CreateInsertValue(res, tmp, idx);
-            }
+            return res;
         }
+
+        // arrays of scalars, fall through
     } else {
         // "big vectors" mode naive implementation
         llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_type);
-        llvm::Type       *e_tp = v_tp->getElementType();
+        e_tp = v_tp->getElementType();
+    }
 
-        for (int k = 0; k < K; ++k) {
-            llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
-            for (int m = 0; m < M; ++m) {
-                llvm::Value *l_idx = ctx.get_constant(m);
-                llvm::Value *a     = ctx->CreateExtractElement(l, l_idx);
+    for (int k = 0; k < K; ++k) {
+        llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
+        for (int m = 0; m < M; ++m) {
+            llvm::Value *a = ctx.create_extract(l, unsigned(m));
+            llvm::Value *b = ctx.create_extract(r, unsigned(m + k * M));
 
-                llvm::Value *r_idx = ctx.get_constant(m + k * M);
-                llvm::Value *b     = ctx->CreateExtractElement(r, r_idx);
-
-                tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a, b));
-            }
-            llvm::Value *idx = ctx.get_constant(k);
-            res = ctx->CreateInsertElement(res, tmp, idx);
+            tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a, b));
         }
+        res = ctx.create_insert(res, tmp, unsigned(k));
     }
     return res;
+}
+
+// Create a vector by matrix multiplication with derivatives.
+llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM_deriv(
+    Function_context &ctx,
+    llvm::Type       *res_type,
+    llvm::Value      *l,
+    llvm::Value      *r,
+    int              M,
+    int              K)
+{
+    llvm::Type  *res_vec_type = m_type_mapper.get_deriv_base_type(res_type);
+    llvm::Value *res_val = llvm::UndefValue::get(res_vec_type);
+    llvm::Value *res_dx = llvm::UndefValue::get(res_vec_type);
+    llvm::Value *res_dy = llvm::UndefValue::get(res_vec_type);
+    llvm::Type  *e_tp;
+
+    llvm::Value *mat_val = ctx.get_dual_val(r);
+    llvm::Value *mat_dx  = ctx.get_dual_dx(r);
+    llvm::Value *mat_dy  = ctx.get_dual_dy(r);
+
+    if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(mat_val->getType())) {
+        e_tp = arr_tp->getElementType();
+
+        if (llvm::isa<llvm::VectorType>(e_tp)) {
+            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            for (unsigned k = 0; k < (unsigned)K; ++k) {
+                llvm::Value *tmp = llvm::Constant::getNullValue(vt_e_tp);
+                llvm::Value *b_val_col = ctx->CreateExtractValue(mat_val, { k });
+                llvm::Value *b_dx_col  = ctx->CreateExtractValue(mat_dx,  { k });
+                llvm::Value *b_dy_col  = ctx->CreateExtractValue(mat_dy,  { k });
+
+                for (unsigned m = 0; m < (unsigned)M; ++m) {
+                    llvm::Value *a = ctx.extract_dual(l, m);
+
+                    llvm::Value *b_val = ctx->CreateExtractElement(b_val_col, m);
+                    llvm::Value *b_dx  = ctx->CreateExtractElement(b_dx_col,  m);
+                    llvm::Value *b_dy  = ctx->CreateExtractElement(b_dy_col,  m);
+
+                    llvm::Value *b = ctx.get_dual(b_val, b_dx, b_dy);
+
+                    tmp = ctx.create_deriv_add(vt_e_tp, tmp, ctx.create_deriv_mul(vt_e_tp, a, b));
+                }
+
+                res_val = ctx.create_insert(res_val, ctx.get_dual_val(tmp), k);
+                res_dx  = ctx.create_insert(res_dx,  ctx.get_dual_dx(tmp),  k);
+                res_dy  = ctx.create_insert(res_dy,  ctx.get_dual_dy(tmp),  k);
+            }
+            return ctx.get_dual(res_val, res_dx, res_dy);
+        }
+
+        // arrays of scalars, fall through
+    } else {
+        // "big vectors" mode naive implementation
+        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_vec_type);
+        e_tp = v_tp->getElementType();
+    }
+
+    for (int k = 0; k < K; ++k) {
+        llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
+        for (int m = 0; m < M; ++m) {
+            llvm::Value *a = ctx.extract_dual(l, unsigned(m));
+            llvm::Value *b = ctx.extract_dual(r, unsigned(m + k * M));
+
+            tmp = ctx.create_deriv_add(e_tp, tmp, ctx.create_deriv_mul(e_tp, a, b));
+        }
+        res_val = ctx.create_insert(res_val, ctx.get_dual_val(tmp), unsigned(k));
+        res_dx  = ctx.create_insert(res_dx,  ctx.get_dual_dx(tmp),  unsigned(k));
+        res_dy  = ctx.create_insert(res_dy,  ctx.get_dual_dy(tmp),  unsigned(k));
+    }
+    return ctx.get_dual(res_val, res_dx, res_dy);
 }
 
 // Create a matrix by vector multiplication.
@@ -8160,9 +8665,10 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV(
     int              M)
 {
     llvm::Value *res = llvm::UndefValue::get(res_type);
+    llvm::Type  *e_tp;
 
     if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(l->getType())) {
-        llvm::Type      *e_tp   = arr_tp->getElementType();
+        e_tp = arr_tp->getElementType();
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
             llvm::Type *vt_e_tp = e_tp->getVectorElementType();
@@ -8180,43 +8686,100 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV(
 
                 res = ctx->CreateInsertElement(res, tmp, n);
             }
-        } else {
-            for (unsigned n = 0; n < (unsigned)N; ++n) {
-                llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
-                for (unsigned m = 0; m < (unsigned)M; ++m) {
-                    unsigned l_idx[1] = { n + m * N };
-                    llvm::Value *a = ctx->CreateExtractValue(l, l_idx);
-
-                    unsigned r_idx[1] = { m };
-                    llvm::Value *b = ctx->CreateExtractValue(r, r_idx);
-
-                    tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a, b));
-                }
-                unsigned idx[1] = { n };
-                res = ctx->CreateInsertValue(res, tmp, idx);
-            }
+            return res;
         }
+
+        // arrays of scalars, fall through
     } else {
         // "big vectors" mode naive implementation
         llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_type);
-        llvm::Type       *e_tp = v_tp->getElementType();
+        e_tp = v_tp->getElementType();
+    }
 
-        for (int n = 0; n < N; ++n) {
-            llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
-            for (int m = 0; m < M; ++m) {
-                llvm::Value *l_idx = ctx.get_constant(n + m * N);
-                llvm::Value *a     = ctx->CreateExtractElement(l, l_idx);
+    for (int n = 0; n < N; ++n) {
+        llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
+        for (int m = 0; m < M; ++m) {
+            llvm::Value *a = ctx.create_extract(l, unsigned(n + m * N));
+            llvm::Value *b = ctx.create_extract(r, unsigned(m));
 
-                llvm::Value *r_idx = ctx.get_constant(m);
-                llvm::Value *b     = ctx->CreateExtractElement(r, r_idx);
-
-                tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a, b));
-            }
-            llvm::Value *idx = ctx.get_constant(n);
-            res = ctx->CreateInsertElement(res, tmp, idx);
+            tmp = ctx->CreateFAdd(tmp, ctx->CreateFMul(a, b));
         }
+        res = ctx.create_insert(res, tmp, unsigned(n));
     }
     return res;
+}
+
+// Create a matrix by vector multiplication with derivatives.
+llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV_deriv(
+    Function_context &ctx,
+    llvm::Type       *res_type,
+    llvm::Value      *l,
+    llvm::Value      *r,
+    int              N,
+    int              M)
+{
+    llvm::Type  *res_vec_type = m_type_mapper.get_deriv_base_type(res_type);
+    llvm::Value *res_val = llvm::UndefValue::get(res_vec_type);
+    llvm::Value *res_dx = llvm::UndefValue::get(res_vec_type);
+    llvm::Value *res_dy = llvm::UndefValue::get(res_vec_type);
+    llvm::Type  *e_tp;
+
+    llvm::Value *mat_val = ctx.get_dual_val(l);
+    llvm::Value *mat_dx  = ctx.get_dual_dx(l);
+    llvm::Value *mat_dy  = ctx.get_dual_dy(l);
+
+    if (llvm::ArrayType *arr_tp = llvm::dyn_cast<llvm::ArrayType>(mat_val->getType())) {
+        e_tp = arr_tp->getElementType();
+
+        if (llvm::isa<llvm::VectorType>(e_tp)) {
+            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            for (unsigned n = 0; n < (unsigned)N; ++n) {
+                llvm::Value *tmp = llvm::Constant::getNullValue(vt_e_tp);
+
+                for (unsigned m = 0; m < (unsigned)M; ++m) {
+                    llvm::Value *a_val_col = ctx->CreateExtractValue(mat_val, { m });
+                    llvm::Value *a_val = ctx->CreateExtractElement(a_val_col, n);
+
+                    llvm::Value *a_dx_col = ctx->CreateExtractValue(mat_dx, { m });
+                    llvm::Value *a_dx = ctx->CreateExtractElement(a_dx_col, n);
+
+                    llvm::Value *a_dy_col = ctx->CreateExtractValue(mat_dy, { m });
+                    llvm::Value *a_dy = ctx->CreateExtractElement(a_dy_col, n);
+
+                    llvm::Value *a = ctx.get_dual(a_val, a_dx, a_dy);
+
+                    llvm::Value *b = ctx.extract_dual(r, m);
+
+                    tmp = ctx.create_deriv_add(vt_e_tp, tmp, ctx.create_deriv_mul(vt_e_tp, a, b));
+                }
+
+                res_val = ctx.create_insert(res_val, ctx.get_dual_val(tmp), n);
+                res_dx  = ctx.create_insert(res_dx,  ctx.get_dual_dx(tmp),  n);
+                res_dy  = ctx.create_insert(res_dy,  ctx.get_dual_dy(tmp),  n);
+            }
+            return ctx.get_dual(res_val, res_dx, res_dy);
+        }
+
+        // arrays of scalars, fall through
+    } else {
+        // "big vectors" mode naive implementation
+        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(res_vec_type);
+        e_tp = v_tp->getElementType();
+    }
+
+    for (int n = 0; n < N; ++n) {
+        llvm::Value *tmp = llvm::Constant::getNullValue(e_tp);
+        for (int m = 0; m < M; ++m) {
+            llvm::Value *a = ctx.extract_dual(l, unsigned(n + m * N));
+            llvm::Value *b = ctx.extract_dual(r, unsigned(m));
+
+            tmp = ctx.create_deriv_add(e_tp, tmp, ctx.create_deriv_mul(e_tp, a, b));
+        }
+        res_val = ctx.create_insert(res_val, ctx.get_dual_val(tmp), unsigned(n));
+        res_dx  = ctx.create_insert(res_dx,  ctx.get_dual_dx(tmp),  unsigned(n));
+        res_dy  = ctx.create_insert(res_dy,  ctx.get_dual_dy(tmp),  unsigned(n));
+    }
+    return ctx.get_dual(res_val, res_dx, res_dy);
 }
 
 // Translate a DAG node into LLVM IR.
@@ -8626,7 +9189,7 @@ void LLVM_code_generator::create_module(char const *mod_name, char const *mod_fn
     MDL_ASSERT(m_module == NULL && !m_func_pass_manager && "current module not finished yet");
 
     // clear the render state usage
-    m_render_state_usage = 0;
+    m_state_usage_analysis.clear();
 
     // creates a new llvm module
     m_module = new llvm::Module(mod_name, m_llvm_context);
@@ -8677,11 +9240,64 @@ void LLVM_code_generator::create_module(char const *mod_name, char const *mod_fn
     m_func_pass_manager->doInitialization();
 }
 
+/// Load and link user-defined renderer module into the given LLVM module.
+bool LLVM_code_generator::load_and_link_renderer_module(llvm::Module *llvm_module)
+{
+    std::unique_ptr<llvm::MemoryBuffer> mem(llvm::MemoryBuffer::getMemBuffer(
+        llvm::StringRef(m_renderer_module.data, m_renderer_module.size),
+        "renderer_module",
+        /*RequiresNullTerminator=*/ false));
+
+    llvm::SMDiagnostic err;
+    auto renderer_mod = llvm::parseIR(*mem.get(), err, m_llvm_context);
+    if (!renderer_mod) {
+        error(PARSING_RENDERER_MODULE_FAILED, err.getMessage().str());
+        return false;
+    }
+
+    // clear target triple to avoid LLVM warning on console about mixing different targets
+    renderer_mod.get()->setTargetTriple("");
+
+    // also avoid LLVM warning on console about mixing different data layouts
+    renderer_mod.get()->setDataLayout(llvm_module->getDataLayout());
+
+    // overwrite wchar_size flag to match gnu size defined in libbsdf module
+    llvm::NamedMDNode *mod_flags = renderer_mod.get()->getModuleFlagsMetadata();
+    if (mod_flags) {
+        for (unsigned i = 0, n = mod_flags->getNumOperands(); i < n; ++i) {
+            llvm::MDNode *flag = mod_flags->getOperand(i);
+            llvm::MDString *id = llvm::cast<llvm::MDString>(flag->getOperand(1));
+            if (id->getString() == "wchar_size") {
+                llvm::Metadata *wchar_size = llvm::ConstantAsMetadata::get(
+                    llvm::ConstantInt::get(llvm::IntegerType::get(m_llvm_context, 32), 4));
+                llvm::Metadata *flag_ops[] = { flag->getOperand(0), id, wchar_size };
+                llvm::MDNode *flag = llvm::MDNode::get(m_llvm_context, flag_ops);
+                mod_flags->setOperand(i, flag);
+            }
+        }
+    }
+
+    // ensure that all renderer runtime functions will be inlined
+    for (llvm::Function &func : renderer_mod.get()->functions()) {
+        func.addFnAttr(llvm::Attribute::AlwaysInline);
+    }
+
+    if (llvm::Linker::linkModules(*llvm_module, std::move(renderer_mod))) {
+        // true means linking has failed
+        error(LINKING_RENDERER_MODULE_FAILED, "unknown linking error");
+        return false;
+    }
+
+    return true;
+}
+
 // Finalize compilation of the current module.
 llvm::Module *LLVM_code_generator::finalize_module()
 {
     // note: these functions could introduce new resource table accesses
     compile_waiting_functions();
+
+    m_state_usage_analysis.update_exported_functions_state_usage();
 
     // adding constants might introduce new data tables
     if (m_use_ro_data_segment)
@@ -8733,6 +9349,12 @@ llvm::Module *LLVM_code_generator::finalize_module()
                 return NULL;
             }
         }
+        if (m_renderer_module.data != NULL) {
+            if (!load_and_link_renderer_module(llvm_module)) {
+                drop_llvm_module(llvm_module);
+                return NULL;
+            }
+        }
         if (m_link_libdevice) {
             std::unique_ptr<llvm::Module> libdevice(
                 load_libdevice(m_llvm_context, m_min_ptx_version));
@@ -8740,6 +9362,11 @@ llvm::Module *LLVM_code_generator::finalize_module()
 
             // avoid LLVM warning on console about mixing different data layouts
             libdevice->setDataLayout(llvm_module->getDataLayout());
+
+            // set required attributes on libdevice functions
+            for (llvm::Function &func : libdevice->functions()) {
+                set_llvm_function_attributes(&func);
+            }
 
             if (llvm::Linker::linkModules(*llvm_module, std::move(libdevice))) {
                 // true means linking has failed
@@ -8751,8 +9378,56 @@ llvm::Module *LLVM_code_generator::finalize_module()
                 return NULL;
             }
         }
+
+        if (m_visible_functions != NULL && *m_visible_functions) {
+            // first mark all non-external functions as internal
+            for (llvm::Function &func : llvm_module->functions()) {
+                if (!func.isDeclaration())
+                    func.setLinkage(llvm::GlobalValue::InternalLinkage);
+            }
+
+            // now mark requested functions as external
+            char const *start = m_visible_functions;
+            while (start && *start) {
+                char const *ptr = strchr(start, ',');
+                if (ptr == nullptr)
+                    ptr = start + strlen(start);
+
+                llvm::Function *func = llvm_module->getFunction(
+                    llvm::StringRef(start, ptr - start));
+                if (func)
+                    func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+
+                start = ptr;
+                if (*ptr == ',')
+                    ++start;
+            }
+        }
+
+#if 0
+        static int fileid = 0;
+        {
+            std::string filename("prog_" + std::to_string(fileid) + "-preopt.ll");
+            std::error_code ec;
+            llvm::raw_fd_ostream file(filename.c_str(), ec, llvm::sys::fs::F_Text);
+            llvm_module->print(file, NULL);
+        }
+#endif
+
         optimize(llvm_module);
+
+#if 0
+        {
+            std::string filename("prog_" + std::to_string(fileid) + "-postopt.ll");
+            std::error_code ec;
+            llvm::raw_fd_ostream file(filename.c_str(), ec, llvm::sys::fs::F_Text);
+            llvm_module->print(file, NULL);
+        }
+
+        ++fileid;
+#endif
     }
+
     return llvm_module;
 }
 
@@ -8798,7 +9473,10 @@ void LLVM_code_generator::ptx_compile(
 
     // LLVM supports only "known" processors, so ensure that we do not pass an unsupported one
     unsigned sm_version = m_sm_version;
-    if (sm_version == 75)
+    if (sm_version == 86)
+        /* ok */;
+    else if (sm_version > 80)  sm_version = 80;
+    else if (sm_version == 75)
         /* ok */;
     else if (sm_version > 70)  sm_version = 70;
     else if (sm_version == 70)
@@ -8835,6 +9513,10 @@ void LLVM_code_generator::ptx_compile(
         OLvl = llvm::CodeGenOpt::Aggressive;
 
     llvm::TargetOptions options;
+    if (m_fast_math)
+        options.UnsafeFPMath = true;
+    if (m_finite_math)
+        options.NoInfsFPMath = options.NoNaNsFPMath = true;
     std::unique_ptr<llvm::TargetMachine> target_machine(target->createTargetMachine(
         triple, mcpu, features, options,
         llvm::None, llvm::None, OLvl));
@@ -8905,7 +9587,8 @@ void LLVM_code_generator::fill_function_info(IGenerated_code_executable *code)
             exp_func.name.c_str(),
             exp_func.distribution_kind,
             exp_func.function_kind,
-            exp_func.arg_block_index);
+            exp_func.arg_block_index,
+            exp_func.state_usage);
 
         for (size_t i = 0, n = exp_func.prototypes.size(); i < n; ++i) {
             if (!exp_func.prototypes[i].empty()) {
@@ -9077,7 +9760,7 @@ void *LLVM_code_generator::get_entry_point(MDL_JIT_module_key module_key, llvm::
 }
 
 // Get the number of error messages.
-int LLVM_code_generator::get_error_message_count()
+size_t LLVM_code_generator::get_error_message_count()
 {
     return m_messages.get_error_message_count();
 }
@@ -9193,6 +9876,7 @@ void LLVM_code_generator::add_texture_attribute_table(
             llvm::GlobalValue::InternalLinkage,
             "get_texture_attr_table",
             m_module);
+        set_llvm_function_attributes(lut_func);
 
         m_lut_info[RTK_TEXTURE].m_get_lut = lut_func;
 
@@ -9201,6 +9885,7 @@ void LLVM_code_generator::add_texture_attribute_table(
             llvm::GlobalValue::InternalLinkage,
             "get_texture_attr_table_size",
             m_module);
+        set_llvm_function_attributes(size_func);
 
         m_lut_info[RTK_TEXTURE].m_get_lut_size = size_func;
     }
@@ -9234,6 +9919,7 @@ void LLVM_code_generator::add_light_profile_attribute_table(
             llvm::GlobalValue::InternalLinkage,
             "get_light_profile_attr_table",
             m_module);
+        set_llvm_function_attributes(lut_func);
 
         m_lut_info[RTK_LIGHT_PROFILE].m_get_lut = lut_func;
 
@@ -9242,6 +9928,7 @@ void LLVM_code_generator::add_light_profile_attribute_table(
             llvm::GlobalValue::InternalLinkage,
             "get_light_profile_attr_table_size",
             m_module);
+        set_llvm_function_attributes(size_func);
 
         m_lut_info[RTK_LIGHT_PROFILE].m_get_lut_size = size_func;
     }
@@ -9276,6 +9963,7 @@ void LLVM_code_generator::add_bsdf_measurement_attribute_table(
             llvm::GlobalValue::InternalLinkage,
             "get_bsdf_measurement_attr_table",
             m_module);
+        set_llvm_function_attributes(lut_func);
 
         m_lut_info[RTK_BSDF_MEASUREMENT].m_get_lut = lut_func;
 
@@ -9284,6 +9972,7 @@ void LLVM_code_generator::add_bsdf_measurement_attribute_table(
             llvm::GlobalValue::InternalLinkage,
             "get_bsdf_measurement_attr_table_size",
             m_module);
+        set_llvm_function_attributes(size_func);
 
         m_lut_info[RTK_BSDF_MEASUREMENT].m_get_lut_size = size_func;
     }
@@ -9310,6 +9999,7 @@ void LLVM_code_generator::init_string_attribute_table()
         llvm::GlobalValue::InternalLinkage,
         "get_string_table",
         m_module);
+    set_llvm_function_attributes(lut_func);
 
     m_lut_info[RTK_STRINGS].m_get_lut = lut_func;
 
@@ -9318,6 +10008,7 @@ void LLVM_code_generator::init_string_attribute_table()
         llvm::GlobalValue::InternalLinkage,
         "get_string_table_size",
         m_module);
+    set_llvm_function_attributes(size_func);
 
     m_lut_info[RTK_STRINGS].m_get_lut_size = size_func;
 }
@@ -9600,11 +10291,14 @@ void LLVM_code_generator::replace_bsdf_data_calls()
 
     for (auto ui = func->user_begin(); ui != func->user_end(); ) {
         llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(*ui);
+
+        // current instruction might get replaced, so advance the iterator here
         ++ui;
-        if (call) {
+
+        if (call != nullptr) {
             llvm::Value *kind_val = call->getArgOperand(1);
             if (llvm::ConstantInt *const_int = llvm::dyn_cast<llvm::ConstantInt>(kind_val)) {
-                int bsdf_data_kind = const_int->getValue().getZExtValue();
+                unsigned bsdf_data_kind = unsigned(const_int->getValue().getZExtValue());
                 int tex_id = 0;
                 if (bsdf_data_kind > 0 && bsdf_data_kind <= IValue_texture::BDK_LAST_KIND) {
                     tex_id = int(m_bsdf_data_texture_ids[bsdf_data_kind - 1]);

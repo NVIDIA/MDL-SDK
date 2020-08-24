@@ -32,7 +32,7 @@
 \if MDL_BIN_RELEASE
     [\link mi_neuray_example_distilling_glsl Previous\endlink]
 \else
-    [\link mi_neuray_example_user_state_module Previous\endlink]
+    [\link mi_neuray_example_derivatives Previous\endlink]
 \endif
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_discovery Next\endlink]
@@ -232,7 +232,7 @@ const std::set<std::string>& Compiled_material_traverser_print::Context::get_use
 \if MDL_BIN_RELEASE
     [\link mi_neuray_example_distilling_glsl Previous\endlink]
 \else
-    [\link mi_neuray_example_user_state_module Previous\endlink]
+    [\link mi_neuray_example_derivatives Previous\endlink]
 \endif
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_discovery Next\endlink]

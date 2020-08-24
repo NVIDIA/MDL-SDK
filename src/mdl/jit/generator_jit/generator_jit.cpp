@@ -83,6 +83,10 @@ Code_generator_jit::Code_generator_jit(
         "true",
         "Enables unsafe math optimizations of the JIT code generator");
     m_options.add_option(
+        MDL_JIT_OPTION_INLINE_AGGRESSIVELY,
+        "false",
+        "Instructs the JIT code generator to aggressively inline functions");
+    m_options.add_option(
         MDL_JIT_OPTION_DISABLE_EXCEPTIONS,
         "false",
         "Disable exception handling in the generated code");
@@ -114,9 +118,6 @@ Code_generator_jit::Code_generator_jit(
         MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE,
         "vtable",
         "The mode for texture lookup functions on GPU (vtable, direct_call or optix_cp)");
-    m_options.add_binary_option(
-        MDL_JIT_BINOPTION_LLVM_STATE_MODULE,
-        "Use this user-specified LLVM implementation for the MDL state module");
     m_options.add_option(
         MDL_JIT_OPTION_MAP_STRINGS_TO_IDS,
         "false",
@@ -143,6 +144,18 @@ Code_generator_jit::Code_generator_jit(
         "",
         "Comma-separated list of names for which scene data may be available in the renderer "
         "(use \"*\" to enforce that the renderer runtime is asked for all scene data names)");
+    m_options.add_option(
+        MDL_JIT_OPTION_VISIBLE_FUNCTIONS,
+        "",
+        "Comma-separated list of names of functions which will be visible in the generated code "
+        "(empty string means no special restriction).");
+
+    m_options.add_binary_option(
+        MDL_JIT_BINOPTION_LLVM_STATE_MODULE,
+        "Use this user-specified LLVM implementation for the MDL state module");
+    m_options.add_binary_option(
+        MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE,
+        "Link and optimize this user-specified LLVM renderer module with the generated code");
 }
 
 // Get the name of the target language.
@@ -218,7 +231,7 @@ public:
     /// Called for a texture resource.
     ///
     /// \param v  the texture resource or an invalid ref
-    void texture(IValue const *v) MDL_FINAL
+    void texture(IValue const *v, Texture_usage tex_usage) MDL_FINAL
     {
         if (IValue_texture const *tex = as<IValue_texture>(v)) {
             bool valid = false;
@@ -570,8 +583,13 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         hasher.update(lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE);
         hasher.update(m_options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
+        hasher.update(m_options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
+        hasher.update(m_options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
+        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
+        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
         hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
@@ -1082,7 +1100,7 @@ void Code_generator_jit::fill_code_from_cache(
     for (size_t i = 0; i < entry->func_info_size; ++i) {
         ICode_cache::Entry::Func_info const &info = entry->func_infos[i];
         size_t index = code->add_function_info(
-            info.name, info.dist_kind, info.func_kind, info.arg_block_index);
+            info.name, info.dist_kind, info.func_kind, info.arg_block_index, info.state_usage);
 
         for (int j = 0 ; j < int(IGenerated_code_executable::PL_NUM_LANGUAGES); ++j) {
             char const *prototype = info.prototypes[j];
@@ -1227,8 +1245,13 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         hasher.update(num_texture_spaces);
         hasher.update(num_texture_results);
         hasher.update(m_options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
+        hasher.update(m_options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
+        hasher.update(m_options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
+        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
+        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
         hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
@@ -1531,6 +1554,13 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
     }
     code_obj->retain();
     return code_obj.get();
+}
+
+/// Create a blank layout used for deserialization of target codes.
+IGenerated_code_value_layout *Code_generator_jit::create_value_layout() const
+{
+    return m_builder.create<mi::mdl::Generated_code_value_layout>(
+        this->get_allocator());
 }
 
 // Calculate the state mapping mode from options.

@@ -43,7 +43,7 @@
 #ifdef WIN_NT
 #include <mi/base/miwindows.h>
 #else
-#include <sys/dir.h>		// for DIR (from opendir)
+#include <sys/dir.h>            // for DIR (from opendir)
 #endif
 #endif
 
@@ -64,7 +64,7 @@ using namespace HAL;
 struct Hal_dir : public MEM::Allocatable
 
 {
-    DIR *m_dp;			// open directory, 0 if not open
+    DIR *m_dp;                  // open directory, 0 if not open
 };
 
 
@@ -95,7 +95,7 @@ Directory::~Directory()
 //
 
 bool Directory::open(
-    const char		*path)		// path to open
+    const char          *path)          // path to open
 {
     m_eof = false;
     if (m_dp_wrapper->m_dp && !close())
@@ -147,15 +147,15 @@ bool Directory::close()
 
 
 std::string Directory::read(
-    bool		nodot)		// ignore files beginning with '.'
+    bool                nodot)          // ignore files beginning with '.'
 {
     ASSERT(M_DISK, m_dp_wrapper->m_dp != 0);
     m_error = 0;
     for (;;) {
         struct dirent *entry = readdir(m_dp_wrapper->m_dp);
-        if ((m_eof = (0==entry)))			// eof: return false
+        if ((m_eof = (0==entry)))                       // eof: return false
             return std::string();
-        if (!(nodot && entry->d_name[0] == '.'))	// not a rejected dot
+        if (!(nodot && entry->d_name[0] == '.'))        // not a rejected dot
             return entry->d_name;
     }
 }
@@ -225,7 +225,7 @@ Directory::~Directory()
 //
 
 bool Directory::open(
-    const char		*path)		// path to open
+    const char          *path)          // path to open
 {
     m_eof = false;
     if ( m_dir->m_opened && !close() )
@@ -413,7 +413,7 @@ bool Directory::rewind()
 //
 
 bool Directory::exists(
-    const char *path)		    // the path to check
+    const char *path)               // the path to check
 {
     if (!path || *path == '\0')  return false;
 

@@ -46,10 +46,11 @@ set(MDL_EXAMPLES_FOLDER ${CMAKE_SOURCE_DIR}/examples CACHE PATH "The folder that
 # configuration options
 option(MDL_BUILD_SDK_EXAMPLES "Adds MDL SDK examples to the build." ON)
 option(MDL_BUILD_CORE_EXAMPLES "Adds MDL Core examples to the build." ON)
+option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." ON)
 option(MDL_LOG_PLATFORM_INFOS "Prints some infos about the current build system (relevant for error reports)." ON)
 option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." ON)
 option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." ON)
-set(MDL_ADDITIONAL_COMPILER_DEFINES "" CACHE STRING "Additional compile defines that are passed to each of the projects")
+set(MDL_ADDITIONAL_COMPILER_DEFINES "MDL_SOURCE_RELEASE" CACHE STRING "Additional compile defines that are passed to each of the projects")
 set(MDL_ADDITIONAL_COMPILER_OPTIONS "" CACHE STRING "Additional compile options that are passed to each of the projects")
 
 # -------------------------------------------------------------------------------------------------
@@ -144,7 +145,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/freeimage)
 #--------------------------------------------------------------------------------------------------
 
 # third party
-if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_D3D11_EXAMPLES OR MDL_ENABLE_D3D12_EXAMPLES)
+if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_D3D11_EXAMPLES OR MDL_ENABLE_D3D12_EXAMPLES OR MDL_ENABLE_OPTIX7_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/imgui)
 endif()
 add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/tinyxml2)
@@ -154,6 +155,7 @@ if(MDL_BUILD_SDK_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/archives)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/calls)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/code_gen)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/compilation)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/discovery)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_native)
@@ -168,6 +170,13 @@ if(MDL_BUILD_SDK_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_cuda)
         if(MDL_ENABLE_OPENGL_EXAMPLES)
             add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/df_cuda)
+            if(MDL_ENABLE_OPTIX7_EXAMPLES)
+                if(WINDOWS)
+                    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/optix7)
+                else()
+                    message(WARNING "The OptiX 7 example is currently only available for Windows.")
+                endif()
+            endif()
         endif()
     endif()
 
@@ -192,6 +201,13 @@ if(MDL_BUILD_CORE_EXAMPLES)
     endif()
 endif()
 
+# MDL SDK libs/products and
+# PLUGINS FOR EXTERNAL APPLICATIONS that use the MDL SDK and mdl_sdk::shared
+#--------------------------------------------------------------------------------------------------
+# MDL Arnold
+if(MDL_BUILD_ARNOLD_PLUGIN)
+    add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_arnold)
+endif()
 
 
 # add tests with the POST option; there require all regular targets to be defined already

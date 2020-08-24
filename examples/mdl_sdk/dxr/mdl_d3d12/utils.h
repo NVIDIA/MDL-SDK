@@ -33,8 +33,11 @@
 
 #include <string>
 #include <vector>
+#include <map>
 #include <chrono>
 #include <cmath>
+#include <mutex>
+#include <algorithm>
 #include <Windows.h>
 #include <DirectXMath.h>
 
@@ -42,11 +45,18 @@
 
 struct ID3D12Object;
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     const float PI = 3.14159265358979323846f;
     const float PI_OVER_2 = PI * 0.5f;
     const float ONE_OVER_PI = 0.318309886183790671538f;
+    const float SQRT_2 = 1.41421356237f;
+    const float SQRT_3 = 1.73205080757f;
+
+    void log_verbose(
+        const std::string& message,
+        const std::string& file = "",
+        int line = 0);
 
     void log_info(
         const std::string& message,
@@ -59,8 +69,8 @@ namespace mdl_d3d12
         int line = 0);
 
     void log_error(
-        const std::string& message, 
-        const std::string& file = "", 
+        const std::string& message,
+        const std::string& file = "",
         int line = 0);
 
     void log_error(
@@ -68,10 +78,15 @@ namespace mdl_d3d12
         const std::string& file,
         int line = 0);
 
+    void log_error(
+        const std::string& message,
+        const std::exception& exception,
+        const std::string& file, int line);
+
     bool log_on_failure(
-        HRESULT error_code, 
-        const std::string& message, 
-        const std::string& file = "", 
+        HRESULT error_code,
+        const std::string& message,
+        const std::string& file = "",
         int line = 0);
 
     void throw_on_failure(
@@ -80,120 +95,26 @@ namespace mdl_d3d12
         const std::string& file = "",
         int line = 0);
 
+    // flushes all ongoing async logging tasks. has to be called before closing the app.
+    void flush_loggers();
+
+    // set a log file to use or \c nullptr in order disable file logging when active.
+    // has to be called with a nullptr before closing the app.
     void log_set_file_path(const char* log_file_path);
 
-    template<typename T>
-    using is_scoped_enum = 
-        std::integral_constant<bool, std::is_enum<T>::value && !std::is_convertible<T, int>::value>;
-
-    template<class T> constexpr T operator & (T a, T b) { 
-        return static_cast<T>(static_cast<int>(a) & static_cast<int>(b)); 
-    }
-
-    template<class T> constexpr T operator | (T a, T b) { 
-        return static_cast<T>(static_cast<int>(a) | static_cast<int>(b)); 
-    }
-
-    template<class T, typename = typename std::enable_if<is_scoped_enum<T>::value>::type>
-    inline bool has_flag(T a, T toCheck) { return static_cast<int>(a & toCheck) > 0; }
-
     void set_debug_name(ID3D12Object* obj, const std::string& name);
-
-    inline std::wstring str_to_wstr(const std::string& s)
-    {
-        size_t slength = s.length() + 1;
-        int len = MultiByteToWideChar(CP_ACP, 0, s.c_str(), static_cast<int>(slength), nullptr, 0);
-        wchar_t* buf = new wchar_t[len];
-        MultiByteToWideChar(CP_ACP, 0, s.c_str(), static_cast<int>(slength), buf, len);
-        std::wstring r(buf);
-        delete[] buf;
-        return r;
-    }
-
-    inline std::string wstr_to_str(const std::wstring& s)
-    {
-        return std::string(s.begin(), s.end());
-    }
 
     inline size_t round_to_power_of_two(size_t value, size_t power_of_two_factor)
     {
         return (value + (power_of_two_factor - 1)) & ~(power_of_two_factor - 1);
     }
 
-    inline std::vector<std::string> str_split(const std::string& input, char sep)
-    {
-        std::vector<std::string> chunks;
-
-        size_t offset(0);
-        size_t pos(0);
-        std::string chunk;
-        while (pos != std::string::npos)
-        {
-            pos = input.find(sep, offset);
-
-            if (pos == std::string::npos)
-                chunk = input.substr(offset);
-            else
-                chunk = input.substr(offset, pos - offset);
-
-            if(!chunk.empty())
-                chunks.push_back(chunk);
-            offset = pos + 1;
-        }
-        return chunks;
-    }
-
-
-    inline bool str_starts_with(const std::string& s, const std::string& potential_start)
-    {
-        size_t n = potential_start.size();
-
-        if (s.size() < n) 
-            return false;
-
-        for (size_t i = 0; i < n; ++i)
-            if (s[i] != potential_start[i])
-                return false;
-
-        return true;
-    }
-
-    inline bool str_ends_with(const std::string& s, const std::string& potential_end)
-    {
-        size_t n = potential_end.size();
-        size_t sn = s.size();
-
-        if (sn < n)
-            return false;
-
-        for (size_t i = 0; i < n; ++i)
-            if (s[sn - i - 1] != potential_end[n - i - 1])
-                return false;
-
-        return true;
-    }
-
-    inline bool str_remove_quotes(std::string& s)
-    {
-        size_t l = s.length();
-        if (l < 2) 
-            return false;
-
-        bool leading = s[0] == '\"';
-        bool trailing = s[l-1] == '\"';
-
-        if (leading != trailing)
-            return false;
-
-        if(leading)
-            s = s.substr(1, l - 2);
-        return true;
-    }
+    // --------------------------------------------------------------------------------------------
 
     struct Timing
     {
         explicit Timing(std::string operation);
-        virtual ~Timing();
+        ~Timing();
 
     private:
         std::string m_operation;
@@ -201,7 +122,41 @@ namespace mdl_d3d12
     };
 
     // --------------------------------------------------------------------------------------------
-    // Vector Math 
+
+    class Profiling
+    {
+    public:
+        struct Measurement
+        {
+            ~Measurement();
+        private:
+            friend class Profiling;
+            explicit Measurement(Profiling* p, std::string operation);
+
+            Profiling* m_profiling;
+            std::string m_operation;
+            std::chrono::steady_clock::time_point m_start;
+        };
+
+        Measurement measure(std::string operation);
+        void print_statistics() const;
+        void reset_statistics() { m_statistics.clear(); }
+
+    private:
+        struct Entry
+        {
+            double average;
+            size_t count;
+        };
+
+        void on_measured(const Measurement& m, const double& value);
+
+        std::map<std::string, Entry> m_statistics;
+        std::mutex m_statistics_mtx;
+    };
+
+    // --------------------------------------------------------------------------------------------
+    // DirectX Math
     // --------------------------------------------------------------------------------------------
 
     inline DirectX::XMMATRIX inverse(const DirectX::XMMATRIX& m, DirectX::XMVECTOR* determinants = nullptr)
@@ -212,11 +167,6 @@ namespace mdl_d3d12
         DirectX::XMVECTOR det;
         return DirectX::XMMatrixInverse(&det, m);
     }
-
-
-    // --------------------------------------------------------------------------------------------
-    // Float Math 
-    // --------------------------------------------------------------------------------------------
 
     inline DirectX::XMFLOAT3 normalize(const DirectX::XMFLOAT3& v)
     {
@@ -239,6 +189,20 @@ namespace mdl_d3d12
         return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
     }
 
+    inline float average(const DirectX::XMFLOAT3& v)
+    {
+        return (v.x + v.y + v.z) * 0.33333333333333f;
+    }
+
+    inline float maximum(const DirectX::XMFLOAT3& v)
+    {
+        return std::max<float>(v.x, std::max<float>(v.y, v.z));
+    }
+
+    inline float minimum(const DirectX::XMFLOAT3& v)
+    {
+        return std::min<float>(v.x, std::min<float>(v.y, v.z));
+    }
 
     inline DirectX::XMFLOAT3 cross(const DirectX::XMFLOAT3& v1, const DirectX::XMFLOAT3& v2)
     {
@@ -258,6 +222,15 @@ namespace mdl_d3d12
         return res;
     }
 
+    inline DirectX::XMFLOAT3 operator+(const DirectX::XMFLOAT3& v1, const DirectX::XMFLOAT3& v2)
+    {
+        DirectX::XMFLOAT3 res;
+        res.x = v1.x + v2.x;
+        res.y = v1.y + v2.y;
+        res.z = v1.z + v2.z;
+        return res;
+    }
+
     inline DirectX::XMFLOAT3 operator*(const DirectX::XMFLOAT3& v1, float s)
     {
         DirectX::XMFLOAT3 res;
@@ -267,7 +240,6 @@ namespace mdl_d3d12
         return res;
     }
 
-
     inline void operator*=(DirectX::XMFLOAT3& v, float s)
     {
         v.x *= s;
@@ -275,10 +247,17 @@ namespace mdl_d3d12
         v.z *= s;
     }
 
+    inline void operator/=(DirectX::XMFLOAT3& v, float s)
+    {
+        v.x /= s;
+        v.y /= s;
+        v.z /= s;
+    }
+
     inline DirectX::XMFLOAT3 operator-(const DirectX::XMFLOAT3& v1)
     {
         DirectX::XMFLOAT3 res;
-        res.x = v1.x;
+        res.x = -v1.x;
         res.y = -v1.y;
         res.z = -v1.z;
         return res;
@@ -290,6 +269,6 @@ namespace mdl_d3d12
         v1.y += v2.y;
         v1.z += v2.z;
     }
-}
 
+}}} // mi::examples::mdl_d3d12
 #endif

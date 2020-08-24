@@ -595,7 +595,7 @@ template<typename T>
 T const *as(IDeclaration const *decl) {
     if (decl == NULL)
         return NULL;
-    return (decl->get_kind() == T::s_kind) ? static_cast<T const *>(decl) : NULL;
+    return (decl->get_kind() == T::s_kind) ? static_cast<T const *>(decl) : 0;
 }
 
 /// Cast to IDeclaration_type or return null if types do not match.

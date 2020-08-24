@@ -580,7 +580,10 @@ BSDF_INLINE void microfacet_sample(
             break;
     }
 
-    if (data->xi.z < f_refl) {
+    if ((mode == scatter_reflect) ||
+        ((mode == scatter_reflect_transmit) &&
+         data->xi.z < f_refl))
+    {
         // BRDF: reflect
         data->k2 = (2.0f * kh) * h - data->k1;
         data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;

@@ -26,11 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-/*! \page mi_neuray_example_dxr Example for a Microsoft DXR-based MDL-enabled path tracer
+/*! \page mi_neuray_example_dxr Example for a Microsoft DXR-based MDL-enabled Path Tracer
 
 <div align="right">
     [\link mi_neuray_example_mdle Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_optix7 Next\endlink]
 </div>
 
 This example demonstrates how to integrate MDL into a real-time path tracer that is able to render
@@ -218,6 +219,7 @@ dxr.exe some_folder/my_scene.gltf
 <div align="right">
     [\link mi_neuray_example_mdle Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_optix7 Next\endlink]
 </div>
 
 */

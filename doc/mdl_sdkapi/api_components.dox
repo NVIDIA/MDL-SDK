@@ -44,6 +44,7 @@ is running.
   <tr><td>#mi::neuraylib::IFactory                 </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IImage_api               </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IMdl_archive_api         </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IMdl_backend_api         </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IMdl_compiler            </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IMdl_configuration       </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IMdl_discovery_api       </td><td>yes</td></tr>
@@ -52,7 +53,10 @@ is running.
 \endif
   <tr><td>#mi::neuraylib::IMdl_evaluator_api       </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IMdl_factory             </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IMdl_impexp_api          </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IMdl_i18n_configuration  </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IMdle_api                </td><td>no </td></tr>
+  <tr><td>#mi::neuraylib::IPlugin_configuration    </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IVersion                 </td><td>yes</td></tr>
 </table>
 

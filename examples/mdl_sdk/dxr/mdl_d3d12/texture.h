@@ -34,12 +34,14 @@
 #include "common.h"
 #include "shader.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
 
     template<typename T>
     class Structured_buffer;
+
+    // --------------------------------------------------------------------------------------------
 
     enum class GPU_access
     {
@@ -50,12 +52,16 @@ namespace mdl_d3d12
         unorder_access = 1 << 3
     };
 
+    // --------------------------------------------------------------------------------------------
+
     enum class Texture_dimension
     {
         Undefined,
         Texture_2D,
         Texture_3D
     };
+
+    // --------------------------------------------------------------------------------------------
 
     class Texture : public Resource
     {
@@ -91,9 +97,9 @@ namespace mdl_d3d12
 
         // Creates a 2D Texture for a swap chain.
         explicit Texture(
-            Base_application* app, 
-            IDXGISwapChain1* swap_chain, 
-            size_t swap_chain_buffer_index, 
+            Base_application* app,
+            IDXGISwapChain1* swap_chain,
+            size_t swap_chain_buffer_index,
             const std::string& debug_name);
 
         virtual ~Texture() = default;
@@ -124,7 +130,6 @@ namespace mdl_d3d12
         bool upload(D3DCommandList* command_list, const uint8_t* data, size_t data_row_pitch = -1);
         bool download(void* data);
 
-
     private:
         bool create();
 
@@ -152,6 +157,7 @@ namespace mdl_d3d12
         D3D12_CLEAR_VALUE m_clear_value;
     };
 
+    // --------------------------------------------------------------------------------------------
 
     class Environment
     {
@@ -160,15 +166,14 @@ namespace mdl_d3d12
         {
             unsigned int alias;
             float q;
-            float pdf;
         };
 
         explicit Environment(Base_application* app, const std::string& file_path);
         virtual ~Environment();
 
         // get a descriptor table that describes the resource layout
-        const Descriptor_table& get_descriptor_table() const { 
-            return m_resource_descriptor_table; 
+        const Descriptor_table& get_descriptor_table() const {
+            return m_resource_descriptor_table;
         }
 
         float get_integral() const { return m_integral;  }
@@ -183,10 +188,12 @@ namespace mdl_d3d12
 
         Texture* m_texture;
         Structured_buffer<Sample_data>* m_sampling_buffer;
+
         float m_integral;
 
         Descriptor_table m_resource_descriptor_table;
+        Descriptor_heap_handle m_first_resource_heap_handle;
     };
-}
 
+}}} // mi::examples::mdl_d3d12
 #endif

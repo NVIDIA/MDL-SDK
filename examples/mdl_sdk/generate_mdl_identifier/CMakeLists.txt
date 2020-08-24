@@ -41,7 +41,7 @@ create_from_base_preset(
     NAMESPACE mdl_sdk
     OUTPUT_NAME "generate_mdl_identifier"
     SOURCES ${PROJECT_SOURCES}
-    WINDOWS_UNICODE
+    EXAMPLE
 )
 
 # add dependencies

@@ -49,16 +49,16 @@ mi::base::IInterface* Pointer_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 1)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> istring( argv[0]->get_interface<mi::IString>());
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* value_type_name = istring->get_c_str();
 
     Pointer_impl* pointer = new Pointer_impl( transaction, value_type_name);
     if( !pointer->successfully_constructed()) {
         pointer->release();
-        return 0;
+        return nullptr;
     } else
         return pointer;
 }
@@ -76,7 +76,7 @@ Pointer_impl::Pointer_impl( mi::neuraylib::ITransaction* transaction, const char
     std::string mangled_value_type_name
         = (m_value_type_name == "Interface") ? "Void" : m_value_type_name;
     mi::base::Handle<mi::base::IInterface> element( s_class_factory->create_type_instance(
-        static_cast<Transaction_impl*>( transaction), mangled_value_type_name.c_str(), 0, 0));
+        static_cast<Transaction_impl*>( transaction), mangled_value_type_name.c_str(), 0, nullptr));
     m_successfully_constructed = element.is_valid_interface();
 }
 
@@ -136,17 +136,17 @@ mi::base::IInterface* Const_pointer_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 1)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> istring( argv[0]->get_interface<mi::IString>());
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* value_type_name = istring->get_c_str();
 
     Const_pointer_impl* const_pointer
         = new Const_pointer_impl( transaction, value_type_name);
     if( !const_pointer->successfully_constructed()) {
         const_pointer->release();
-        return 0;
+        return nullptr;
     } else
         return const_pointer;
 }
@@ -165,7 +165,7 @@ Const_pointer_impl::Const_pointer_impl(
     std::string mangled_value_type_name
         = (m_value_type_name == "Interface") ? "Void" : m_value_type_name;
     mi::base::Handle<mi::base::IInterface> element( s_class_factory->create_type_instance(
-        static_cast<Transaction_impl*>( transaction), mangled_value_type_name.c_str(), 0, 0));
+        static_cast<Transaction_impl*>( transaction), mangled_value_type_name.c_str(), 0, nullptr));
     m_successfully_constructed = element.is_valid_interface();
 }
 

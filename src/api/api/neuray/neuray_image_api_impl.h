@@ -74,6 +74,14 @@ public:
         bool is_cubemap,
         mi::Float32 gamma) const;
 
+    mi::neuraylib::ICanvas_cuda* create_canvas_cuda(
+        mi::Sint32 cuda_device_id,
+        const char* pixel_type,
+        mi::Uint32 width,
+        mi::Uint32 height,
+        mi::Uint32 layers,
+        mi::Float32 gamma) const;
+
     mi::neuraylib::ITile* create_tile(
         const char* pixel_type,
         mi::Uint32 width,

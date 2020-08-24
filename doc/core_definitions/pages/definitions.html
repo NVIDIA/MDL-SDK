@@ -14,7 +14,7 @@
 <p id="1001">The Material Definition Language (MDL) module <span class="monospace">nvidia::core_definitions</span>
 contains a collection of MDL materials that can either be used independently (<i>simple materials</i>) or in combination with other materials through the use of <i>material combiners</i> and <i>material modifiers</i>. <i>Texturing functions</i>
 provide further control and refinement of material parameter values.  Together,
-materials, combiners, modfiers and the texturing functions can simulate complex,
+materials, combiners, modifiers and the texturing functions can simulate complex,
 real-world models of appearance.</p>
 
 
@@ -486,7 +486,7 @@ have an index of refraction of around 1.5. Realistic values are between 1.0 and 
 <td id="1257" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Metallic material</td>
 <td id="1258" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">bool</td>
 <td id="1259" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">false</td>
-<td id="1260" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the index of refraction (Fresnell effect).</td>
+<td id="1260" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the index of refraction (Fresnel effect).</td>
 </tr>
 <tr>
 <td id="1261" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Reflection weight</td>
@@ -540,7 +540,7 @@ have an index of refraction of around 1.5. Realistic values are between 1.0 and 
 <td id="1293" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Transmission weight</td>
 <td id="1294" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">float</td>
 <td id="1295" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">0.0</td>
-<td id="1296" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Weights how much light passes through the object vs it's diffuse reflectivity  Values must be between 0.0 and 1.0.</td>
+<td id="1296" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Weights how much light passes through the object vs its diffuse reflectivity  Values must be between 0.0 and 1.0.</td>
 </tr>
 <tr>
 <td id="1297" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">IOR</td>
@@ -572,7 +572,7 @@ have an index of refraction of around 1.5. Realistic values are between 1.0 and 
 <h3 id="flaky-paint" class="headerlink"><span class="sectionnumber">2.1.10</span>Flaky Paint</h3>
 
 
-<p id="1313">A multi layer paint material featuring metallic flakesflakes. It is made up of a diffuse base, a flake layer and a clearcoat layer.</p>
+<p id="1313">A multi layer paint material featuring metallic flakes. It is made up of a diffuse base, a flake layer and a clearcoat layer.</p>
 
 <p id="1314">Parameters:</p>
 
@@ -629,7 +629,7 @@ have an index of refraction of around 1.5. Realistic values are between 1.0 and 
 <td id="1347" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">IOR</td>
 <td id="1348" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">float</td>
 <td id="1349" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">1.6</td>
-<td id="1350" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">termines reflectivity of the clear coat. Realistic values are between 1.0 and 4.0.</td>
+<td id="1350" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Determines reflectivity of the clear coat. Realistic values are between 1.0 and 4.0.</td>
 </tr>
 <tr>
 <td id="1351" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Coat roughness</td>
@@ -741,7 +741,7 @@ have an index of refraction of around 1.5. Realistic values are between 1.0 and 
 <td id="1408" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Reflection weight</td>
 <td id="1409" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">float</td>
 <td id="1410" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">0.3</td>
-<td id="1411" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">The oacity of the metallic coat.  Values must be between 0.0 and 1.0.</td>
+<td id="1411" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">The opacity of the metallic coat.  Values must be between 0.0 and 1.0.</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
 <td id="1412" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Bumps</td>
@@ -755,7 +755,7 @@ have an index of refraction of around 1.5. Realistic values are between 1.0 and 
 <h3 id="apply-a-cover-of-dust" class="headerlink"><span class="sectionnumber">2.2.3</span>Apply a cover of dust</h3>
 
 
-<p id="1416">A diffuse dust cover thats more visible towards the edges of an object.</p>
+<p id="1416">A diffuse dust cover that's more visible towards the edges of an object.</p>
 
 <p id="1417">Parameters:</p>
 
@@ -1130,7 +1130,7 @@ Parameters:</p>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
 <td id="1620" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Unit for emission</td>
-<td id="1621" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emmission unit type</td>
+<td id="1621" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emission unit type</td>
 <td id="1622" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">lumen/m2</td>
 <td id="1623" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">supported units are lumen/m2,lumen,candela, nit (candela/m2)</td>
 </tr>
@@ -1171,7 +1171,7 @@ Parameters:</p>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
 <td id="1642" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Unit for emission</td>
-<td id="1643" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emmission unit type</td>
+<td id="1643" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emission unit type</td>
 <td id="1644" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">lumen/m2</td>
 <td id="1645" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">supported units are lumen/m2,lumen,candela, nit (candela/m2)</td>
 </tr>
@@ -1246,7 +1246,7 @@ In MDL, there is no distinction between regular objects and lightsources. Any ob
 </tr>
 <tr style=" border-bottom: solid 1px black;">
 <td id="1678" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Unit for emission</td>
-<td id="1679" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emmission unit type</td>
+<td id="1679" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emission unit type</td>
 <td id="1680" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">lumen/m2</td>
 <td id="1681" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">supported units are lumen/m2,lumen,candela, nit (candela/m2)</td>
 </tr>
@@ -1287,7 +1287,7 @@ In MDL, there is no distinction between regular objects and lightsources. Any ob
 </tr>
 <tr style=" border-bottom: solid 1px black;">
 <td id="1700" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Unit for emission</td>
-<td id="1701" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emmission unit type</td>
+<td id="1701" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">emission unit type</td>
 <td id="1702" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">lumen/m2</td>
 <td id="1703" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">supported units are lumen/m2,lumen,candela, nit (candela/m2)</td>
 </tr>
@@ -1332,12 +1332,12 @@ In MDL, there is no distinction between regular objects and lightsources. Any ob
 <h1 id="texturing-functions" style="clear:both;" class="headerlink"><span class="sectionnumber">3</span>Texturing functions</h1>
 
 Texturing functions can be used to add variation to many features of a material. They can for example be used to change the color across an object, the intensities of reflections or add variations to an otherwise smooth surface through bump maps.
-nvidia::core_definitions suppports texturing using bitmap textures as well as a selection of procedural textures to add variation. Most texturing functions come in 2 flavours: 1 variant suitable to add bumps to a material and one variant to add color or vary roughness or reflectivity.
+nvidia::core_definitions supports texturing using bitmap textures as well as a selection of procedural textures to add variation. Most texturing functions come in 2 flavors: 1 variant suitable to add bumps to a material and one variant to add color or vary roughness or reflectivity.
 
 
 <h2 id="bitmap-texture-color-float-variant-" class="headerlink"><span class="sectionnumber">3.1</span>Bitmap texture (color/float variant)</h2>
 
-This function allows texturing using image files of various file formates. It is suitable for adding variation to color or float type parameters.
+This function allows texturing using image files of various file formats. It is suitable for adding variation to color or float type parameters.
 
 <p id="1722">Parameters:</p>
 
@@ -1358,19 +1358,19 @@ This function allows texturing using image files of various file formates. It is
 <td id="1731" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Scalar mode</td>
 <td id="1732" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">enum</td>
 <td id="1733" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">"Average"</td>
-<td id="1734" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Defines what should happen if a color texture is used on a "float" type parameter. By defaul, the average value is used.</td>
+<td id="1734" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Defines what should happen if a color texture is used on a "float" type parameter. By default, the average value is used.</td>
 </tr>
 <tr>
 <td id="1735" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Brightness</td>
 <td id="1736" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">float</td>
 <td id="1737" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">1.0</td>
-<td id="1738" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">A controll to vary the brightness of the image before use.</td>
+<td id="1738" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">A control to vary the brightness of the image before use.</td>
 </tr>
 <tr>
 <td id="1739" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Contrast</td>
 <td id="1740" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">float</td>
 <td id="1741" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">1.0</td>
-<td id="1742" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">A controll to vary the contrast of the image before use.</td>
+<td id="1742" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">A control to vary the contrast of the image before use.</td>
 </tr>
 <tr>
 <td id="1743" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">UV space index</td>
@@ -1413,7 +1413,7 @@ This function allows texturing using image files of various file formates. It is
 
 <h2 id="bitmap-texture-bump-variant-" class="headerlink"><span class="sectionnumber">3.2</span>Bitmap texture (bump variant)</h2>
 
-Allows texturing using image files of various file formates. The image is interpreted as a hight map to compute the bumpiness.
+Allows texturing using image files of various file formats. The image is interpreted as a height map to compute the bumpiness.
 
 <p id="1767">Parameters:</p>
 
@@ -1434,7 +1434,7 @@ Allows texturing using image files of various file formates. The image is interp
 <td id="1776" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Bump mode</td>
 <td id="1777" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">enum</td>
 <td id="1778" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">"Average"</td>
-<td id="1779" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Defines what should happen if a color texture is used on a "float" type parameter. By defaul, the average value is used.</td>
+<td id="1779" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Defines what should happen if a color texture is used on a "float" type parameter. By default, the average value is used.</td>
 </tr>
 <tr>
 <td id="1780" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Bump strength</td>
@@ -1535,7 +1535,7 @@ Allows the use of tangent space normal maps.
 
 <h2 id="3d-checker-texture-color-float-variant-" class="headerlink"><span class="sectionnumber">3.4</span>3d checker texture (color/float variant)</h2>
 
-Allows texturing using a 3 dimensional checkerboard pattern. 3D textures use all not just uv but uvw or object space (xyz) coordinates. If "w" coordinates are not explicitely provided they are set to 0.
+Allows texturing using a 3 dimensional checkerboard pattern. 3D textures use all not just uv but uvw or object space (xyz) coordinates. If "w" coordinates are not explicitly provided they are set to 0.
 
 <p id="1837">Parameters:</p>
 
@@ -1560,7 +1560,7 @@ Allows texturing using a 3 dimensional checkerboard pattern. 3D textures use all
 </tr>
 <tr>
 <td id="1850" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Blur</td>
-<td id="1851" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">floar</td>
+<td id="1851" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">float</td>
 <td id="1852" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">0.0</td>
 <td id="1853" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Higher values lead to a blurring of the checker tiles.</td>
 </tr>
@@ -1618,7 +1618,7 @@ Allows texturing using a checkerboard pattern.
 </tr>
 <tr>
 <td id="1883" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Blur</td>
-<td id="1884" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">floar</td>
+<td id="1884" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">float</td>
 <td id="1885" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">0.0</td>
 <td id="1886" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">Higher values lead to a blurring of the checker tiles.</td>
 </tr>
@@ -2232,7 +2232,7 @@ short description of the matching blend function.</p>
 </tr>
 <tr>
 <td id="2245" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">color_layer_overlay</td>
-<td id="2246" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px; width:57.96vw">For each channel individualy: if A < 0.5: B * A * 2, else: 2 * (B + A - B * A - 0.5)</td>
+<td id="2246" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px; width:57.96vw">For each channel individually: if A < 0.5: B * A * 2, else: 2 * (B + A - B * A - 0.5)</td>
 </tr>
 <tr>
 <td id="2247" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">color_layer_brightness</td>
@@ -2293,12 +2293,12 @@ short description of the matching blend function.</p>
 </tr>
 <tr>
 <td id="2275" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">color_layer_hardlight</td>
-<td id="2276" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px; width:57.96vw">For each channel individualy: if B > 0.5:
+<td id="2276" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px; width:57.96vw">For each channel individually: if B > 0.5:
   B * A * 2, else: 2 * (B + A - B * A - 0.5)</td>
 </tr>
 <tr>
 <td id="2277" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">color_layer_hardmix</td>
-<td id="2278" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px; width:57.96vw">For each channel individualy: (B + A <= 1) ? 0 : 1</td>
+<td id="2278" class="rfont lhpos tvpos tline rline bline lline" style="padding:3px 6px; width:57.96vw">For each channel indiviually: (B + A <= 1) ? 0 : 1</td>
 </tr>
 <tr>
 <td id="2279" class="tfont lhpos tvpos tline rline bline lline" style="padding:3px 6px;">color_layer_lineardodge</td>

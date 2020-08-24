@@ -1889,7 +1889,10 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                     if (count == 1) {
                         // rewrite T v(a) into T v = a;
                         print(" = ");
-                        print(call->get_argument(0));
+                        print(
+                            call->get_argument(0),
+                            get_priority(IExpression::OK_ASSIGN),
+                            /*ignore_named=*/true);
                     } else if (count > 0) {
                         bool vertical = 1 < count;
                         print("(");
@@ -1913,8 +1916,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                     }
                 } else {
                     print(" = ");
-
-                    print(init);
+                    print(init, get_priority(IExpression::OK_ASSIGN));
                 }
 
                 print_anno_block(d->get_annotations(i), " ");
@@ -1957,7 +1959,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 // Get the initializer of the field at index.
                 if (IExpression const *init = d->get_field_init(i)) {
                     print(" = ");
-                    print(init);
+                    print(init, get_priority(IExpression::OK_ASSIGN));
                 }
 
                 // Get the annotations of the field at index.
@@ -1996,7 +1998,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
 
                 if (IExpression const *init = d->get_value_init(i)) {
                     print(" = ");
-                    print(init);
+                    print(init, get_priority(IExpression::OK_ASSIGN));
                 }
 
                 print_anno_block(d->get_annotations(i), " ");
@@ -2027,7 +2029,10 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                         if (count == 1 && can_rewite_constructor_init(init)) {
                             // rewrite T v(a) into T v = a;
                             print(" = ");
-                            print(call->get_argument(0), /*priority=*/0, /*ignore_named=*/true);
+                            print(
+                                call->get_argument(0),
+                                get_priority(IExpression::OK_ASSIGN),
+                                /*ignore_named=*/true);
                         } else if (count > 0) {
                             bool vertical = 3 < count;
                             print("(");
@@ -2051,7 +2056,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                         }
                     } else {
                         print(" = ");
-                        print(init);
+                        print(init, get_priority(IExpression::OK_ASSIGN));
                     }
                 }
 
@@ -2117,14 +2122,14 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 } else if (IStatement_expression const *e = as<IStatement_expression>(body)) {
                     nl();
                     print(" = ");
-                    IExpression const *exp = e->get_expression();
-                    if (is<IExpression_let>(exp)) {
+                    IExpression const *expr = e->get_expression();
+                    if (is<IExpression_let>(expr)) {
                         ++m_indent;
                         nl();
-                        print(exp);
+                        print(expr);
                         --m_indent;
                     } else {
-                        print(exp);
+                        print(expr, get_priority(IExpression::OK_ASSIGN));
                     }
                     print(";");
                 }
@@ -2181,7 +2186,7 @@ void Printer::print(IParameter const *parameter)
 
     if (IExpression const *init = parameter->get_init_expr()) {
         print(" = ");
-        print(init);
+        print(init, get_priority(IExpression::OK_ASSIGN));
     }
 
     print_anno_block(parameter->get_annotations(), " ");
@@ -2298,7 +2303,9 @@ void Printer::print(IModule const *module)
         IDeclaration::Kind kind  = decl->get_kind();
 
         if (last_kind != kind ||
-            (last_kind != IDeclaration::DK_IMPORT && last_kind != IDeclaration::DK_CONSTANT)) {
+            (last_kind != IDeclaration::DK_IMPORT
+                && last_kind != IDeclaration::DK_NAMESPACE_ALIAS
+                && last_kind != IDeclaration::DK_CONSTANT)) {
             nl();
         }
         nl();
@@ -2697,6 +2704,8 @@ void Printer::show_function_hash_table(bool enable)
 // Print namespace.
 void Printer::print_namespace(IQualified_name const *name)
 {
+    if (name->is_absolute())
+        print("::");
     for (size_t i = 0, n = name->get_component_count(); i < n; ++i) {
         if (i > 0)
             print("::");

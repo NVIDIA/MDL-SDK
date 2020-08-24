@@ -57,7 +57,7 @@ public:
     /// \param[in]  module_name     The absolute name of the original module.
     /// \param[in]  repl_file_name  Path to the replacement module.
     /// \param[in]  search_paths    An optional array of additional search paths to consider for
-    ///                             repl_file_name.
+    ///                             \p repl_file_name.
     /// \param[out] context         An execution context. If non-null, the context can be queried
     ///                             for messages after the comparison operation has finished.
     ///
@@ -77,13 +77,13 @@ public:
     /// \param[in]  archive_fname1  Path to first archive.
     /// \param[in]  archive_fname2  Path to second archive.
     /// \param[in]  search_paths    An optional array of additional search paths to consider for
-    ///                             archive_fname2.
+    ///                             \p archive_fname2.
     /// \param[out] context         An execution context. If non-null, the context can be queried
     ///                             for messages after the comparison operation has finished.
     ///
     /// \return
     ///                             -  0: The archives are compatible.
-    ///                             - -1: Invalid parameters (NULL pointer).
+    ///                             - -1: Invalid parameters (\c NULL pointer).
     ///                             - -2: An error occurred during archive comparison.
     ///                                   Please check the context for details.
     virtual Sint32 compare_archives(

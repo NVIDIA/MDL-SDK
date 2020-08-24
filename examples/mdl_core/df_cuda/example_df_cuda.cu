@@ -47,6 +47,10 @@
     using namespace mi::mdl;
 #endif
 
+// If enabled, math::DX(state::texture_coordinates(0).xy) = float2(1, 0) and
+// math::DY(state::texture_coordinates(0).xy) = float2(0, 1) will be used.
+// #define USE_FAKE_DERIVATIVES
+
 #ifdef ENABLE_DERIVATIVES
 typedef Material_expr_function_with_derivs  Mat_expr_func;
 typedef Bsdf_init_function_with_derivs      Bsdf_init_func;
@@ -396,7 +400,8 @@ __device__ inline bool trace_sphere(
     const Kernel_params &params)
 {
     // intersect with geometry
-    const float t = intersect_sphere(ray_state.pos, ray_state.dir, 1.0f);
+    const float radius = 1.0f;
+    const float t = intersect_sphere(ray_state.pos, ray_state.dir, radius);
     if (t < 0.0f) {
         if (ray_state.intersection == 0 && params.mdl_test_type != MDL_TEST_NO_ENV) {
             // primary ray miss, add environment contribution
@@ -423,15 +428,22 @@ __device__ inline bool trace_sphere(
     float sp, cp;
     sincosf(phi, &sp, &cp);
     const float st = sinf(theta);
-    float3 tangent_u = make_float3(cp * st, 0.0f, -sp * st) * (float)M_PI;
-    float3 tangent_v = make_float3(sp * normal.y, -st, cp * normal.y) * (float)(-M_PI);
+    float3 tangent_u = make_float3(cp * st, 0.0f, -sp * st) * (float)M_PI * radius;
+    float3 tangent_v = make_float3(sp * normal.y, -st, cp * normal.y) * (float)(-M_PI) * radius;
 
 #ifdef ENABLE_DERIVATIVES
+    tct_deriv_float3 pos = { ray_state.pos, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } };
     tct_deriv_float3 texture_coords[1] = {
         { uvw, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } } };
 
     if (params.use_derivatives && ray_state.intersection == 0)
     {
+#ifdef USE_FAKE_DERIVATIVES
+        pos.dx = make_float3(1.0f, 0.0f, 0.0f);
+        pos.dy = make_float3(0.0f, 1.0f, 0.0f);
+        texture_coords[0].dx = make_float3(1.0f, 0.0f, 0.0f);
+        texture_coords[0].dy = make_float3(0.0f, 1.0f, 0.0f);
+#else
         // compute ray differential for one-pixel offset rays
         // ("Physically Based Rendering", 3rd edition, chapter 10.1.1)
         const float d = dot(normal, ray_state.pos);
@@ -439,6 +451,9 @@ __device__ inline bool trace_sphere(
         const float ty = (d - dot(normal, ray_state.pos_ry)) / dot(normal, ray_state.dir_ry);
         ray_state.pos_rx += ray_state.dir_rx * tx;
         ray_state.pos_ry += ray_state.dir_ry * ty;
+
+        pos.dx = ray_state.pos_rx - ray_state.pos;
+        pos.dy = ray_state.pos_ry - ray_state.pos;
 
         float4 A;
         float2 B_x, B_y;
@@ -481,6 +496,7 @@ __device__ inline bool trace_sphere(
             texture_coords[0].dy.x = inv_det * (A.w * B_y.x - A.z * B_y.y);
             texture_coords[0].dy.y = inv_det * (A.x * B_y.y - A.y * B_y.x);
         }
+#endif
     }
 #else
     tct_float3 texture_coords[1] = { uvw };
@@ -500,7 +516,11 @@ __device__ inline bool trace_sphere(
     Mdl_state state = {
         normal,
         normal,
+#ifdef ENABLE_DERIVATIVES
+        pos,
+#else
         ray_state.pos,
+#endif
         0.0f,
         texture_coords,
         &tangent_u,
@@ -509,7 +529,8 @@ __device__ inline bool trace_sphere(
         NULL,
         identity,
         identity,
-        0
+        0,
+        1.0f
     };
 
 

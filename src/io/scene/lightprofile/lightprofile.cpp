@@ -69,7 +69,7 @@ std::string hash_to_string( const mi::base::Uuid& hash)
 // implemented in lightprofile_ies_parser.cpp
 bool setup_lightprofile(
     mi::neuraylib::IReader* reader,
-    const std::string& filename,
+    const std::string& log_identifier,
     mi::neuraylib::Lightprofile_degree degree,
     mi::Uint32 flags,
     mi::Uint32& resolution_phi,
@@ -129,9 +129,10 @@ mi::Sint32 Lightprofile::reset_file(
     if( !reader.open( resolved_filename.c_str()))
         return -2;
 
+    std::string log_identifier = "light profile \"" + resolved_filename + "\"";
     mi::base::Uuid impl_hash{0,0,0,0};
     mi::Sint32 result = reset_shared( transaction,
-        &reader, resolved_filename, impl_hash, resolution_phi, resolution_theta, degree, flags);
+        &reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
     if( result != 0)
         return result;
 
@@ -152,9 +153,10 @@ mi::Sint32 Lightprofile::reset_reader(
     mi::neuraylib::Lightprofile_degree degree,
     mi::Uint32 flags)
 {
+    std::string log_identifier = "memory-based light profile";
     mi::base::Uuid impl_hash{0,0,0,0};
-    mi::Sint32 result = reset_shared(
-        transaction, reader, "", impl_hash, resolution_phi, resolution_theta, degree, flags);
+    mi::Sint32 result = reset_shared( transaction,
+        reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
     if( result != 0)
         return result;
 
@@ -167,38 +169,10 @@ mi::Sint32 Lightprofile::reset_reader(
     return 0;
 }
 
-mi::Sint32 Lightprofile::reset_file_mdl(
-    DB::Transaction* transaction,
-    const std::string& resolved_filename,
-    const std::string& mdl_file_path,
-    const mi::base::Uuid& impl_hash,
-    mi::Uint32 resolution_phi,
-    mi::Uint32 resolution_theta,
-    mi::neuraylib::Lightprofile_degree degree,
-    mi::Uint32 flags)
-{
-    // create reader for resolved_filename
-    DISK::File_reader_impl reader;
-    if( !reader.open( resolved_filename.c_str()))
-        return -2;
-
-    mi::Sint32 result = reset_shared( transaction,
-        &reader, resolved_filename, impl_hash, resolution_phi, resolution_theta, degree, flags);
-    if( result != 0)
-        return result;
-
-    m_resolved_container_filename.clear();
-    m_resolved_container_membername.clear();
-    m_original_filename.clear();
-    m_resolved_filename = resolved_filename;
-    m_mdl_file_path = mdl_file_path;
-
-    return 0;
-}
-
-mi::Sint32 Lightprofile::reset_container_mdl(
+mi::Sint32 Lightprofile::reset_mdl(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
+    const std::string& filename,
     const std::string& container_filename,
     const std::string& container_membername,
     const std::string& mdl_file_path,
@@ -209,17 +183,24 @@ mi::Sint32 Lightprofile::reset_container_mdl(
     mi::Uint32 flags)
 {
     // compute filename for log messages
-    std::string filename = container_membername;
-    filename += "\" in \"";
-    filename +=  container_filename;
+    std::string log_identifier;
+    if( !filename.empty())
+        log_identifier = std::string( "light profile \"") + filename + "\"";
+    else if( !container_filename.empty())
+        log_identifier = std::string( "light profile \"") + container_membername + "\" in \""
+            + container_filename + "\"";
+    else if( !mdl_file_path.empty())
+        log_identifier = std::string( "light profile from MDL file path \"") + mdl_file_path + "\"";
+    else
+        log_identifier = "memory-based light profile";
 
-    mi::Sint32 result = reset_shared(
-        transaction, reader, filename, impl_hash, resolution_phi, resolution_theta, degree, flags);
+    mi::Sint32 result = reset_shared( transaction,
+        reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
     if( result != 0)
         return result;
 
     m_original_filename.clear();
-    m_resolved_filename.clear();
+    m_resolved_filename = filename;
     m_resolved_container_filename = container_filename;
     m_resolved_container_membername = container_membername;
     m_mdl_file_path = mdl_file_path;
@@ -230,7 +211,7 @@ mi::Sint32 Lightprofile::reset_container_mdl(
 mi::Sint32 Lightprofile::reset_shared(
     DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
-    const std::string& filename,
+    const std::string& log_identifier,
     const mi::base::Uuid& impl_hash,
     mi::Uint32 resolution_phi,
     mi::Uint32 resolution_theta,
@@ -273,7 +254,7 @@ mi::Sint32 Lightprofile::reset_shared(
 
     // parse and interpolate data
     bool success = setup_lightprofile(
-        reader, filename, degree, flags, resolution_phi, resolution_theta,
+        reader, log_identifier, degree, flags, resolution_phi, resolution_theta,
         start_phi, start_theta, delta_phi, delta_theta, data);
 
     // handle file format errors
@@ -328,9 +309,6 @@ mi::Float32 Lightprofile::get_data(
 
 const mi::Float32* Lightprofile::get_data( DB::Transaction* transaction ) const
 {
-    if( !m_impl_tag)
-        return nullptr;
-
     if( !m_impl_tag)
         return nullptr;
 
@@ -864,37 +842,8 @@ mi::neuraylib::IBuffer* create_buffer_from_lightprofile(
 
 DB::Tag load_mdl_lightprofile(
     DB::Transaction* transaction,
-    const std::string& resolved_filename,
-    const std::string& mdl_file_path,
-    const mi::base::Uuid& impl_hash,
-    bool shared_proxy)
-{
-    std::string db_name = shared_proxy ? "MI_default_" : "";
-    db_name += "lightprofile_" + resolved_filename;
-    if( !shared_proxy)
-        db_name = MDL::DETAIL::generate_unique_db_name( transaction, db_name.c_str());
-
-    DB::Tag tag = transaction->name_to_tag( db_name.c_str());
-    if( tag)
-        return tag;
-
-    Lightprofile* lp = new Lightprofile();
-    mi::Sint32 result = lp->reset_file_mdl(
-        transaction, resolved_filename, mdl_file_path, impl_hash);
-    ASSERT( M_LIGHTPROFILE, result == 0 || result == -4);
-    if( result == -4)
-        LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_IO,
-            "File format error in default light profile \"%s\".",
-            resolved_filename.c_str());
-
-    tag = transaction->store_for_reference_counting(
-        lp, db_name.c_str(), transaction->get_scope()->get_level());
-    return tag;
-}
-
-DB::Tag load_mdl_lightprofile(
-    DB::Transaction* transaction,
     mi::neuraylib::IReader* reader,
+    const std::string& filename,
     const std::string& container_filename,
     const std::string& container_membername,
     const std::string& mdl_file_path,
@@ -904,8 +853,19 @@ DB::Tag load_mdl_lightprofile(
     if( !reader)
         return DB::Tag( 0);
 
+    std::string identifier;
+    if( !filename.empty())
+        identifier = filename;
+    else if( !container_filename.empty())
+        identifier = container_filename + "_" + container_membername;
+    else {
+        identifier = "without_name";
+        // Never share the proxy for memory-based resources.
+        shared_proxy = false;
+    }
+
     std::string db_name = shared_proxy ? "MI_default_" : "";
-    db_name += "lightprofile_" + container_filename + "_" + container_membername;
+    db_name += "lightprofile_" + identifier;
     if( !shared_proxy)
         db_name = MDL::DETAIL::generate_unique_db_name( transaction, db_name.c_str());
 
@@ -914,8 +874,8 @@ DB::Tag load_mdl_lightprofile(
         return tag;
 
     Lightprofile* lp = new Lightprofile();
-    mi::Sint32 result = lp->reset_container_mdl(
-        transaction, reader, container_filename, container_membername, mdl_file_path, impl_hash);
+    mi::Sint32 result = lp->reset_mdl( transaction,
+        reader, filename, container_filename, container_membername, mdl_file_path, impl_hash);
     ASSERT( M_LIGHTPROFILE, result == 0 || result == -4);
     if( result == -4)
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_IO,

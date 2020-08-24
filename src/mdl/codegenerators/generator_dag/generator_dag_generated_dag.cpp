@@ -39,6 +39,8 @@
 #include <mdl/compiler/compilercore/compilercore_hash.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 
+#include <mdl/compiler/stdmodule/enums.h>
+
 #include <mdl/codegenerators/generator_code/generator_code.h>
 
 #include <cstring>
@@ -178,7 +180,7 @@ public:
     /// \param argc               number of arguments of the dag
     /// \param argv               the arguments
     void dump(
-        int            argc,
+        size_t         argc,
         DAG_node const *argv[]);
 
     /// Dump the material instance expression DAG to the output stream.
@@ -214,7 +216,7 @@ Material_dumper::Material_dumper(
 
 // Dump the material expression DAG to the output stream.
 void Material_dumper::dump(
-    int            argc,
+    size_t         argc,
     DAG_node const *argv[])
 {
     m_printer->print("digraph \"");
@@ -225,7 +227,7 @@ void Material_dumper::dump(
     m_printer->print("\" {\n");
     m_walker.walk_material(const_cast<Generated_code_dag *>(&m_dag), m_mat_index, this);
 
-    for (int i = 0; i < argc; ++i) {
+    for (size_t i = 0; i < argc; ++i) {
         DAG_node *arg = const_cast<DAG_node *>(argv[i]);
 
         m_walker.walk_node(arg, this);
@@ -367,8 +369,8 @@ public:
         Temporary_name_map const &temp_name_map)
     : m_node_factory(expression_factory)
     , m_phen_outs(phen_outs)
-    , m_fold_constants(false)
-    , m_fold_parameters(true)
+    , m_process_constants(false)
+    , m_process_parameters(true)
     , m_temp_map(0, Temporary_map::hasher(), Temporary_map::key_equal(), alloc)
     , m_temp_name_map(temp_name_map)
     {
@@ -388,17 +390,17 @@ public:
         for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
             DAG_node const *arg = call->get_argument(i);
 
-            auto it_name  = m_temp_name_map.find(arg);
+            Temporary_name_map::const_iterator it_name  = m_temp_name_map.find(arg);
             bool has_name = it_name != m_temp_name_map.end();
             char const *name = has_name ? it_name->second : "";
 
             switch (arg->get_kind()) {
             case DAG_node::EK_CONSTANT:
-                if (!m_fold_constants && !has_name)
+                if (!m_process_constants && !has_name)
                     continue;
                 break;
             case DAG_node::EK_PARAMETER:
-                if (!m_fold_parameters && !has_name)
+                if (!m_process_parameters && !has_name)
                     continue;
                 break;
             default:
@@ -453,10 +455,10 @@ private:
     Phen_out_map const &m_phen_outs;
 
     /// If true, constants will be placed into temporaries.
-    bool m_fold_constants;
+    bool m_process_constants;
 
     /// If true, parameters will be placed into temporaries.
-    bool m_fold_parameters;
+    bool m_process_parameters;
 
     /// Map of created temporaries.
     Temporary_map m_temp_map;
@@ -726,13 +728,13 @@ private:
 /// Helper class to handle enable_if dependencies.
 class Condition_compute MDL_FINAL : public IDAG_ir_visitor {
 public:
-    typedef set<int>::Type Dependency_set;
+    typedef set<size_t>::Type Dependency_set;
 
     /// Process a parameter.
     ///
     /// \param param  the parameter
     /// \param index  the index of the parameter
-    void process_parameter(Generated_code_dag::Parameter_info &param, int index)
+    void process_parameter(Generated_code_dag::Parameter_info &param, size_t index)
     {
         if (DAG_node const *cond = param.get_enable_if_condition()) {
             m_dependencies.clear();
@@ -744,7 +746,7 @@ public:
                  it != end;
                  ++it)
             {
-                int ctrl_index = *it;
+                size_t ctrl_index = *it;
 
                 // the parameter with index ctrl_index controls the enable condition
                 // of this parameter
@@ -892,107 +894,104 @@ Generated_code_dag::Generated_code_dag(
 
 // Get the material info for a given material index or NULL if the index is out of range.
 Generated_code_dag::Material_info *Generated_code_dag::get_material_info(
-    int material_index)
+    size_t material_index)
 {
-    if (material_index < 0 || m_materials.size() <= size_t(material_index)) {
-        return NULL;
+    if (material_index < m_materials.size()) {
+        return &m_materials[material_index];
     }
-    return &m_materials[material_index];
+    return NULL;
 }
 
 // Get the material info for a given material index or NULL if the index is out of range.
 Generated_code_dag::Material_info const *Generated_code_dag::get_material_info(
-    int material_index) const
+    size_t material_index) const
 {
-    if (material_index < 0 || m_materials.size() <= size_t(material_index)) {
-        return NULL;
+    if (material_index < m_materials.size()) {
+        return &m_materials[material_index];
     }
-    return &m_materials[material_index];
+    return NULL;
 }
 
 // Get the parameter info for a given material and parameter index pair or NULL if
 // one index is out of range.
 Generated_code_dag::Parameter_info const *Generated_code_dag::get_mat_param_info(
-    int material_index,
-    int parameter_index) const
+    size_t material_index,
+    size_t parameter_index) const
 {
     if (Material_info const *mat = get_material_info(material_index)) {
-        if (parameter_index < 0 || mat->get_parameter_count() <= size_t(parameter_index)) {
-            return NULL;
+        if (parameter_index < mat->get_parameter_count()) {
+            return &mat->get_parameter(parameter_index);
         }
-        return &mat->get_parameter(parameter_index);
     }
     return NULL;
 }
 
 // Get the function info for a given function index or NULL if the index is out of range.
 Generated_code_dag::Function_info const *Generated_code_dag::get_function_info(
-    int function_index) const
+    size_t function_index) const
 {
-    if (function_index < 0 || m_functions.size() <= size_t(function_index)) {
-        return NULL;
+    if (function_index < m_functions.size()) {
+        return &m_functions[function_index];
     }
-    return &m_functions[function_index];
+    return NULL;
 }
 
 // Get the parameter info for a given function and parameter index pair or NULL if
 // one index is out of range.
 Generated_code_dag::Parameter_info const *Generated_code_dag::get_func_param_info(
-    int function_index,
-    int parameter_index) const
+    size_t function_index,
+    size_t parameter_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
-        if (parameter_index < 0 || func->get_parameter_count() <= size_t(parameter_index)) {
-            return NULL;
+        if (parameter_index < func->get_parameter_count()) {
+            return &func->get_parameter(parameter_index);
         }
-        return &func->get_parameter(parameter_index);
     }
     return NULL;
 }
 
 // Get the annotation info for a given annotation index or NULL if the index is out of range.
 Generated_code_dag::Annotation_info const *Generated_code_dag::get_annotation_info(
-    int annotation_index) const
+    size_t annotation_index) const
 {
-    if (annotation_index < 0 || m_annotations.size() <= size_t(annotation_index)) {
-        return NULL;
+    if (annotation_index < m_annotations.size()) {
+        return &m_annotations[annotation_index];
     }
-    return &m_annotations[annotation_index];
+    return NULL;
 }
 
 // Get the parameter info for a given annotation and parameter index pair or NULL if
 // one index is out of range.
 Generated_code_dag::Parameter_info const *Generated_code_dag::get_anno_param_info(
-    int annotation_index,
-    int parameter_index) const
+    size_t annotation_index,
+    size_t parameter_index) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
-        if (parameter_index < 0 || anno->get_parameter_count() <= size_t(parameter_index)) {
-            return NULL;
+        if (parameter_index < anno->get_parameter_count()) {
+            return &anno->get_parameter(parameter_index);
         }
-        return &anno->get_parameter(parameter_index);
     }
     return NULL;
 }
 
 // Get the user type info for a given type index or NULL if the index is out of range.
 Generated_code_dag::User_type_info const *Generated_code_dag::get_type_info(
-    int type_index) const
+    size_t type_index) const
 {
-    if (type_index < 0 || m_user_types.size() <= size_t(type_index)) {
-        return NULL;
+    if (type_index < m_user_types.size()) {
+        return &m_user_types[type_index];
     }
-    return &m_user_types[type_index];
+    return NULL;
 }
 
 // Get the user constant info for a given constant index or NULL if the index is out of range.
 Generated_code_dag::Constant_info const *Generated_code_dag::get_constant_info(
-    int constant_index) const
+    size_t constant_index) const
 {
-    if (constant_index < 0 || m_user_constants.size() <= size_t(constant_index)) {
-        return NULL;
+    if (constant_index < m_user_constants.size()) {
+        return &m_user_constants[constant_index];
     }
-    return &m_user_constants[constant_index];
+    return NULL;
 }
 
 // Add an import if not already there.
@@ -1230,32 +1229,6 @@ void Generated_code_dag::compile_function(
         }
     }
 
-    Function_info func(
-        get_allocator(),
-        f_node->get_semantics(),
-        ret_type,
-        f_node->get_dag_name(),
-        f_node->get_dag_alias_name(),
-        f_node->get_dag_preset_name(),
-        fh);
-
-    size_t parameter_count = f_node->get_parameter_count();
-    for (size_t k = 0; k < parameter_count; ++k) {
-        IType const *parameter_type;
-        char const  *parameter_name;
-
-        f_node->get_parameter(k, parameter_type, parameter_name);
-
-        // import the parameter type into our type factory
-        parameter_type = m_type_factory.import(parameter_type);
-
-        Parameter_info param(get_allocator(), parameter_type, parameter_name);
-
-        func.add_parameter(param);
-    }
-
-    unsigned char func_properties = 1 << FP_IS_EXPORTED;
-
     // Note: The file resolver might produce error messages when non-existing resources are
     // processed. Catch them but throw them away
     Messages_impl dummy_msgs(get_allocator(), module->get_filename());
@@ -1269,6 +1242,38 @@ void Generated_code_dag::compile_function(
         /*front_path=*/NULL);
 
     DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler, file_resolver);
+
+    Function_info func(
+        get_allocator(),
+        f_node->get_semantics(),
+        ret_type,
+        f_node->get_dag_name(),
+        f_node->get_dag_simple_name(),
+        f_node->get_dag_alias_name(),
+        f_node->get_dag_preset_name(),
+        fh);
+
+    size_t parameter_count = f_node->get_parameter_count();
+    for (size_t k = 0; k < parameter_count; ++k) {
+        IType const *parameter_type;
+        char const  *parameter_name;
+
+        f_node->get_parameter(k, parameter_type, parameter_name);
+
+        // import the parameter type into our type factory
+        parameter_type = m_type_factory.import(parameter_type);
+        string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
+
+        Parameter_info param(
+            get_allocator(),
+            parameter_type,
+            parameter_name,
+            parameter_type_name.c_str());
+
+        func.add_parameter(param);
+    }
+
+    unsigned char func_properties = 1 << FP_IS_EXPORTED;
 
     if (f_def == NULL) {
         // DAG generated functions are not native but always uniform
@@ -1422,25 +1427,8 @@ void Generated_code_dag::compile_annotation(
         get_allocator(),
         f_node->get_semantics(),
         f_node->get_dag_name(),
+        f_node->get_dag_simple_name(),
         f_node->get_dag_alias_name());
-
-    size_t parameter_count = f_node->get_parameter_count();
-    for (size_t k = 0; k < parameter_count; ++k) {
-        IType const *parameter_type;
-        char const  *parameter_name;
-
-        f_node->get_parameter(k, parameter_type, parameter_name);
-
-        // import the parameter type into our type factory
-        parameter_type = m_type_factory.import(parameter_type);
-
-        Parameter_info param(get_allocator(), parameter_type, parameter_name);
-
-        anno.add_parameter(param);
-    }
-
-    unsigned char anno_properties = 1 << AP_IS_EXPORTED;
-    anno.set_properties(anno_properties);
 
     // Note: The file resolver might produce error messages when non-existing resources are
     // processed. Catch them but throw them away
@@ -1455,6 +1443,29 @@ void Generated_code_dag::compile_annotation(
         /*front_path=*/NULL);
 
     DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler, file_resolver);
+
+    size_t parameter_count = f_node->get_parameter_count();
+    for (size_t k = 0; k < parameter_count; ++k) {
+        IType const *parameter_type;
+        char const  *parameter_name;
+
+        f_node->get_parameter(k, parameter_type, parameter_name);
+
+        // import the parameter type into our type factory
+        parameter_type = m_type_factory.import(parameter_type);
+        string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
+
+        Parameter_info param(
+            get_allocator(),
+            parameter_type,
+            parameter_name,
+            parameter_type_name.c_str());
+
+        anno.add_parameter(param);
+    }
+
+    unsigned char anno_properties = 1 << AP_IS_EXPORTED;
+    anno.set_properties(anno_properties);
 
     IDefinition const  *f_def = f_node->get_definition();
     IDefinition const  *orig_f_def = module->get_original_definition(f_def);
@@ -1508,6 +1519,7 @@ void Generated_code_dag::compile_local_annotation(
         get_allocator(),
         a_node->get_semantics(),
         a_node->get_dag_name(),
+        a_node->get_dag_simple_name(),
         a_node->get_dag_alias_name());
 
     size_t parameter_count = a_node->get_parameter_count();
@@ -1519,8 +1531,13 @@ void Generated_code_dag::compile_local_annotation(
 
         // import the parameter type into our type factory
         parameter_type = m_type_factory.import(parameter_type);
+        string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
-        Parameter_info param(get_allocator(), parameter_type, parameter_name);
+        Parameter_info param(
+            get_allocator(),
+            parameter_type,
+            parameter_name,
+            parameter_type_name.c_str());
 
         anno.add_parameter(param);
     }
@@ -1579,6 +1596,7 @@ void Generated_code_dag::compile_local_function(
         f_node->get_semantics(),
         ret_type,
         f_node->get_dag_name(),
+        f_node->get_dag_simple_name(),
         f_node->get_dag_alias_name(),
         f_node->get_dag_preset_name(),
         fh);
@@ -1592,8 +1610,13 @@ void Generated_code_dag::compile_local_function(
 
         // import the parameter type into our type factory
         parameter_type = m_type_factory.import(parameter_type);
+        string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
-        Parameter_info param(get_allocator(), parameter_type, parameter_name);
+        Parameter_info param(
+            get_allocator(),
+            parameter_type,
+            parameter_name,
+            parameter_type_name.c_str());
 
         func.add_parameter(param);
     }
@@ -1690,11 +1713,12 @@ void Generated_code_dag::compile_material(
         dag_builder, (m_options & FORBID_LOCAL_FUNC_CALLS) != 0);
 
     string mat_name(dag_builder.def_to_name(material_def, module));
+    string mat_simple_name(dag_builder.def_to_name(material_def, (const char*)NULL));
     string orig_name(
         material_def->get_property(IDefinition::DP_IS_IMPORTED) ?
         dag_builder.def_to_name(material_def) : string("", get_allocator()));
 
-    Material_info mat(get_allocator(), mat_name.c_str(), orig_name.c_str());
+    Material_info mat(get_allocator(), mat_name.c_str(), mat_simple_name.c_str(), orig_name.c_str());
 
     IType_function const *fun_type = as<IType_function>(material_def->get_type());
     int parameter_count = fun_type->get_parameter_count();
@@ -1707,8 +1731,13 @@ void Generated_code_dag::compile_material(
 
         // import the parameter type into our type factory
         parameter_type = m_type_factory.import(parameter_type);
+        string parameter_type_name = dag_builder.parameter_type_to_name(parameter_type);
 
-        Parameter_info param(get_allocator(), parameter_type, parameter_symbol->get_name());
+        Parameter_info param(
+            get_allocator(),
+            parameter_type,
+            parameter_symbol->get_name(),
+            parameter_type_name.c_str());
 
         mat.add_parameter(param);
     }
@@ -2424,12 +2453,6 @@ void Generated_code_dag::compile_entity(
 {
     IModule const *module = dag_builder.tos_module();
 
-    IDefinition::Semantics sema = node->get_semantics();
-    if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
-        // copy constructors are of no semantic value in MDL, do not export them
-        return;
-    }
-
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
 
@@ -2450,12 +2473,6 @@ void Generated_code_dag::compile_local_entity(
     DAG_builder           &dag_builder,
     Dependence_node const *node)
 {
-    IDefinition::Semantics sema = node->get_semantics();
-    if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
-        // copy constructors are of no semantic value in MDL, do not export them
-        return;
-    }
-
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
 
@@ -2628,28 +2645,31 @@ const char *Generated_code_dag::get_module_file_name() const
 
 // Get the number of modules directly imported by the module
 // from which this code was generated.
-int Generated_code_dag::get_import_count() const
+size_t Generated_code_dag::get_import_count() const
 {
-    return int(m_module_imports.size());
+    return m_module_imports.size();
 }
 
 // Get the module at index imported from the module
 // from which this code was generated.
-char const *Generated_code_dag::get_import(int index) const
+char const *Generated_code_dag::get_import(
+    size_t index) const
 {
-    if (0 <= index && size_t(index) < m_module_imports.size())
+    if (index < m_module_imports.size()) {
         return m_module_imports[index].c_str();
+    }
     return NULL;
 }
 
 // Get the number of functions in the generated code.
-int Generated_code_dag::get_function_count() const
+size_t Generated_code_dag::get_function_count() const
 {
     return m_functions.size();
 }
 
 // Get the return type of the function at function_index.
-IType const *Generated_code_dag::get_function_return_type(int function_index) const
+IType const *Generated_code_dag::get_function_return_type(
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_return_type();
@@ -2658,7 +2678,8 @@ IType const *Generated_code_dag::get_function_return_type(int function_index) co
 }
 
 // Get the semantics of the function at function_index.
-IDefinition::Semantics Generated_code_dag::get_function_semantics(int function_index) const
+IDefinition::Semantics Generated_code_dag::get_function_semantics(
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_semantics();
@@ -2667,7 +2688,8 @@ IDefinition::Semantics Generated_code_dag::get_function_semantics(int function_i
 }
 
 // Get the name of the function at function_index.
-char const *Generated_code_dag::get_function_name(int function_index) const
+char const *Generated_code_dag::get_function_name(
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_name();
@@ -2676,7 +2698,8 @@ char const *Generated_code_dag::get_function_name(int function_index) const
 }
 
 // Get the original name of the function at function_index if the function name is an alias.
-char const *Generated_code_dag::get_original_function_name(int function_index) const
+char const *Generated_code_dag::get_original_function_name(
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_original_name();
@@ -2684,8 +2707,18 @@ char const *Generated_code_dag::get_original_function_name(int function_index) c
     return NULL;
 }
 
+// Get the simple name of the function at function_index.
+char const *Generated_code_dag::get_simple_function_name(
+    size_t function_index) const
+{
+    if (Function_info const *func = get_function_info(function_index)) {
+        return func->get_simple_name();
+    }
+    return NULL;
+}
+
 // Get the parameter count of the function at function_index.
-int Generated_code_dag::get_function_parameter_count(int function_index) const
+size_t Generated_code_dag::get_function_parameter_count(size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_parameter_count();
@@ -2696,8 +2729,8 @@ int Generated_code_dag::get_function_parameter_count(int function_index) const
 // Get the parameter type of the parameter at parameter_index
 // of the function at function_index.
 IType const *Generated_code_dag::get_function_parameter_type(
-    int function_index,
-    int parameter_index) const
+    size_t function_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         return param->get_type();
@@ -2705,11 +2738,23 @@ IType const *Generated_code_dag::get_function_parameter_type(
     return NULL;
 }
 
+/// Get the parameter type name of the parameter at parameter_index
+/// of the function at function_index.
+char const *Generated_code_dag::get_function_parameter_type_name(
+    size_t function_index,
+    size_t parameter_index) const
+{
+    if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
+        return param->get_type_name();
+    }
+    return NULL;
+}
+
 // Get the parameter name of the parameter at parameter_index
 // of the function at function_index.
 char const *Generated_code_dag::get_function_parameter_name(
-    int function_index,
-    int parameter_index) const
+    size_t function_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         return param->get_name();
@@ -2718,8 +2763,8 @@ char const *Generated_code_dag::get_function_parameter_name(
 }
 
 // Get the index of the parameter parameter_name.
-int Generated_code_dag::get_function_parameter_index(
-    int        function_index,
+size_t Generated_code_dag::get_function_parameter_index(
+    size_t     function_index,
     char const *parameter_name) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
@@ -2728,13 +2773,13 @@ int Generated_code_dag::get_function_parameter_index(
                 return i;
         }
     }
-    return -1;
+    return ~size_t(0);
 }
 
 // Get the enable_if condition for the given function parameter if one was specified.
 DAG_node const *Generated_code_dag::get_function_parameter_enable_if_condition(
-    int function_index,
-    int parameter_index) const
+    size_t function_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         return param->get_enable_if_condition();
@@ -2744,8 +2789,8 @@ DAG_node const *Generated_code_dag::get_function_parameter_enable_if_condition(
 
 // Get the number of parameters whose enable_if condition depends on this parameter.
 size_t Generated_code_dag::get_function_parameter_enable_if_condition_users(
-    int function_index,
-    int parameter_index) const
+    size_t function_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         Index_vector const &users = param->get_users();
@@ -2755,22 +2800,22 @@ size_t Generated_code_dag::get_function_parameter_enable_if_condition_users(
 }
 
 // Get a parameter index whose enable_if condition depends on this parameter.
-int Generated_code_dag::get_function_parameter_enable_if_condition_user(
-    int function_index,
-    int parameter_index,
-    int user_index) const
+size_t Generated_code_dag::get_function_parameter_enable_if_condition_user(
+    size_t function_index,
+    size_t parameter_index,
+    size_t user_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         Index_vector const &users = param->get_users();
-        if (user_index >= 0 && user_index < users.size())
+        if (user_index < users.size())
             return users[user_index];
     }
-    return -1;
+    return ~size_t(0);
 }
 
 // Get the function hash value for the given function index if available.
 DAG_hash const *Generated_code_dag::get_function_hash(
-    int function_index) const
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_hash();
@@ -2791,21 +2836,29 @@ Messages const &Generated_code_dag::access_messages() const
 }
 
 // Get the number of materials in the generated code.
-int Generated_code_dag::get_material_count() const
+size_t Generated_code_dag::get_material_count() const
 {
     return m_materials.size();
 }
 
 // Get the name of the material at material_index.
-char const *Generated_code_dag::get_material_name(int material_index) const
+char const *Generated_code_dag::get_material_name(size_t material_index) const
 {
     if (Material_info const *mat = get_material_info(material_index))
         return mat->get_name();
     return NULL;
 }
 
+// Get the simple name of the material at material_index.
+char const *Generated_code_dag::get_simple_material_name(size_t material_index) const
+{
+    if (Material_info const *mat = get_material_info(material_index))
+        return mat->get_simple_name();
+    return NULL;
+}
+
 // Get the original name of the material at material_index if the material name is an alias.
-char const *Generated_code_dag::get_original_material_name(int material_index) const
+char const *Generated_code_dag::get_original_material_name(size_t material_index) const
 {
     if (Material_info const *mat = get_material_info(material_index))
         return mat->get_original_name();
@@ -2813,7 +2866,7 @@ char const *Generated_code_dag::get_original_material_name(int material_index) c
 }
 
 // Get the parameter count of the material at material_index.
-int Generated_code_dag::get_material_parameter_count(int material_index) const
+size_t Generated_code_dag::get_material_parameter_count(size_t material_index) const
 {
     if (Material_info const *mat = get_material_info(material_index))
         return mat->get_parameter_count();
@@ -2823,8 +2876,8 @@ int Generated_code_dag::get_material_parameter_count(int material_index) const
 // Get the parameter type of the parameter at parameter_index
 // of the material at material_index.
 IType const *Generated_code_dag::get_material_parameter_type(
-    int material_index,
-    int parameter_index) const
+    size_t material_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index))
         return param->get_type();
@@ -2834,8 +2887,8 @@ IType const *Generated_code_dag::get_material_parameter_type(
 // Get the parameter name of the parameter at parameter_index
 // of the material at material_index.
 char const *Generated_code_dag::get_material_parameter_name(
-    int material_index,
-    int parameter_index) const
+    size_t material_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index))
         return param->get_name();
@@ -2843,8 +2896,8 @@ char const *Generated_code_dag::get_material_parameter_name(
 }
 
 // Get the index of the parameter parameter_name.
-int Generated_code_dag::get_material_parameter_index(
-    int        material_index,
+size_t Generated_code_dag::get_material_parameter_index(
+    size_t     material_index,
     char const *parameter_name) const
 {
     if (Material_info const *mat = get_material_info(material_index)) {
@@ -2853,13 +2906,13 @@ int Generated_code_dag::get_material_parameter_index(
                 return i;
         }
     }
-    return -1;
+    return ~size_t(0);
 }
 
 // Get the enable_if condition for the given material parameter if one was specified.
 DAG_node const *Generated_code_dag::get_material_parameter_enable_if_condition(
-    int material_index,
-    int parameter_index) const
+    size_t material_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index))
         return param->get_enable_if_condition();
@@ -2868,8 +2921,8 @@ DAG_node const *Generated_code_dag::get_material_parameter_enable_if_condition(
 
 // Get the number of parameters whose enable_if condition depends on this parameter.
 size_t Generated_code_dag::get_material_parameter_enable_if_condition_users(
-    int material_index,
-    int parameter_index) const
+    size_t material_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index)) {
         Index_vector const &users = param->get_users();
@@ -2879,17 +2932,17 @@ size_t Generated_code_dag::get_material_parameter_enable_if_condition_users(
 }
 
 // Get a parameter index whose enable_if condition depends on this parameter.
-int Generated_code_dag::get_material_parameter_enable_if_condition_user(
-    int material_index,
-    int parameter_index,
-    int user_index) const
+size_t Generated_code_dag::get_material_parameter_enable_if_condition_user(
+    size_t material_index,
+    size_t parameter_index,
+    size_t user_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index)) {
         Index_vector const &users = param->get_users();
-        if (user_index >= 0 && user_index < users.size())
+        if (user_index < users.size())
             return users[user_index];
     }
-    return -1;
+    return ~size_t(0);
 }
 
 // Get the node IR-node factory of this code DAG.
@@ -2899,8 +2952,8 @@ DAG_node_factory_impl *Generated_code_dag::get_node_factory()
 }
 
 // Get the number of annotations of the function at function_index.
-int Generated_code_dag::get_function_annotation_count(
-    int function_index) const
+size_t Generated_code_dag::get_function_annotation_count(
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_annotation_count();
@@ -2910,19 +2963,19 @@ int Generated_code_dag::get_function_annotation_count(
 
 // Get the annotation at annotation_index of the function at function_index.
 DAG_node const *Generated_code_dag::get_function_annotation(
-    int function_index,
-    int annotation_index) const
+    size_t function_index,
+    size_t annotation_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
-        if (size_t(annotation_index) < func->get_annotation_count())
+        if (annotation_index < func->get_annotation_count())
             return func->get_annotation(annotation_index);
     }
     return NULL;
 }
 
 // Get the number of annotations of the function return type at function_index.
-int Generated_code_dag::get_function_return_annotation_count(
-    int function_index) const
+size_t Generated_code_dag::get_function_return_annotation_count(
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_return_annotation_count();
@@ -2932,8 +2985,8 @@ int Generated_code_dag::get_function_return_annotation_count(
 
 // Get the annotation at annotation_index of the function return type at function_index.
 DAG_node const *Generated_code_dag::get_function_return_annotation(
-    int function_index,
-    int annotation_index) const
+    size_t function_index,
+    size_t annotation_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         if (size_t(annotation_index) < func->get_return_annotation_count())
@@ -2945,8 +2998,8 @@ DAG_node const *Generated_code_dag::get_function_return_annotation(
 // Get the default initializer of the parameter at parameter_index
 // of the function at function_index.
 DAG_node const *Generated_code_dag::get_function_parameter_default(
-    int function_index,
-    int parameter_index) const
+    size_t function_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         return param->get_default();
@@ -2956,9 +3009,9 @@ DAG_node const *Generated_code_dag::get_function_parameter_default(
 
 // Get the number of annotations of the parameter at parameter_index
 // of the function at function_index.
-int Generated_code_dag::get_function_parameter_annotation_count(
-    int function_index,
-    int parameter_index) const
+size_t Generated_code_dag::get_function_parameter_annotation_count(
+    size_t function_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         return param->get_annotation_count();
@@ -2969,9 +3022,9 @@ int Generated_code_dag::get_function_parameter_annotation_count(
 // Get the annotation at annotation_index of the parameter at parameter_index
 // of the function at function_index.
 DAG_node const *Generated_code_dag::get_function_parameter_annotation(
-    int function_index,
-    int parameter_index,
-    int annotation_index) const
+    size_t function_index,
+    size_t parameter_index,
+    size_t annotation_index) const
 {
     if (Parameter_info const *param = get_func_param_info(function_index, parameter_index)) {
         if (size_t(annotation_index) < param->get_annotation_count())
@@ -2981,8 +3034,8 @@ DAG_node const *Generated_code_dag::get_function_parameter_annotation(
 }
 
 // Get the number of temporaries used by the function at function_index.
-int Generated_code_dag::get_function_temporary_count(
-    int function_index) const
+size_t Generated_code_dag::get_function_temporary_count(
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_temporary_count();
@@ -2992,35 +3045,33 @@ int Generated_code_dag::get_function_temporary_count(
 
 // Get the temporary at temporary_index used by the function at function_index.
 DAG_node const *Generated_code_dag::get_function_temporary(
-    int function_index,
-    int temporary_index) const
+    size_t function_index,
+    size_t temporary_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
-        if ((temporary_index < 0) || (func->get_temporary_count() <= size_t(temporary_index))) {
-            return NULL;
+        if (temporary_index < func->get_temporary_count()) {
+            return func->get_temporary(temporary_index);
         }
-        return func->get_temporary(temporary_index);
     }
     return NULL;
 }
 
 // Get the temporary name at temporary_index used by the function at function_index.
 char const *Generated_code_dag::get_function_temporary_name(
-    int function_index,
-    int temporary_index) const
+    size_t function_index,
+    size_t temporary_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
-        if ((temporary_index < 0) || (func->get_temporary_count() <= size_t(temporary_index))) {
-            return NULL;
+        if (temporary_index < func->get_temporary_count()) {
+            return func->get_temporary_name(temporary_index);
         }
-        return func->get_temporary_name(temporary_index);
     }
     return NULL;
 }
 
 // Get the body of the function at function_index.
 DAG_node const *Generated_code_dag::get_function_body(
-    int function_index) const
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_body();
@@ -3029,8 +3080,8 @@ DAG_node const *Generated_code_dag::get_function_body(
 }
 
 // Get the number of annotations of the material at material_index.
-int Generated_code_dag::get_material_annotation_count(
-    int material_index) const
+size_t Generated_code_dag::get_material_annotation_count(
+    size_t material_index) const
 {
     if (Material_info const *mat = get_material_info(material_index))
         return mat->get_annotation_count();
@@ -3039,15 +3090,13 @@ int Generated_code_dag::get_material_annotation_count(
 
 // Get the annotation at annotation_index of the material at material_index.
 DAG_node const *Generated_code_dag::get_material_annotation(
-    int material_index,
-    int annotation_index) const
+    size_t material_index,
+    size_t annotation_index) const
 {
     if (Material_info const *mat = get_material_info(material_index)) {
-        if ((annotation_index < 0) || (mat->get_annotation_count() <= size_t(annotation_index))) {
-            MDL_ASSERT(!"get_material_annotation() annotation_index out of range");
-            return NULL;
+        if (annotation_index < mat->get_annotation_count()) {
+            return mat->get_annotation(annotation_index);
         }
-        return mat->get_annotation(annotation_index);
     }
     return NULL;
 }
@@ -3055,8 +3104,8 @@ DAG_node const *Generated_code_dag::get_material_annotation(
 // Get the default initializer of the parameter at parameter_index
 // of the material at material_index.
 DAG_node const *Generated_code_dag::get_material_parameter_default(
-    int material_index,
-    int parameter_index) const
+    size_t material_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index))
         return param->get_default();
@@ -3065,9 +3114,9 @@ DAG_node const *Generated_code_dag::get_material_parameter_default(
 
 // Get the number of annotations of the parameter at parameter_index
 // of the material at material_index.
-int Generated_code_dag::get_material_parameter_annotation_count(
-    int material_index,
-    int parameter_index) const
+size_t Generated_code_dag::get_material_parameter_annotation_count(
+    size_t material_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index))
         return param->get_annotation_count();
@@ -3077,22 +3126,21 @@ int Generated_code_dag::get_material_parameter_annotation_count(
 // Get the annotation at annotation_index of the parameter at parameter_index
 // of the material at material_index.
 DAG_node const *Generated_code_dag::get_material_parameter_annotation(
-    int material_index,
-    int parameter_index,
-    int annotation_index) const
+    size_t material_index,
+    size_t parameter_index,
+    size_t annotation_index) const
 {
     if (Parameter_info const *param = get_mat_param_info(material_index, parameter_index)) {
-        if ((annotation_index < 0) || (param->get_annotation_count() <= size_t(annotation_index))) {
-            return NULL;
+        if (annotation_index < param->get_annotation_count()) {
+            return param->get_annotation(annotation_index);
         }
-        return param->get_annotation(annotation_index);
     }
     return NULL;
 }
 
 // Get the number of temporaries used by the material at material_index.
-int Generated_code_dag::get_material_temporary_count(
-    int material_index) const
+size_t Generated_code_dag::get_material_temporary_count(
+    size_t material_index) const
 {
     if (Material_info const *mat = get_material_info(material_index)) {
         return mat->get_temporary_count();
@@ -3102,35 +3150,33 @@ int Generated_code_dag::get_material_temporary_count(
 
 // Get the temporary at temporary_index used by the material at material_index.
 DAG_node const *Generated_code_dag::get_material_temporary(
-    int material_index,
-    int temporary_index) const
+    size_t material_index,
+    size_t temporary_index) const
 {
     if (Material_info const *mat = get_material_info(material_index)) {
-        if ((temporary_index < 0) || (mat->get_temporary_count() <= size_t(temporary_index))) {
-            return NULL;
+        if (temporary_index < mat->get_temporary_count()) {
+            return mat->get_temporary(temporary_index);
         }
-        return mat->get_temporary(temporary_index);
     }
     return NULL;
 }
 
 // Get the temporary name at temporary_index used by the material at material_index.
 char const *Generated_code_dag::get_material_temporary_name(
-    int material_index,
-    int temporary_index) const
+    size_t material_index,
+    size_t temporary_index) const
 {
     if (Material_info const *mat = get_material_info(material_index)) {
-        if ((temporary_index < 0) || (mat->get_temporary_count() <= size_t(temporary_index))) {
-            return NULL;
+        if (temporary_index < mat->get_temporary_count()) {
+            return mat->get_temporary_name(temporary_index);
         }
-        return mat->get_temporary_name(temporary_index);
     }
     return NULL;
 }
 
 // Get the value of the material at material_index.
 DAG_node const *Generated_code_dag::get_material_value(
-    int material_index) const
+    size_t material_index) const
 {
     if (Material_info const *mat = get_material_info(material_index)) {
         return mat->get_body();
@@ -3139,7 +3185,7 @@ DAG_node const *Generated_code_dag::get_material_value(
 }
 
 // Get the export flags of the material at material_index.
-bool Generated_code_dag::get_material_exported(int material_index) const
+bool Generated_code_dag::get_material_exported(size_t material_index) const
 {
     if (get_material_info(material_index) != NULL) {
         // currently, only exported materials are reported
@@ -3151,7 +3197,7 @@ bool Generated_code_dag::get_material_exported(int material_index) const
 // Return the original material name of a cloned material or "" if the material
 // is not a clone.
 char const *Generated_code_dag::get_cloned_material_name(
-    int material_index) const
+    size_t material_index) const
 {
     if (Material_info const *mat = get_material_info(material_index))
         return mat->get_cloned_name();
@@ -3162,7 +3208,7 @@ char const *Generated_code_dag::get_cloned_material_name(
 Generated_code_dag::Material_instance::Material_instance(
     IMDL        *mdl,
     IAllocator  *alloc,
-    int         material_index,
+    size_t      material_index,
     char const  *internal_space,
     bool        unsafe_math_optimizations)
 : Base(alloc)
@@ -3317,14 +3363,17 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     ICall_name_resolver       *resolver,
     IResource_modifier        *resource_modifier,
     IGenerated_code_dag const *code_dag,
-    int                       argc,
+    size_t                    argc,
     DAG_node const            *argv[],
     bool                      use_temporaries,
     unsigned                  flags,
     ICall_evaluator           *evaluator,
+    bool                      fold_meters_per_scene_unit,
     float                     mdl_meters_per_scene_unit,
     float                     wavelength_min,
-    float                     wavelength_max)
+    float                     wavelength_max,
+    char const * const        fold_params[],
+    size_t                    num_fold_params)
 {
 #if 0
     {
@@ -3338,7 +3387,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     }
 #endif
 
-    int parameter_count = code_dag->get_material_parameter_count(m_material_index);
+    size_t parameter_count = code_dag->get_material_parameter_count(m_material_index);
     if (argc < parameter_count)
         return EC_TOO_FEW_ARGUMENTS;
     if (parameter_count < argc)
@@ -3480,9 +3529,12 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
         evaluator,
         argc,
         argv,
+        fold_meters_per_scene_unit,
         mdl_meters_per_scene_unit,
         wavelength_min,
-        wavelength_max);
+        wavelength_max,
+        fold_params,
+        num_fold_params);
 
     DAG_call const *constructor = creator.compile();
     set_constructor(constructor);
@@ -3499,6 +3551,8 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
     set_property(IP_USES_TERNARY_OPERATOR,          0 != (props & IP_USES_TERNARY_OPERATOR));
     set_property(IP_USES_TERNARY_OPERATOR_ON_DF,    0 != (props & IP_USES_TERNARY_OPERATOR_ON_DF));
     set_property(IP_CLASS_COMPILED,                 0 != (flags & CLASS_COMPILATION));
+    set_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA,
+        0 != (props & IP_DEPENDS_ON_UNIFORM_SCENE_DATA));
 
     m_referenced_scene_data.insert(
         m_referenced_scene_data.end(),
@@ -3620,6 +3674,12 @@ bool Generated_code_dag::Material_instance::depends_on_object_id() const
 bool Generated_code_dag::Material_instance::depends_on_global_distribution() const
 {
     return (get_properties() & IP_DEPENDS_ON_GLOBAL_DISTRIBUTION) != 0;
+}
+
+// Returns true if this instance depends on uniform scene data.
+bool Generated_code_dag::Material_instance::depends_on_uniform_scene_data() const
+{
+    return (get_properties() & IP_DEPENDS_ON_UNIFORM_SCENE_DATA) != 0;
 }
 
 // Returns the number of scene data attributes referenced by this instance.
@@ -3841,11 +3901,11 @@ void Generated_code_dag::Material_instance::dump_instance_dag(char const *name) 
 
 // Create a material instance.
 IGenerated_code_dag::IMaterial_instance *Generated_code_dag::create_material_instance(
-    int                             index,
+    size_t                          index,
     IGenerated_code_dag::Error_code *error_code) const
 {
-    int material_count = get_material_count();
-    if ((index < 0) || (material_count <= index)) {
+    size_t material_count = get_material_count();
+    if (material_count <= index) {
         if (error_code)
             *error_code = EC_INVALID_INDEX;
         return NULL;
@@ -3868,14 +3928,14 @@ IGenerated_code_dag::IMaterial_instance *Generated_code_dag::create_material_ins
 }
 
 // Get the number of exported types.
-int Generated_code_dag::get_type_count() const
+size_t Generated_code_dag::get_type_count() const
 {
     return m_user_types.size();
 }
 
 // Get the name of the type at index.
 char const *Generated_code_dag::get_type_name(
-    int index) const
+    size_t index) const
 {
     if (User_type_info const *type = get_type_info(index)) {
         return type->get_name();
@@ -3885,7 +3945,7 @@ char const *Generated_code_dag::get_type_name(
 
 // Get the original name of the type at index  if the type name is an alias..
 char const *Generated_code_dag::get_original_type_name(
-    int index) const
+    size_t index) const
 {
     if (User_type_info const *type = get_type_info(index)) {
         return type->get_original_name();
@@ -3895,7 +3955,7 @@ char const *Generated_code_dag::get_original_type_name(
 
 // Get the user type at index.
 IType const *Generated_code_dag::get_type(
-    int index) const
+    size_t index) const
 {
     if (User_type_info const *type = get_type_info(index)) {
         return type->get_type();
@@ -3905,7 +3965,7 @@ IType const *Generated_code_dag::get_type(
 
 // Returns true if the type at index is exported.
 bool Generated_code_dag::is_type_exported(
-    int index) const
+    size_t index) const
 {
     if (User_type_info const *type = get_type_info(index)) {
         return type->is_exported();
@@ -3914,8 +3974,8 @@ bool Generated_code_dag::is_type_exported(
 }
 
 // Get the number of annotations of the type at index.
-int Generated_code_dag::get_type_annotation_count(
-    int index) const
+size_t Generated_code_dag::get_type_annotation_count(
+    size_t index) const
 {
     if (User_type_info const *type = get_type_info(index)) {
         return type->get_annotation_count();
@@ -3925,11 +3985,11 @@ int Generated_code_dag::get_type_annotation_count(
 
 // Get the annotation at annotation_index of the type at type_index.
 DAG_node const *Generated_code_dag::get_type_annotation(
-    int type_index,
-    int annotation_index) const
+    size_t type_index,
+    size_t annotation_index) const
 {
     if (User_type_info const *type = get_type_info(type_index)) {
-        if (size_t(annotation_index) < type->get_annotation_count()) {
+        if (annotation_index < type->get_annotation_count()) {
             return type->get_annotation(annotation_index);
         }
     }
@@ -3937,19 +3997,19 @@ DAG_node const *Generated_code_dag::get_type_annotation(
 }
 
 // Get the number of type sub-entities (fields or enum constants).
-int Generated_code_dag::get_type_sub_entity_count(
-    int type_index) const
+size_t Generated_code_dag::get_type_sub_entity_count(
+    size_t type_index) const
 {
     if (User_type_info const *type = get_type_info(type_index)) {
-        return int(type->get_entity_count());
+        return type->get_entity_count();
     }
     return 0;
 }
 
 // Get the number of type sub-entities (fields or enum constants).
 char const *Generated_code_dag::get_type_sub_entity_name(
-    int type_index,
-    int entity_index) const
+    size_t type_index,
+    size_t entity_index) const
 {
     if (User_type_info const *type = get_type_info(type_index)) {
         IType const *u_tp = type->get_type();
@@ -3977,7 +4037,7 @@ char const *Generated_code_dag::get_type_sub_entity_name(
                 // return number of enum values
                 IType_enum const *e_type = cast<IType_enum>(u_tp);
 
-                if (entity_index < 0 || e_type->get_value_count() <= entity_index)
+                if (e_type->get_value_count() <= entity_index)
                     return NULL;
 
                 ISymbol const *v_sym = NULL;
@@ -3996,8 +4056,8 @@ char const *Generated_code_dag::get_type_sub_entity_name(
 
 // Get the type of a type sub-entity (field or enum constant).
 IType const *Generated_code_dag::get_type_sub_entity_type(
-    int type_index,
-    int entity_index) const
+    size_t type_index,
+    size_t entity_index) const
 {
     if (User_type_info const *type = get_type_info(type_index)) {
         IType const *u_tp = type->get_type();
@@ -4011,7 +4071,7 @@ IType const *Generated_code_dag::get_type_sub_entity_type(
                 // return number of fields
                 IType_struct const *s_type = cast<IType_struct>(u_tp);
 
-                if (entity_index < 0 || s_type->get_field_count() <= entity_index)
+                if (s_type->get_field_count() <= entity_index)
                     return NULL;
 
                 IType const *f_type = NULL;
@@ -4031,9 +4091,9 @@ IType const *Generated_code_dag::get_type_sub_entity_type(
 }
 
 // Get the number of annotations of a type sub-entity (field or enum constant) at index.
-int Generated_code_dag::get_type_sub_entity_annotation_count(
-    int type_index,
-    int entity_index) const
+size_t Generated_code_dag::get_type_sub_entity_annotation_count(
+    size_t type_index,
+    size_t entity_index) const
 {
     if (User_type_info const *type = get_type_info(type_index)) {
         if (size_t(entity_index) < type->get_entity_count()) {
@@ -4045,15 +4105,15 @@ int Generated_code_dag::get_type_sub_entity_annotation_count(
 
 // Get the annotation at annotation_index of the type sub-entity at (type_index, entity_index).
 DAG_node const *Generated_code_dag::get_type_sub_entity_annotation(
-    int type_index,
-    int entity_index,
-    int annotation_index) const
+    size_t type_index,
+    size_t entity_index,
+    size_t annotation_index) const
 {
     if (User_type_info const *type = get_type_info(type_index)) {
-        if (size_t(entity_index) < type->get_entity_count()) {
+        if (entity_index < type->get_entity_count()) {
             User_type_info::Entity_info const &ent = type->get_entity(entity_index);
 
-            if (size_t(annotation_index) < ent.get_annotation_count())
+            if (annotation_index < ent.get_annotation_count())
                 return ent.get_annotation(annotation_index);
         }
     }
@@ -4061,14 +4121,14 @@ DAG_node const *Generated_code_dag::get_type_sub_entity_annotation(
 }
 
 // Get the number of exported constants.
-int Generated_code_dag::get_constant_count() const
+size_t Generated_code_dag::get_constant_count() const
 {
     return m_user_constants.size();
 }
 
 // Get the name of the constant at index.
 char const *Generated_code_dag::get_constant_name(
-    int index) const
+    size_t index) const
 {
     if (Constant_info const *con = get_constant_info(index)) {
         return con->get_name();
@@ -4078,7 +4138,7 @@ char const *Generated_code_dag::get_constant_name(
 
 // Get the value of the constant at index.
 DAG_constant const *Generated_code_dag::get_constant_value(
-    int index) const
+    size_t index) const
 {
     if (Constant_info const *con = get_constant_info(index)) {
         return con->get_value();
@@ -4087,8 +4147,8 @@ DAG_constant const *Generated_code_dag::get_constant_value(
 }
 
 // Get the number of annotations of the constant at index.
-int Generated_code_dag::get_constant_annotation_count(
-    int index) const
+size_t Generated_code_dag::get_constant_annotation_count(
+    size_t index) const
 {
     if (Constant_info const *con = get_constant_info(index)) {
         return con->get_annotation_count();
@@ -4098,11 +4158,11 @@ int Generated_code_dag::get_constant_annotation_count(
 
 // Get the annotation at annotation_index of the constant at constant_index.
 DAG_node const *Generated_code_dag::get_constant_annotation(
-    int constant_index,
-    int annotation_index) const
+    size_t constant_index,
+    size_t annotation_index) const
 {
     if (Constant_info const *con = get_constant_info(constant_index)) {
-        if (size_t(annotation_index) <= con->get_annotation_count()) {
+        if (annotation_index < con->get_annotation_count()) {
             return con->get_annotation(annotation_index);
         }
     }
@@ -4465,11 +4525,14 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
     int                      material_index,
     unsigned                 flags,
     ICall_evaluator          *evaluator,
-    int                      argc,
+    size_t                   argc,
     DAG_node const           *argv[],
+    bool                     fold_meters_per_scene_unit,
     float                    mdl_meters_per_scene_unit,
     float                    wavelength_min,
-    float                    wavelength_max)
+    float                    wavelength_max,
+    char const * const       fold_params[],
+    size_t                   num_fold_params)
 : m_resolver(resolver)
 , m_resource_modifier(resource_modifier)
 , m_code_dag(*code_dag)
@@ -4485,6 +4548,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
 , m_material_index(material_index)
 , m_params(0)
 , m_visit_map(0, Visit_map::hasher(), Visit_map::key_equal(), &m_arena)
+, m_replacement_map(0, Replacement_map::hasher(), Replacement_map::key_equal(), &m_arena)
 , m_resource_param_map(
     0, Resource_param_map::hasher(), Resource_param_map::key_equal(), &m_arena)
 , m_default_param_values(get_allocator())
@@ -4495,6 +4559,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
 , m_properties(0)
 , m_referenced_scene_data(dag_builder.get_allocator())
 , m_instantiate_args(flags & CLASS_COMPILATION)
+, m_fold_params(get_allocator())
 {
     // reset the CSE table, we will build new expressions
     m_node_factory.identify_clear();
@@ -4502,11 +4567,17 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
     // set the call evaluator if any
     m_node_factory.set_call_evaluator(evaluator);
 
-    // enable folding of unit conversion
-    m_node_factory.enable_unit_conv_fold(mdl_meters_per_scene_unit);
+    // enable folding of unit conversion if requested
+    if (fold_meters_per_scene_unit)
+        m_node_factory.enable_unit_conv_fold(mdl_meters_per_scene_unit);
 
     // enable folding of state::wavelength_[min|max]
     m_node_factory.enable_wavelength_fold(wavelength_min, wavelength_max);
+
+    // convert names of parameters to be folded
+    for (size_t i = 0; i < num_fold_params; ++i) {
+        m_fold_params.insert(string(fold_params[i], get_allocator()));
+    }
 }
 
 // Destructor.
@@ -4516,6 +4587,342 @@ Generated_code_dag::Material_instance::Instantiate_helper::~Instantiate_helper()
     m_node_factory.set_call_evaluator(m_old_evaluator);
 }
 
+DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::skip_temporaries(
+    DAG_node const *expr)
+{
+    if (DAG_temporary const *temp = as<DAG_temporary>(expr)) {
+         expr = temp->get_expr();
+    }
+    return expr;
+}
+
+DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::get_value(
+    IValue const *value, Array_ref<char const *> const &path)
+{
+    for (size_t i = 0, n = path.size(); i < n; ++i) {
+        IValue_struct const *s_value = cast<IValue_struct>(value);
+        value = s_value->get_value(path[i]);
+    }
+
+    return m_node_factory.create_constant(value);
+}
+
+DAG_node const *Generated_code_dag::Material_instance::Instantiate_helper::get_value(
+    DAG_node const *expr, Array_ref<char const *> const &path)
+{
+    for (size_t i = 0, n = path.size(); i < n; ++i) {
+        expr = skip_temporaries(expr);
+
+        while (DAG_parameter const *p = as<DAG_parameter>(expr)) {
+            expr = m_argv[p->get_index()];
+            expr = skip_temporaries(expr);
+        }
+
+        if (DAG_constant const *c = as<DAG_constant>(expr)) {
+            IValue const *v = c->get_value();
+            return get_value(v, path.slice(i));
+        }
+
+        if (DAG_call const *call = as<DAG_call>(expr)) {
+            expr = call->get_argument(path[i]);
+            if (expr == NULL)
+                return NULL;
+            continue;
+        }
+
+        MDL_ASSERT(!"wrong DAG node type");
+        return NULL;
+    }
+
+    return expr;
+}
+
+// Fold geometry.cutout_opacity if in class-compilation mode, requested via flags,
+// and evaluates to 0.0f or 1.0f.
+void Generated_code_dag::Material_instance::Instantiate_helper::handle_cutout_opacity()
+{
+    if (!m_instantiate_args || (m_flags & NO_TRIVIAL_CUTOUT_OPACITY) == 0)
+        return;
+
+    DAG_node const *constructor = m_code_dag.get_material_value(m_material_index);
+
+    static char const * const path[] = { "geometry", "cutout_opacity" };
+    DAG_node const *cutout_opacity = get_value(constructor, path);
+
+    // We might not find the path if there are calls in between that are similar to the copy
+    // constructor, but without such a semantic.
+    if (!cutout_opacity)
+        return;
+
+    // Instantiate cutout_opacity in instance compilation mode.
+    DAG_node const *folded_cutout_opacity;
+    Visit_map old_visit_map(m_visit_map);
+    {
+        Flag_store store(m_instantiate_args, false);
+        folded_cutout_opacity = instantiate_dag(cutout_opacity);
+
+        // No parameters should have been created by the call above in instance compilation mode.
+        MDL_ASSERT(m_default_param_values.empty());
+        MDL_ASSERT(m_param_names.empty());
+    }
+
+    // Nothing to do if the instantiation of cutout_opacity did not result in a constant.
+    if (!is<DAG_constant>(folded_cutout_opacity)) {
+        m_visit_map = std::move(old_visit_map);
+        return;
+    }
+
+    DAG_constant const *c = cast<DAG_constant>(folded_cutout_opacity);
+
+    float value = cast<IValue_float>(c->get_value())->get_value();
+
+    // Nothing to do if the value of cutout_opacity is not 0.0f or 1.0f.
+    if (value != 0.0f && value != 1.0f) {
+        m_visit_map = std::move(old_visit_map);
+        return;
+    }
+
+    // Remove all entries from m_visit_map that are not in old_visit_map, are not the node for
+    // cutout_opacity itself, nor any of the parameters encountered during folding of that node.
+    // Such parameters are kept in the map to avoid that they are folded here, but not for other
+    // uses.
+    Arena_ptr_hash_set<DAG_node const>::Type keep_set(&m_arena);
+    for (auto const& o: old_visit_map)
+        keep_set.insert(o.first);
+    keep_set.insert(cutout_opacity);
+    for (size_t i = 0; i < m_argc; ++i)
+        keep_set.insert(m_argv[i]);
+    for (Visit_map::iterator it = m_visit_map.begin(); it != m_visit_map.end(); ) {
+        if (keep_set.count(it->first) == 0) {
+            it = m_visit_map.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+class Transparent_layers : public IDAG_ir_visitor {
+public:
+    Transparent_layers(
+        Generated_code_dag::Material_instance::Instantiate_helper &instantiate_helper)
+      : m_instantiate_helper(instantiate_helper) { }
+
+    void visit(DAG_constant *cnst) { }
+    void visit(DAG_temporary *tmp) { }
+    void visit(DAG_call *call) { m_instantiate_helper.handle_transparent_layers(call); }
+    void visit(DAG_parameter *param) { }
+    void visit(int index, DAG_node *init) { }
+
+private:
+    Generated_code_dag::Material_instance::Instantiate_helper& m_instantiate_helper;
+};
+
+void Generated_code_dag::Material_instance::Instantiate_helper::handle_transparent_layers()
+{
+    if (!m_instantiate_args || (m_flags & NO_TRANSPARENT_LAYERS) == 0)
+        return;
+
+    Transparent_layers tl(*this);
+    DAG_ir_walker walker(get_allocator(), /*as_tree*/ true);
+    walker.walk_material(const_cast<Generated_code_dag*>(&m_code_dag), m_material_index, &tl);
+}
+
+void Generated_code_dag::Material_instance::Instantiate_helper::handle_transparent_layers(DAG_call const *call)
+{
+    // Extract properties from relevant layering functions.
+    bool float_weight = true;
+    int index_weight  = -1;
+    int index_layer   = -1;
+    int index_base    = -1;
+
+    IDefinition::Semantics sema = call->get_semantic();
+    switch (sema) {
+
+        case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:        
+            float_weight = false;
+        case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
+            index_weight = 0;
+            index_layer  = 1;
+            index_base   = 2;
+            break;
+
+        case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
+            float_weight = false;
+        case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
+            index_weight = 1;
+            index_layer  = 2;
+            index_base   = 3;
+            break;
+
+        case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
+            float_weight = false;
+        case IDefinition::DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER:
+            index_weight = 3;
+            index_layer  = 4;
+            index_base   = 5;
+            break;
+
+        case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
+            float_weight = false;
+        case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
+            index_weight = 1;
+            index_layer  = 2;
+            index_base   = 3;
+            break;
+
+        // Nothing to do for other functions.
+        default:
+            return;
+    }
+    
+    MDL_ASSERT(index_weight != -1 && index_layer != -1 && index_base != -1);
+
+    // Nothing to do if the layer argument is not one of the qualified BSDFs.
+    DAG_node const *arg_layer = call->get_argument(index_layer);
+    Replacement_map::const_iterator it = m_replacement_map.find(arg_layer);
+    if (it != m_replacement_map.end())
+        arg_layer = it->second;
+    if (!is_layer_qualified(arg_layer))
+        return;
+
+    // Instantiate the weight argument in instance compilation mode.
+    DAG_node const *arg_weight = call->get_argument(index_weight);
+    DAG_node const *folded_weight;
+    Visit_map old_visit_map(m_visit_map);
+    {
+        Flag_store store(m_instantiate_args, false);
+        folded_weight = instantiate_dag(arg_weight);
+
+        // No parameters should have been created by the call above in instance compilation mode.
+        MDL_ASSERT(m_default_param_values.empty());
+        MDL_ASSERT(m_param_names.empty());
+    }
+
+    // Nothing to do if the instantiation of arg_weight did not result in a constant.
+    if (!is<DAG_constant>(folded_weight)) {
+        m_visit_map = std::move(old_visit_map);
+        return;
+    }
+
+    DAG_constant const *c = cast<DAG_constant>(folded_weight);
+
+    // Nothing to do if the value of arg_weight is not 0.0f or color(0.0f).
+    if (float_weight) {
+        IValue_float const *value = cast<IValue_float>(c->get_value());
+        if (!value->is_zero()) {
+            m_visit_map = std::move(old_visit_map);
+            return;
+        }
+    } else {
+        IValue_rgb_color const *value = cast<IValue_rgb_color>(c->get_value());
+        if (!value->is_zero()) {
+            m_visit_map = std::move(old_visit_map);
+            return;
+        }
+    }
+
+    // Replace call by arg_base when traversing the DAG later.
+    DAG_node const *arg_base = call->get_argument(index_base);
+    it = m_replacement_map.find(arg_base);
+    if (it != m_replacement_map.end())
+        arg_base = it->second;
+    m_replacement_map[call] = arg_base;
+
+    // Remove all entries from m_visit_map that are not in old_visit_map, nor any of the parameters
+    // encountered during folding of the weight. Such parameters are kept in the map to avoid that
+    // they are folded here, but not for other uses.
+    Arena_ptr_hash_set<DAG_node const>::Type keep_set(&m_arena);
+    for (auto const& o: old_visit_map)
+        keep_set.insert(o.first);
+    for (size_t i = 0; i < m_argc; ++i)
+        keep_set.insert(m_argv[i]);
+    for (Visit_map::iterator it = m_visit_map.begin(); it != m_visit_map.end(); ) {
+        if (keep_set.count(it->first) == 0) {
+            it = m_visit_map.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+bool Generated_code_dag::Material_instance::Instantiate_helper::is_layer_qualified(DAG_node const *expr)
+{
+    switch (expr->get_kind())
+    {
+        case DAG_node::EK_CONSTANT:
+            return false;
+
+        case DAG_node::EK_TEMPORARY: {
+            DAG_temporary const *temp = as<DAG_temporary>(expr);
+            return is_layer_qualified(temp->get_expr());
+        }
+
+        case DAG_node::EK_PARAMETER: {
+            DAG_parameter const *parameter = as<DAG_parameter>(expr);
+            return is_layer_qualified(m_argv[parameter->get_index()]);
+        }
+
+        case DAG_node::EK_CALL: {
+
+            DAG_call const *call = as<DAG_call>(expr);
+            IDefinition::Semantics sema = call->get_semantic();
+
+            // Ternary operators are qualified if both true and false expression are qualified.
+            if (sema == operator_to_semantic(IExpression::OK_TERNARY))
+                return is_layer_qualified(call->get_argument(1))
+                    && is_layer_qualified(call->get_argument(2));
+
+            // Extract scatter mode from relevant BSDFs.
+            int index_scatter_mode = -1;
+            switch (sema)
+            {
+                case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
+                    return true; // No scatter mode paramter.
+                case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
+                    index_scatter_mode = 1;
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
+                    index_scatter_mode = 5;
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
+                    index_scatter_mode = 5;
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
+                    index_scatter_mode = 5;
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
+                    index_scatter_mode = 5;
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
+                    index_scatter_mode = 5;
+                    break;
+                default:
+                    return false;
+            }
+
+            MDL_ASSERT(index_scatter_mode != -1);
+
+            // Not qualified if scatter_mode is not a constant.
+            DAG_node const *arg_scatter_mode = call->get_argument(index_scatter_mode);
+            DAG_constant const *arg_scatter_mode_constant = cast<DAG_constant>(arg_scatter_mode);
+            if (!arg_scatter_mode_constant)
+                return false;
+
+            // Not qualified if scatter_mode is not scatter_transmit or scatter_reflect_transmit.
+            IValue const *arg_scatter_mode_value = arg_scatter_mode_constant->get_value();
+            IValue_enum const *arg_scatter_mode_enum = cast<IValue_enum>(arg_scatter_mode_value);
+            int value = arg_scatter_mode_enum->get_value();
+            if (value != df::scatter_transmit && value != df::scatter_reflect_transmit)
+                return false;        
+
+            return true;
+        }
+    }
+
+    MDL_ASSERT(!"Unsupported DAG node kind");
+    return false;
+}
+    
 // Compile the material.
 DAG_call const *
 Generated_code_dag::Material_instance::Instantiate_helper::compile()
@@ -4529,6 +4936,9 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile()
     mi::base::Handle<IModule const> mod(
         m_resolver.get_owner_module(m_code_dag.get_material_name(m_material_index)));
     Module_scope scope(m_dag_builder, mod.get());
+
+    handle_cutout_opacity();
+    handle_transparent_layers();
 
     DAG_node const *node = instantiate_dag(m_code_dag.get_material_value(m_material_index));
 
@@ -4631,18 +5041,20 @@ public:
     , m_depends_on_transform(false)
     , m_depends_on_object_id(false)
     , m_edf_global_distribution(false)
+    , m_depends_on_uniform_scene_data(false)
     , m_referenced_scene_data(alloc)
     {
     }
 
     /// Post visit of an call
-    void post_visit(IExpression_call *call) MDL_FINAL
+    IExpression *post_visit(IExpression_call *call) MDL_FINAL
     {
         // assume the AST error free
         IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
 
-        if (ref->is_array_constructor())
-            return;
+        if (ref->is_array_constructor()) {
+            return call;
+        }
 
         IDefinition const *def = ref->get_definition();
 
@@ -4679,15 +5091,6 @@ public:
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
             {
                 if (mi::mdl::IExpression_literal const *lit =
                         as<mi::mdl::IExpression_literal>(
@@ -4698,10 +5101,33 @@ public:
                 }
                 break;
             }
+
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+            {
+                m_depends_on_uniform_scene_data = true;
+                if (mi::mdl::IExpression_literal const *lit =
+                        as<mi::mdl::IExpression_literal>(
+                            call->get_argument(0)->get_argument_expr())) {
+                    if (IValue_string const *name_str = as<IValue_string>(lit->get_value())) {
+                        m_referenced_scene_data.insert(string(name_str->get_value(), m_alloc));
+                    }
+                }
+                break;
+            }
+
         default:
             // all others have a known semantic and can be safely ignored.
             break;
         }
+        return call;
     }
 
     /// Returns true if the analyzed entity depends on object transforms.
@@ -4712,6 +5138,9 @@ public:
 
     /// Returns true if the analyzed entity depends on any edf's global_distribution.
     bool depends_on_global_distribution() const { return m_edf_global_distribution; }
+
+    /// Returns true if this instance depends on uniform scene data.
+    bool depends_on_uniform_scene_data() const { return m_depends_on_uniform_scene_data; }
 
     /// Returns the set of scene data names referenced by the analyzed entity.
     Generated_code_dag::String_set const &referenced_scene_data() const {
@@ -4730,6 +5159,7 @@ private:
     , m_depends_on_transform(false)
     , m_depends_on_object_id(false)
     , m_edf_global_distribution(false)
+    , m_depends_on_uniform_scene_data(false)
     , m_referenced_scene_data(alloc)
     {
     }
@@ -4738,8 +5168,9 @@ private:
     void analyze_unknown_call(IExpression_call const *call)
     {
         IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
-        if (ref->is_array_constructor())
+        if (ref->is_array_constructor()) {
             return;
+        }
 
         IDefinition const *def = ref->get_definition();
 
@@ -4755,9 +5186,10 @@ private:
         if (it != m_cache.end()) {
             Dependence_result const &res = it->second;
 
-            m_depends_on_transform    |= res.m_depends_on_transform;
-            m_depends_on_object_id    |= res.m_depends_on_object_id;
-            m_edf_global_distribution |= res.m_edf_global_distribution;
+            m_depends_on_transform          |= res.m_depends_on_transform;
+            m_depends_on_object_id          |= res.m_depends_on_object_id;
+            m_edf_global_distribution       |= res.m_edf_global_distribution;
+            m_depends_on_uniform_scene_data |= res.m_depends_on_uniform_scene_data;
             m_referenced_scene_data.insert(
                 res.m_referenced_scene_data.begin(),
                 res.m_referenced_scene_data.end());
@@ -4781,11 +5213,13 @@ private:
                 analysis.m_depends_on_transform,
                 analysis.m_depends_on_object_id,
                 analysis.m_edf_global_distribution,
+                analysis.m_depends_on_uniform_scene_data,
                 analysis.m_referenced_scene_data));
 
-            m_depends_on_transform    |= analysis.m_depends_on_transform;
-            m_depends_on_object_id    |= analysis.m_depends_on_object_id;
-            m_edf_global_distribution |= analysis.m_edf_global_distribution;
+            m_depends_on_transform          |= analysis.m_depends_on_transform;
+            m_depends_on_object_id          |= analysis.m_depends_on_object_id;
+            m_edf_global_distribution       |= analysis.m_edf_global_distribution;
+            m_depends_on_uniform_scene_data |= analysis.m_depends_on_uniform_scene_data;
             m_referenced_scene_data.insert(
                 analysis.m_referenced_scene_data.begin(),
                 analysis.m_referenced_scene_data.end());
@@ -4925,6 +5359,9 @@ private:
     /// True if this instance depends on global distribution (edf).
     bool m_edf_global_distribution;
 
+    /// True if this instance depends on uniform scene data.
+    bool m_depends_on_uniform_scene_data;
+
     /// Set of scene data names referenced by this instance.
     Generated_code_dag::String_set m_referenced_scene_data;
 };
@@ -4963,6 +5400,15 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
+        {
+            if (DAG_constant const *c = as<DAG_constant>(call->get_argument(0))) {
+                if (IValue_string const *name_str = as<IValue_string>(c->get_value())) {
+                    m_referenced_scene_data.insert(string(name_str->get_value(), get_allocator()));
+                }
+            }
+            break;
+        }
+
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
@@ -4973,6 +5419,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
         {
+            set_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA, true);
             if (DAG_constant const *c = as<DAG_constant>(call->get_argument(0))) {
                 if (IValue_string const *name_str = as<IValue_string>(c->get_value())) {
                     m_referenced_scene_data.insert(string(name_str->get_value(), get_allocator()));
@@ -4984,6 +5431,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
     case IDefinition::DS_UNKNOWN:
         {
             // user defined function
+
             char const *signature = call->get_name();
             mi::base::Handle<mi::mdl::IModule const> mod(m_resolver.get_owner_module(signature));
             if (!mod.is_valid_interface())
@@ -5014,6 +5462,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
         set_property(IP_DEPENDS_ON_TRANSFORM,           res.m_depends_on_transform);
         set_property(IP_DEPENDS_ON_OBJECT_ID,           res.m_depends_on_object_id);
         set_property(IP_DEPENDS_ON_GLOBAL_DISTRIBUTION, res.m_edf_global_distribution);
+        set_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA,  res.m_depends_on_uniform_scene_data);
         m_referenced_scene_data.insert(
             res.m_referenced_scene_data.begin(),
             res.m_referenced_scene_data.end());
@@ -5031,6 +5480,8 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
             set_property(IP_DEPENDS_ON_OBJECT_ID, analysis.depends_on_object_id());
             set_property(IP_DEPENDS_ON_GLOBAL_DISTRIBUTION,
                 analysis.depends_on_global_distribution());
+            set_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA,
+                analysis.depends_on_uniform_scene_data());
             m_referenced_scene_data.insert(
                 analysis.referenced_scene_data().begin(),
                 analysis.referenced_scene_data().end());
@@ -5039,6 +5490,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
                 0 != (get_properties() & IP_DEPENDS_ON_TRANSFORM),
                 0 != (get_properties() & IP_DEPENDS_ON_OBJECT_ID),
                 0 != (get_properties() & IP_DEPENDS_ON_GLOBAL_DISTRIBUTION),
+                0 != (get_properties() & IP_DEPENDS_ON_UNIFORM_SCENE_DATA),
                 analysis.referenced_scene_data()));
         }
     }
@@ -5075,9 +5527,13 @@ DAG_node const *
 Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
     DAG_node const *node)
 {
-    Visit_map::const_iterator it = m_visit_map.find(node);
-    if (it != m_visit_map.end())
-        return it->second;
+    Replacement_map::const_iterator itr = m_replacement_map.find(node);
+    if (itr != m_replacement_map.end())
+        node = itr->second;
+
+    Visit_map::const_iterator itv = m_visit_map.find(node);
+    if (itv != m_visit_map.end())
+        return itv->second;
 
     DAG_node const *res = NULL;
 
@@ -5324,9 +5780,13 @@ DAG_node const *
 Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_arguments(
     DAG_node const *node)
 {
-    Visit_map::const_iterator it = m_visit_map.find(node);
-    if (it != m_visit_map.end())
-        return it->second;
+    Replacement_map::const_iterator itr = m_replacement_map.find(node);
+    if (itr != m_replacement_map.end())
+        node = itr->second;
+
+    Visit_map::const_iterator itv = m_visit_map.find(node);
+    if (itv != m_visit_map.end())
+        return itv->second;
 
     DAG_node const *res = NULL;
 
@@ -5338,6 +5798,7 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
         {
             DAG_constant const *cnst = cast<DAG_constant>(node);
             IValue const       *v    = cnst->get_value();
+            IType const        *t    = v->get_type();
 
             v = m_value_factory.import(v);
             IValue_resource const *resource = as<IValue_resource>(v);
@@ -5347,8 +5808,14 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                     resource, m_dag_builder.tos_module(), m_value_factory);
             }
 
-            if ((m_flags & NO_STRING_PARAMS) != 0 && contains_string_type(v->get_type())) {
-                // no not create parameters containing string values
+            if ((m_flags & NO_STRING_PARAMS) != 0 && contains_string_type(t)) {
+                // do not create parameters containing string values
+                res = m_node_factory.create_constant(v);
+            } else if ((m_flags & NO_BOOL_PARAMS) != 0 && is<IType_bool>(t)) {
+                // do not create plain bool parameters
+                res = m_node_factory.create_constant(v);
+            } else if ((m_flags & NO_ENUM_PARAMS) != 0 && is<IType_enum>(t)) {
+                // do not create plain enum parameters
                 res = m_node_factory.create_constant(v);
             } else {
                 // we reach a leave: create new argument(s) for it
@@ -5358,15 +5825,19 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                     if (it != m_resource_param_map.end()) {
                         res = it->second;
                     } else {
-                        res = m_node_factory.create_parameter(v->get_type(), m_params++);
+                        res = m_node_factory.create_parameter(t, m_params++);
                         m_default_param_values.push_back(v);
                         m_param_names.push_back(m_curr_param_name);
 
                         m_resource_param_map[resource] = res;
                     }
+                } else if (m_fold_params.count(m_curr_param_name) > 0) {
+                    // do not create parameter if explicitly disabled by name
+                    res = m_node_factory.create_constant(v);
                 } else {
-                    // not a resource or sharing disabled: just create a new parameter
-                    res = m_node_factory.create_parameter(v->get_type(), m_params++);
+                    // not a resource or sharing disabled, folding not explicitly requested by
+                    // name: just create a new parameter
+                    res = m_node_factory.create_parameter(t, m_params++);
                     m_default_param_values.push_back(v);
                     m_param_names.push_back(m_curr_param_name);
                 }
@@ -5479,6 +5950,7 @@ size_t dynamic_memory_consumption(Generated_code_dag::Parameter_info const &para
 {
     return
         dynamic_memory_consumption(param.m_name) +
+        dynamic_memory_consumption(param.m_type_name) +
         dynamic_memory_consumption(param.m_annotations);
 }
 
@@ -5491,6 +5963,7 @@ size_t dynamic_memory_consumption(Generated_code_dag::Material_info const &mat)
 {
     return
         dynamic_memory_consumption(mat.m_name) +
+        dynamic_memory_consumption(mat.m_simple_name) +
         dynamic_memory_consumption(mat.m_original_name) +
         dynamic_memory_consumption(mat.m_cloned) +
         dynamic_memory_consumption(mat.m_parameters) +
@@ -5508,6 +5981,7 @@ size_t dynamic_memory_consumption(Generated_code_dag::Function_info const &func)
 {
     return
         dynamic_memory_consumption(func.m_name) +
+        dynamic_memory_consumption(func.m_simple_name) +
         dynamic_memory_consumption(func.m_original_name) +
         dynamic_memory_consumption(func.m_cloned) +
         dynamic_memory_consumption(func.m_parameters) +
@@ -5516,6 +5990,21 @@ size_t dynamic_memory_consumption(Generated_code_dag::Function_info const &func)
         dynamic_memory_consumption(func.m_temporary_names) +
         dynamic_memory_consumption(func.m_return_annos) +
         dynamic_memory_consumption(func.m_refs);
+}
+
+bool has_dynamic_memory_consumption(Generated_code_dag::Annotation_info const &)
+{
+    return true;
+}
+
+size_t dynamic_memory_consumption(Generated_code_dag::Annotation_info const &func)
+{
+    return
+        dynamic_memory_consumption(func.m_name) +
+        dynamic_memory_consumption(func.m_simple_name) +
+        dynamic_memory_consumption(func.m_original_name) +
+        dynamic_memory_consumption(func.m_parameters) +
+        dynamic_memory_consumption(func.m_annotations);
 }
 
 bool has_dynamic_memory_consumption(Generated_code_dag::User_type_info::Entity_info const &)
@@ -5575,7 +6064,7 @@ size_t Generated_code_dag::get_memory_size() const
 
 // Get the export flags of the function at function_index.
 bool Generated_code_dag::get_function_property(
-    int               function_index,
+    size_t            function_index,
     Function_property fp) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
@@ -5585,7 +6074,7 @@ bool Generated_code_dag::get_function_property(
 }
 
 // Get the number of entities referenced by a function.
-int Generated_code_dag::get_function_references_count(int function_index) const
+size_t Generated_code_dag::get_function_references_count(size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_ref_count();
@@ -5594,10 +6083,12 @@ int Generated_code_dag::get_function_references_count(int function_index) const
 }
 
 // Get the signature of the i'th reference of a function
-char const *Generated_code_dag::get_function_reference(int function_index, int callee_index) const
+char const *Generated_code_dag::get_function_reference(
+    size_t function_index,
+    size_t callee_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
-        if (size_t(callee_index) < func->get_ref_count()) {
+        if (callee_index < func->get_ref_count()) {
             return func->get_ref(callee_index).c_str();
         }
     }
@@ -5607,7 +6098,7 @@ char const *Generated_code_dag::get_function_reference(int function_index, int c
 // Return the original function name of a cloned function or "" if the function
 // is not a clone.
 char const *Generated_code_dag::get_cloned_function_name(
-    int function_index) const
+    size_t function_index) const
 {
     if (Function_info const *func = get_function_info(function_index)) {
         return func->get_cloned_name();
@@ -5616,20 +6107,19 @@ char const *Generated_code_dag::get_cloned_function_name(
 }
 
 // Get the number of annotations of the module.
-int Generated_code_dag::get_module_annotation_count() const
+size_t Generated_code_dag::get_module_annotation_count() const
 {
-    return int(m_module_annotations.size());
+    return m_module_annotations.size();
 }
 
 // Get the annotation at annotation_index of the module.
 DAG_node const *Generated_code_dag::get_module_annotation(
-    int annotation_index) const
+    size_t annotation_index) const
 {
-    if (annotation_index < 0 || m_module_annotations.size() <= annotation_index) {
-        MDL_ASSERT(!"get_module_annotation() annotation_index out of range");
-        return NULL;
+    if (annotation_index < m_module_annotations.size()) {
+        return m_module_annotations[annotation_index];
     }
-    return m_module_annotations[annotation_index];
+    return NULL;
 }
 
 // Get the internal space.
@@ -5639,13 +6129,14 @@ char const *Generated_code_dag::get_internal_space() const
 }
 
 // Get the number of annotations in the generated code.
-int Generated_code_dag::get_annotation_count() const
+size_t Generated_code_dag::get_annotation_count() const
 {
     return m_annotations.size();
 }
 
 // Get the semantics of the annotation at annotation_index.
-IDefinition::Semantics Generated_code_dag::get_annotation_semantics(int annotation_index) const
+IDefinition::Semantics Generated_code_dag::get_annotation_semantics(
+    size_t annotation_index) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
         return anno->get_semantics();
@@ -5654,7 +6145,8 @@ IDefinition::Semantics Generated_code_dag::get_annotation_semantics(int annotati
 }
 
 // Get the name of the annotation at annotation_index.
-char const *Generated_code_dag::get_annotation_name(int annotation_index) const
+char const *Generated_code_dag::get_annotation_name(
+    size_t annotation_index) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
         return anno->get_name();
@@ -5662,9 +6154,20 @@ char const *Generated_code_dag::get_annotation_name(int annotation_index) const
     return NULL;
 }
 
+// Get the simple name of the annotation at annotation_index.
+char const *Generated_code_dag::get_simple_annotation_name(
+    size_t annotation_index) const
+{
+    if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
+        return anno->get_simple_name();
+    }
+    return NULL;
+}
+
 // Get the original name of the annotation at annotation_index if the annotation name is
 // an alias, i.e. re-exported from a module.
-char const *Generated_code_dag::get_original_annotation_name(int annotation_index) const
+char const *Generated_code_dag::get_original_annotation_name(
+    size_t annotation_index) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
         return anno->get_original_name();
@@ -5673,7 +6176,8 @@ char const *Generated_code_dag::get_original_annotation_name(int annotation_inde
 }
 
 // Get the parameter count of the annotation at annotation_index.
-int Generated_code_dag::get_annotation_parameter_count(int annotation_index) const
+size_t Generated_code_dag::get_annotation_parameter_count(
+    size_t annotation_index) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
         return anno->get_parameter_count();
@@ -5684,8 +6188,8 @@ int Generated_code_dag::get_annotation_parameter_count(int annotation_index) con
 // Get the parameter type of the parameter at parameter_index
 // of the annotation at annotation_index.
 IType const *Generated_code_dag::get_annotation_parameter_type(
-    int annotation_index,
-    int parameter_index) const
+    size_t annotation_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_anno_param_info(annotation_index, parameter_index)) {
         return param->get_type();
@@ -5693,11 +6197,23 @@ IType const *Generated_code_dag::get_annotation_parameter_type(
     return NULL;
 }
 
+/// Get the parameter type name of the parameter at parameter_index
+/// of the annotation at annotation_index.
+char const *Generated_code_dag::get_annotation_parameter_type_name(
+    size_t annotation_index,
+    size_t parameter_index) const
+{
+    if (Parameter_info const *param = get_anno_param_info(annotation_index, parameter_index)) {
+        return param->get_type_name();
+    }
+    return NULL;
+}
+
 // Get the parameter name of the parameter at parameter_index
 // of the annotation at annotation_index.
 char const *Generated_code_dag::get_annotation_parameter_name(
-    int annotation_index,
-    int parameter_index) const
+    size_t annotation_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_anno_param_info(annotation_index, parameter_index)) {
         return param->get_name();
@@ -5706,8 +6222,8 @@ char const *Generated_code_dag::get_annotation_parameter_name(
 }
 
 // Get the index of the parameter parameter_name.
-int Generated_code_dag::get_annotation_parameter_index(
-    int        annotation_index,
+size_t Generated_code_dag::get_annotation_parameter_index(
+    size_t     annotation_index,
     char const *parameter_name) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
@@ -5716,14 +6232,14 @@ int Generated_code_dag::get_annotation_parameter_index(
                 return i;
         }
     }
-    return -1;
+    return ~size_t(0);
 }
 
 // Get the default initializer of the parameter at parameter_index
 // of the annotation at annotation_index.
 DAG_node const *Generated_code_dag::get_annotation_parameter_default(
-    int annotation_index,
-    int parameter_index) const
+    size_t annotation_index,
+    size_t parameter_index) const
 {
     if (Parameter_info const *param = get_anno_param_info(annotation_index, parameter_index)) {
         return param->get_default();
@@ -5733,7 +6249,7 @@ DAG_node const *Generated_code_dag::get_annotation_parameter_default(
 
 // Get the property flag of the annotation at annotation_index.
 bool Generated_code_dag::get_annotation_property(
-    int                 annotation_index,
+    size_t              annotation_index,
     Annotation_property ap) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
@@ -5744,8 +6260,8 @@ bool Generated_code_dag::get_annotation_property(
 }
 
 // Get the number of annotations of the annotation at annotation_index.
-int Generated_code_dag::get_annotation_annotation_count(
-    int annotation_index) const
+size_t Generated_code_dag::get_annotation_annotation_count(
+    size_t annotation_index) const
 {
     if (Annotation_info const *anno = get_annotation_info(annotation_index)) {
         return anno->get_annotation_count();
@@ -5755,11 +6271,11 @@ int Generated_code_dag::get_annotation_annotation_count(
 
 // Get the annotation at annotation_index of the annotation (declaration) at anno_decl_index.
 DAG_node const *Generated_code_dag::get_annotation_annotation(
-    int anno_decl_index,
-    int annotation_index) const
+    size_t anno_decl_index,
+    size_t annotation_index) const
 {
     if (Annotation_info const *anno = get_annotation_info(anno_decl_index)) {
-        if (size_t(annotation_index) < anno->get_annotation_count())
+        if (annotation_index < anno->get_annotation_count())
             return anno->get_annotation(annotation_index);
     }
     return NULL;
@@ -6028,6 +6544,7 @@ void Generated_code_dag::serialize_functions(DAG_serializer &dag_serializer) con
         dag_serializer.write_encoded(func.m_return_type);
 
         dag_serializer.write_encoded(func.m_name);
+        dag_serializer.write_encoded(func.m_simple_name);
         dag_serializer.write_encoded(func.m_original_name);
         dag_serializer.write_encoded(func.m_cloned);
 
@@ -6068,12 +6585,13 @@ void Generated_code_dag::deserialize_functions(DAG_deserializer &dag_deserialize
     m_functions.reserve(l);
 
     for (size_t i = 0; i < l; ++i) {
-        Definition::Semantics sema      = dag_deserializer.read_encoded<Definition::Semantics>();
-        IType const           *ret_type = dag_deserializer.read_encoded<IType const *>();
-        string                name      = dag_deserializer.read_encoded<string>();
-        string                orig_name = dag_deserializer.read_encoded<string>();
-        string                cloned    = dag_deserializer.read_encoded<string>();
-        bool                  has_hash  = dag_deserializer.read_bool();
+        Definition::Semantics sema        = dag_deserializer.read_encoded<Definition::Semantics>();
+        IType const           *ret_type   = dag_deserializer.read_encoded<IType const *>();
+        string                name        = dag_deserializer.read_encoded<string>();
+        string                simple_name = dag_deserializer.read_encoded<string>();
+        string                orig_name   = dag_deserializer.read_encoded<string>();
+        string                cloned      = dag_deserializer.read_encoded<string>();
+        bool                  has_hash    = dag_deserializer.read_bool();
 
         DAG_hash hash, *hp = NULL;
 
@@ -6085,7 +6603,14 @@ void Generated_code_dag::deserialize_functions(DAG_deserializer &dag_deserialize
         }
 
         Function_info func(
-            get_allocator(), sema, ret_type, name.c_str(), orig_name.c_str(), cloned.c_str(), hp);
+            get_allocator(),
+            sema,
+            ret_type,
+            name.c_str(),
+            simple_name.c_str(),
+            orig_name.c_str(),
+            cloned.c_str(),
+            hp);
 
         deserialize_parameters(func, dag_deserializer);
 
@@ -6117,6 +6642,7 @@ void Generated_code_dag::serialize_materials(DAG_serializer &dag_serializer) con
         Material_info const &mat = m_materials[i];
 
         dag_serializer.write_encoded(mat.m_name);
+        dag_serializer.write_encoded(mat.m_simple_name);
         dag_serializer.write_encoded(mat.m_original_name);
         dag_serializer.write_encoded(mat.m_cloned);
 
@@ -6137,9 +6663,10 @@ void Generated_code_dag::deserialize_materials(DAG_deserializer &dag_deserialize
     m_materials.reserve(l);
 
     for (size_t i = 0; i < l; ++i) {
-        string name      = dag_deserializer.read_encoded<string>();
-        string orig_name = dag_deserializer.read_encoded<string>();
-        Material_info mat(get_allocator(), name.c_str(), orig_name.c_str());
+        string name        = dag_deserializer.read_encoded<string>();
+        string simple_name = dag_deserializer.read_encoded<string>();
+        string orig_name   = dag_deserializer.read_encoded<string>();
+        Material_info mat(get_allocator(), name.c_str(), simple_name.c_str(), orig_name.c_str());
 
         mat.m_cloned = dag_deserializer.read_encoded<string>();
 
@@ -6166,6 +6693,7 @@ void Generated_code_dag::serialize_annotations(DAG_serializer &dag_serializer) c
 
         dag_serializer.write_encoded(anno.m_semantics);
         dag_serializer.write_encoded(anno.m_name);
+        dag_serializer.write_encoded(anno.m_simple_name);
         dag_serializer.write_encoded(anno.m_original_name);
 
         serialize_parameters(anno, dag_serializer);
@@ -6185,9 +6713,11 @@ void Generated_code_dag::deserialize_annotations(DAG_deserializer &dag_deseriali
     for (size_t i = 0; i < l; ++i) {
         Definition::Semantics sema = dag_deserializer.read_encoded<Definition::Semantics>();
         string                name = dag_deserializer.read_encoded<string>();
+        string                simple_name = dag_deserializer.read_encoded<string>();
         string                orig_name = dag_deserializer.read_encoded<string>();
 
-        Annotation_info anno(get_allocator(), sema, name.c_str(), orig_name.c_str());
+        Annotation_info anno(
+            get_allocator(), sema, name.c_str(), simple_name.c_str(), orig_name.c_str());
 
         deserialize_parameters(anno, dag_deserializer);
 
@@ -6207,6 +6737,7 @@ void Generated_code_dag::serialize_parameter(
 
     dag_serializer.write_encoded(param.m_type);
     dag_serializer.write_encoded(param.m_name);
+    dag_serializer.write_encoded(param.m_type_name);
 
     if (DAG_node const *def_arg = param.m_default) {
         dag_serializer.write_encoded(def_arg);
@@ -6231,8 +6762,14 @@ Generated_code_dag::Parameter_info Generated_code_dag::deserialize_parameter(
 {
     IType const *type = dag_deserializer.read_encoded<IType const *>();
 
+    string name      = dag_deserializer.read_encoded<string>();
+    string type_name = dag_deserializer.read_encoded<string>();
+
     Parameter_info param(
-        get_allocator(), type, dag_deserializer.read_encoded<string>().c_str());
+        get_allocator(),
+        type,
+        name.c_str(),
+        type_name.c_str());
 
     {
         Tag_t t = dag_deserializer.read_encoded_tag();
@@ -6565,9 +7102,9 @@ int Generated_code_dag::add_function_temporary(
 
 // Dump the material expression DAG.
 void Generated_code_dag::dump_material_dag(
-    int            index,
+    size_t         index,
     char const     *suffix,
-    int            argc,
+    size_t         argc,
     DAG_node const *argv[]) const
 {
     // dump the dependency graph
@@ -6711,7 +7248,7 @@ IValue_matrix const *Generated_code_dag::create_default_matrix(
 IValue_rgb_color const *Generated_code_dag::create_default_color(
     IValue_factory &value_factory)
 {
-    IValue_float const*zero_value = value_factory.create_float(0.0f);
+    IValue_float const *zero_value = value_factory.create_float(0.0f);
     return value_factory.create_rgb_color(zero_value, zero_value, zero_value);
 }
 

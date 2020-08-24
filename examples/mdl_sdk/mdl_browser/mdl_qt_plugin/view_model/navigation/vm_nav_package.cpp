@@ -69,7 +69,7 @@ QVariant VM_nav_package::data(int role) const
 
 QString VM_nav_package::get_name() const 
 {
-    return m_node->get_simple_name(); 
+    return m_node->get_entity_name(); 
 }
 
 bool VM_nav_package::get_is_module() const 

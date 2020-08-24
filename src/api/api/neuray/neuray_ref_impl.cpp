@@ -55,9 +55,9 @@ mi::base::IInterface* Ref_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new Ref_impl( transaction);
 }
 
@@ -109,7 +109,7 @@ mi::Sint32 Ref_impl::set_reference( const char* name)
 const mi::base::IInterface* Ref_impl::get_reference() const
 {
     if( !m_storage.is_valid())
-        return 0;
+        return nullptr;
 
     return m_transaction->access( m_storage);
 }
@@ -117,7 +117,7 @@ const mi::base::IInterface* Ref_impl::get_reference() const
 mi::base::IInterface* Ref_impl::get_reference()
 {
     if( !m_storage.is_valid())
-        return 0;
+        return nullptr;
 
     return m_transaction->edit( m_storage);
 }
@@ -125,7 +125,7 @@ mi::base::IInterface* Ref_impl::get_reference()
 const char* Ref_impl::get_reference_name() const
 {
     if( !m_storage.is_valid())
-        return 0;
+        return nullptr;
 
     const char* name = m_transaction->get_db_transaction()->tag_to_name( m_storage);
     return name;
@@ -143,9 +143,9 @@ mi::base::IInterface* Ref_impl_proxy::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Ref_impl_proxy( transaction))->cast_to_major();
 }
 
@@ -153,7 +153,7 @@ Ref_impl_proxy::Ref_impl_proxy( mi::neuraylib::ITransaction* transaction)
 {
     ASSERT( M_NEURAY_API, transaction);
     m_transaction = make_handle_dup( static_cast<Transaction_impl*>( transaction));
-    m_pointer = 0;
+    m_pointer = nullptr;
 }
 
 const char* Ref_impl_proxy::get_type_name() const
@@ -179,7 +179,7 @@ mi::Sint32 Ref_impl_proxy::set_reference( const IInterface* interface)
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
     mi::base::Handle<const IDb_element> owner_db_element(
-        attribute_context ? attribute_context->get_db_element() : 0);
+        attribute_context ? attribute_context->get_db_element() : nullptr);
     if( !owner_db_element->can_reference_tag( tag))
         return -4;
 
@@ -201,7 +201,7 @@ mi::Sint32 Ref_impl_proxy::set_reference( const char* name)
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
     mi::base::Handle<const IDb_element> owner_db_element(
-        attribute_context ? attribute_context->get_db_element() : 0);
+        attribute_context ? attribute_context->get_db_element() : nullptr);
     if( !owner_db_element->can_reference_tag( tag))
         return -4;
 
@@ -212,7 +212,7 @@ mi::Sint32 Ref_impl_proxy::set_reference( const char* name)
 const mi::base::IInterface* Ref_impl_proxy::get_reference() const
 {
     if( !m_pointer->is_valid())
-        return 0;
+        return nullptr;
 
     return m_transaction->access( *m_pointer);
 }
@@ -220,7 +220,7 @@ const mi::base::IInterface* Ref_impl_proxy::get_reference() const
 mi::base::IInterface* Ref_impl_proxy::get_reference()
 {
     if( !m_pointer->is_valid())
-        return 0;
+        return nullptr;
 
     return m_transaction->edit( *m_pointer);
 }
@@ -228,7 +228,7 @@ mi::base::IInterface* Ref_impl_proxy::get_reference()
 const char* Ref_impl_proxy::get_reference_name() const
 {
     if( !m_pointer->is_valid())
-        return 0;
+        return nullptr;
 
     const char* name = m_transaction->get_db_transaction()->tag_to_name( *m_pointer);
     return name;

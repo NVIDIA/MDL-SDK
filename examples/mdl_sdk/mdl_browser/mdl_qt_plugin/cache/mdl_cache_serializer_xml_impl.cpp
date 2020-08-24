@@ -81,7 +81,9 @@ XMLElement* Mdl_cache_serializer_xml_impl::serialize(XMLElement* parent,
     XMLElement* element = Xml_helper::attach_element(parent, xml_node_name);
 
     // attributes
-    element->SetAttribute("Name", item->get_simple_name());
+    element->SetAttribute("EntityName", item->get_entity_name());
+    element->SetAttribute("SimpleName", item->get_simple_name());
+    element->SetAttribute("QualifiedName", item->get_qualified_name());
 
     // Cached data
     tinyxml2::XMLElement* cache_node = Xml_helper::attach_element(element, "CacheData");
@@ -135,42 +137,31 @@ IMdl_cache_item* Mdl_cache_serializer_xml_impl::deserialize(
     IMdl_cache_item* cache_item = nullptr;
     IMdl_cache_node* cache_node = nullptr;
     
-    std::string simple_name;
-    std::string qualified_name;
-
-    // no parent means root
-    if (!parent) 
-    {
-        simple_name = "::";
-        qualified_name = "::";
-    }
-    else
-    {
-        simple_name = Xml_helper::query_text_attribute(item, "Name");
-        const std::string parent_qualified_name = std::string(parent->get_qualified_name());
-        qualified_name = (parent_qualified_name == "::")
-            ? parent_qualified_name + simple_name           // space case for items at the root
-            : parent_qualified_name + "::" + simple_name;   // general case
-    }
+    std::string entity_name = Xml_helper::query_text_attribute(item, "EntityName");
+    std::string simple_name = Xml_helper::query_text_attribute(item, "SimpleName");
+    std::string qualified_name = Xml_helper::query_text_attribute(item, "QualifiedName");
 
     if (node_name == "Package")
     {
-        cache_item = cache->create(IMdl_cache_item::CK_PACKAGE, qualified_name.c_str());
+        cache_item = cache->create(IMdl_cache_item::CK_PACKAGE,
+            entity_name.c_str(), simple_name.c_str(), qualified_name.c_str());
         cache_node = dynamic_cast<IMdl_cache_node*>(cache_item);
     }
     else if (node_name == "Module")
     {
-        cache_item = cache->create(IMdl_cache_item::CK_MODULE, qualified_name.c_str());
+        cache_item = cache->create(IMdl_cache_item::CK_MODULE,
+            entity_name.c_str(), simple_name.c_str(), qualified_name.c_str());
         cache_node = dynamic_cast<IMdl_cache_node*>(cache_item);
     }
     else if (node_name == "Material")
     {
-        cache_item = cache->create(IMdl_cache_item::CK_MATERIAL, qualified_name.c_str());
+        cache_item = cache->create(IMdl_cache_item::CK_MATERIAL,
+            entity_name.c_str(), simple_name.c_str(), qualified_name.c_str());
     }
     else if (node_name == "Function")
     {
-        cache_item = cache->create(IMdl_cache_item::CK_FUNCTION, qualified_name.c_str());
-
+        cache_item = cache->create(IMdl_cache_item::CK_FUNCTION,
+            entity_name.c_str(), simple_name.c_str(), qualified_name.c_str());
     }
 
     // process child elements

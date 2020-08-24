@@ -35,27 +35,29 @@
 #include "command_queue.h"
 #include "mdl_material_target.h"
 
-namespace mi
+namespace mi { namespace neuraylib
 {
-    namespace neuraylib
-    {
-        class IExpression_list;
-        class IMdl_execution_context;
-    }
-}
+    class IExpression_list;
+    class IMdl_execution_context;
+}}
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
     class Mdl_material;
     class Mdl_material_description;
+    class IMdl_material_description_loader;
     class Mdl_sdk;
     struct Mdl_resource_set;
     enum class Texture_dimension;
 
+    // --------------------------------------------------------------------------------------------
+
     /// keeps all materials that are loaded by the application
     class Mdl_material_library
     {
+        // --------------------------------------------------------------------
+
         struct Target_entry
         {
             // Constructor.
@@ -68,10 +70,12 @@ namespace mdl_d3d12
             std::mutex m_mutex;
         };
 
+        // --------------------------------------------------------------------
+
         /// Import relationships between loaded modules.
         struct Mdl_module_dependency
         {
-            explicit Mdl_module_dependency() 
+            explicit Mdl_module_dependency()
                 : imports()
                 , is_imported_by()
             {}
@@ -87,22 +91,52 @@ namespace mdl_d3d12
             std::unordered_set<std::string> is_imported_by;
         };
 
+        // --------------------------------------------------------------------
+
     public:
         /// Constructor.
         explicit Mdl_material_library(
-            Base_application* app, 
+            Base_application* app,
             Mdl_sdk* sdk);
-        
+
         /// Destructor.
         virtual ~Mdl_material_library();
 
-        /// creates a new material or reuses an existing one.
-        Mdl_material* create(const Mdl_material_description& material_desc);
+        /// Creates a new material to be used in the scene.
+        /// The action type and parameterization is set using a description.
+        Mdl_material* create_material();
 
-        /// reload all modules required by a certain material.
+        /// Set the type and parameterization for this material as defined
+        /// in the Scene to load or the material to assign.
+        /// If this fails, an invalid material, that still can be rendered will
+        /// be assigned instead. In that case the method returns false.
+        bool set_description(
+            Mdl_material* material,
+            const Mdl_material_description& material_desc);
+
+        /// Set a pink error material to signalize problems without crashing.
+        void set_invalid_material(Mdl_material* material);
+
+        /// Reload all modules required by a certain material.
         bool reload_material(Mdl_material* material, bool& targets_changed);
 
-        /// recompile all materials that got invalid after a reload.
+        /// Reload a module (already loaded) module and all importing modules in order
+        /// get back to a consistent state.
+        bool reload_module(const std::string& module_db_name, bool& targets_changed);
+
+        /// Reload a module (already loaded) module and all importing modules in order
+        /// get back to a consistent state. if \c module_source_code is not empty,
+        /// the module is reloaded from string.
+        bool reload_module(
+            const std::string& module_db_name,
+            const char* module_source_code,
+            bool& targets_changed);
+
+        /// recompile a material after parameter changes in instance compilation mode
+        /// or after structural changes in class compilation mode.
+        bool recompile_material(Mdl_material* material, bool& targets_changed);
+
+        /// recompile all material. E.g., after global compilation settings changed.
         bool recompile_materials(bool& targets_changed);
 
         /// Creates or updates the generated HLSL code and the compiled DXIL libraries.
@@ -124,29 +158,30 @@ namespace mdl_d3d12
         /// \returns        false if the iteration was aborted, true otherwise.
         bool visit_materials(std::function<bool(Mdl_material*)> action);
 
-        /// Updates the depencies between modules after loading or reloading a module.
+        /// Updates the dependencies between modules after loading or reloading a module.
         void update_module_dependencies(const std::string& module_db_name);
 
         /// get access to the texture data by the texture database name and create a resource.
         /// if there resource is loaded already, no loading is required
         Mdl_resource_set* access_texture_resource(
-            std::string db_name, 
+            std::string db_name,
             Texture_dimension dimension,
             D3DCommandList* command_list);
 
-    private:
-        /// Triggers the loading of a module that is not yet loaded.
-        ///
-        /// \param qualified_module_name    Qualified name of the module to load.
-        /// \param reload                   Triggers a reload of the module is already loaded.
-        /// \param context                  Used for error reporting.
-        ///
-        /// \returns                        The modules DB name or empty string in case of error.
-        std::string load_module(
-            const std::string& qualified_module_name,
-            bool reload,
-            mi::neuraylib::IMdl_execution_context* context);
+        /// Add a custom MDL code generated to handle materials by naming convention in gltf.
+        void register_mdl_material_description_loader(
+            const IMdl_material_description_loader* loader);
 
+        /// iterate over all registered loaders
+        ///
+        /// \param action   action to run while visiting a material.
+        ///                 if the action returns false, the iteration is aborted.
+        ///
+        /// \returns        false if the iteration was aborted, true otherwise.
+        bool visit_material_description_loaders(
+            std::function<bool(const IMdl_material_description_loader*)> action);
+
+    private:
         /// get an already existing target or a created new one.
         Mdl_material_library::Target_entry* get_target_for_material_creation(
             const std::string& key);
@@ -164,10 +199,13 @@ namespace mdl_d3d12
         std::map<std::string, Mdl_resource_set> m_resources;
         std::mutex m_resources_mtx;
 
-        /// depencies between loaded modules
+        /// dependencies between loaded modules
         std::unordered_map<std::string, Mdl_module_dependency> m_module_dependencies;
         std::mutex m_module_dependencies_mtx;
-    };
-}
 
+        /// registered loaders to process generated MDL materials
+        std::vector<const IMdl_material_description_loader*> m_loaders;
+    };
+
+}}} // mi::examples::mdl_d3d12
 #endif

@@ -35,6 +35,7 @@
 #include <mi/base/handle.h>
 #include <mi/neuraylib/iimage_plugin.h>
 #include <mi/neuraylib/iplugin_api.h>
+#include <mi/math/color.h>
 
 #include <cstring>
 #include <sstream>
@@ -163,6 +164,7 @@ IMipmap* Image_module_impl::create_mipmap(
 }
 
 IMipmap* Image_module_impl::create_mipmap(
+    Container_based,
     mi::neuraylib::IReader* reader,
     const std::string& archive_filename,
     const std::string& member_filename,
@@ -172,6 +174,7 @@ IMipmap* Image_module_impl::create_mipmap(
     mi::Sint32* errors) const
 {
     return new Mipmap_impl(
+        Container_based(),
         reader,
         archive_filename,
         member_filename,
@@ -182,15 +185,24 @@ IMipmap* Image_module_impl::create_mipmap(
 }
 
 IMipmap* Image_module_impl::create_mipmap(
+    Memory_based,
     mi::neuraylib::IReader* reader,
     const char* image_format,
+    const char* mdl_file_path,
     mi::Uint32 tile_width,
     mi::Uint32 tile_height,
     bool only_first_level,
     mi::Sint32* errors) const
 {
     return new Mipmap_impl(
-        reader, image_format, tile_width, tile_height, only_first_level, errors);
+        Memory_based(),
+        reader,
+        image_format,
+        mdl_file_path,
+        tile_width,
+        tile_height,
+        only_first_level,
+        errors);
 }
 
 IMipmap* Image_module_impl::create_mipmap(
@@ -266,6 +278,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
 }
 
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
+    Container_based,
     mi::neuraylib::IReader* reader,
     const std::string& archive_filename,
     const std::string& member_filename,
@@ -275,6 +288,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     mi::Sint32* errors) const
 {
     return new Canvas_impl(
+        Container_based(),
         reader,
         archive_filename,
         member_filename,
@@ -286,8 +300,10 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
 }
 
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
+    Memory_based,
     mi::neuraylib::IReader* reader,
     const char* image_format,
+    const char* mdl_file_path,
     mi::Uint32 miplevel,
     mi::Uint32 tile_width,
     mi::Uint32 tile_height,
@@ -297,8 +313,10 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
         return 0;
 
     return new Canvas_impl(
+        Memory_based(),
         reader,
         image_format,
+        mdl_file_path,
         miplevel,
         tile_width,
         tile_height,
@@ -786,7 +804,7 @@ bool Image_module_impl::export_canvas(
             }
 
     LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-        "Saving image \"%s\", pixel type \"%s\", %dx%dx%d pixels, 1 miplevel.",
+        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, 1 miplevel.",
         output_filename, export_pixel_type, image_width, image_height, nr_of_layers);
 
     return true;
@@ -897,7 +915,7 @@ bool Image_module_impl::export_mipmap(
     }
 
     LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-        "Saving image \"%s\", pixel type \"%s\", %dx%dx%d pixels, %d miplevel%s.",
+        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, %u miplevel%s.",
         output_filename, export_pixel_type, image_width, image_height, nr_of_layers,
         nr_of_levels, nr_of_levels == 1 ? "" : "s");
 

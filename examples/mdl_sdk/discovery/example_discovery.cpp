@@ -37,32 +37,10 @@
 #include <string>
 #include <vector>
 
-#include <mi/mdl_sdk.h>
 #include "example_shared.h"
 
 using namespace mi::neuraylib;
 using namespace std;
-
-//-----------------------------------------------------------------------------
-//  Helper function to add the root paths to the MDL SDK
-//
-void configure(mi::neuraylib::INeuray* neuray, const vector<string> &roots)
-{
-    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
-
-    // Install logger
-    mi::base::Handle<mi::base::ILogger> logger(new Default_logger());
-    mdl_compiler->set_logger(logger.get());
-
-    // Add mdl search paths
-    for (size_t p = 0; p < roots.size(); ++p)
-    {
-        mi::Sint32 res = mdl_compiler->add_module_path(roots[p].c_str());
-        if ( res != 0)
-            std::cerr << "Error: Issue with adding path " << roots[p] << "\n";
-    }
-}
 
 //-----------------------------------------------------------------------------
 // Converts a kind to a string
@@ -297,13 +275,13 @@ static void usage(const char *name)
 }
 
 //-----------------------------------------------------------------------------
-// 
+//
 //
 int MAIN_UTF8(int argc, char* argv[])
 {
-    vector<string>  mdl_paths;
+    mi::examples::mdl::Configure_options options;
     vector<string>  kind_filter;
-    
+
     if (argc > 1) {
         // Collect command line arguments, if any argument is set
         for (int i = 1; i < argc; ++i) {
@@ -319,7 +297,7 @@ int MAIN_UTF8(int argc, char* argv[])
             }
             else if ((strcmp(opt, "--mdl_path") == 0) || (strcmp(opt, "-m") == 0)) {
                 if (i < argc - 1)
-                    mdl_paths.push_back(argv[++i]);
+                    options.additional_mdl_paths.push_back(argv[++i]);
                 else
                     usage(argv[0]);
             }
@@ -328,44 +306,55 @@ int MAIN_UTF8(int argc, char* argv[])
                 usage(argv[0]);
             }
         }
+
+        // at least one search path is required for the example to work
+        if (options.additional_mdl_paths.size() == 0) {
+            usage(argv[0]);
+        }
+
+        // disable the example search path
+        options.add_example_search_path = false;
     }
-    else {
-        // Set default search path if no argument is set
-        mdl_paths.push_back(get_samples_mdl_root());
-    }
-    if (mdl_paths.size() == 0) {
-        usage(argv[0]);
-    }
+
+    // disable admin and user space search paths to limit the output to only
+    // the user input or the example content if the example was started without
+    // parameters. Note, that real applications should always consider the
+    // the admin and user space search paths.
+    options.add_admin_space_search_paths = false;
+    options.add_user_space_search_paths = false;
 
     // Configure filtering by IMdl_info::Kind
     mi::Uint32 discover_filter = IMdl_info::DK_ALL;
-    if (kind_filter.size() > 0) {  
+    if (kind_filter.size() > 0) {
         discover_filter = IMdl_info::DK_PACKAGE;
-        for (auto& filter : kind_filter) 
+        for (auto& filter : kind_filter)
             discover_filter |= string_to_DK(filter);
     }
 
-
     // Access the MDL SDK
-    mi::base::Handle<mi::neuraylib::INeuray> neuray(load_and_get_ineuray());
-    check_success(neuray.is_valid_interface());
+    mi::base::Handle<mi::neuraylib::INeuray> neuray(mi::examples::mdl::load_and_get_ineuray());
+    if (!neuray.is_valid_interface())
+        exit_failure("Failed to load the SDK.");
 
-    // Config root paths and logging
-    configure(neuray.get(), mdl_paths);
+    // Configure the MDL SDK
+    if (!mi::examples::mdl::configure(neuray.get(), options))
+        exit_failure("Failed to initialize the SDK.");
 
     // Start the MDL SDK
-    mi::Sint32 result = neuray->start();
-    check_start_success(result);
+    mi::Sint32 ret = neuray->start();
+    if (ret != 0)
+        exit_failure("Failed to initialize the SDK. Result code: %d", ret);
+
     {
         vector<string> mdl_files;
-       
+
         chrono::time_point<chrono::system_clock> start, end;
 
         // Load discovery API
         mi::base::Handle<mi::neuraylib::IMdl_discovery_api> discovery_api(
             neuray->get_api_component<mi::neuraylib::IMdl_discovery_api>());
 
-        // Create root package 
+        // Create root package
         start = chrono::system_clock::now();
 
         // Get complete graph
@@ -379,7 +368,7 @@ int MAIN_UTF8(int argc, char* argv[])
         {
             const mi::base::Handle<const mi::neuraylib::IMdl_package_info> root(
                 disc_result->get_graph());
-       
+
             cout << "\nsearch path";
             mi::Size num = disc_result->get_search_paths_count();
             // Exclude '.'
@@ -398,26 +387,28 @@ int MAIN_UTF8(int argc, char* argv[])
             // Print traverse benchmark result
             stringstream m;
             m << "\nTraversed search path(s) ";
-            for (size_t p = 0; p < mdl_paths.size(); ++p)
-                m << mdl_paths[p] << " ";
+            for (size_t p = 0; p < options.additional_mdl_paths.size(); ++p)
+                m << options.additional_mdl_paths[p] << " ";
             m << "in " << elapsed_seconds.count() << " seconds \n\n";
             cerr << m.str();
         }
         else
-            cerr << "Failed to create collapsing graph out of search path"<< mdl_paths[0]<<"\n";
+            cerr << "Failed to create collapsing graph out of search path "
+                 << options.additional_mdl_paths[0] << "\n";
 
         discovery_api = 0;
     }
 
     // Shut down the MDL SDK
-    check_success(neuray->shutdown() == 0);
-    neuray = 0;
+    if (neuray->shutdown() != 0)
+        exit_failure("Failed to shutdown the SDK.");
 
     // Unload the MDL SDK
-    check_success(unload());
+    neuray = nullptr;
+    if (!mi::examples::mdl::unload())
+        exit_failure("Failed to unload the SDK.");
 
-    keep_console_open();
-    return EXIT_SUCCESS;
+    exit_success();
 }
 
 // Convert command line arguments to UTF8 on Windows

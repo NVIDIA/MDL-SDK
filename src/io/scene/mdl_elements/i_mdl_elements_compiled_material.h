@@ -90,6 +90,8 @@ public:
         mi::Float32 mdl_wavelength_max,
         bool        load_resources);
 
+    Mdl_compiled_material& operator=( const Mdl_compiled_material&) = delete;
+
     // methods corresponding to mi::neuraylib::ICompiled_material
 
     const IExpression_direct_call* get_body() const;
@@ -111,6 +113,8 @@ public:
     bool depends_on_state_object_id() const;
 
     bool depends_on_global_distribution() const;
+
+    bool depends_on_uniform_scene_data() const;
 
     mi::Size get_referenced_scene_data_count() const;
 
@@ -200,7 +204,7 @@ public:
 
     SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
 
-    void dump() const { dump( /*transaction*/ 0); }
+    void dump() const { dump( /*transaction*/ nullptr); }
 
     // methods of DB::Element_base
 
@@ -244,7 +248,7 @@ private:
 
     std::string m_internal_space;                     ///< Internal space.
 
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity 
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity
         m_opacity;                                    ///< Material opacity.
 
     mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity

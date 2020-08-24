@@ -369,7 +369,7 @@ public:
     void print_messages()
     {
         mi::mdl::Messages const &msgs = m_ctx->access_messages();
-        for (int i = 0, n = msgs.get_message_count(); i < n; ++i) {
+        for (size_t i = 0, n = msgs.get_message_count(); i < n; ++i) {
             m_printer->print(msgs.get_message(i));
         }
     }
@@ -391,9 +391,16 @@ private:
 class Module_manager : public mi::mdl::ICall_name_resolver, public mi::mdl::IModule_cache
 {
     typedef std::unordered_map<std::string, mi::base::Handle<mi::mdl::IModule const> > Module_map;
+    typedef std::unordered_map<std::string, mi::base::Handle<mi::mdl::IGenerated_code_dag const> > DAG_map;
 public:
     /// Constructor.
-    Module_manager() {}
+    ///
+    /// \param mdl_compiler  the MDL compiler interface
+    Module_manager(mi::mdl::IMDL *mdl_compiler)
+      : m_dag_be(mi::base::make_handle(mdl_compiler->load_code_generator("dag"))
+        .get_interface<mi::mdl::ICode_generator_dag>())
+    {
+    }
 
     /// Adds a module and all its imports to the module manager.
     ///
@@ -416,32 +423,33 @@ public:
                 mi::base::Handle<mi::mdl::IModule const> imported_module(module->get_import(i));
                 add_module(imported_module.get());
             }
+            
+            mi::base::Handle<mi::mdl::IGenerated_code_dag const> dag(m_dag_be->compile(module));
+            m_dags[module->get_name()] = dag;
+
+            for (size_t i = 0, n = dag->get_material_count(); i < n; ++i) {
+                const char* material_name = dag->get_material_name(i);
+                m_entities[material_name] = make_handle_dup(module);
+            }
+
+            for (size_t i = 0, n = dag->get_function_count(); i < n; ++i) {
+                const char* function_name = dag->get_function_name(i);
+                m_entities[function_name] = make_handle_dup(module);
+            }
         }
     }
 
-    /// Extract the fully qualified module name from the given entity name.
-    ///
-    /// \param entity_name    the entity name
-    ///
-    /// \returns the module name of this entity if found, an empty string otherwise
-    std::string get_module_name(char const *entity_name) const
+    /// Returns the DAG for a previously added module.
+    mi::mdl::IGenerated_code_dag const *get_dag(mi::mdl::IModule const *module)
     {
-        if (entity_name == nullptr)
-            return std::string();
+        auto it = m_dags.find(module->get_name());
+        if (it == m_dags.end())
+            return nullptr;
 
-        // search for last colon before an opening parenthesis
-        char const *last_colon = nullptr;
-        char const *ptr = entity_name;
-        while (*ptr && *ptr != '(') {
-            if (*ptr == ':') last_colon = ptr;
-            ++ptr;
-        }
-
-        if (last_colon == nullptr || last_colon == entity_name)
-            return std::string();
-        return std::string(entity_name, last_colon - 1);
+        it->second->retain();
+        return it->second.get();
     }
-
+    
     /// Find the owner module of a given entity name.
     /// If the entity name does not contain a colon, you should return the builtins module,
     /// which you can identify by IModule::is_builtins().
@@ -451,22 +459,16 @@ public:
     /// \returns the owning module of this entity if found, nullptr otherwise
     mi::mdl::IModule const *get_owner_module(char const *entity_name) const final
     {
-        std::string module_name(get_module_name(entity_name));
-
-        // no colon -> builtin -> return the builtins module
-        if (module_name.empty() && m_builtins_module) {
+        auto it = m_entities.find(entity_name);
+        if (it == m_entities.end()) {
+            if (strchr(entity_name, ':'))
+                return nullptr;
             m_builtins_module->retain();
             return m_builtins_module.get();
         }
 
-        // search for the module name
-        auto it = m_modules.find(module_name);
-        if (it != m_modules.end()) {
-            it->second->retain();
-            return it->second.get();
-        }
-
-        return nullptr;
+        it->second->retain();
+        return it->second.get();
     }
 
     /// Find the owner code DAG of a given entity name.
@@ -520,8 +522,11 @@ public:
     }
 
 private:
+    mi::base::Handle<mi::mdl::ICode_generator_dag> m_dag_be;
     mi::base::Handle<mi::mdl::IModule const> m_builtins_module;
     Module_map m_modules;
+    DAG_map m_dags;
+    Module_map m_entities;
 };
 
 
@@ -638,8 +643,8 @@ public:
 
     /// Constructor.
     Material_instance(
-        mi::mdl::IGenerated_code_dag *dag,
-        int material_index,
+        mi::mdl::IGenerated_code_dag const *dag,
+        size_t material_index,
         mi::mdl::IGenerated_code_dag::IMaterial_instance *instance)
     : m_dag(dag, mi::base::DUP_INTERFACE)
     , m_material_index(material_index)
@@ -668,7 +673,7 @@ public:
     /// Get the number of annotations of the material.
     ///
     /// \returns The number of annotations.
-    int get_dag_annotation_count() const
+    size_t get_dag_annotation_count() const
     {
         return m_dag->get_material_annotation_count(m_material_index);
     }
@@ -686,7 +691,7 @@ public:
     /// Get the parameter count of the material in the DAG.
     ///
     /// \returns The number of parameters of the material.
-    int get_dag_parameter_count() const
+    size_t get_dag_parameter_count() const
     {
         return m_dag->get_material_parameter_count(m_material_index);
     }
@@ -696,7 +701,7 @@ public:
     /// \param parameter_index  The index of the parameter.
     ///
     /// \returns The type of the parameter.
-    mi::mdl::IType const *get_dag_parameter_type(int parameter_index) const
+    mi::mdl::IType const *get_dag_parameter_type(size_t parameter_index) const
     {
         return m_dag->get_material_parameter_type(m_material_index, parameter_index);
     }
@@ -706,7 +711,7 @@ public:
     /// \param parameter_index  The index of the parameter.
     ///
     /// \returns The name of the parameter.
-    char const *get_dag_parameter_name(int parameter_index) const
+    char const *get_dag_parameter_name(size_t parameter_index) const
     {
         return m_dag->get_material_parameter_name(m_material_index, parameter_index);
     }
@@ -716,7 +721,7 @@ public:
     /// \param param_name  The name of the DAG parameter
     ///
     /// \returns The index of the DAG parameter or -1, if it was not found
-    int get_dag_parameter_index(char const *param_name) const
+    size_t get_dag_parameter_index(char const *param_name) const
     {
         return m_dag->get_material_parameter_index(m_material_index, param_name);
     }
@@ -726,7 +731,7 @@ public:
     /// \param parameter_index  The index of the parameter.
     ///
     /// \returns The type of the parameter.
-    mi::mdl::DAG_node const *get_dag_parameter_default(int parameter_index) const
+    mi::mdl::DAG_node const *get_dag_parameter_default(size_t parameter_index) const
     {
         return m_dag->get_material_parameter_default(m_material_index, parameter_index);
     }
@@ -736,7 +741,7 @@ public:
     /// \param parameter_index  The index of the parameter.
     ///
     /// \returns The number of annotations.
-    int get_dag_parameter_annotation_count(int parameter_index) const
+    size_t get_dag_parameter_annotation_count(size_t parameter_index) const
     {
         return m_dag->get_material_parameter_annotation_count(m_material_index, parameter_index);
     }
@@ -748,8 +753,8 @@ public:
     ///
     /// \returns The annotation or nullptr, if the indices are invalid.
     mi::mdl::DAG_node const *get_dag_parameter_annotation(
-        int parameter_index,
-        int annotation_index) const
+        size_t parameter_index,
+        size_t annotation_index) const
     {
         return m_dag->get_material_parameter_annotation(
             m_material_index, parameter_index, annotation_index);
@@ -759,16 +764,16 @@ public:
     mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> get_material_instance()
         const
     {
-        return mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance>(m_inst);
+        return m_inst;
     }
 
     /// Get the DAG containing the material of the material instance.
-    mi::base::Handle<mi::mdl::IGenerated_code_dag> get_dag() const {
-        return mi::base::Handle<mi::mdl::IGenerated_code_dag>(m_dag);
+    mi::base::Handle<mi::mdl::IGenerated_code_dag const> get_dag() const {
+        return m_dag;
     }
 
     /// Get the material index inside the containing DAG.
-    int get_material_index() const {
+    size_t get_material_index() const {
         return m_material_index;
     }
 
@@ -778,16 +783,18 @@ public:
     /// \param func_name   The name of the function
     ///
     /// \return The index of the found function or -1 if not found.
-    static int find_first_function(mi::mdl::IGenerated_code_dag *module_dag, char const *func_name)
+    static size_t find_first_function(
+        mi::mdl::IGenerated_code_dag const *module_dag,
+        char const                         *func_name)
     {
         size_t len = strlen(func_name);
-        for (int i = 0, n = module_dag->get_function_count(); i < n; ++i) {
+        for (size_t i = 0, n = module_dag->get_function_count(); i < n; ++i) {
             char const *cur_func_name = module_dag->get_function_name(i);
             if (strncmp(cur_func_name, func_name, len) == 0 &&
                     (cur_func_name[len] == '(' || cur_func_name[len] == 0))
                 return i;
         }
-        return -1;
+        return ~0;
     }
 
     /// Create a DAG call with the given name (with or without signature) and the list of arguments.
@@ -801,18 +808,19 @@ public:
     /// \returns The created node which may already be optimized to something else or nullptr
     ///     on error (unknown function name, missing or too many arguments, creation failed)
     mi::mdl::DAG_node const *create_call(
-        mi::mdl::IGenerated_code_dag *module_dag,
-        char const *function_name,
-        Array_ref<Call_argument> const &args)
+        mi::mdl::IGenerated_code_dag const *module_dag,
+        char const                         *function_name,
+        Array_ref<Call_argument> const     &args)
     {
-        int func_index = find_first_function(module_dag, function_name);
-        if (func_index < 0) return nullptr;
+        size_t func_index = find_first_function(module_dag, function_name);
+        if (func_index == ~0)
+            return nullptr;
 
         // Create list of call arguments: all arguments and in the right order
         std::vector<Call_argument> real_args;
         size_t used_args = 0;
-        int num_args = int(args.size());
-        for (int i = 0, n = module_dag->get_function_parameter_count(func_index); i < n; ++i) {
+        size_t num_args = args.size();
+        for (size_t i = 0, n = module_dag->get_function_parameter_count(func_index); i < n; ++i) {
             char const *param_name = module_dag->get_function_parameter_name(func_index, i);
 
             // First check, whether the argument already exists at the right position
@@ -823,7 +831,7 @@ public:
             }
 
             // If not, search for it
-            int j = 0;
+            size_t j = 0;
             for (; j < num_args; ++j) {
                 if (j == i) continue;  // already checked
                 if (strcmp(param_name, args[j].param_name) == 0) {
@@ -867,8 +875,8 @@ public:
     }
 
 private:
-    mi::base::Handle<mi::mdl::IGenerated_code_dag> m_dag;
-    int m_material_index;
+    mi::base::Handle<mi::mdl::IGenerated_code_dag const> m_dag;
+    size_t m_material_index;
     mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> m_inst;
 };
 
@@ -887,6 +895,7 @@ public:
         .get_interface<mi::mdl::ICode_generator_dag>())
     , m_search_path(new MDL_search_path())
     , m_msg_context(mdl_compiler)
+    , m_module_manager(mdl_compiler)
     {
         // increment reference counter, as the MDL compiler will take ownership (and not increment it),
         // but we will keep a reference
@@ -901,15 +910,15 @@ public:
     /// \param material_name  the name of the requested material
     ///
     /// \return the index of the material or -1 if the requested material was not found
-    static int get_material_index(
-        mi::mdl::IGenerated_code_dag *module_dag,
-        char const                   *material_name)
+    static size_t get_material_index(
+        mi::mdl::IGenerated_code_dag const *module_dag,
+        char const                         *material_name)
     {
-        for (int i = 0, n = module_dag->get_material_count(); i < n; ++i) {
+        for (size_t i = 0, n = module_dag->get_material_count(); i < n; ++i) {
             if (strcmp(module_dag->get_material_name(i), material_name) == 0)
                 return i;
         }
-        return -1;
+        return ~0;
     }
 
     /// Helper function to extract the module name from a fully-qualified material name.
@@ -1018,7 +1027,7 @@ public:
     /// Compile a module to a DAG.
     ///
     /// \param module_name  a fully qualified MDL module name.
-    mi::base::Handle<mi::mdl::IGenerated_code_dag> compile_module(
+    mi::base::Handle<mi::mdl::IGenerated_code_dag const> compile_module(
         char const *module_name)
     {
         // Load the MDL module
@@ -1030,18 +1039,18 @@ public:
         }
         m_module_manager.add_module(module.get());
 
-        return mi::base::Handle<mi::mdl::IGenerated_code_dag>(m_dag_be->compile(module.get()));
+        return make_handle(m_module_manager.get_dag(module.get()));
     }
 
     /// Return the list of all material names in the given MDL module.
     std::vector<std::string> get_material_names(const std::string& module_name)
     {
-        mi::base::Handle<mi::mdl::IGenerated_code_dag> code_dag(
+        mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(
             compile_module(module_name.c_str()));
 
-        int num_materials = code_dag->get_material_count();
+        size_t num_materials = code_dag->get_material_count();
         std::vector<std::string> material_names(num_materials);
-        for (int i = 0; i < num_materials; ++i) {
+        for (size_t i = 0; i < num_materials; ++i) {
             material_names[i] = code_dag->get_material_name(i);
         }
         return material_names;
@@ -1052,11 +1061,11 @@ public:
     /// \param code_dag       the DAG of a MDL module
     /// \param material_name  the name of the material to instantiate
     Material_instance create_material_instance(
-        mi::mdl::IGenerated_code_dag *code_dag,
-        std::string const            &material_name)
+        mi::mdl::IGenerated_code_dag const *code_dag,
+        std::string const                  &material_name)
     {
-        int mat_index = get_material_index(code_dag, get_full_material_name(material_name).c_str());
-        if (mat_index < 0)
+        size_t mat_index = get_material_index(code_dag, get_full_material_name(material_name).c_str());
+        if (mat_index == ~0)
             return Material_instance();
 
         mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> mat_instance(
@@ -1075,7 +1084,7 @@ public:
     {
         // Load the MDL module
         std::string module_name = get_module_name(material_name);
-        mi::base::Handle<mi::mdl::IGenerated_code_dag> code_dag(compile_module(module_name.c_str()));
+        mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(compile_module(module_name.c_str()));
 
         return create_material_instance(code_dag.get(), material_name);
     }
@@ -1097,8 +1106,8 @@ public:
     {
         std::vector<mi::mdl::DAG_node const *> real_args;
         size_t used_args = 0;
-        int num_args = int(args.size());
-        for (int i = 0, n = mat_inst.get_dag_parameter_count(); i < n; ++i) {
+        size_t num_args = args.size();
+        for (size_t i = 0, n = mat_inst.get_dag_parameter_count(); i < n; ++i) {
             char const *param_name = mat_inst.get_dag_parameter_name(i);
 
             // First check, whether the argument already exists at the right position
@@ -1109,7 +1118,7 @@ public:
             }
 
             // If not, search for it
-            int j = 0;
+            size_t j = 0;
             for (; j < num_args; ++j) {
                 if (j == i) continue;  // already checked
                 if (strcmp(param_name, args[j].param_name) == 0) {
@@ -1149,9 +1158,12 @@ public:
                 ? mi::mdl::IGenerated_code_dag::IMaterial_instance::DEFAULT_CLASS_COMPILATION
                 : mi::mdl::IGenerated_code_dag::IMaterial_instance::INSTANCE_COMPILATION,
             /*evaluator=*/ nullptr,
-            /*mdl_meter_per_scene_unit=*/ 1.0f,
+            /*fold_meters_per_scene_unit=*/ true,
+            /*mdl_meters_per_scene_unit=*/ 1.0f,
             /*wavelength_min=*/ 380.0f,
-            /*wavelength_max=*/ 780.0f);
+            /*wavelength_max=*/ 780.0f,
+            /*fold_params=*/ nullptr,
+            /*num_fold_params=*/ 0);
     }
 
 protected:

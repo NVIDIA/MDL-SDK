@@ -573,7 +573,7 @@ class Mdl_discovery_api_impl
 
         mi::neuraylib::INeuray*                          m_neuray;
         MI::SYSTEM::Access_module<MI::MDLC::Mdlc_module> m_mdlc_module;
-        MI::SYSTEM::Access_module<MI::PATH::Path_module> m_path_module;
+        MI::SYSTEM::Access_module<PATH::Path_module> m_path_module;
 };
 
 /// This class implements the discover result.

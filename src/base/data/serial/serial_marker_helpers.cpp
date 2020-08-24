@@ -150,8 +150,6 @@ public:
     }
 
 private:
-    Deserializer_wrapper() {};
-
     Deserializer* m_int_deserializer;
     mi::neuraylib::IDeserializer* m_ext_deserializer;
     bool m_valid;

@@ -45,8 +45,8 @@ using std::endl;
 using std::find;
 using std::map;
 using mi::base::Handle;
-using mi::neuraylib::IMdl_compiler;
 using mi::neuraylib::IMdl_info;
+using mi::neuraylib::IMdl_impexp_api;
 
 // In the GNU C Library, "minor" and "major" are defined
 #ifdef minor
@@ -1024,8 +1024,6 @@ int Create_mdle::execute()
     mi::base::Handle<mi::neuraylib::IMdle_api> mdle_api(
         mdlm::neuray()->get_api_component<mi::neuraylib::IMdle_api>());
 
-    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-        mdlm::neuray()->get_api_component<mi::neuraylib::IMdl_compiler>());
 
     // Load the FreeImage plugin.
     if(!mdlm::freeimage_available())
@@ -1053,13 +1051,24 @@ int Create_mdle::execute()
         context->set_option("experimental", true);
 
         // load module
-        mdl_compiler->load_module(transaction.get(), module_name.c_str(), context.get());
+        Handle<IMdl_impexp_api> mdl_impexp_api(
+            mdlm::neuray()->get_api_component<IMdl_impexp_api>());
+        mdl_impexp_api->load_module(transaction.get(), module_name.c_str(), context.get());
         if (context->get_error_messages_count() > 0)
             break;
 
         // get the resulting db name
-        std::string db_name = mdl_compiler->get_module_db_name(
-            transaction.get(), module_name.c_str(), context.get());
+        mi::base::Handle<const mi::IString> module_db_name(
+            mdl_factory->get_db_module_name(module_name.c_str()));
+
+        // parameter is no a valid qualified module name
+        if (!module_db_name)
+        {
+            Util::log_warning("module name to load '%s' is invalid" + module_name);
+            return -1;
+        }
+
+        std::string db_name(module_db_name->get_c_str());
 
         // since "main" could be a function the signature is required
         // therefore, get the module and iterate over the functions that are called main (only one)

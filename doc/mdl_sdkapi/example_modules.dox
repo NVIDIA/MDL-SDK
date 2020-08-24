@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-/*! \page mi_neuray_example_modules Example for MDL modules
+/*! \page mi_neuray_example_modules Example for MDL Modules
 
 <div align="right">
     [\link mi_neuray_example_start_shutdown Previous\endlink]
@@ -52,11 +52,11 @@ This example loads an MDL module and inspects it contents.
     <dd><br>
         In order to allow the \neurayProductName to locate MDL modules and its resources
         in the file system it is necessary to configure the MDL module search path.
-        This is done by calling #mi::neuraylib::IMdl_compiler::add_module_path().
+        This is done by calling #mi::neuraylib::IMdl_configuration::add_mdl_path().
         
         Our example module \c \::nvidia::sdk_examples::tutorials makes use of textures. The 
         support for image formats in the \neurayProductName is provided by image plugins, which
-        have to be loaded explicitly via #mi::neuraylib::IMdl_compiler::load_plugin_library().
+        have to be loaded explicitly via #mi::neuraylib::IPlugin_configuration::load_plugin_library().
         
         In this and most other examples the configuration is done within the utility function
         \c configure(). Here, we set the module search path to the MDL directory shipped wit
@@ -68,7 +68,7 @@ This example loads an MDL module and inspects it contents.
         Loading of MDL modules
     </b></dt>
     <dd><br>
-        MDL modules are loaded with the method #mi::neuraylib::IMdl_compiler::load_module(). Note
+        MDL modules are loaded with the method #mi::neuraylib::IMdl_impexp_api::load_module(). Note
         that this method expects the module name, not the name of the file containing the module. To
         find the corresponding file it is necessary to configure the module search path as described
         above.

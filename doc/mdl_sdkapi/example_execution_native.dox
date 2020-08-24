@@ -29,7 +29,7 @@
 /*! \page mi_neuray_example_execution_native Example for Execution of Compiled MDL Materials (CPU)
 
 <div align="right">
-    [\link mi_neuray_example_compilation Previous\endlink]
+    [\link mi_neuray_example_code_gen Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_execution_ptx Next\endlink]
 </div>
@@ -157,7 +157,7 @@ To switch example_execution_native to the custom texturing code, please disable 
 
 
 <div align="right">
-    [\link mi_neuray_example_compilation Previous\endlink]
+    [\link mi_neuray_example_code_gen Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
     [\link mi_neuray_example_execution_ptx Next\endlink]
 </div>

@@ -386,8 +386,12 @@ Texture_2d::Texture_2d(
     m_is_valid = image->is_valid();
 
     DB::Access<DBIMAGE::Image_impl> image_impl;
-    if (m_is_valid)
+    if (m_is_valid) {
         image_impl.set(image->get_impl_tag(), trans);
+        m_is_valid = image_impl.is_valid();
+    }
+    if (!m_is_valid)
+        return;
 
     m_is_udim = image->is_uvtile();
     unsigned int num_tiles;

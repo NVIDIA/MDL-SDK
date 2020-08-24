@@ -46,7 +46,7 @@ mi::base::IInterface* Structure_decl_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new Structure_decl_impl();
 }
 
@@ -95,7 +95,7 @@ mi::Size Structure_decl_impl::get_length() const
 const char* Structure_decl_impl::get_member_type_name( mi::Size index) const
 {
     if( index >= m_type_name.size())
-        return 0;
+        return nullptr;
 
     return m_type_name[index].c_str();
 }
@@ -103,19 +103,19 @@ const char* Structure_decl_impl::get_member_type_name( mi::Size index) const
 const char* Structure_decl_impl::get_member_type_name( const char* name) const
 {
     if( !name)
-    	return 0;
+    	return nullptr;
 
     for( mi::Size i = 0; i < m_name.size(); ++i)
         if( m_name[i] == name)
             return m_type_name[i].c_str();
 
-    return 0;
+    return nullptr;
 }
 
 const char* Structure_decl_impl::get_member_name( mi::Size index) const
 {
     if( index >= m_name.size())
-        return 0;
+        return nullptr;
 
     return m_name[index].c_str();
 }
@@ -123,7 +123,7 @@ const char* Structure_decl_impl::get_member_name( mi::Size index) const
 const char* Structure_decl_impl::get_structure_type_name() const
 {
     if( m_structure_type_name.empty())
-        return 0;
+        return nullptr;
 
     return m_structure_type_name.c_str();
 }

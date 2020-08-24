@@ -141,6 +141,7 @@ Buffer_deserializer::Buffer_deserializer(
     Deserialization_manager*	manager) 		// the deserialization manager
     : Deserializer_impl(manager),
       m_buffer(NULL),
+      m_read_pointer(NULL),
       m_buffer_size(0),
       m_valid(true)
 {
@@ -153,8 +154,8 @@ Buffer_deserializer::~Buffer_deserializer()
 
 // Set the deserializer to use the given buffer for input
 void Buffer_deserializer::reset(
-    Uint8* buffer,					// the buffer
-    size_t buffer_size)					// the size of the buffer
+    const Uint8* buffer,                // the buffer
+    size_t buffer_size)                 // the size of the buffer
 {
     m_buffer = buffer;
     m_buffer_size = buffer_size;
@@ -223,7 +224,10 @@ void Buffer_deserializer::read_impl(
     m_valid = ensure_size(size);
     if (!m_valid)
     {
-        LOG::mod_log->warning(M_SERIAL, LOG::Mod_log::C_MISC, 1, "Buffer deserializer: "
+        // Note: this should really be fatal because there is no good way to recover from this.
+        // However, a few code paths which use this function support a user defined callback that
+        // is invoked for deserialization errors.
+        LOG::mod_log->error(M_SERIAL, LOG::Mod_log::C_MISC, "Buffer deserializer: "
                             "reading beyond end of buffer");
         return;
     }

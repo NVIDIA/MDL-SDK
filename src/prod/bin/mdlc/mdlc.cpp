@@ -52,7 +52,9 @@
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_code_generators.h>
+#include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_module_transformer.h>
+
 
 
 #include <string>
@@ -192,6 +194,9 @@ void Mdlc::usage()
         "  --inline\n"
         "  -i\n"
         "\tInlines the given module (if target is set to MDL).\n"
+        "  --plugin <filename>\n"
+        "  -l\n"
+        "\tLoads the given plugin.\n"
         "  --help\n"
         "  -?"
         "\tThis help.\n",
@@ -216,9 +221,10 @@ int Mdlc::run(int argc, char *argv[])
         /*12*/ { "internal-space",         mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
         /*13*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
         /*15*/{ "inline",                  mi::getopt::NO_ARGUMENT,       NULL, 'i' },
-        /*16*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
+        /*16*/{ "plugin",                  mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
+        /*17*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
        
-        /*17*/ { NULL,                     0,                             NULL, 0 }
+        /*18*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;
@@ -230,11 +236,14 @@ int Mdlc::run(int argc, char *argv[])
 
     m_imdl = mi::mdl::initialize();
 
+
     mi::mdl::Options &comp_options = m_imdl->access_options();
 
 
+    std::vector<std::string> plugin_filenames;
+
     while (
-        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvip:Ct:d:B:?", long_options, &longidx)) != -1
+        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvip:Ct:d:B:l:?", long_options, &longidx)) != -1
     ) {
         switch (c) {
         case 'O':
@@ -339,6 +348,9 @@ int Mdlc::run(int argc, char *argv[])
         case 'i':
             m_inline = true;
             break;
+        case 'l':
+            plugin_filenames.push_back(mi::getopt::optarg);
+            break;
         case '\0':
             switch (longidx) {
             case 2:
@@ -370,6 +382,9 @@ int Mdlc::run(int argc, char *argv[])
             case 13:
                 m_show_positions = true;
                 break;
+            case 16:
+                plugin_filenames.push_back(mi::getopt::optarg);
+                break;
             default:
                 fprintf(
                     stderr,
@@ -392,6 +407,7 @@ int Mdlc::run(int argc, char *argv[])
         std::transform(s.begin(), s.end(), s.begin(), ::tolower);
         comp_options.set_option(MDL_OPTION_WARN, s.c_str());
     }
+
 
     if (show_version) {
         fprintf(
@@ -431,7 +447,7 @@ int Mdlc::run(int argc, char *argv[])
     {
         std::string const &input_module = *it;
 
-        unsigned errors = 0;
+        size_t errors = 0;
         mi::base::Handle<IModule const> module;
 
         if (is_binary(input_module.c_str())) {
@@ -466,11 +482,12 @@ int Mdlc::run(int argc, char *argv[])
                 m_check_root.c_str());
         }
     }
+
     return err_count == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 // Compile one module.
-IModule const *Mdlc::compile(char const *module_name, unsigned &errors)
+IModule const *Mdlc::compile(char const *module_name, size_t &errors)
 {
     mi::base::Handle<IThread_context> ctx(m_imdl->create_thread_context());
     IModule const *module = m_imdl->load_module(ctx.get(), module_name, /*cache=*/NULL);
@@ -483,9 +500,10 @@ IModule const *Mdlc::compile(char const *module_name, unsigned &errors)
     Messages const &msgs = ctx->access_messages();
     print_messages(msgs, printer.get());
 
-    unsigned err_count = msgs.get_error_message_count();
+    size_t err_count = msgs.get_error_message_count();
     if (0 < err_count) {
-        fprintf(stderr, "%s: %u errors detected in module %s\n", m_program, err_count, module_name);
+        fprintf(stderr, "%s: %u errors detected in module %s\n",
+            m_program, unsigned(err_count), module_name);
     } else if (m_verbose && m_check_root.empty()) {
         fprintf(stderr,"%s: successfully compiled module %s\n", m_program, module_name);
     }
@@ -592,10 +610,10 @@ bool Mdlc::backend(IModule const *module)
             Messages const &msgs = dag->access_messages();
             print_messages(msgs, printer.get());
 
-            int err_count = msgs.get_error_message_count();
+            size_t err_count = msgs.get_error_message_count();
             if (0 < err_count) {
-                fprintf(stderr, "%s: %d errors detected in dag code generated for module %s\n",
-                                m_program, err_count, module->get_name());
+                fprintf(stderr, "%s: %u errors detected in dag code generated for module %s\n",
+                                m_program, unsigned(err_count), module->get_name());
                 return false;
             } else {
                 print_generated_code(dag.get());
@@ -642,7 +660,7 @@ bool Mdlc::is_binary(char const *filename) const
 }
 
 // Load a module binary.
-IModule const *Mdlc::load_binary(char const *filename, unsigned &errors)
+IModule const *Mdlc::load_binary(char const *filename, size_t &errors)
 {
     mi::base::Handle<IInput_stream> is(m_imdl->create_file_input_stream(filename));
     mi::base::Handle<mi::base::IAllocator> allocator(m_imdl->get_mdl_allocator());
@@ -656,7 +674,7 @@ IModule const *Mdlc::load_binary(char const *filename, unsigned &errors)
     }
 
     Messages const &msgs = module->access_messages();
-    unsigned err_count = msgs.get_error_message_count();
+    size_t err_count = msgs.get_error_message_count();
     errors = err_count;
     return module;
 }

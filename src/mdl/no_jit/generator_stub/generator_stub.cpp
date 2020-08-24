@@ -28,7 +28,10 @@
 
 #include "pch.h"
 
-#include "mdl/compiler/compilercore/compilercore_allocator.h"
+#include <mi/mdl/mdl_generated_executable.h>
+
+#include <base/system/main/i_assert.h>
+#include <mdl/compiler/compilercore/compilercore_allocator.h>
 
 namespace mi {
 namespace mdl {
@@ -50,6 +53,38 @@ Jitted_code *create_jitted_code_singleton(IAllocator *alloc)
 
 void terminate_jitted_code_singleton(Jitted_code *jitted_code)
 {
+}
+
+class Generated_code_value_layout
+    : public Allocator_interface_implement<IGenerated_code_value_layout>
+{
+public:
+    char const* get_layout_data(size_t& size) const;
+    void set_layout_data(char const* /*data*/, size_t& /*size*/);
+    bool get_strings_mapped_to_ids() const;
+    void set_strings_mapped_to_ids(bool /*value*/);
+};
+
+char const* Generated_code_value_layout::get_layout_data(size_t& size) const
+{
+    MI_ASSERT(!"not implemented");
+    return NULL;
+}
+
+void Generated_code_value_layout::set_layout_data(char const* /*data*/, size_t& /*size*/)
+{
+    MI_ASSERT(!"not implemented");
+}
+
+bool Generated_code_value_layout::get_strings_mapped_to_ids() const
+{
+    MI_ASSERT(!"not implemented");
+    return false;
+}
+
+void Generated_code_value_layout::set_strings_mapped_to_ids(bool /*value*/)
+{
+    MI_ASSERT(!"not implemented");
 }
 
 } // mdl

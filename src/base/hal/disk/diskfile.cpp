@@ -94,8 +94,8 @@ bool File::open(
 
 
 bool File::open(
-    const char		*path,		// path to open
-    Mode		mode)		// read, write, modify, append?
+    const char          *path,          // path to open
+    Mode                mode)           // read, write, modify, append?
 {
     ASSERT(M_DISK, mode != M_NONE);
     if (m_fp && !close())
@@ -110,6 +110,11 @@ bool File::open(
     }
     else {
         m_path = path;
+        if (mode != M_READ) {
+           std::string dir = HAL::Ospath::dirname(path);
+           if (!dir.empty() && !is_directory(dir.c_str()))
+               mkdir(dir.c_str());
+        }
         if (!(m_fp = DISK::fopen(m_path.c_str(), get_mode_string(mode)))) {
             m_error = HAL::get_errno();
             if (LOG::mod_log)
@@ -162,8 +167,8 @@ bool File::close()
 //
 
 Sint64 File::read(
-    char		*buf,		// copy data here
-    Uint64	         num)		// copy this many bytes
+    char                *buf,           // copy data here
+    Uint64               num)           // copy this many bytes
 {
     ASSERT(M_DISK, m_fp != 0);
     ASSERT(M_DISK,
@@ -217,8 +222,8 @@ Sint64 File::read(
 //
 
 bool File::readline(
-    char		*line,		// copy data here
-    int			num)		// copy at most this many bytes
+    char                *line,          // copy data here
+    int                 num)            // copy at most this many bytes
 {
     ASSERT(M_DISK, m_fp != 0);
     ASSERT(M_DISK,
@@ -257,8 +262,8 @@ bool File::read_line(
 //
 
 Sint64 File::write(
-    const char		*buf,		// write this buffer
-    Uint64               num)		// write this many bytes
+    const char          *buf,           // write this buffer
+    Uint64               num)           // write this many bytes
 {
     ASSERT(M_DISK, m_fp != 0);
     ASSERT(M_DISK, m_mode != M_READ);
@@ -310,7 +315,7 @@ Sint64 File::write(
 //
 
 bool File::writeline(
-    const char		*line)		// write this string
+    const char          *line)          // write this string
 {
     ASSERT(M_DISK, m_fp != 0);
     ASSERT(M_DISK, m_mode != M_READ);
@@ -330,8 +335,8 @@ bool File::writeline(
 //
 
 int File::printf(
-    const char		*fmt,		// format string with %X
-    ...)				// arguments for %X
+    const char          *fmt,           // format string with %X
+    ...)                                // arguments for %X
 {
     ASSERT(M_DISK, m_fp != 0);
     ASSERT(M_DISK, m_mode != M_READ);
@@ -352,8 +357,8 @@ int File::printf(
 //
 
 int File::vprintf(
-    const char		*fmt,		// format string with %X
-    va_list		 args)		// arguments for %X
+    const char          *fmt,           // format string with %X
+    va_list              args)          // arguments for %X
 {
     ASSERT(M_DISK, m_fp != 0);
     ASSERT(M_DISK, m_mode != M_READ);
@@ -398,11 +403,11 @@ bool File::eof() const
 //
 
 bool File::seek(
-    Sint64		offset,		// seek to this byte offset
-    int			whence)		// 0=absolute, 1=relative, 2=rel to eof
+    Sint64              offset,         // seek to this byte offset
+    int                 whence)         // 0=absolute, 1=relative, 2=rel to eof
 {
     ASSERT(M_DISK, m_fp != 0);
-    //ASSERT(M_DISK, !m_path.empty());	// no seek() for stdin/stdout
+    //ASSERT(M_DISK, !m_path.empty());  // no seek() for stdin/stdout
 #if defined(LINUX) || defined(MACOSX)
     mi_static_assert(sizeof(Sint64) == sizeof(off_t));
     if (!fseeko(m_fp, off_t(offset), whence)) {
@@ -428,7 +433,7 @@ bool File::seek(
 Sint64 File::tell()
 {
     ASSERT(M_DISK, m_fp != 0);
-    //ASSERT(M_DISK, !m_path.empty());	// no tell() for stdin/stdout
+    //ASSERT(M_DISK, !m_path.empty());  // no tell() for stdin/stdout
 
     m_error = 0;
 #if defined(LINUX) || defined(MACOSX)
@@ -450,7 +455,7 @@ Sint64 File::tell()
 Sint64 File::filesize()
 {
     ASSERT(M_DISK, m_fp != 0);
-    //ASSERT(M_DISK, !m_path.empty());	// no filesize() for stdin/stdout
+    //ASSERT(M_DISK, !m_path.empty());  // no filesize() for stdin/stdout
 
     Sint64 curr = tell();
     seek(0, 2);

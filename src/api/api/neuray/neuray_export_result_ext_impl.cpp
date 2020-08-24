@@ -46,7 +46,7 @@ mi::base::IInterface* Export_result_ext_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new Export_result_ext_impl();
 }
 
@@ -64,8 +64,8 @@ const char* Export_result_ext_impl::get_error_message() const
     for( mi::Size i = 0; i < m_message_numbers.size(); ++i)
         if(  ( m_message_severities[i] == mi::base::MESSAGE_SEVERITY_FATAL)
           || ( m_message_severities[i] == mi::base::MESSAGE_SEVERITY_ERROR))
-            return m_messages[i].empty() ? 0 : m_messages[i].c_str();
-    return 0;
+            return m_messages[i].empty() ? nullptr : m_messages[i].c_str();
+    return nullptr;
 }
 
 mi::Size Export_result_ext_impl::get_messages_length() const
@@ -85,8 +85,8 @@ mi::Uint32 Export_result_ext_impl::get_message_number( mi::Size index) const
 const char* Export_result_ext_impl::get_message( mi::Size index) const
 {
     if( index >= m_messages.size())
-        return 0;
-    return m_messages[index].empty() ? 0 : m_messages[index].c_str();
+        return nullptr;
+    return m_messages[index].empty() ? nullptr : m_messages[index].c_str();
 }
 
 mi::base::Message_severity Export_result_ext_impl::get_message_severity( mi::Size index) const
@@ -133,7 +133,7 @@ mi::Sint32 Export_result_ext_impl::set_message(
 
     m_message_numbers[index] = number;
     m_message_severities[index] = severity;
-    m_messages[index] = message;
+    m_messages[index] = message; //-V557 PVS
     return 0;
 }
 

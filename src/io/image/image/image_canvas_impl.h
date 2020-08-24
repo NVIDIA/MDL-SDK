@@ -159,6 +159,7 @@ public:
     ///                           - -4: No image plugin found to handle the data.
     ///                           - -5: The image plugin failed to import the data.
     Canvas_impl(
+        Container_based,
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
@@ -176,6 +177,8 @@ public:
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
+    /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
+    ///                           or \c NULL in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
     /// \param tile_width         The desired tile width. The special value 0 currently implies the
@@ -194,8 +197,10 @@ public:
     ///                           - -4: No image plugin found to handle the data.
     ///                           - -5: The image plugin failed to import the data.
     Canvas_impl(
+        Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* mdl_file_path,
         mi::Uint32 miplevel,
         mi::Uint32 tile_width,
         mi::Uint32 tile_height,
@@ -269,7 +274,7 @@ private:
         mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z) const;
 
     /// Returns the reader used by #load_tile();
-    mi::neuraylib::IReader* get_reader( std::string& filename_error_msg) const;
+    mi::neuraylib::IReader* get_reader( std::string& log_identifier) const;
 
     /// Sets the canvas to a dummy canvas with a 1x1 tile with a pink pixel.
     void set_default_pink_dummy_canvas();

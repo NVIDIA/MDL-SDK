@@ -82,8 +82,7 @@ private:
     Generated_code_dag const * const m_dag;
 
     /// The current material index.
-    int m_current_mat_index;
-
+    size_t m_current_mat_index;
 };
 
 // ------------------------ DAG code checker ------------------------
@@ -145,7 +144,7 @@ bool DAG_code_checker::check(
 void DAG_code_checker::check_materials(
     Generated_code_dag const *dag)
 {
-    for (int i = 0, n = dag->get_material_count(); i < n; ++i) {
+    for (size_t i = 0, n = dag->get_material_count(); i < n; ++i) {
         DAG_node const *expr = dag->get_material_value(i);
 
         m_current_mat_index = i;
@@ -281,7 +280,7 @@ IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
     result->compile(module);
 
     if (m_options.get_bool_option(MDL_CG_DAG_OPTION_DUMP_MATERIAL_DAG)) {
-        for (int i = 0, n = result->get_material_count(); i < n; ++i) {
+        for (size_t i = 0, n = result->get_material_count(); i < n; ++i) {
             result->dump_material_dag(i, NULL);
         }
     }
@@ -319,6 +318,55 @@ void Code_generator_dag::serialize_lambda(
 ILambda_function *Code_generator_dag::deserialize_lambda(IDeserializer *ds)
 {
     return Lambda_function::deserialize(get_allocator(), m_compiler.get(), ds);
+}
+
+// Create the DAG code generator.
+ICode_generator *create_code_generator_dag(IAllocator *alloc, MDL *mdl)
+{
+    Allocator_builder builder(alloc);
+    return builder.create<Code_generator_dag>(alloc, mdl);
+}
+
+// Serialize the code DAG.
+void serialize_code_dag(
+    IGenerated_code_dag const *code,
+    ISerializer               *is,
+    MDL_binary_serializer     &bin_serializer)
+{
+    Generated_code_dag const *cod = impl_cast<Generated_code_dag>(code);
+
+    cod->serialize(is, &bin_serializer);
+}
+
+// Deserialize the code DAG.
+IGenerated_code_dag const *deserialize_code_dag(
+    IDeserializer           *ds,
+    MDL_binary_deserializer &bin_deserializer,
+    MDL                     *compiler)
+{
+    Tag_t t;
+
+    // currently we support only binaries, no single units
+    t = bin_deserializer.read_section_tag();
+    MDL_ASSERT(t == Serializer::ST_DAG_START);
+    DOUT(("Starting DAG Deserialization\n")); INC_SCOPE();
+
+    mi::base::Handle<IGenerated_code_dag const> code;
+    for (;;) {
+        code = mi::base::make_handle(
+            Generated_code_dag::deserialize(ds, &bin_deserializer, compiler));
+        t = bin_deserializer.read_section_tag();
+        if (t != Serializer::ST_DAG_END) {
+        } else {
+            MDL_ASSERT(t == Serializer::ST_DAG_END);
+            DEC_SCOPE(); DOUT(("DAG Deserialization Finished\n\n"));
+            break;
+        }
+    }
+
+    if (code.is_valid_interface())
+        code->retain();
+    return code.get();
 }
 
 } // mdl

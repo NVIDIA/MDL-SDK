@@ -86,7 +86,7 @@ public:
     {
 #ifndef MI_PLATFORM_WINDOWS
         pthread_mutex_lock( &m_mutex);
-        while( !m_signaled)
+        while( !m_signaled) //-V776 PVS
             pthread_cond_wait( &m_condvar, &m_mutex);
         m_signaled = false;
         pthread_mutex_unlock( &m_mutex);

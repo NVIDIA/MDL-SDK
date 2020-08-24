@@ -71,9 +71,9 @@ public:
     /// \param layout_buf   the layout buffer
     /// \param data_layout  the LLVM data layout
     Layout_builder(
-        IAllocator             *alloc,
-        LLVM_code_generator    &code_gen,
-        vector<char>::Type     &layout_buf,
+        IAllocator                  *alloc,
+        LLVM_code_generator         &code_gen,
+        vector<unsigned char>::Type &layout_buf,
         llvm::DataLayout const *data_layout)
     : m_code_gen(code_gen)
     , m_layout_buf(layout_buf)
@@ -333,7 +333,7 @@ private:
 
 private:
     LLVM_code_generator &m_code_gen;
-    vector<char>::Type &m_layout_buf;
+    vector<unsigned char>::Type &m_layout_buf;
     llvm::DataLayout const *m_data_layout;
     size_t m_cur_offs;
     size_t m_total_size;
@@ -369,6 +369,15 @@ Generated_code_value_layout::Generated_code_value_layout(
 : Base(alloc)
 , m_layout_data(layout_data_block, layout_data_block + layout_data_size, alloc)
 , m_strings_mapped_to_ids(strings_mapped_to_ids)
+{
+}
+
+// Constructor used for deserialization.
+Generated_code_value_layout::Generated_code_value_layout(
+    IAllocator* alloc)
+    : Base(alloc)
+    , m_layout_data(alloc)
+    , m_strings_mapped_to_ids(false)
 {
 }
 
@@ -607,9 +616,14 @@ int Generated_code_value_layout::set_value(
 char const *Generated_code_value_layout::get_layout_data(size_t &size) const
 {
     size = m_layout_data.size();
-    return &m_layout_data[0];
+    return (char const *)&m_layout_data[0];
 }
 
+void Generated_code_value_layout::set_layout_data(char const* data, size_t& size)
+{
+    m_layout_data.resize(size);
+    memcpy(m_layout_data.data(), data, size);
+}
 
 // ------------------------------- Generated_code_executable_base -------------------------------
 
@@ -695,14 +709,16 @@ size_t Generated_code_executable_base<I>::add_function_info(
     char const *name,
     IGenerated_code_executable::Distribution_kind dist_kind,
     IGenerated_code_executable::Function_kind func_kind,
-    size_t arg_block_index)
+    size_t arg_block_index,
+    IGenerated_code_executable::State_usage state_usage)
 {
     m_func_infos.push_back(
         Generated_code_function_info(
             string(name, this->get_allocator()),
             dist_kind,
             func_kind,
-            arg_block_index));
+            arg_block_index,
+            state_usage));
 
     return m_func_infos.size() - 1;
 }
@@ -743,6 +759,17 @@ size_t Generated_code_executable_base<I>::add_function_df_handle(
         string(handle_name, this->get_allocator()));
 
     return m_func_infos[func_index].m_df_handle_name_table.size() - 1;
+}
+
+/// Get the state properties used by a function.
+template <class I>
+IGenerated_code_executable::State_usage Generated_code_executable_base<I>::get_function_state_usage(
+    size_t func_index) const
+{
+    if (func_index >= m_func_infos.size()) {
+        return 0;
+    }
+    return m_func_infos[func_index].m_state_usage;
 }
 
 // ----------------------------------- Generated_code_jit -----------------------------------
@@ -1957,6 +1984,10 @@ void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attr
         case Resource_tag_tuple::RK_WARD_GEISLER_MORODER_MULTISCATTER:
             gamma_mode = IValue_texture::gamma_linear;
             shape = e.u.tex.shape;
+            break;
+        case Resource_tag_tuple::RK_LIGHT_PROFILE:
+        case Resource_tag_tuple::RK_BSDF_MEASUREMENT:
+            // gamma_mode and shape will be ignored
             break;
         default:
             MDL_ASSERT(!"unexpected kind");

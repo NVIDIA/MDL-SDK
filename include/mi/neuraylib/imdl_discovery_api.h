@@ -255,7 +255,7 @@ public:
     ///                 the result (see #mi::neuraylib::IMdl_info::Kind). 
     ///                 By default, all kinds are included.
     virtual const IMdl_discovery_result*  discover(
-        Uint32 filter = IMdl_info::DK_ALL) const = 0;
+        Uint32 filter = static_cast<Uint32>(IMdl_info::DK_ALL)) const = 0;
 };
 
 } // namespace neuraylib

@@ -92,8 +92,6 @@ public:
 	void SynErr(Token const *la, int n);
 	virtual void Error(Token const *t, const wchar_t *s);
 	virtual void Warning(int line, int col, const wchar_t *s);
-	virtual void Warning(const wchar_t *s);
-	virtual void Exception(const wchar_t *s);
 	virtual void Error(int line, int col, int code, Error_params const &params);
 
 }; // Errors

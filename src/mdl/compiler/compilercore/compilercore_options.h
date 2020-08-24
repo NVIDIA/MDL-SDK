@@ -293,6 +293,13 @@ public:
     /// \return the unsigned integer option value or its default value if not set
     unsigned get_unsigned_option(char const *name) const;
 
+    /// Get a float option.
+    ///
+    /// \param name         The name of the option.
+    ///
+    /// \return the float option value or its default value if not set
+    float get_float_option(char const *name) const;
+
     /// Get a version option.
     ///
     /// \param[in]  name     The name of the option.

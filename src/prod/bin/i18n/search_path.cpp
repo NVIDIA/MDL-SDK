@@ -36,11 +36,7 @@ using std::string;
 // Initialize
 Search_path::Search_path(const mi::neuraylib::INeuray * neuray)
 {
-    m_compiler = 
-        mi::base::Handle<mi::neuraylib::IMdl_compiler>
-        (
-            neuray->get_api_component<mi::neuraylib::IMdl_compiler>()
-        );
+    m_mdl_config = neuray->get_api_component<mi::neuraylib::IMdl_configuration>();
 }
 
 Search_path::~Search_path()
@@ -50,14 +46,14 @@ Search_path::~Search_path()
 // Take a snapshot of the current search pathes
 mi::Sint32 Search_path::snapshot()
 {
-    if (!m_compiler)
+    if (!m_mdl_config)
     {
         return -1;
     }
     clear_snapshot();
-    for (mi::Size i = 0; i < m_compiler->get_module_paths_length(); i++)
+    for (mi::Size i = 0; i < m_mdl_config->get_mdl_paths_length(); i++)
     {
-        m_paths.push_back(m_compiler->get_module_path(i)->get_c_str());
+        m_paths.push_back(m_mdl_config->get_mdl_path(i)->get_c_str());
     }
     return 0;
 }
@@ -66,7 +62,7 @@ mi::Sint32 Search_path::snapshot()
 // If no snapshot was ever taken, nothing to restore 
 mi::Sint32 Search_path::restore_snapshot() const
 {
-    if (!m_compiler)
+    if (!m_mdl_config)
     {
         return -1;
     }
@@ -75,7 +71,7 @@ mi::Sint32 Search_path::restore_snapshot() const
         it != m_paths.end();
         it++)
     {
-        mi::Sint32 success = m_compiler->add_module_path(it->c_str());
+        mi::Sint32 success = m_mdl_config->add_mdl_path(it->c_str());
         check_success3(success == 0, Errors::ERR_MODULE_PATH_FAILURE, it->c_str());
         rtn |= success;
     }
@@ -91,7 +87,7 @@ mi::Sint32 Search_path::clear_snapshot()
 // Add to module path
 mi::Sint32 Search_path::add_module_path(const string & directory)
 {
-    mi::Sint32 success = m_compiler->add_module_path(directory.c_str());
+    mi::Sint32 success = m_mdl_config->add_mdl_path(directory.c_str());
     check_success3(success == 0, Errors::ERR_MODULE_PATH_FAILURE, directory.c_str());
     clear_snapshot();// Clear the current snapshot
     return success;
@@ -116,7 +112,7 @@ bool Search_path::find_module_path(const std::string & directory) const
 // Remove all module paths
 mi::Sint32 Search_path::clear_module_paths()
 {
-    m_compiler->clear_module_paths();
+    m_mdl_config->clear_mdl_paths();
     clear_snapshot();// Clear the current snapshot
     return 0;
 }

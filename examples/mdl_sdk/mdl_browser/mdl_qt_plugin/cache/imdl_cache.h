@@ -73,7 +73,10 @@ public:
     virtual Kind get_kind() const = 0;
 
     // name of the current item (unique in the child list of the parent item)
-    // to get this uniqueness, overloaded functions for instance still have their parameter list.
+    // usually equal to the simple name, but e.g. includes the parameter types for functions
+    virtual const char* get_entity_name() const = 0;
+
+    // simple MDL name of the item, \em not necessarily unique in the child list of the parent item
     virtual const char* get_simple_name() const = 0;
 
     // qualified MDL name of the item, unique for the entire graph
@@ -247,7 +250,11 @@ public:
 
     // Factory method, used e.g. during deserialization, or while building the cache from scratch
     // use the corresponding erase to delete the created object
-    virtual IMdl_cache_item* create(IMdl_cache_item::Kind kind, const char* qualified_name) = 0;
+    virtual IMdl_cache_item* create(
+        IMdl_cache_item::Kind kind,
+        const char* entity_name,
+        const char* simple_name,
+        const char* qualified_name) = 0;
 
     // delete a cache item
     // this will trigger a recursive deleting of child elements, too.

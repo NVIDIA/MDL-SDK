@@ -1,0 +1,189 @@
+options
+{
+  AA_samples 2
+  AA_seed 81
+  xres 640
+  yres 480
+  GI_sss_samples 4
+  GI_diffuse_samples 4
+  GI_specular_samples 4
+  GI_transmission_samples 4
+  GI_diffuse_depth 4
+  GI_specular_depth 8
+  GI_transmission_depth 8
+  outputs 2 1 STRING
+  "albedo RGBA pixel_filter albedo_driver"
+  "RGBA RGBA pixel_filter output_driver"
+}
+
+box_filter
+{
+  name pixel_filter
+}
+
+driver_png
+{
+  name output_driver
+  filename cornell.png
+}
+
+driver_png
+{
+  name albedo_driver
+  filename cornell_albedo.png
+}
+
+persp_camera
+{
+  name persp
+  position 0 -0.5 8.0
+  look_at 0 -0.5 0
+  up 0 1 0
+  fov 45
+}
+
+standard_surface
+{  
+  name left_srf
+  base_color 0 0 1
+  specular 0
+}
+
+standard_surface 
+{
+  name right_srf
+  base_color 1 0 0
+  specular 0
+}
+
+standard_surface 
+{
+  name bottom_srf
+  base_color 1 1 1
+  specular 0
+}
+
+standard_surface 
+{
+  name top_srf
+  base_color 1 1 1
+  specular 0
+}
+
+standard_surface 
+{
+  name back_srf
+  base_color 1 1 1
+  specular 0
+}
+
+mdl
+{
+  name mdl_glossy_mat
+  qualified_name "::simple::glossy"
+}
+
+mdl
+{
+  name mdl_glass_mat
+  qualified_name "::simple::rough_glass"
+  declare roughness constant FLOAT
+  roughness 0.05
+}
+
+mdl
+{
+  name mdl_glow_mat
+  qualified_name "::simple::glow"
+}
+
+polymesh
+{
+  name left
+  nsides 1 1 BYTE 4
+  vidxs 4 1 LONG 0 1 2 3
+  nidxs 4 1 LONG 0 0 0 0
+  vlist 12 1 FLOAT -2.0 -2.0 8.0   -2.0 2.0 8.0   -2.0 2.0 -2.0  -2.0 -2.0 -2.0
+  nlist 3 1 FLOAT 1.0 0 0 
+  shader left_srf
+}
+
+polymesh
+{
+  name right
+  nsides 1 1 BYTE 4
+  vidxs 4 1 LONG 0 1 2 3
+  nidxs 4 1 LONG 0 0 0 0
+  vlist 12 1 FLOAT 2.0 -2.0 8.0   2.0 2.0 8.0   2.0 2.0 -2.0  2.0 -2.0 -2.0
+  nlist 3 1 FLOAT -1.0 0 0 
+  shader right_srf
+}
+
+polymesh
+{
+  name top
+  nsides 1 1 BYTE 4
+  vidxs 4 1 LONG 0 1 2 3
+  nidxs 4 1 LONG 0 0 0 0
+  vlist 12 1 FLOAT -2.0 2.0 8.0   2.0 2.0 8.0   2.0 2.0 -2.0  -2.0 2.0 -2.0
+  nlist 3 1 FLOAT 0.0 -1 0 
+  shader top_srf
+}
+
+polymesh
+{
+  name bottom
+  nsides 1 1 BYTE 4
+  vidxs 4 1 LONG 0 1 2 3
+  nidxs 4 1 LONG 0 0 0 0
+  vlist 12 1 FLOAT -2.0 -2.0 8.0   2.0 -2.0 8.0   2.0 -2.0 -2.0  -2.0 -2.0 -2.0
+  nlist 3 1 FLOAT 0.0 1 0 
+  shader bottom_srf
+}
+
+polymesh
+{
+  name back
+  nsides 1 1 BYTE 4
+  vidxs 4 1 LONG 0 1 2 3
+  nidxs 4 1 LONG 0 0 0 0
+  vlist 12 1 FLOAT -2.0 -2.0 -2.0   2.0 -2.0 -2.0   2.0 2.0 -2.0  -2.0 2.0 -2.0
+  nlist 3 1 FLOAT 0.0 0 1 
+  shader back_srf
+}
+
+sphere
+{
+  name big_sphere
+  shader mdl_glossy_mat 
+  opaque off
+  radius 1.2
+  center -0.25 -0.8 0.25
+}
+
+sphere
+{
+  name small_sphere
+  shader mdl_glass_mat
+  radius 0.6
+  center 1.0 -1.4 1.5
+}
+
+sphere
+{
+  name small_sphere
+  shader mdl_glow_mat
+  radius 0.3
+  center -1.4 -1.7 1.6
+}
+
+quad_light
+{
+  name arealight
+  vertices 4 1 POINT -1.0 1.9 1.0   -1.0 1.9 0.0  1.0 1.9 0.0   1.0 1.9 1.0
+  color 0.9 0.9 1.0
+  intensity 1
+  exposure 6
+  samples 16
+  normalize on
+}

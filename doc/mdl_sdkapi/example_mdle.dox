@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-/*! \page mi_neuray_example_mdle Example for Integrating the MDL encapsulated format
+/*! \page mi_neuray_example_mdle Example for Integrating the MDL Encapsulated Format
 
 <div align="right">
     [\link mi_neuray_example_mdl_browser Previous\endlink]

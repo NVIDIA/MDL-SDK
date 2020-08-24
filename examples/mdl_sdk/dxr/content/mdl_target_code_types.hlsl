@@ -26,14 +26,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#ifndef MDL_TARGET_CODE_TYPES_HLSLI
+#if !defined(MDL_TARGET_CODE_TYPES_HLSLI)
 #define MDL_TARGET_CODE_TYPES_HLSLI
 
 // compiler constants defined from outside:
 // - MDL_NUM_TEXTURE_RESULTS
 // - USE_DERIVS
 // - MDL_DF_HANDLE_SLOT_MODE (-1, 1, 2, 4, or 8)
-#ifndef MDL_DF_HANDLE_SLOT_MODE
+#if !defined(MDL_DF_HANDLE_SLOT_MODE)
     #define MDL_DF_HANDLE_SLOT_MODE -1
 #endif
 
@@ -42,20 +42,28 @@
 #endif
 
 
- // Used by the texture runtime when derivatives are enabled.
-struct Derived_float2
-{
+struct Derived_float {
+    float val;
+    float dx;
+    float dy;
+};
+
+struct Derived_float2 {
     float2 val;
     float2 dx;
     float2 dy;
 };
 
-// Used for the texture coordinates when derivatives are enabled.
-struct Derived_float3
-{
+struct Derived_float3 {
     float3 val;
     float3 dx;
     float3 dy;
+};
+
+struct Derived_float4 {
+    float4 val;
+    float4 dx;
+    float4 dy;
 };
 
 
@@ -73,7 +81,7 @@ struct Shading_state_material
 
     /// The result of state::position().
     /// It represents the position where the material should be evaluated.
-#ifdef USE_DERIVS
+#if defined(USE_DERIVS)
     Derived_float3    position;
 #else
     float3            position;
@@ -86,7 +94,7 @@ struct Shading_state_material
     /// An array containing the results of state::texture_coordinate(i).
     /// The i-th entry represents the texture coordinates of the i-th texture space at the
     /// current position.
-#ifdef USE_DERIVS
+#if defined(USE_DERIVS)
     Derived_float3    text_coords[1];
 #else
     float3            text_coords[1];
@@ -112,7 +120,7 @@ struct Shading_state_material
     /// This field is only relevant for code generated with
     /// #mi::neuraylib::IMdl_backend::translate_material_df() or
     /// #mi::neuraylib::ILink_unit::add_material_df(). In other cases this may be NULL.
-#ifdef USE_TEXTURE_RESULTS
+#if defined(USE_TEXTURE_RESULTS)
     float4            text_results[MDL_NUM_TEXTURE_RESULTS];
 #endif
     /// An offset for accesses to the read-only data segment. Will be added before
@@ -137,18 +145,23 @@ struct Shading_state_material
     /// This field is only used if the uniform state is included.
     uint              object_id;
 
+    /// The result of state::meters_per_scene_unit().
+    /// The field is only used if the \c "fold_meters_per_scene_unit" option is set to false.
+    /// Otherwise, the value of the \c "meters_per_scene_unit" option will be used in the code.
+    float             meters_per_scene_unit;
+
     /// An offset to add to any argument block read accesses.
     uint              arg_block_offset;
 
-#ifdef RENDERER_STATE_TYPE
-    /// A user-defined structure that allows to pass renderer information; for instance about the 
+#if defined(RENDERER_STATE_TYPE)
+    /// A user-defined structure that allows to pass renderer information; for instance about the
     /// hit-point or buffer references; to mdl run-time functions. This is especially required for
     /// the scene data access. The fields of this structure are not altered by generated code.
     RENDERER_STATE_TYPE renderer_state;
 #endif
 };
 
-#ifdef WITH_ENUM_SUPPORT  // HLSL 2017 and above support enums
+#if defined(WITH_ENUM_SUPPORT)  // HLSL 2017 and above support enums
 
 /// The texture wrap modes as defined by \c tex::wrap_mode in the MDL specification.
 /// It determines the texture lookup behavior if a lookup coordinate
@@ -304,7 +317,7 @@ struct Bsdf_auxiliary_data {
     float3 ior1;                    ///< mutual input: IOR current medium
     float3 ior2;                    ///< mutual input: IOR other side
     float3 k1;                      ///< mutual input: outgoing direction
- 
+
     #if (MDL_DF_HANDLE_SLOT_MODE != -1)
         int handle_offset;          ///< output: handle offset to allow the evaluation of more then
                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times

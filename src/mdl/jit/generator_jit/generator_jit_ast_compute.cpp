@@ -1372,6 +1372,12 @@ bool IfContext::handleProperRegions(
                 for (int index : reverse(phiIndicesToRemove)) {
                     phi->removeIncomingValue(index, /*DeletePHIIfEmpty=*/ true);
                 }
+
+                // replace trivial phis by their incoming value
+                if (phi->getNumOperands() == 1) {
+                    phi->replaceAllUsesWith(phi->getIncomingValue(0));
+                    phi->eraseFromParent();
+                }
             }
 
             ++curIndex;

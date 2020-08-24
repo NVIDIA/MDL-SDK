@@ -39,6 +39,7 @@
 #include "mdl/compiler/compilercore/compilercore_array_ref.h"
 #include "mdl/compiler/compilercore/compilercore_file_resolution.h"
 #include "mdl/compiler/compilercore/compilercore_hash.h"
+#include "mdl/compiler/compilercore/compilercore_tools.h"
 #include "mdl/compiler/compilercore/compilercore_visitor.h"
 
 #include "mdl/codegenerators/generator_code/generator_code.h"
@@ -54,6 +55,9 @@ namespace mi {
 namespace mdl {
 
 namespace {
+
+typedef Store<mi::base::Handle<IModule const> >  IModule_scope;
+
 
 ///
 /// Helper class to dump an material expression DAG as a dot file.
@@ -487,52 +491,80 @@ size_t Lambda_function::get_root_expr_count() const
 
 namespace {
 
-typedef set<IValue const *>::Type Resource_set;
+typedef ptr_hash_set<IValue const>::Type Resource_set;
 typedef vector<IValue const *>::Type Resource_list;
+typedef ptr_hash_map<IValue const, ILambda_resource_enumerator::Texture_usage>::Type Texture_usage_map;
+typedef ptr_hash_map<IDefinition const, ILambda_resource_enumerator::Texture_usage *>::Type
+    Arg_usages_by_def;
+typedef map<IDefinition::Semantics, ILambda_resource_enumerator::Texture_usage *>::Type
+    Arg_usages_by_semantics;
+
+class Resource_collector;
 
 /// Helper class to collect all resources from a AST walk.
 class Resource_AST_collector : private Module_visitor {
 public:
     /// Constructor.
     Resource_AST_collector(
-        IAllocator    *alloc,
-        Resource_list &textures,
-        Resource_list &light_profiles,
-        Resource_list &bsdf_measurements,
-        Resource_set  &found_resources)
-    : m_textures(textures)
+        IAllocator              *alloc,
+        Memory_arena            &arena,
+        Resource_collector      &res_collector,
+        Resource_list           &textures,
+        Resource_list           &light_profiles,
+        Resource_list           &bsdf_measurements,
+        Resource_set            &found_resources,
+        Texture_usage_map       &tex_usage_map,
+        Arg_usages_by_def       &arg_usages_by_def,
+        Arg_usages_by_semantics &arg_usages_by_semantics)
+    : m_arena(arena)
+    , m_res_collector(res_collector)
+    , m_textures(textures)
     , m_light_profiles(light_profiles)
     , m_bsdf_measurements(bsdf_measurements)
     , m_found_resources(found_resources)
+    , m_tex_usage_map(tex_usage_map)
+    , m_arg_usages_by_def(arg_usages_by_def)
+    , m_arg_usages_by_semantics(arg_usages_by_semantics)
     , m_mod()
-    , m_visited(0, Definition_set::hasher(), Definition_set::key_equal(), alloc)
-    , m_queue(Definition_queue::container_type(alloc))
+    , m_tex_usage(0)
+    , m_param_usage_map(alloc)
     {
     }
 
-    /// process a call graph starting with function root.
-    void process(IModule const *owner, IDefinition const *root)
+    /// Calculate the argument usage of a function and collect used resources.
+    ILambda_resource_enumerator::Texture_usage *process_function(
+        mi::base::Handle<IModule const> owner,
+        IDefinition const *def)
     {
-        if (root->get_declaration() != NULL) {
-            m_visited.insert(root);
-            m_queue.push(Entry(owner, root));
+        IDeclaration_function const *f = as<IDeclaration_function>(def->get_declaration());
+        if (f == NULL)
+            return NULL;
+
+        // Allocate argument usage array
+        size_t num_params = f->get_parameter_count();
+        size_t alloc_size = std::max(size_t(1), num_params) *
+            sizeof(ILambda_resource_enumerator::Texture_usage);
+        ILambda_resource_enumerator::Texture_usage *arg_usages =
+            reinterpret_cast<ILambda_resource_enumerator::Texture_usage *>(
+                m_arena.allocate(alloc_size));
+        memset(arg_usages, 0, alloc_size);
+
+        // Map function parameters to argument usage slots
+        for (size_t i = 0; i < num_params; ++i) {
+            m_param_usage_map[f->get_parameter(i)->get_name()->get_definition()] = arg_usages + i;
         }
 
-        while (!m_queue.empty()) {
-            Entry const &e = m_queue.front();
+        IModule_scope scope(m_mod, owner);
+        visit(f);
 
-            m_mod = e.owner;
-            visit(e.def->get_declaration());
-
-            m_queue.pop();
-        }
+        return arg_usages;
     }
 
 private:
     /// Post-visit a literal expression.
     ///
     /// \param cnst  the constant that is visited
-    void post_visit(IExpression_literal *expr) MDL_FINAL
+    IExpression *post_visit(IExpression_literal *expr) MDL_FINAL
     {
         IValue const *v = expr->get_value();
         IType const  *t = v->get_type();
@@ -540,77 +572,112 @@ private:
         // note: this also collects invalid references ...
         switch (t->get_kind()) {
         case IType::TK_TEXTURE:
-            if (m_found_resources.insert(v).second)  // inserted for first time?
+            if (m_tex_usage)
+                m_tex_usage_map[v] |= m_tex_usage;
+
+            if (m_found_resources.insert(v).second) { // inserted for first time?
                 m_textures.push_back(v);
+            }
             break;
         case IType::TK_LIGHT_PROFILE:
-            if (m_found_resources.insert(v).second)  // inserted for first time?
+            if (m_found_resources.insert(v).second) { // inserted for first time?
                 m_light_profiles.push_back(v);
+            }
             break;
         case IType::TK_BSDF_MEASUREMENT:
-            if (m_found_resources.insert(v).second)  // inserted for first time?
+            if (m_found_resources.insert(v).second) { // inserted for first time?
                 m_bsdf_measurements.push_back(v);
+            }
             break;
         default:
             break;
         }
+        return expr;
     }
 
-    /// Post-visit a call expression.
+    /// Pre-visit a call expression.
     ///
     /// \param call  the call that is visited
-    void post_visit(IExpression_call *expr) MDL_FINAL
-    {
-        if (IExpression_reference const *ref = as<IExpression_reference>(expr->get_reference())) {
-            if (IDefinition const *def = ref->get_definition()) {
-                mi::base::Handle<IModule const> owner(m_mod->get_owner_module(def));
-                def = m_mod->get_original_definition(def);
+    ///
+    /// \return true, if the children should be visited
+    bool pre_visit(IExpression_call *call) MDL_FINAL;
 
-                if (def->get_declaration() != NULL && m_visited.insert(def).second) {
-                    // found a new call
-                    m_queue.push(Entry(owner, def));
-                }
+    /// Post-visit a reference expression.
+    IExpression *post_visit(IExpression_reference *ref) MDL_FINAL
+    {
+        IDefinition const *def = ref->get_definition();
+
+        // Ignore references without definition (array constructor, for example string[] in anno)
+        if (def == NULL)
+            return ref;
+
+        if (def->get_kind() == IDefinition::DK_PARAMETER) {
+            if (is<IType_texture>(def->get_type()->skip_type_alias())) {
+                ILambda_resource_enumerator::Texture_usage *usage = m_param_usage_map[def];
+                MDL_ASSERT(usage);
+                if (usage)
+                    *usage |= m_tex_usage;
             }
         }
+        return ref;
     }
 
 
 private:
-    Resource_list &m_textures;
-    Resource_list &m_light_profiles;
-    Resource_list &m_bsdf_measurements;
-    Resource_set  &m_found_resources;
+    Memory_arena            &m_arena;
+    Resource_collector      &m_res_collector;
+    Resource_list           &m_textures;
+    Resource_list           &m_light_profiles;
+    Resource_list           &m_bsdf_measurements;
+    Resource_set            &m_found_resources;
+    Texture_usage_map       &m_tex_usage_map;
+    Arg_usages_by_def       &m_arg_usages_by_def;
+    Arg_usages_by_semantics &m_arg_usages_by_semantics;
 
     mi::base::Handle<IModule const> m_mod;
 
-    struct Entry {
-        Entry(
-            IModule const     *owner,
-            IDefinition const *def)
-        : owner(mi::base::make_handle_dup(owner)), def(def)
-        {
-        }
+    ILambda_resource_enumerator::Texture_usage m_tex_usage;
 
-        Entry(
-            mi::base::Handle<IModule const> owner,
-            IDefinition const               *def)
-        : owner(owner), def(def)
-        {
-        }
-
-        mi::base::Handle<IModule const> owner;
-        IDefinition const               *def;
-    };
-
-    typedef ptr_hash_set<IDefinition const>::Type  Definition_set;
-    typedef queue<Entry>::Type                     Definition_queue;
-
-    Definition_set   m_visited;
-    Definition_queue m_queue;
+    typedef ptr_hash_map<IDefinition const, ILambda_resource_enumerator::Texture_usage *>::Type
+        Parameter_usage_map;
+    Parameter_usage_map m_param_usage_map;
 };
 
-/// Helper class to collect all resources from a DAG walk.
-class Resource_collector : public IDAG_ir_visitor {
+
+struct Argument_usage_init_table
+{
+    IDefinition::Semantics sema;
+    ILambda_resource_enumerator::Texture_usage arg_usage[8];  // for intrinsics support up to 8 args
+};
+
+static Argument_usage_init_table arg_usage_init_table[] = {
+    #define USAGE_ON_FIRST_ARG(sema, usage) \
+        { \
+            IDefinition::sema, \
+            { ILambda_resource_enumerator::usage, 0, 0, 0, 0, 0, 0, 0 } \
+        }
+
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_HEIGHT,           TU_HEIGHT),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_WIDTH,            TU_WIDTH),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_DEPTH,            TU_DEPTH),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_LOOKUP_FLOAT,     TU_LOOKUP_FLOAT),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_LOOKUP_FLOAT2,    TU_LOOKUP_FLOAT2),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_LOOKUP_FLOAT3,    TU_LOOKUP_FLOAT3),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_LOOKUP_FLOAT4,    TU_LOOKUP_FLOAT4),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_LOOKUP_COLOR,     TU_LOOKUP_COLOR),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_TEXEL_FLOAT,      TU_TEXEL_FLOAT),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_TEXEL_FLOAT2,     TU_TEXEL_FLOAT2),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_TEXEL_FLOAT3,     TU_TEXEL_FLOAT3),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_TEXEL_FLOAT4,     TU_TEXEL_FLOAT4),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_TEXEL_COLOR,      TU_TEXEL_COLOR),
+    USAGE_ON_FIRST_ARG(DS_INTRINSIC_TEX_TEXTURE_ISVALID,  TU_TEXTURE_ISVALID),
+
+    #undef USAGE_ON_FIRST_ARG
+};
+
+
+/// Helper class to collect all resources.
+class Resource_collector {
 public:
     /// Constructor.
     ///
@@ -626,21 +693,15 @@ public:
         Lambda_function const     &lambda_func,
         Resource_list             &textures,
         Resource_list             &light_profiles,
-        Resource_list             &bsdf_measurements)
-    : m_resolver(name_resolver)
-    , m_lambda_func(lambda_func)
-    , m_textures(textures)
-    , m_light_profiles(light_profiles)
-    , m_bsdf_measurements(bsdf_measurements)
-    , m_found_resources(Resource_set::key_compare(), alloc)
-    , m_ast_collector(alloc, textures, light_profiles, bsdf_measurements, m_found_resources)
-    {
-    }
+        Resource_list             &bsdf_measurements);
+
+    /// Collect resources and texture usage information for the given DAG node.
+    void collect(DAG_node const *node);
 
     /// Post-visit a Constant.
     ///
     /// \param cnst  the constant that is visited
-    void visit(DAG_constant *cnst) MDL_FINAL
+    void visit_constant(DAG_constant const *cnst)
     {
         IValue const *v = cnst->get_value();
         IType const  *t = v->get_type();
@@ -649,6 +710,9 @@ public:
         // not for the value kind ...
         switch (t->get_kind()) {
         case IType::TK_TEXTURE:
+            if (m_tex_usage)
+                m_tex_usage_map[v] |= m_tex_usage;
+
             if (m_found_resources.insert(v).second)  // inserted for first time?
                 m_textures.push_back(v);
             break;
@@ -665,99 +729,35 @@ public:
         }
     }
 
-    /// Post-visit a Temporary.
-    ///
-    /// \param tmp  the temporary that is visited
-    void visit(DAG_temporary *tmp) MDL_FINAL
-    {
-        // do nothing, but should not happen here
-        MDL_ASSERT(!"temporaries should not occur here");
-    }
-
-    /// Post-visit a call.
+    /// Post-visit a Call.
     ///
     /// \param call  the call that is visited
-    void visit(DAG_call *call) MDL_FINAL
+    void visit_call(DAG_call const *call);
+
+    /// Returns the potential texture usage of a value.
+    ILambda_resource_enumerator::Texture_usage get_texture_usage(IValue const *value) const
     {
-        if (call->get_semantic() != IDefinition::DS_UNKNOWN) {
-            // handle known functions:
-            // register multiscatter BSDF data textures
-            IValue_texture::Bsdf_data_kind bsdf_data_kind = IValue_texture::BDK_NONE;
-            switch (call->get_semantic()) {
-            case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER;
-                break;
-            case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER;
-                break;
-            case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_BECKMANN_SMITH_MULTISCATTER;
-                break;
-            case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_GGX_SMITH_MULTISCATTER;
-                break;
-            case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_BECKMANN_VC_MULTISCATTER;
-                break;
-            case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_GGX_VC_MULTISCATTER;
-                break;
-            case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER;
-                break;
-            case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
-                bsdf_data_kind = IValue_texture::BDK_SHEEN_MULTISCATTER;
-                break;
-            default:
-                break;
-            }
-
-            if (bsdf_data_kind != IValue_texture::BDK_NONE) {
-                // ugly: we inject here a bsdf_data texture value into the lambda function
-                Lambda_function *lambda = const_cast<Lambda_function *>(&m_lambda_func);
-                IValue_factory *vf = lambda->get_value_factory();
-                IValue const *v = vf->create_bsdf_data_texture(
-                    bsdf_data_kind,
-                    /*tag_value=*/ 0,
-                    /*tag_version=*/ 0);
-                if (m_found_resources.insert(v).second)  // inserted for first time?
-                    m_textures.push_back(v);
-            }
-            return;
-        }
-
-        // visit function and other material bodies
-        char const *signature = call->get_name();
-        mi::base::Handle<mi::mdl::IModule const> mod(m_resolver.get_owner_module(signature));
-        if (mod.is_valid_interface()) {
-            Module const *owner = impl_cast<mi::mdl::Module>(mod.get());
-
-            IDefinition const *def = owner->find_signature(signature, /*only_exported=*/false);
-            if (def != NULL) {
-                m_ast_collector.process(owner, def);
-            }
-        }
+        Texture_usage_map::const_iterator it = m_tex_usage_map.find(value);
+        if (it == m_tex_usage_map.end())
+            return 0;
+        return it->second;
     }
 
-    /// Post-visit a Parameter.
-    ///
-    /// \param param  the parameter that is visited
-    void visit(DAG_parameter *param) MDL_FINAL
-    {
-        // do nothing
-    }
+    /// Returns the argument usage for the given definition and calculates it, if necessary.
+    ILambda_resource_enumerator::Texture_usage *get_or_calc_arg_usage(
+        mi::base::Handle<IModule const> owner,
+        IDefinition const *def);
 
-    /// Post-visit a temporary initializer.
-    ///
-    /// \param index  the index of the temporary
-    /// \param init   the initializer expression of this temporary
-    void visit(int index, DAG_node *init) MDL_FINAL
+    /// Ensure, we keep a reference to the module, to avoid IValues from disappearing.
+    void keep_module_reference(mi::base::Handle<IModule const> module)
     {
-        // should never be called
-        MDL_ASSERT(!"temporary initializers should not occur here");
+        m_module_set.insert(module);
     }
 
 private:
+    /// The memory arena used to allocate usage information.
+    Memory_arena               m_arena;
+
     ICall_name_resolver const &m_resolver;
 
     Lambda_function const     &m_lambda_func;
@@ -767,8 +767,260 @@ private:
     Resource_list             &m_bsdf_measurements;
     Resource_set              m_found_resources;
 
+    typedef ptr_hash_map<IValue const, ILambda_resource_enumerator::Texture_usage>::Type
+        Texture_usage_map;
+    Texture_usage_map         m_tex_usage_map;
+
+    Arg_usages_by_def         m_arg_usages_by_def;
+    Arg_usages_by_semantics   m_arg_usages_by_sema;
+
     Resource_AST_collector    m_ast_collector;
+
+    typedef ptr_hash_set<DAG_node const>::Type Visited_set;
+    Visited_set               m_visited;
+
+    ILambda_resource_enumerator::Texture_usage  m_tex_usage;
+
+    typedef handle_hash_set<IModule const>::Type Module_set;
+    Module_set                m_module_set;
 };
+
+// Pre-visit a call expression.
+bool Resource_AST_collector::pre_visit(IExpression_call *call)
+{
+    if (IExpression_reference const *ref = as<IExpression_reference>(call->get_reference())) {
+        if (IDefinition const *def = ref->get_definition()) {
+            mi::base::Handle<IModule const> owner(m_mod->get_owner_module(def));
+            m_res_collector.keep_module_reference(owner);
+
+            def = m_mod->get_original_definition(def);
+
+            // TODO: May lead to very deep recursion. Maybe better put into working queue
+            //       together with state (m_tex_usage and the call)
+            ILambda_resource_enumerator::Texture_usage *arg_usages =
+                m_res_collector.get_or_calc_arg_usage(owner, def);
+
+            ILambda_resource_enumerator::Texture_usage old_tex_usage = m_tex_usage;
+            for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
+                IArgument const *arg = call->get_argument(i);
+
+                if (arg_usages) {
+                    if (is<IType_texture>(
+                            arg->get_argument_expr()->get_type()->skip_type_alias())) {
+                        m_tex_usage = old_tex_usage | arg_usages[i];
+                    } else {
+                        m_tex_usage = arg_usages[i];
+                    }
+                }
+
+                visit(arg);
+            }
+            m_tex_usage = old_tex_usage;
+            return false;  // already visited
+        }
+    }
+    return true;
+}
+
+// Constructor.
+Resource_collector::Resource_collector(
+    IAllocator                *alloc,
+    ICall_name_resolver const &name_resolver,
+    Lambda_function const     &lambda_func,
+    Resource_list             &textures,
+    Resource_list             &light_profiles,
+    Resource_list             &bsdf_measurements)
+: m_arena(alloc)
+, m_resolver(name_resolver)
+, m_lambda_func(lambda_func)
+, m_textures(textures)
+, m_light_profiles(light_profiles)
+, m_bsdf_measurements(bsdf_measurements)
+, m_found_resources(alloc)
+, m_tex_usage_map(alloc)
+, m_arg_usages_by_def(alloc)
+, m_arg_usages_by_sema(alloc)
+, m_ast_collector(alloc, m_arena, *this, textures, light_profiles, bsdf_measurements,
+    m_found_resources, m_tex_usage_map, m_arg_usages_by_def, m_arg_usages_by_sema)
+, m_visited(alloc)
+, m_tex_usage(0)
+, m_module_set(alloc)
+{
+    for (size_t i = 0, n = sizeof(arg_usage_init_table) / sizeof(*arg_usage_init_table);
+            i < n; ++i) {
+        m_arg_usages_by_sema[arg_usage_init_table[i].sema] = arg_usage_init_table[i].arg_usage;
+    }
+}
+
+void Resource_collector::collect(DAG_node const *node)
+{
+    // note: we don't check, whether the node was already visited, because the same node
+    //       may have to be visited with different texture usages.
+    //       As this is a DAG, we won't cause an endless iteration, though
+
+    switch (node->get_kind()) {
+    case DAG_node::EK_TEMPORARY:
+        {
+            // should not happen, but we can handle it
+            DAG_temporary const *t = cast<DAG_temporary>(node);
+            node = t->get_expr();
+            collect(node);
+        }
+        break;
+
+    case DAG_node::EK_CONSTANT:
+        {
+            DAG_constant const *c = cast<DAG_constant>(node);
+            visit_constant(c);
+        }
+        break;
+
+    case DAG_node::EK_PARAMETER:
+        // nothing to do, yet
+        break;
+
+    case DAG_node::EK_CALL:
+        {
+            DAG_call const *call = cast<DAG_call>(node);
+            visit_call(call);
+        }
+        break;
+    }
+}
+
+// Post-visit a Call.
+void Resource_collector::visit_call(DAG_call const *call)
+{
+    ILambda_resource_enumerator::Texture_usage *arg_usages = NULL;
+
+    IDefinition::Semantics sema = call->get_semantic();
+    if (sema == IDefinition::DS_UNKNOWN) {
+        // visit function and other material bodies
+        char const *signature = call->get_name();
+        mi::base::Handle<mi::mdl::IModule const> mod(
+            m_resolver.get_owner_module(signature));
+        if (mod.is_valid_interface()) {
+            keep_module_reference(mod);
+
+            Module const *owner = impl_cast<mi::mdl::Module>(mod.get());
+            IDefinition const *def = owner->find_signature(
+                signature, /*only_exported=*/false);
+            MDL_ASSERT(def != NULL && "signature has no definition");
+            arg_usages = get_or_calc_arg_usage(mod, def);
+        }
+    } else {
+        // handle known functions:
+        // register multiscatter BSDF data textures
+        IValue_texture::Bsdf_data_kind bsdf_data_kind = IValue_texture::BDK_NONE;
+        switch (sema) {
+        case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_SIMPLE_GLOSSY_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_BACKSCATTERING_GLOSSY_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_BECKMANN_SMITH_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_GGX_SMITH_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_BECKMANN_VC_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_GGX_VC_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_WARD_GEISLER_MORODER_MULTISCATTER;
+            break;
+        case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+            bsdf_data_kind = IValue_texture::BDK_SHEEN_MULTISCATTER;
+            break;
+        default:
+            break;
+        }
+
+        if (bsdf_data_kind != IValue_texture::BDK_NONE) {
+            // check whether multiscatter_tint is a constant zero color
+            DAG_node const *multiscatter_tint = call->get_argument("multiscatter_tint");
+            if (multiscatter_tint != NULL &&
+                    multiscatter_tint->get_kind() == DAG_node::EK_CONSTANT) {
+                IValue_rgb_color const *val = as<IValue_rgb_color>(
+                        cast<DAG_constant>(multiscatter_tint)->get_value());
+                if (val != NULL &&
+                        val->get_value(0)->get_value() == 0.f &&
+                        val->get_value(1)->get_value() == 0.f &&
+                        val->get_value(2)->get_value() == 0.f) {
+                    // no need to use multiscatter data textures for zero multiscatter tint
+                    return;
+                }
+            }
+
+            // ugly: we inject a bsdf_data texture value into the lambda function here
+            Lambda_function *lambda = const_cast<Lambda_function *>(&m_lambda_func);
+            IValue_factory *vf = lambda->get_value_factory();
+            IValue const *v = vf->create_bsdf_data_texture(
+                bsdf_data_kind,
+                /*tag_value=*/ 0,
+                /*tag_version=*/ 0);
+
+            // libbsdf uses tex::lookup_float3_3d()
+            m_tex_usage_map[v] |= ILambda_resource_enumerator::TU_LOOKUP_FLOAT3;
+            if (m_found_resources.insert(v).second)  // inserted for first time?
+                m_textures.push_back(v);
+        }
+
+        Arg_usages_by_semantics::const_iterator it = m_arg_usages_by_sema.find(sema);
+        if (it != m_arg_usages_by_sema.end())
+            arg_usages = it->second;
+    }
+
+    ILambda_resource_enumerator::Texture_usage old_tex_usage = m_tex_usage;
+    for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
+        DAG_node const *arg = call->get_argument(i);
+
+        if (arg_usages) {
+            if (is<IType_texture>(arg->get_type()->skip_type_alias())) {
+                m_tex_usage = old_tex_usage | arg_usages[i];
+            } else {
+                m_tex_usage = arg_usages[i];
+            }
+        }
+
+        collect(arg);
+    }
+    m_tex_usage = old_tex_usage;
+}
+
+// Returns the argument usage for the given definition and calculates it, if necessary.
+ILambda_resource_enumerator::Texture_usage *Resource_collector::get_or_calc_arg_usage(
+    mi::base::Handle<IModule const> owner, IDefinition const *def)
+{
+    if (def == NULL)
+        return NULL;
+
+    IDefinition::Semantics sema = def->get_semantics();
+    if (sema == IDefinition::DS_UNKNOWN) {
+        Arg_usages_by_def::const_iterator it = m_arg_usages_by_def.find(def);
+        if (it != m_arg_usages_by_def.end())
+            return it->second;
+
+        if (!is<IDeclaration_function>(def->get_declaration()))
+            return NULL;
+
+        ILambda_resource_enumerator::Texture_usage *arg_usages =
+            m_ast_collector.process_function(owner, def);
+        m_arg_usages_by_def[def] = arg_usages;
+        return arg_usages;
+    }
+
+    Arg_usages_by_semantics::const_iterator it = m_arg_usages_by_sema.find(sema);
+    if (it != m_arg_usages_by_sema.end())
+        return it->second;
+
+    return NULL;
+}
 
 }   // anonymous
 
@@ -786,13 +1038,13 @@ void Lambda_function::enumerate_resources(
         get_allocator(), resolver, *this, textures, light_profiles, bsdf_measurements);
 
     if (root != NULL) {
-        walker.walk_node(const_cast<DAG_node *>(root), &collector);
+        collector.collect(root);
     } else {
         // assume that a switch function is processed
         for (Root_vector::const_iterator it(m_roots.begin()), end(m_roots.end()); it != end; ++it) {
             // Note: due to material updates holes can occur in the root range
             if (DAG_node const *root = *it) {
-                walker.walk_node(const_cast<DAG_node *>(root), &collector);
+                collector.collect(root);
             }
         }
     }
@@ -802,8 +1054,9 @@ void Lambda_function::enumerate_resources(
          ++it)
     {
         IValue const *texture = *it;
+        ILambda_resource_enumerator::Texture_usage tex_usage = collector.get_texture_usage(texture);
 
-        enumerator.texture(texture);
+        enumerator.texture(texture, tex_usage);
     }
     for (Resource_list::const_iterator it(light_profiles.begin()), end(light_profiles.end());
          it != end;
@@ -1434,17 +1687,18 @@ public:
     }
 
     /// Post visit of an call
-    void post_visit(IExpression_call *call) MDL_FINAL
+    IExpression *post_visit(IExpression_call *call) MDL_FINAL
     {
         if (m_error) {
             // stop here, error will not be better
-            return;
+            return call;
         }
 
         // assume the AST error free
         IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
-        if (ref->is_array_constructor())
-            return;
+        if (ref->is_array_constructor()) {
+            return call;
+        }
 
         IDefinition const *def = ref->get_definition();
 
@@ -1488,6 +1742,7 @@ public:
             // all others have a known semantic and can be safely ignored.
             break;
         }
+        return call;
     }
 
 private:
@@ -2967,24 +3222,15 @@ public:
                     continue;
                 }
             case DAG_node::EK_CONSTANT:
+                {
+                    DAG_node const *res = m_root_lambda->import_expr(expr);
+                    set_result_node(expr, res, ES_AFTER_GEOMETRY_NORMAL);
+                    return res;
+                }
             case DAG_node::EK_CALL:
             case DAG_node::EK_PARAMETER:
                 {
                     DAG_node const *res;
-
-                    if (expr->get_kind() == DAG_node::EK_CONSTANT) {
-                        DAG_constant const *constant = cast<DAG_constant>(expr);
-                        IValue const *value = constant->get_value();
-
-                        // handle "bsdf()" constants, arrays and structs
-                        if (value->get_kind() == IValue::VK_INVALID_REF ||
-                                value->get_kind() == IValue::VK_ARRAY ||
-                                value->get_kind() == IValue::VK_STRUCT) {
-                            res = m_root_lambda->import_expr(constant);
-                            set_result_node(expr, res, ES_AFTER_GEOMETRY_NORMAL);
-                            return res;
-                        }
-                    }
 
                     IType const *ret_type = expr->get_type();
                     ret_type = m_type_factory.import(ret_type);

@@ -27,6 +27,7 @@
  *****************************************************************************/
 
 #include "compiled_material_traverser_base.h"
+#include <sstream>
 
 void Compiled_material_traverser_base::traverse(
     const mi::neuraylib::ICompiled_material* material, void* context)

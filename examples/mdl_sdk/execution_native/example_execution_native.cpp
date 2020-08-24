@@ -37,12 +37,9 @@
 #include <sstream>
 #include <string>
 
-#include <mi/mdl_sdk.h>
-
 #include "example_shared.h"
 #include "texture_support.h"
 #include <vector>
-
 
 // Command line options structure.
 struct Options {
@@ -65,9 +62,6 @@ struct Options {
     // Material to use.
     std::string material_name;
 
-    // List of MDL module paths.
-    std::vector<std::string> mdl_paths;
-
     Options()
         : outputfile("example_native.png")
         , res_x(700)
@@ -89,33 +83,45 @@ const mi::Float32_3_4 identity(
 
 // Creates an instance of the given material.
 void create_material_instance(
+    mi::neuraylib::IMdl_factory* factory,
     mi::neuraylib::ITransaction* transaction,
-    mi::neuraylib::IMdl_compiler* mdl_compiler,
+    mi::neuraylib::IMdl_impexp_api* mdl_impexp_api,
     mi::neuraylib::IMdl_execution_context* context,
     const char* material_name,
     const char* instance_name)
 {
+    // split module and material name
+    std::string module_name, material_simple_name;
+    if (!mi::examples::mdl::parse_cmd_argument_material_name(
+        material_name, module_name, material_simple_name, true))
+            exit_failure();
+
     // Load the module.
-    std::string module_name = get_module_name(material_name);
-    check_success(mdl_compiler->load_module(transaction, module_name.c_str(), context) >= 0);
-    print_messages(context);
+    mdl_impexp_api->load_module(transaction, module_name.c_str(), context);
+    if (!print_messages(context))
+        exit_failure("Loading module '%s' failed.", module_name.c_str());
 
-    // Create a material instance from the material definition
-    // Construct the material definition database name.
-    std::string prefix;
-    if (strncmp(material_name, "::", 2) == 0)
-        prefix = "mdl";  // already has a leading "::"
-    else
-        prefix = "mdl::";
-    std::string material_db_name = prefix + material_name;
+    // Get the database name for the module we loaded
+    mi::base::Handle<const mi::IString> module_db_name(
+        factory->get_db_module_name(module_name.c_str()));
 
-    // Create a material instance from the material definition with the default arguments.
+    // attach the material name
+    std::string material_db_name =
+        std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
+
+    // Get the material definition from the database
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
         transaction->access<mi::neuraylib::IMaterial_definition>(material_db_name.c_str()));
+    if (!material_definition)
+        exit_failure("Accessing definition '%s' failed.", material_db_name.c_str());
+
+    // Create a material instance from the material definition with the default arguments.
     mi::Sint32 result;
     mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
         material_definition->create_material_instance(0, &result));
-    check_success(result == 0);
+    if (result != 0)
+        exit_failure("Instantiating '%s' failed.", material_db_name.c_str());
+
     transaction->store(material_instance.get(), instance_name);
 }
 
@@ -142,7 +148,7 @@ void compile_material_instance(
 // Generate and execute native CPU code for a subexpression of a given compiled material.
 mi::neuraylib::ITarget_code const *generate_native(
     mi::neuraylib::ITransaction* transaction,
-    mi::neuraylib::IMdl_compiler* mdl_compiler,
+    mi::neuraylib::IMdl_backend_api* mdl_backend_api,
     mi::neuraylib::IMdl_execution_context* context,
     const char* compiled_material_name,
     const char* path,
@@ -154,7 +160,7 @@ mi::neuraylib::ITarget_code const *generate_native(
         transaction->access<mi::neuraylib::ICompiled_material>(compiled_material_name));
 
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_native(
-        mdl_compiler->get_backend(mi::neuraylib::IMdl_compiler::MB_NATIVE));
+        mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_NATIVE));
     check_success(be_native->set_option("num_texture_spaces", "1") == 0);
 
     if (use_custom_tex_runtime)
@@ -193,18 +199,19 @@ mi::neuraylib::ICanvas *bake_expression_native(
     mi::Float32_3_struct   texture_tangent_v[1] = { { 0.0f, 1.0f, 0.0f } };
 
     mi::neuraylib::Shading_state_material mdl_state = {
-        /*normal=*/           { 0.0f, 0.0f, 1.0f },
-        /*geom_normal=*/      { 0.0f, 0.0f, 1.0f },
-        /*position=*/         { 0.0f, 0.0f, 0.0f },
-        /*animation_time=*/   0.0f,
-        /*texture_coords=*/   texture_coords,
-        /*tangent_u=*/        texture_tangent_u,
-        /*tangent_v=*/        texture_tangent_v,
-        /*text_results=*/     nullptr,
-        /*ro_data_segment=*/  nullptr,
-        /*world_to_object=*/  &identity[0],
-        /*object_to_world=*/  &identity[0],
-        /*object_id=*/        0
+        /*normal=*/                { 0.0f, 0.0f, 1.0f },
+        /*geom_normal=*/           { 0.0f, 0.0f, 1.0f },
+        /*position=*/              { 0.0f, 0.0f, 0.0f },
+        /*animation_time=*/        0.0f,
+        /*texture_coords=*/        texture_coords,
+        /*tangent_u=*/             texture_tangent_u,
+        /*tangent_v=*/             texture_tangent_v,
+        /*text_results=*/          nullptr,
+        /*ro_data_segment=*/       nullptr,
+        /*world_to_object=*/       &identity[0],
+        /*object_to_world=*/       &identity[0],
+        /*object_id=*/             0,
+        /*meters_per_scene_unit=*/ 1.0f
     };
 
     // Provide a large enough buffer for any result type.
@@ -257,11 +264,11 @@ mi::neuraylib::ICanvas *bake_expression_native(
 // Bake the material expression created with the native backend into a canvas with the given
 // resolution with derivative support.
 mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
-    mi::neuraylib::IImage_api            *image_api,
-    mi::neuraylib::ITarget_code const    *code_native,
-    mi::neuraylib::Texture_handler_base  *tex_handler,
-    mi::Uint32                            width,
-    mi::Uint32                            height)
+    mi::neuraylib::IImage_api                  *image_api,
+    mi::neuraylib::ITarget_code const          *code_native,
+    mi::neuraylib::Texture_handler_deriv_base  *tex_handler,
+    mi::Uint32                                  width,
+    mi::Uint32                                  height)
 {
     // Create a canvas (with only one tile)
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
@@ -281,23 +288,24 @@ mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
     mi::neuraylib::tct_float3 texture_tangent_v[1] = { { 0.0f, 1.0f, 0.0f } };
 
     mi::neuraylib::Shading_state_material_with_derivs mdl_state = {
-        /*normal=*/           { 0.0f, 0.0f, 1.0f },
-        /*geom_normal=*/      { 0.0f, 0.0f, 1.0f },
+        /*normal=*/                { 0.0f, 0.0f, 1.0f },
+        /*geom_normal=*/           { 0.0f, 0.0f, 1.0f },
         /*position=*/
         {
             { 0.0f, 0.0f, 0.0f },         // value component
             { 2 * step_x, 0.0f, 0.0f },   // dx component
             { 0.0f, 2 * step_y, 0.0f }    // dy component
         },
-        /*animation_time=*/   0.0f,
-        /*texture_coords=*/   texture_coords,
-        /*tangent_u=*/        texture_tangent_u,
-        /*tangent_v=*/        texture_tangent_v,
-        /*text_results=*/     nullptr,
-        /*ro_data_segment=*/  nullptr,
-        /*world_to_object=*/  &identity[0],
-        /*object_to_world=*/  &identity[0],
-        /*object_id=*/        0
+        /*animation_time=*/        0.0f,
+        /*texture_coords=*/        texture_coords,
+        /*tangent_u=*/             texture_tangent_u,
+        /*tangent_v=*/             texture_tangent_v,
+        /*text_results=*/          nullptr,
+        /*ro_data_segment=*/       nullptr,
+        /*world_to_object=*/       &identity[0],
+        /*object_to_world=*/       &identity[0],
+        /*object_id=*/             0,
+        /*meters_per_scene_unit=*/ 1.0f
     };
 
     // Provide a large enough buffer for any result type.
@@ -333,7 +341,7 @@ mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
             check_success(code_native->execute(
                 0,
                 reinterpret_cast<mi::neuraylib::Shading_state_material &>(mdl_state),
-                tex_handler,
+                reinterpret_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                 nullptr,
                 &execute_result) == 0);
 
@@ -414,8 +422,7 @@ void usage(char const *prog_name)
         << "                      (default: example_native.png)\n"
         << "  --mdl_path <path>   mdl search path, can occur multiple times."
         << std::endl;
-    keep_console_open();
-    exit(EXIT_FAILURE);
+    exit_failure();
 }
 
 
@@ -428,6 +435,8 @@ int MAIN_UTF8(int argc, char *argv[])
 {
     // Parse command line options
     Options options;
+    mi::examples::mdl::Configure_options configure_options;
+    configure_options.add_example_search_path = false;
 
     for (int i = 1; i < argc; ++i) {
         char const *opt = argv[i];
@@ -444,7 +453,7 @@ int MAIN_UTF8(int argc, char *argv[])
             } else if (strcmp(opt, "-d") == 0) {
                 options.enable_derivatives = true;
             } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
-                options.mdl_paths.push_back(argv[++i]);
+                configure_options.additional_mdl_paths.push_back(argv[++i]);
             } else {
                 std::cout << "Unknown option: \"" << opt << "\"" << std::endl;
                 usage(argv[0]);
@@ -453,41 +462,25 @@ int MAIN_UTF8(int argc, char *argv[])
             options.material_name = opt;
     }
 
-    if (options.use_custom_tex_runtime && options.enable_derivatives) {
-        std::cout << "This example does not support using derivatives with the custom texture "
-            "runtime.\n";
-        usage(argv[0]);
-    }
-
     // Use default material, if none was provided via command line
     if (options.material_name.empty()) {
-        options.mdl_paths.push_back(get_samples_mdl_root());
+        configure_options.add_example_search_path = true;
         options.material_name = "::nvidia::sdk_examples::tutorials::example_execution1";
     }
 
     // Access the MDL SDK
-    mi::base::Handle<mi::neuraylib::INeuray> neuray(load_and_get_ineuray());
-    check_success(neuray.is_valid_interface());
-
-    // Access the MDL SDK compiler component
-    mi::base::Handle<mi::neuraylib::IMdl_compiler> mdl_compiler(
-        neuray->get_api_component<mi::neuraylib::IMdl_compiler>());
+    mi::base::Handle<mi::neuraylib::INeuray> neuray(mi::examples::mdl::load_and_get_ineuray());
+    if (!neuray.is_valid_interface())
+        exit_failure("Failed to load the SDK.");
 
     // Configure the MDL SDK
-
-    // Install logger
-    mi::base::Handle<mi::base::ILogger> logger(new Default_logger());
-    mdl_compiler->set_logger(logger.get());
-
-    // Load plugin required for loading textures
-    check_success(mdl_compiler->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0);
-    // Configure MDL search root
-    for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
-        check_success(mdl_compiler->add_module_path(options.mdl_paths[i].c_str()) == 0);
+    if (!mi::examples::mdl::configure(neuray.get(), configure_options))
+        exit_failure("Failed to initialize the SDK.");
 
     // Start the MDL SDK
-    mi::Sint32 result = neuray->start();
-    check_start_success(result);
+    mi::Sint32 ret = neuray->start();
+    if (ret != 0)
+        exit_failure("Failed to initialize the SDK. Result code: %d", ret);
 
     {
         // Create a transaction
@@ -499,14 +492,21 @@ int MAIN_UTF8(int argc, char *argv[])
             mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
                 neuray->get_api_component<mi::neuraylib::IMdl_factory>());
 
+            mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+                neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
+
+            mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
+                neuray->get_api_component<mi::neuraylib::IMdl_backend_api>());
+
             mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
                 mdl_factory->create_execution_context());
 
             // Load the MDL module and create a material instance
             std::string instance_name = "material instance";
             create_material_instance(
+                mdl_factory.get(),
                 transaction.get(),
-                mdl_compiler.get(),
+                mdl_impexp_api.get(),
                 context.get(),
                 options.material_name.c_str(),
                 instance_name.c_str());
@@ -528,7 +528,7 @@ int MAIN_UTF8(int argc, char *argv[])
             mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
                 generate_native(
                     transaction.get(),
-                    mdl_compiler.get(),
+                    mdl_backend_api.get(),
                     context.get(),
                     compilation_name.c_str(),
                     "surface.scattering.tint",            // MDL expression path
@@ -543,50 +543,60 @@ int MAIN_UTF8(int argc, char *argv[])
             mi::base::Handle<mi::neuraylib::ICanvas> canvas;
 
             std::vector<Texture>  textures;
-            Texture_handler       tex_handler;
-            Texture_handler      *tex_handler_ptr = nullptr;
             if (options.use_custom_tex_runtime) {
                 // Setup custom texture handler
                 check_success(prepare_textures(
                     textures, transaction.get(), image_api.get(), target_code.get()));
-
-                tex_handler.vtable = &tex_vtable;
-                tex_handler.num_textures = target_code->get_texture_count() - 1;
-                tex_handler.textures = textures.data();
-
-                tex_handler_ptr = &tex_handler;
             }
 
             // Bake the expression into a canvas
             if (options.enable_derivatives) {
+                Texture_handler_deriv tex_handler;
+                Texture_handler_deriv *tex_handler_ptr = nullptr;
+                if (options.use_custom_tex_runtime) {
+                    tex_handler.vtable = &tex_deriv_vtable;
+                    tex_handler.num_textures = target_code->get_texture_count() - 1;
+                    tex_handler.textures = textures.data();
+
+                    tex_handler_ptr = &tex_handler;
+                }
+
                 canvas = bake_expression_native_with_derivs(
                     image_api.get(), target_code.get(), tex_handler_ptr,
                     options.res_x, options.res_y);
             } else {
+                Texture_handler tex_handler;
+                Texture_handler *tex_handler_ptr = nullptr;
+                if (options.use_custom_tex_runtime) {
+                    tex_handler.vtable = &tex_vtable;
+                    tex_handler.num_textures = target_code->get_texture_count() - 1;
+                    tex_handler.textures = textures.data();
+
+                    tex_handler_ptr = &tex_handler;
+                }
+
                 canvas = bake_expression_native(
                     image_api.get(), target_code.get(), tex_handler_ptr,
                     options.res_x, options.res_y);
             }
 
             // Export the canvas to an image on disk
-            mdl_compiler->export_canvas(options.outputfile.c_str(), canvas.get());
+            mdl_impexp_api->export_canvas(options.outputfile.c_str(), canvas.get());
         }
 
         transaction->commit();
     }
 
-    // Free MDL compiler before shutting down MDL SDK
-    mdl_compiler = 0;
-
     // Shut down the MDL SDK
-    check_success(neuray->shutdown() == 0);
-    neuray = 0;
+    if (neuray->shutdown() != 0)
+        exit_failure("Failed to shutdown the SDK.");
 
     // Unload the MDL SDK
-    check_success(unload());
+    neuray = nullptr;
+    if (!mi::examples::mdl::unload())
+        exit_failure("Failed to unload the SDK.");
 
-    keep_console_open();
-    return EXIT_SUCCESS;
+    exit_success();
 }
 
 // Convert command line arguments to UTF8 on Windows

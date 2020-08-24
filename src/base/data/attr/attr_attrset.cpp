@@ -241,7 +241,7 @@ bool Attribute_set::attach(
                 "duplicate attribute \"%s\", already attached", aname);
         else
             mod_log->error(M_ATTR, LOG::Mod_log::C_DATABASE, 3,
-                "duplicate unnamed attribute %d, already attached",
+                "duplicate unnamed attribute %u, already attached",
                                                         attr->get_id());
     }
 
@@ -724,7 +724,7 @@ void print_type_value(
         mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
             "  (%d, %d, %d), arraysize %" FMT_SIZE_T ", name %s",
             (int)ptr[0], (int)ptr[1], (int)ptr[2],
-            array_size, typ.get_name());
+            array_size, typ.get_name()?typ.get_name():"<nil>");
         break;
       }
       case TYPE_RGBA: {
@@ -834,7 +834,7 @@ void print_type_value(
             else
                 name = "<invalid>";
             mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-                "  elem[%" FMT_SIZE_T "] = %d, reference to %s",
+                "  elem[%" FMT_SIZE_T "] = %u, reference to %s",
                 i, *ptr++, name.c_str());
         }
         break;
@@ -846,7 +846,7 @@ void print_type_value(
       case TYPE_INT32: {
         Uint32 *ptr = (Uint32*)val_ptr;
         mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-            "  %d with arraysize %" FMT_SIZE_T ", name %s",
+            "  %u with arraysize %" FMT_SIZE_T ", name %s",
             *ptr, array_size, typ.get_name());
         break;
       }
@@ -873,7 +873,7 @@ void print_type_value(
             ptr->size(), typ.get_name());
         for (size_t i=0; i<ptr->size(); ++i)
             mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
-                "  elem[%" FMT_SIZE_T "] = %d",
+                "  elem[%" FMT_SIZE_T "] = %u",
                 i, (*ptr)[i]);
         break;
       }
@@ -886,6 +886,7 @@ void print_type_value(
         mod_log->debug(M_ATTR, Mod_log::C_DATABASE,
             "  value of type %s currently not handled",
             ((code <= TYPE_NUM)? Type::type_name(code) : "undefined"));
+        break;
     }
 
 }

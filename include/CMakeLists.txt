@@ -57,6 +57,7 @@ set(PROJECT_HEADERS_BASE
     "${MDL_INCLUDE_FOLDER}/mi/base/types.h"
     "${MDL_INCLUDE_FOLDER}/mi/base/uuid.h"
     "${MDL_INCLUDE_FOLDER}/mi/base/version.h"
+    "${MDL_INCLUDE_FOLDER}/mi/base.h"
     )
 
 set(PROJECT_HEADERS_MATH
@@ -68,6 +69,7 @@ set(PROJECT_HEADERS_MATH
     "${MDL_INCLUDE_FOLDER}/mi/math/spectrum.h"
     "${MDL_INCLUDE_FOLDER}/mi/math/vector.h"
     "${MDL_INCLUDE_FOLDER}/mi/math/version.h"
+    "${MDL_INCLUDE_FOLDER}/mi/math.h"
     )
 
 set(PROJECT_HEADERS_MDL
@@ -90,6 +92,7 @@ set(PROJECT_HEADERS_MDL
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_mdl.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_messages.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_modules.h"
+    "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_module_transformer.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_names.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_options.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_positions.h"
@@ -101,11 +104,13 @@ set(PROJECT_HEADERS_MDL
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_symbols.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_target_types.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_thread_context.h"
+    "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_translator_plugin.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_types.h"
     "${MDL_INCLUDE_FOLDER}/mi/mdl/mdl_values.h"
     )
 
 set(PROJECT_HEADERS_NEURAYLIB
+    "${MDL_INCLUDE_FOLDER}/mi/mdl_sdk.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/annotation_wrapper.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/argument_editor.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/assert.h"
@@ -131,8 +136,8 @@ set(PROJECT_HEADERS_NEURAYLIB
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/idynamic_array.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ienum.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ienum_decl.h"
-    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iexport_result.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iexporter.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iexport_result.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iexpression.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iextension_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ifactory.h"
@@ -143,29 +148,35 @@ set(PROJECT_HEADERS_NEURAYLIB
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimage_plugin.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimpexp_base.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimpexp_state.h"
-    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimport_result.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimporter.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimport_result.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ilightprofile.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ilogging_configuration.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imap.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imaterial_definition.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imaterial_instance.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imatrix.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdle_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_archive_api.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_backend.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_backend_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_compatibility_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_compiler.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_configuration.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_discovery_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_entity_resolver.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_evaluator_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_execution_context.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_factory.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_i18n_configuration.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_impexp_api.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_loading_wait_handle.h"
-    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdle_api.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imdl_module_transformer.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imodule.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ineuray.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/inumber.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iplugin_api.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iplugin_configuration.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ipointer.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ireader.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ireader_writer_base.h"
@@ -189,17 +200,16 @@ set(PROJECT_HEADERS_NEURAYLIB
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ivector.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iversion.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iwriter.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/matrix_typedefs.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/set_get.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/target_code_types.h"
-    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/type_traits.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/typedefs.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/type_traits.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/vector_typedefs.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/version.h"
     )
 
 set(PROJECT_SOURCES
-    "${MDL_INCLUDE_FOLDER}/mi/base.h"
-    "${MDL_INCLUDE_FOLDER}/mi/math.h"
-    "${MDL_INCLUDE_FOLDER}/mi/mdl_sdk.h"
      ${PROJECT_HEADERS_BASE}
      ${PROJECT_HEADERS_MATH}
      ${PROJECT_HEADERS_MDL}
@@ -214,7 +224,7 @@ create_from_base_preset(
     )
 
 # override position and name in the folder hierarchy
-set_target_properties(${PROJECT_NAME} PROPERTIES 
+set_target_properties(${PROJECT_NAME} PROPERTIES
     FOLDER          "include"               # hierarchy
     PROJECT_LABEL   "mi"                    # project name
     )

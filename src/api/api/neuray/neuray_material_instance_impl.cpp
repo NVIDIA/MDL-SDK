@@ -57,7 +57,7 @@ DB::Element_base* Material_instance_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new MDL::Mdl_material_instance;
 }
 
@@ -67,7 +67,7 @@ mi::base::IInterface* Material_instance_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Material_instance_impl())->cast_to_major();
 }
 
@@ -186,8 +186,8 @@ mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_mater
         return nullptr;
 
     MDL::Execution_context default_context;
-    NEURAY::Mdl_execution_context_impl* context_impl =
-        static_cast<NEURAY::Mdl_execution_context_impl*>(context);
+    Mdl_execution_context_impl* context_impl =
+        static_cast<Mdl_execution_context_impl*>(context);
 
     bool class_compilation = flags & CLASS_COMPILATION;
     boost::shared_ptr<MDL::Mdl_compiled_material> db_instance(
@@ -196,7 +196,7 @@ mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_mater
             context_impl ? &context_impl->get_context() : &default_context));
 
     if (!db_instance)
-        return 0;
+        return nullptr;
     mi::neuraylib::ICompiled_material* api_instance
         = get_transaction()->create<mi::neuraylib::ICompiled_material>(
             "__Compiled_material");

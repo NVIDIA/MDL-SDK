@@ -30,8 +30,6 @@
 //
 // Obtain an INeuray interface, start the MDL SDK and shut it down.
 
-#include <mi/mdl_sdk.h>
-
 // Include code shared by all examples.
 #include "example_shared.h"
 
@@ -40,13 +38,10 @@
 int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 {
     // Get the INeuray interface in a suitable smart pointer.
-    mi::base::Handle<mi::neuraylib::INeuray> neuray( load_and_get_ineuray());
-    if( !neuray.is_valid_interface()) {
-        fprintf( stderr, "Error: The MDL SDK library failed to load and to provide "
-                 "the mi::neuraylib::INeuray interface.\n");
-        keep_console_open();
-        return EXIT_FAILURE;
-    }
+    mi::base::Handle<mi::neuraylib::INeuray> neuray( mi::examples::mdl::load_and_get_ineuray());
+    if ( !neuray.is_valid_interface())
+        exit_failure("Error: The MDL SDK library failed to load and to provide "
+                     "the mi::neuraylib::INeuray interface.");
 
     // Print library version information.
     mi::base::Handle<const mi::neuraylib::IVersion> version(
@@ -64,12 +59,12 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
     mi::base::Uuid neuray_id_libraray = version->get_neuray_iid();
     mi::base::Uuid neuray_id_interface = mi::neuraylib::INeuray::IID();
 
-    fprintf( stderr, "MDL SDK header interface ID           = <%2x, %2x, %2x, %2x>\n",
+    fprintf( stderr, "MDL SDK header interface ID     = <%2x, %2x, %2x, %2x>\n",
         neuray_id_interface.m_id1,
         neuray_id_interface.m_id2,
         neuray_id_interface.m_id3,
         neuray_id_interface.m_id4);
-    fprintf( stderr, "MDL SDK library interface ID          = <%2x, %2x, %2x, %2x>\n\n",
+    fprintf( stderr, "MDL SDK library interface ID    = <%2x, %2x, %2x, %2x>\n\n",
         neuray_id_libraray.m_id1,
         neuray_id_libraray.m_id2,
         neuray_id_libraray.m_id3,
@@ -77,7 +72,10 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 
     version = 0;
 
-    // configuration settings go here, none in this example
+    // configuration settings go here, none in this example,
+    // but for a standard initialization the other examples use this helper function:
+    // if ( !mi::examples::mdl::configure(neuray.get()))
+    //     exit_failure("Failed to initialize the SDK.");
 
     // After all configurations, the MDL SDK is started. A return code of 0 implies success. The
     // start can be blocking or non-blocking. Here the blocking mode is used so that you know that
@@ -88,19 +86,22 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
     //
     // if startup is completed.
     mi::Sint32 result = neuray->start( true);
-    check_start_success( result);
+    if ( result != 0)
+        exit_failure( "Failed to initialize the SDK. Result code: %d", result);
 
     // scene graph manipulations and rendering calls go here, none in this example.
+    // ...
 
-    // Shutting down in blocking mode. Again, a return code of 0 indicates success.
-    check_success( neuray->shutdown( true) == 0);
-    neuray = 0;
+    // Shutting the MDL SDK down in blocking mode. Again, a return code of 0 indicates success.
+    if (neuray->shutdown( true) != 0)
+        exit_failure( "Failed to shutdown the SDK.");
 
     // Unload the MDL SDK
-    check_success( unload());
+    neuray = nullptr; // free the handles that holds the INeuray instance
+    if ( !mi::examples::mdl::unload())
+        exit_failure( "Failed to unload the SDK.");
 
-    keep_console_open();
-    return EXIT_SUCCESS;
+    exit_success();
 }
 
 // Convert command line arguments to UTF8 on Windows

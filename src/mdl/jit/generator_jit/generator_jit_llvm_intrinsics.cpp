@@ -1761,6 +1761,7 @@ llvm::Function *MDL_runtime_creator::decl_from_signature(
         llvm::GlobalValue::InternalLinkage,
         name,
         m_code_gen.m_module);
+    m_code_gen.set_llvm_function_attributes(func);
 
     return func;
 }
@@ -3915,54 +3916,60 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
 {
     mi::mdl::IDefinition const *callee_def = call_expr->get_callee_definition(*this);
 
+    State_usage usage;
     switch (callee_def->get_semantics()) {
     case IDefinition::DS_INTRINSIC_STATE_POSITION:
-        m_render_state_usage |= IGenerated_code_executable::SU_POSITION;
+        usage = IGenerated_code_executable::SU_POSITION;
         break;
     case IDefinition::DS_INTRINSIC_STATE_NORMAL:
-        m_render_state_usage |= IGenerated_code_executable::SU_NORMAL;
+        usage = IGenerated_code_executable::SU_NORMAL;
         break;
     case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_NORMAL:
-        m_render_state_usage |= IGenerated_code_executable::SU_GEOMETRY_NORMAL;
+        usage = IGenerated_code_executable::SU_GEOMETRY_NORMAL;
         break;
     case IDefinition::DS_INTRINSIC_STATE_MOTION:
-        m_render_state_usage |= IGenerated_code_executable::SU_MOTION;
+        usage = IGenerated_code_executable::SU_MOTION;
         break;
     case IDefinition::DS_INTRINSIC_STATE_TEXTURE_COORDINATE:
-        m_render_state_usage |= IGenerated_code_executable::SU_TEXTURE_COORDINATE;
+        usage = IGenerated_code_executable::SU_TEXTURE_COORDINATE;
         break;
     case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_U:
     case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_V:
-        m_render_state_usage |= IGenerated_code_executable::SU_TEXTURE_TANGENTS;
+        usage = IGenerated_code_executable::SU_TEXTURE_TANGENTS;
         break;
     case IDefinition::DS_INTRINSIC_STATE_TANGENT_SPACE:
-        m_render_state_usage |= IGenerated_code_executable::SU_TANGENT_SPACE;
+        usage = IGenerated_code_executable::SU_TANGENT_SPACE;
         break;
     case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_U:
     case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_V:
-        m_render_state_usage |= IGenerated_code_executable::SU_GEOMETRY_TANGENTS;
+        usage = IGenerated_code_executable::SU_GEOMETRY_TANGENTS;
         break;
     case IDefinition::DS_INTRINSIC_STATE_DIRECTION:
-        m_render_state_usage |= IGenerated_code_executable::SU_DIRECTION;
+        usage = IGenerated_code_executable::SU_DIRECTION;
         break;
     case IDefinition::DS_INTRINSIC_STATE_ANIMATION_TIME:
-        m_render_state_usage |= IGenerated_code_executable::SU_ANIMATION_TIME;
+        usage = IGenerated_code_executable::SU_ANIMATION_TIME;
         break;
     case IDefinition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:
-        m_render_state_usage |= IGenerated_code_executable::SU_ROUNDED_CORNER_NORMAL;
+        usage = IGenerated_code_executable::SU_ROUNDED_CORNER_NORMAL;
         break;
     case IDefinition::DS_INTRINSIC_STATE_TRANSFORM:
     case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_NORMAL:
     case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_POINT:
     case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_SCALE:
     case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_VECTOR:
-        m_render_state_usage |= IGenerated_code_executable::SU_TRANSFORMS;
+        usage = IGenerated_code_executable::SU_TRANSFORMS;
         break;
     case IDefinition::DS_INTRINSIC_STATE_OBJECT_ID:
-        m_render_state_usage |= IGenerated_code_executable::SU_OBJECT_ID;
+        usage = IGenerated_code_executable::SU_OBJECT_ID;
         break;
     default:
+        usage = 0;
         break;
+    }
+
+    if (usage != 0) {
+        m_state_usage_analysis.add_state_usage(ctx.get_function(), usage);
     }
 
     mi::mdl::IDeclaration_function const *fdecl =

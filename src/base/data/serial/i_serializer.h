@@ -287,7 +287,7 @@ public:
     ///
     /// \param marker_status    Type of error encountered.
     /// \param serializable     Pointer to serializable object that failed deserializing.
-    ///                         Only it's class id is known to be defined.
+    ///                         Only its class id is known to be defined.
     virtual void handle(Marker_status status, const T* serializable) = 0;
 };
 
@@ -469,6 +469,13 @@ void read(Deserializer* deser, Serializable* object);
 template <class Iterator>
 inline void read_range(Deserializer& deserializer, Iterator begin, Iterator end);
 
+/// A small helper function for de-serializing arrays of values.
+///
+/// \param deserializer   de-serializer to read from
+/// \param arr            the array to deserialize
+template <typename T, size_t N>
+inline void read_range(Deserializer& deserializer, T (&arr)[N]);
+
 /// A small helper function for serializing ranges of values. write_range() can serialize ranges of
 /// any serializable type from any given container.
 ///
@@ -477,6 +484,13 @@ inline void read_range(Deserializer& deserializer, Iterator begin, Iterator end)
 /// \param end            one past the last spot of the range
 template <class Iterator>
 inline void write_range(Serializer& serializer, Iterator begin, Iterator end);
+
+/// A small helper function for serializing ranges of values. write_range() can serialize arrays.
+///
+/// \param serializer     serializer to write to
+/// \param arr            the array to serialize
+template <typename T, size_t N>
+inline void write_range(Serializer& serializer, const T (&arr)[N]);
 
 /// Serialize a vector.
 template <typename T>
@@ -538,6 +552,11 @@ void write(Serializer* serializer, const std::multimap<K,V,C,A>&);
 template<class K, class V, class C, class A>
 void read(Deserializer* deserializer, std::multimap<K,V,C,A>*);
 
+template <typename Enum_type>
+void write_enum(Serializer* serializer, Enum_type enum_value );
+
+template <typename Enum_type>
+void read_enum(Deserializer* deserializer, Enum_type* enum_value );
 
 } /// namespace SERIAL
 

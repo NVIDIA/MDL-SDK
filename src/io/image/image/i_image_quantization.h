@@ -35,11 +35,7 @@
 #include <climits>
 #include <limits>
 
-#ifdef __CUDACC__
-#define FORCE_INLINE __device__ __forceinline__
-#else
-#define FORCE_INLINE MI_FORCE_INLINE
-
+#ifndef __CUDACC__
 #include <base/system/main/platform.h>
 #include <base/system/main/i_assert.h>
 #include <base/system/stlext/i_stlext_binary_cast.h>
@@ -56,7 +52,7 @@ namespace IMAGE {
 //  the test did dequantize an unsigned (X bits) to float, then back to unsigned via quantize_unsigned (below) with both variants
 //  the intermediate float values then obviously differed a bit, but the resulting unsigned from the back and forth conversion was always the same!
 /*template <unsigned char bits> // number of bits to map to
-FORCE_INLINE float dequantize_unsigned(const unsigned int i)
+MI_HOST_DEVICE_INLINE float dequantize_unsigned(const unsigned int i)
 {
 #ifndef __CUDACC__
     using std::min;
@@ -66,7 +62,7 @@ FORCE_INLINE float dequantize_unsigned(const unsigned int i)
 }*/
 
 template <unsigned char bits> // number of bits to map to
-FORCE_INLINE unsigned quantize_unsigned(const float x)
+MI_HOST_DEVICE_INLINE unsigned quantize_unsigned(const float x)
 {
 #ifndef __CUDACC__
     MI_ASSERT(!std::isnan(x));
@@ -86,7 +82,7 @@ FORCE_INLINE unsigned quantize_unsigned(const float x)
 
 
 template <typename T>
-FORCE_INLINE T quantize_unsigned(const float x)
+MI_HOST_DEVICE_INLINE T quantize_unsigned(const float x)
 {
 #ifndef __CUDACC__
     static_assert(std::numeric_limits<T>::is_integer && !std::numeric_limits<T>::is_signed,"can only quantize to unsigned integer types");
@@ -96,7 +92,7 @@ FORCE_INLINE T quantize_unsigned(const float x)
 
 
 template <unsigned char bits> // number of bits to map to, including negative numbers, so mapping just to unsigned: bits+1 (0..255 -> bits = 9)
-FORCE_INLINE int quantize_signed(const float x)
+MI_HOST_DEVICE_INLINE int quantize_signed(const float x)
 {
 #ifndef __CUDACC__
     MI_ASSERT(!std::isnan(x));
@@ -112,7 +108,7 @@ FORCE_INLINE int quantize_signed(const float x)
 
 
 template <typename T>
-FORCE_INLINE T quantize_signed(const float x)
+MI_HOST_DEVICE_INLINE T quantize_signed(const float x)
 {
 #ifndef __CUDACC__
     static_assert(std::numeric_limits<T>::is_integer && std::numeric_limits<T>::is_signed,"can only quantize to signed integer types");
@@ -127,26 +123,25 @@ template <bool is_signed>
 struct Quantize
 {
     template <typename T>
-    FORCE_INLINE static T quantize(const float x) { return quantize_signed<T>(x); }
+    MI_HOST_DEVICE_INLINE static T quantize(const float x) { return quantize_signed<T>(x); }
 };
 
 template <>
 struct Quantize<false>
 {
     template <typename T>
-    FORCE_INLINE static T quantize(const float x) { return quantize_unsigned<T>(x); }
+    MI_HOST_DEVICE_INLINE static T quantize(const float x) { return quantize_unsigned<T>(x); }
 };
 
 }
 
 
 template <typename T>
-FORCE_INLINE T quantize(const float x)
+MI_HOST_DEVICE_INLINE T quantize(const float x)
 {
     return DETAIL::Quantize<std::numeric_limits<T>::is_signed>::template quantize<T>(x);
 }
 
 }}
 
-#undef FORCE_INLINE
 

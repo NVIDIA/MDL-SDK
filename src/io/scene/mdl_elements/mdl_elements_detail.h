@@ -38,9 +38,12 @@
 #include <mi/mdl/mdl_values.h>
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_entity_resolver.h>
+#include <mi/mdl/mdl_streams.h>
 #include <mi/neuraylib/ireader.h>
+
 #include <string>
 #include <boost/unordered_map.hpp>
+
 #include <base/data/db/i_db_tag.h>
 #include <io/image/image/i_image.h>
 #include <io/scene/dbimage/i_dbimage.h>
@@ -58,30 +61,19 @@ namespace MDL {
 
 namespace DETAIL {
 
-/// Indicates whether the given filename refers to a file in an MDL archive ore MDLe.
-///
-/// Such files are recognized by the \c ".mdr:" substring.
-bool is_container_member( const char* filename);
-
-/// Returns the filename of the container if #is_container_member() returns \c true, and the empty
-/// string otherwise.
-std::string get_container_filename( const char* filename);
-
-/// Returns the filename of the container member if #is_container_member() returns \c true, and the
-/// empty string otherwise.
-std::string get_container_membername( const char* filename);
-
-/// Searches a thumbnail image for the given mdl definition by considering both the 
+/// Searches a thumbnail image for the given mdl definition by considering both the
 /// "thumbnail"-annotation and the 'module_name.definition_name.ext' convention.
 ///
 /// \param module_filename      resolved module file name
-/// \param mdl_name             name of the mdl definition
+/// \param module_name          MDL name of the module
+/// \param def_simple_name      MDL simple name of the definitionA
 /// \param annotations          annotations of the mdl definition
 /// \param archive_tool         to resolve thumbnails in archives
 /// \return the resolved file name of the thumbnail or an empty string if none could be found
 std::string lookup_thumbnail(
-    const std::string& module_filename, 
-    const std::string& mdl_name,
+    const std::string& module_filename,
+    const std::string& module_name,
+    const std::string& def_simple_name,
     const IAnnotation_block* annotations,
     mi::mdl::IArchive_tool* archive_tool);
 
@@ -391,17 +383,74 @@ private:
     Bind_size_map m_size_bindings;
 };
 
-/// Adapts mi::mdl::IMDL_resource_reader to mi::neuraylib::IReader.
-class File_reader_impl : public mi::base::Interface_implement<mi::neuraylib::IReader>
+/// Adapts mi::mdl::IIput_stream to mi::neuraylib::IReader.
+class Input_stream_reader_impl : public mi::base::Interface_implement<mi::neuraylib::IReader>
 {
 public:
-    File_reader_impl( mi::mdl::IMDL_resource_reader* reader);
+    Input_stream_reader_impl( mi::mdl::IInput_stream* reader);
 
     // public API methods
 
-    mi::Sint32 get_error_number() const;
+    // Error handling not implemented.
+    mi::Sint32 get_error_number() const { return 0; }
 
-    const char* get_error_message() const;
+    // Error handling not implemented.
+    const char* get_error_message() const { return nullptr; }
+
+    // In this implementation, EOF is (incorrect) only reported after an attempt to read beyond the
+    // end.
+    bool eof() const { return m_eof; }
+
+    mi::Sint32 get_file_descriptor() const { return -1; }
+
+    bool supports_recorded_access() const { return false; }
+
+    const mi::neuraylib::IStream_position* tell_position() const { return nullptr; }
+
+    bool seek_position( const mi::neuraylib::IStream_position* stream_position) { return false; }
+
+    bool rewind() { return false; }
+
+    bool supports_absolute_access() const { return false; }
+
+    mi::Sint64 tell_absolute() const { return -1; }
+
+    bool seek_absolute( mi::Sint64 pos) { return false; }
+
+    mi::Sint64 get_file_size() const { return 0; }
+
+    bool seek_end() { return false; }
+
+    mi::Sint64 read( char* buffer, mi::Sint64 size);
+
+    bool readline( char* buffer, mi::Sint32 size);
+
+    /// Lookahead is not supported in this implementation since the signature of lookahead()
+    /// is not thread-safe.
+    bool supports_lookahead() const { return false; }
+
+    /// Lookahead is not supported in this implementation since the signature of lookahead()
+    /// is not thread-safe.
+    mi::Sint64 lookahead( mi::Sint64 size, const char** buffer) const { return 0; }
+
+private:
+    mi::base::Handle<mi::mdl::IInput_stream> m_stream;
+    bool m_eof;
+};
+
+/// Adapts mi::mdl::IMDL_resource_reader to mi::neuraylib::IReader.
+class Resource_reader_impl : public mi::base::Interface_implement<mi::neuraylib::IReader>
+{
+public:
+    Resource_reader_impl( mi::mdl::IMDL_resource_reader* reader);
+
+    // public API methods
+
+    // Error handling not implemented.
+    mi::Sint32 get_error_number() const { return 0; }
+
+    // Error handling not implemented.
+    const char* get_error_message() const { return nullptr; }
 
     bool eof() const;
 
@@ -409,7 +458,7 @@ public:
 
     bool supports_recorded_access() const { return false; }
 
-    const mi::neuraylib::IStream_position* tell_position() const { return 0; }
+    const mi::neuraylib::IStream_position* tell_position() const { return nullptr; }
 
     bool seek_position( const mi::neuraylib::IStream_position* stream_position) { return false; }
 
@@ -441,6 +490,68 @@ private:
     mi::base::Handle<mi::mdl::IMDL_resource_reader> m_reader;
 };
 
+/// Adapts mi::neuraylib::IReader to mi::mdl::Input_stream.
+class Input_stream_impl : public mi::base::Interface_implement<mi::mdl::IInput_stream>
+{
+public:
+    Input_stream_impl( mi::neuraylib::IReader* reader, const std::string& filename);
+
+    // MDL core API methods
+
+    int read_char();
+
+    const char* get_filename();
+
+private:
+    mi::base::Handle<mi::neuraylib::IReader> m_reader;
+    std::string m_filename;
+};
+
+/// Adapts mi::neuraylib::IReader to mi::mdl::IMdle_input_stream.
+class Mdle_input_stream_impl
+  : public mi::base::Interface_implement<mi::mdl::IMdle_input_stream>, Input_stream_impl
+{
+public:
+    Mdle_input_stream_impl( mi::neuraylib::IReader* reader, const std::string& filename);
+
+    // MDL core API methods
+
+    int read_char();
+
+    const char* get_filename();
+};
+
+/// Adapts mi::neuraylib::IReader to mi::mdl::IMDL_resource_reader.
+class Mdl_resource_reader_impl : public mi::base::Interface_implement<mi::mdl::IMDL_resource_reader>
+{
+public:
+    Mdl_resource_reader_impl(
+        mi::neuraylib::IReader* reader,
+        const std::string& file_path,
+        const std::string& filename,
+        const mi::base::Uuid& hash);
+
+    // MDL core API methods
+
+    Uint64 read( void* ptr, Uint64 size);
+
+    Uint64 tell();
+
+    bool seek( Sint64 offset, Position origin);
+
+    const char* get_filename() const;
+
+    const char* get_mdl_url() const;
+
+    bool get_resource_hash( unsigned char hash[16]);
+
+private:
+    mi::base::Handle<mi::neuraylib::IReader> m_reader;
+    std::string m_file_path;
+    std::string m_filename;
+    mi::base::Uuid m_hash;
+};
+
 /// Implementation of IMAGE::IMdl_container_callback.
 class Mdl_container_callback : public mi::base::Interface_implement<IMAGE::IMdl_container_callback>
 {
@@ -452,11 +563,8 @@ public:
 class Mdl_image_set : public DBIMAGE::Image_set
 {
 public:
-    
-    Mdl_image_set(
-        mi::mdl::IMDL_resource_set* set, 
-        const std::string& filename,
-        const std::string& container_filename = "");
+
+    Mdl_image_set( mi::mdl::IMDL_resource_set* set, const std::string& file_path);
 
     mi::Size get_length() const;
 
@@ -487,6 +595,7 @@ private:
     mi::base::Handle<mi::mdl::IMDL_resource_set> m_resource_set;
     std::string m_mdl_file_path;
     std::string m_container_filename;
+    std::string m_file_format;
     bool m_is_container;
 };
 

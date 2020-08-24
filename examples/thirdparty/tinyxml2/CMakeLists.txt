@@ -42,6 +42,7 @@ create_from_base_preset(
     NAMESPACE ${PROJECT_NAME}
     VERSION ${PROJECT_VERSION}
     SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
 )
 
 # add include directories

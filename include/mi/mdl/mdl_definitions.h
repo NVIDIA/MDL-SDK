@@ -98,6 +98,8 @@ public:
         DP_IS_NATIVE,           ///< True, if this function was declared native.
         DP_IS_CONST_EXPR,       ///< True, if this function is declared as const_expr.
         DP_USES_DERIVATIVES,    ///< True, if this functions uses derivatives directly
+        DP_USES_SCENE_DATA,     ///< True, if this function uses the scene data functions (either
+                                ///  directly or by calling another function that uses scene data).
     };
 
     /// Built-in semantics.
@@ -415,6 +417,11 @@ public:
 
     /// Return the position of this definition if any.
     virtual Position const *get_position() const = 0;
+
+    /// Set the position of this definition if any.
+    ///
+    /// \param pos  the new position
+    virtual void set_position(Position const *pos) = 0;
 
     /// Return the mask specifying which parameters of a function are derivable.
     ///

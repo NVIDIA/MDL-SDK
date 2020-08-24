@@ -135,11 +135,12 @@ private:
     /// \param expr  the expression
     static IType::Modifiers get_type_modifier(IExpression const *expr);
 
-    void post_visit(IExpression_reference *ref) MDL_FINAL;
-    void post_visit(IExpression_unary *un_expr) MDL_FINAL;
-    void post_visit(IExpression_binary *bin_expr) MDL_FINAL;
-    void post_visit(IExpression_conditional *cond_expr) MDL_FINAL;
-    void post_visit(IExpression_call *call_expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_reference *ref) MDL_FINAL;
+    IExpression *post_visit(IExpression_unary *un_expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_binary *bin_expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_conditional *cond_expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_call *call_expr) MDL_FINAL;
+
     void post_visit(IParameter *param) MDL_FINAL;
 
     bool pre_visit(IDeclaration_variable *var_decl) MDL_FINAL;
@@ -223,7 +224,7 @@ IType::Modifiers AT_check::get_type_modifier(IExpression const *expr)
 }
 
 // end of a reference expression
-void AT_check::post_visit(IExpression_reference *ref)
+IExpression *AT_check::post_visit(IExpression_reference *ref)
 {
     if (!ref->is_array_constructor()) {
         // get the definition from the type name
@@ -235,15 +236,16 @@ void AT_check::post_visit(IExpression_reference *ref)
             ref->set_type(def->get_type());
         }
     }
+    return ref;
 }
 
 // end of unary expression
-void AT_check::post_visit(IExpression_unary *un_expr)
+IExpression *AT_check::post_visit(IExpression_unary *un_expr)
 {
     IType const *res_type = un_expr->get_type();
     if (is<IType_error>(res_type)) {
         // already error
-        return;
+        return un_expr;
     }
 
     // all unary expressions are uniform 
@@ -252,15 +254,16 @@ void AT_check::post_visit(IExpression_unary *un_expr)
 
     res_type = fix_type(res_type, res_mod);
     un_expr->set_type(res_type);
+    return un_expr;
 }
 
 // end of a binary expression
-void AT_check::post_visit(IExpression_binary *bin_expr)
+IExpression *AT_check::post_visit(IExpression_binary *bin_expr)
 {
     IType const *res_type = bin_expr->get_type();
     if (is<IType_error>(res_type)) {
         // already error
-        return;
+        return bin_expr;
     }
 
     IExpression_binary::Operator op   = bin_expr->get_operator();
@@ -317,6 +320,7 @@ void AT_check::post_visit(IExpression_binary *bin_expr)
 
     res_type = fix_type(res_type, res_mod);
     bin_expr->set_type(res_type);
+    return bin_expr;
 }
 
 /// Check if the given type needs a uniform condition
@@ -391,12 +395,12 @@ static IType const *needs_uniform_condition(IType const *type)
 
 
 // end of a conditional expression
-void AT_check::post_visit(IExpression_conditional *cond_expr)
+IExpression *AT_check::post_visit(IExpression_conditional *cond_expr)
 {
     IType const *res_type = cond_expr->get_type();
     if (is<IType_error>(res_type)) {
         // already error
-        return;
+        return cond_expr;
     }
 
     IExpression const *cond = cond_expr->get_condition();
@@ -434,15 +438,16 @@ void AT_check::post_visit(IExpression_conditional *cond_expr)
 
     res_type = fix_type(res_type, res_mod);
     cond_expr->set_type(res_type);
+    return cond_expr;
 }
 
 // end of a call
-void AT_check::post_visit(IExpression_call *call_expr)
+IExpression *AT_check::post_visit(IExpression_call *call_expr)
 {
     IType const *res_type = call_expr->get_type();
     if (is<IType_error>(res_type)) {
         // already error
-        return;
+        return call_expr;
     }
 
     IType::Modifiers res_mod = get_type_modifiers(res_type);
@@ -468,7 +473,7 @@ void AT_check::post_visit(IExpression_call *call_expr)
         }
     } else if (f_def->get_kind() == Definition::DK_ERROR) {
         // already error
-        return;
+        return call_expr;
     } else if (f_def->has_flag(Definition::DEF_IS_VARYING)) {
         // varying function call
         res_mod = IType::MK_VARYING;
@@ -655,6 +660,7 @@ void AT_check::post_visit(IExpression_call *call_expr)
 
     res_type = fix_type(res_type, res_mod);
     call_expr->set_type(res_type);
+    return call_expr;
 }
 
 // end of an parameter
@@ -1581,14 +1587,14 @@ bool AT_analysis::pre_visit(IExpression_call *expr)
 
 
 // end of a reference
-void AT_analysis::post_visit(IExpression_reference *ref)
+IExpression *AT_analysis::post_visit(IExpression_reference *ref)
 {
     if (m_assignment_stack.empty()) {
         // outside of an assignment
-        return;
+        return ref;
     }
 
-    if (IDefinition const *def = ref->get_definition()) {     
+    if (IDefinition const *def = ref->get_definition()) {
         if (Dependence_graph::Node *dst_node = m_dg->get_node(def)) {
             Dependence_graph::Id_type dst_id  = dst_node->get_id();
             Dependence_graph::Id_type lval_id = m_assignment_stack.top();
@@ -1596,6 +1602,7 @@ void AT_analysis::post_visit(IExpression_reference *ref)
             m_dg->add_dependency(lval_id, dst_id);
         }
     }
+    return ref;
 }
 
 // begin of a parameter

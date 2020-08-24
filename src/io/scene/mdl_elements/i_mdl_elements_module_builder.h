@@ -53,7 +53,7 @@ namespace mi
 namespace MI
 {
     namespace DB
-    { 
+    {
         class Transaction;
         class Tag;
     }
@@ -99,7 +99,7 @@ public:
     ///                                 messages.
     explicit Mdl_module_builder(
         mi::mdl::IMDL* imdl,
-        MI::DB::Transaction* transaction,
+        DB::Transaction* transaction,
         const char* module_name,
         mi::mdl::IMDL::MDL_version version,
         bool allow_compatible_types,
@@ -125,7 +125,7 @@ public:
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 Index of the added material, function or -1 in case of failure.
     mi::Sint32 add_material_or_function(
-        const MI::DB::Tag prototype_tag,
+        const DB::Tag prototype_tag,
         const char* name,
         const MI::MDL::IExpression_list* defaults,
         const MI::MDL::IAnnotation_block* annotations,
@@ -148,7 +148,7 @@ public:
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 Index of the variant or -1 in case of failure.
     mi::Sint32 add_variant(
-        const MI::DB::Tag prototype_tag,
+        const DB::Tag prototype_tag,
         const char* name,
         const MI::MDL::IExpression_list* defaults,
         const MI::MDL::IAnnotation_block* annotations,
@@ -229,7 +229,7 @@ public:
         MI::MDL::Execution_context* context);
 
     /// Completes the module building process and returns the resulting module or NULL in case of
-    /// failure, e.g. because module validation failed. 
+    /// failure, e.g. because module validation failed.
     ///
     /// \param[inout] context   Execution context used to pass options to and store messages.
     /// \return                 The built module in case of success.
@@ -288,7 +288,7 @@ private:
 
     template <typename T>
     mi::Sint32 add_intern(
-        MI::DB::Tag prototype_tag,
+        DB::Tag prototype_tag,
         const char* name,
         const MI::MDL::IExpression_list* defaults,
         const MI::MDL::IAnnotation_block* annotations,
@@ -317,8 +317,7 @@ private:
 
     mi::Sint32 add_annotation(
         mi::mdl::IAnnotation_block* mdl_annotation_block,
-        const char* annotation_name,
-        const MI::MDL::IExpression_list* annotation_args);
+        const MI::MDL::IAnnotation* annotation);
 
     // validates and sets up parameters
     mi::Sint32 prepare_parameters(

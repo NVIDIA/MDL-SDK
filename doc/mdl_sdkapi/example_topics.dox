@@ -55,6 +55,10 @@ index.
   - \ref mi_neuray_example_compilation "Different compilation modes"
   - \ref mi_neuray_example_compilation "Target code generation"
 
+  - \ref mi_neuray_example_code_gen "Different compilation modes and options between"
+  - \ref mi_neuray_example_code_gen "Target code generation for a material with multiple functions"
+  - \ref mi_neuray_example_code_gen "Target code serialization"
+
   - \ref mi_neuray_example_execution_native "MDL material state (CPU)"
   - \ref mi_neuray_example_execution_ptx "MDL material state (PTX)"
 \if  MDL_BIN_RELEASE
@@ -63,6 +67,7 @@ index.
 
   - \ref mi_neuray_example_execution_native "Execution of generated code (CPU)"
   - \ref mi_neuray_example_execution_ptx "Execution of generated code (PTX)"
+  - \ref mi_neuray_example_optix7 "Execution of generated code (OptiX 7)"
 \if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_execution_glsl "Execution of generated code (GLSL)"
 \endif
@@ -84,8 +89,6 @@ index.
 
   - \ref mi_neuray_example_derivatives "Automatic derivatives"
 
-  - \ref mi_neuray_example_user_state_module "User-defined state modules"
-
 \if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_distilling "Material distilling"
   - \ref mi_neuray_example_distilling "Baking material sub-expressions"
@@ -106,4 +109,7 @@ index.
 
   - \ref mi_neuray_example_dxr "Example for a Microsoft DXR-based MDL-enabled path tracer"
   - \ref mi_neuray_example_dxr "Rendering glTF scenes using MDL materials"
+
+  - \ref mi_neuray_example_optix7 "Linking and optimizing generated MDL code with renderer code"
+  - \ref mi_neuray_example_optix7 "Limiting the number of exported PTX functions"
 */

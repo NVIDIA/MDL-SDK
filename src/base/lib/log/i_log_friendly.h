@@ -89,7 +89,7 @@ struct Large_item_count : public Item_count<Large_number>
 /** iostream helper to print numbers of seconds.
 
  This is mainly used to make printing of timings consistent and may be replaced
- by std::chronos.
+ by std::chrono.
  */
 struct Seconds
 {

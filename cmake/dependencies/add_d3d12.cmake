@@ -47,6 +47,7 @@ else()
     target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
         PRIVATE
             ${MDL_DEPENDENCY_D3D12_INCLUDE}
+            ${MDL_DEPENDENCY_DXGI_INCLUDE}
         )
 
     # static library

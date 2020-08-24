@@ -127,7 +127,7 @@ void *Base_pointer_deserializer::get_pointer(Tag_t tag) const
 // Write an int.
 void Base_serializer::write_int(int v)
 {
-    size_t code = v < 0 ? ~(v << 1) : v << 1;
+    size_t code = v < 0 ? ~(unsigned(v) << 1) : unsigned(v) << 1;
 
     write_encoded_tag(code);
 }
@@ -387,9 +387,10 @@ void Buffer_serializer::write(Byte b)
         // reached end of current buffer
 
         // allocate a new header
-        Header *h = reinterpret_cast<Header *>(m_alloc->malloc(sizeof(*h)));
+        Header *h = reinterpret_cast<Header *>(m_alloc->malloc(sizeof(*h) - 1 + LOAD_SIZE));
 
         h->next = NULL;
+        h->size = LOAD_SIZE;
 
         if (m_first == NULL)
             m_first = h;
@@ -398,7 +399,7 @@ void Buffer_serializer::write(Byte b)
         m_curr = h;
 
         m_next = h->load;
-        m_end  = m_next + sizeof(h->load);
+        m_end  = &h->load[h->size];
     }
     *m_next = b;
     ++m_next;
@@ -430,7 +431,33 @@ Buffer_serializer::~Buffer_serializer()
 // Get the data stream.
 Buffer_serializer::Byte const *Buffer_serializer::get_data() const
 {
-    return NULL;
+    if (m_size == 0) {
+        return NULL;
+    }
+    if (m_size > m_first->size) {
+        // data is in several headers, combine into one
+        Header *dst = reinterpret_cast<Header *>(m_alloc->malloc(sizeof(*dst) - 1 + m_size));
+
+        dst->next = NULL;
+        dst->size = m_size;
+
+        Header *h = m_first;
+        Byte   *p = dst->load;
+        for (size_t s = m_size; s > 0;) {
+            size_t c = s < h->size ? s : h->size;
+
+            memcpy(p, h->load, c);
+            p += c;
+            s -= c;
+            Header *n = h->next;
+            m_alloc->free(h);
+            h = n;
+        }
+        m_first = m_curr = dst;
+        m_next  = m_end  = &dst->load[dst->size];
+    }
+    // all data is now in the first header
+    return m_first->load;
 }
 
 // Read a byte.

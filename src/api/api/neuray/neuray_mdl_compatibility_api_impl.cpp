@@ -59,7 +59,7 @@ Mdl_compatibility_api_impl::Mdl_compatibility_api_impl(mi::neuraylib::INeuray *n
 
 Mdl_compatibility_api_impl::~Mdl_compatibility_api_impl()
 {
-    m_neuray = NULL;
+    m_neuray = nullptr;
 }
 
 namespace {
@@ -69,7 +69,7 @@ void handle_messages(Mdl_execution_context_impl* ctx, const mi::mdl::Messages& m
     if(ctx)
         ctx->get_context().add_messages(messages);
     else
-        MDL::report_messages(messages, NULL);
+        MDL::report_messages(messages, nullptr);
 }
 
 
@@ -92,9 +92,9 @@ public:
     char const *get_search_path(Path_set set, size_t i) const {
 
         if (set != mi::mdl::IMDL_search_path::MDL_SEARCH_PATH)
-            return NULL;
+            return nullptr;
         if (i >= m_roots.size())
-            return NULL;
+            return nullptr;
         return m_roots[i].c_str();
     }
 
@@ -129,7 +129,7 @@ mi::Sint32 Mdl_compatibility_api_impl::compare_modules(
     const mi::IArray* search_paths,
     mi::neuraylib::IMdl_execution_context* context) const
 {
-    if (module_name == NULL || repl_file_name == NULL)
+    if (module_name == nullptr || repl_file_name == nullptr)
         return -1;
 
     Mdl_execution_context_impl* context_impl = static_cast<Mdl_execution_context_impl*>(context);
@@ -187,7 +187,7 @@ mi::Sint32 Mdl_compatibility_api_impl::compare_archives(
     const mi::IArray* search_paths,
     mi::neuraylib::IMdl_execution_context* context) const
 {
-    if (archive_fname1 == NULL || archive_fname2 == NULL)
+    if (archive_fname1 == nullptr || archive_fname2 == nullptr)
         return -1;
 
     Mdl_execution_context_impl* context_impl = static_cast<Mdl_execution_context_impl*>(context);

@@ -49,9 +49,9 @@ DB::Element_base* Bsdf_measurement_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new BSDFM::Bsdf_measurement;
 }
 
@@ -61,9 +61,9 @@ mi::base::IInterface* Bsdf_measurement_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Bsdf_measurement_impl())->cast_to_major();
 }
 
@@ -97,13 +97,13 @@ mi::Sint32 Bsdf_measurement_impl::reset_reader( mi::neuraylib::IReader* reader)
 const char* Bsdf_measurement_impl::get_filename() const
 {
     const std::string& filename = get_db_element()->get_filename();
-    return filename.empty() ? 0 : filename.c_str();
+    return filename.empty() ? nullptr : filename.c_str();
 }
 
 const char* Bsdf_measurement_impl::get_original_filename() const
 {
     const std::string& filename = get_db_element()->get_original_filename();
-    return filename.empty() ? 0 : filename.c_str();
+    return filename.empty() ? nullptr : filename.c_str();
 }
 
 mi::Sint32 Bsdf_measurement_impl::set_reflection(

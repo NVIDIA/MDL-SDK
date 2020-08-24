@@ -53,6 +53,7 @@
 #include <base/data/db/i_db_tag.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/lib/log/i_log_logger.h>
+#include <base/util/string_utils/i_string_utils.h>
 
 #include <io/scene/dbimage/i_dbimage.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
@@ -149,7 +150,7 @@ mi::base::IInterface* Transaction_impl::create(
     const mi::base::IInterface* argv[])
 {
     if( !type_name)
-        return 0;
+        return nullptr;
 
     return m_class_factory->create_type_instance( this, type_name, argc, argv);
 }
@@ -195,11 +196,11 @@ const mi::base::IInterface* Transaction_impl::access(
     const char* name)
 {
     if( !is_open())
-        return 0;
+        return nullptr;
 
     DB::Tag tag = m_db_transaction->name_to_tag( name);
     if( !tag.is_valid())
-        return 0;
+        return nullptr;
 
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
@@ -213,15 +214,15 @@ mi::base::IInterface* Transaction_impl::edit(
     const char* name)
 {
     if( !is_open())
-        return 0;
+        return nullptr;
 
     DB::Tag tag = m_db_transaction->name_to_tag( name);
     if( !tag.is_valid())
-        return 0;
+        return nullptr;
 
     SERIAL::Class_id id = m_db_transaction->get_class_id(tag);
     if (id == MDL::ID_MDL_MATERIAL_DEFINITION || id == MDL::ID_MDL_FUNCTION_DEFINITION)
-        return 0;
+        return nullptr;
 
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
@@ -351,7 +352,7 @@ const char* Transaction_impl::name_of(
     const mi::base::IInterface* interface) const
 {
     if( !is_open() || !interface)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const mi::base::IInterface> api_class( interface, mi::base::DUP_INTERFACE);
 
@@ -359,11 +360,11 @@ const char* Transaction_impl::name_of(
 
     mi::base::Handle<const IDb_element> db_element( api_class->get_interface<IDb_element>());
     if( !db_element.is_valid_interface())
-        return 0;
+        return nullptr;
 
     DB::Tag tag = db_element->get_tag();
     if( !tag)
-        return 0;
+        return nullptr;
 
     return m_db_transaction->tag_to_name( tag);
 }
@@ -385,11 +386,11 @@ const char* Transaction_impl::get_time_stamp() const
 const char* Transaction_impl::get_time_stamp( const char* element) const
 {
     if( !element || !is_open())
-        return 0;
+        return nullptr;
 
     DB::Tag tag = m_db_transaction->name_to_tag( element);
     if( !tag)
-        return 0;
+        return nullptr;
 
     return get_time_stamp( tag);
 }
@@ -424,7 +425,7 @@ mi::neuraylib::IScope* Transaction_impl::get_scope() const
 {
     DB::Scope* db_scope = m_db_transaction->get_scope();
     if( !db_scope)
-        return 0;
+        return nullptr;
 
     return new Scope_impl( db_scope, m_class_factory);
 }
@@ -433,17 +434,19 @@ mi::IArray* Transaction_impl::list_elements(
     const char* root_element, const char* name_pattern, const mi::IArray* type_names) const
 {
     if( !root_element || !is_open())
-        return 0;
+        return nullptr;
     DB::Tag root_tag = m_db_transaction->name_to_tag( root_element);
     if( !root_tag)
-        return 0;
+        return nullptr;
 
-    std::regex name_regex;
+    std::wregex name_regex;
     try {
-        if( name_pattern)
-            name_regex.assign( name_pattern, std::regex::extended);
+        if( name_pattern) {
+            std::wstring name_pattern_wstr = STRING::utf8_to_wchar( name_pattern);
+            name_regex.assign( name_pattern_wstr, std::wregex::extended);
+        }
     } catch( const std::regex_error& ) {
-        return 0;
+        return nullptr;
     }
 
     LOG::mod_log->vdebug( M_NEURAY_API, LOG::Mod_log::C_MISC, "ITransaction::list_elements()");
@@ -452,7 +455,7 @@ mi::IArray* Transaction_impl::list_elements(
 
     // convert type_names to set of SERIAL::Class_id
     std::set<SERIAL::Class_id> class_ids;
-    for( mi::Size i = 0; type_names && i < type_names->get_length(); ++i) {
+    for( size_t i = 0; type_names && i < type_names->get_length(); ++i) {
         mi::base::Handle<const mi::IString> type_name_istring(
             type_names->get_element<mi::IString>( i));
         if( !type_name_istring.is_valid_interface()) {
@@ -480,13 +483,13 @@ mi::IArray* Transaction_impl::list_elements(
 
     // create result array
     mi::IDynamic_array* result
-        = m_class_factory->create_type_instance<mi::IDynamic_array>( 0, "String[]", 0, 0);
+        = m_class_factory->create_type_instance<mi::IDynamic_array>( nullptr, "String[]", 0, nullptr);
 
     // start DFS post-order graph traversal at root_tag
     std::set<DB::Tag> tags_seen;
     tags_seen.insert( root_tag); // not really needed if the graph is acyclic
     list_elements_internal(
-        root_tag, name_pattern ? &name_regex : 0, type_names ? &class_ids : 0, result, tags_seen);
+        root_tag, name_pattern ? &name_regex : nullptr, type_names ? &class_ids : nullptr, result, tags_seen);
 
     return result;
 }
@@ -529,7 +532,7 @@ DB::Transaction* Transaction_impl::get_db_transaction() const
 mi::base::IInterface* Transaction_impl::edit( DB::Tag tag)
 {
     if( !is_open())
-        return 0;
+        return nullptr;
 
     return m_class_factory->create_class_instance( this, tag, true);
 }
@@ -537,7 +540,7 @@ mi::base::IInterface* Transaction_impl::edit( DB::Tag tag)
 const mi::base::IInterface* Transaction_impl::access( DB::Tag tag)
 {
     if( !is_open())
-        return 0;
+        return nullptr;
 
     return m_class_factory->create_class_instance( this, tag, false);
 }
@@ -659,7 +662,7 @@ void Transaction_impl::check_no_referenced_elements( const char* committed_or_ab
 
 void Transaction_impl::list_elements_internal(
     DB::Tag tag,
-    const std::regex* name_regex,
+    const std::wregex* name_regex,
     const std::set<SERIAL::Class_id>* class_ids,
     mi::IDynamic_array* result,
     std::set<DB::Tag>& tags_seen) const
@@ -699,12 +702,15 @@ void Transaction_impl::list_elements_internal(
         return;
 
     // skip tag if its name does not match the regular expression
-    if( name_regex && !std::regex_search( name, *name_regex))
-        return;
+    if( name_regex) {
+        std::wstring name_wstr = STRING::utf8_to_wchar( name);
+        if( !std::regex_search( name_wstr, *name_regex))
+            return;
+    }
 
     // tag matches criteria, store its name in the result
     mi::base::Handle<mi::IString> s(
-        m_class_factory->create_type_instance<mi::IString>( 0, "String", 0, 0));
+        m_class_factory->create_type_instance<mi::IString>( nullptr, "String", 0, nullptr));
     s->set_c_str( name);
     result->push_back( s.get());
 }

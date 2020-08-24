@@ -160,17 +160,21 @@ public:
 
     /// Convert a definition to a name.
     ///
-    /// \param def           The definition to convert.
-    /// \param module_name   The name of the owner module of this definition.
-    /// \returns             The name for the definition.
-    string def_to_name(IDefinition const *def, const char *module_name) const;
+    /// \param def                     The definition to convert.
+    /// \param module_name             The name of the owner module of this definition.
+    /// \param with_signature_suffix   Indicates whether to include the signature suffix
+    /// \returns                       The name for the definition.
+    string def_to_name(
+        IDefinition const *def, const char *module_name, bool with_signature_suffix = true) const;
 
     /// Convert a definition to a name.
     ///
-    /// \param def    The definition to convert.
-    /// \param module The (virtual) owner module of this definition.
-    /// \returns      The name for the definition.
-    string def_to_name(IDefinition const *def, IModule const *module) const;
+    /// \param def                     The definition to convert.
+    /// \param module                  The (virtual) owner module of this definition.
+    /// \param with_signature_suffix   Indicates whether to include the signature suffix
+    /// \returns                       The name for the definition.
+    string def_to_name(
+        IDefinition const *def, IModule const *module, bool with_signature_suffix = true) const;
 
     /// Convert a definition to a name.
     ///
@@ -178,11 +182,17 @@ public:
     /// \returns    The name for the definition (using the original owner module).
     string def_to_name(IDefinition const *def) const;
 
-    /// Convert a type to a name.
+    /// Convert a type to a name (not using the mangler).
     ///
     /// \param type  The type to convert.
-    /// \returns     The name for the definition (using the original owner module).
+    /// \returns     The name for the type.
     string type_to_name(IType const *type) const;
+
+    /// Convert a parameter type to a name (using the mangler).
+    ///
+    /// \param type  The type to convert.
+    /// \returns     The name for the type.
+    string parameter_type_to_name(IType const *type) const;
 
     /// Clear temporary data to restart code generation.
     void reset();
@@ -278,13 +288,15 @@ public:
 
     /// Returns the name of a binary operator.
     ///
-    /// \param expr  The MDL expression.
-    string get_binary_name(IExpression_binary const *expr) const;
+    /// \param expr                    The MDL expression.
+    /// \param with_signature_suffix   Indicates whether to include the signature suffix
+    string get_binary_name(IExpression_binary const *expr, bool with_signature_suffix = true) const;
 
     /// Returns the name of an unary operator.
     ///
-    /// \param expr  The MDL expression.
-    string get_unary_name(IExpression_unary const *expr) const;
+    /// \param expr                    The MDL expression.
+    /// \param with_signature_suffix   Indicates whether to include the signature suffix
+    string get_unary_name(IExpression_unary const *expr, bool with_signature_suffix = true) const;
 
     /// Convert an unary MDL operator to a name.
     ///

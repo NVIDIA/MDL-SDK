@@ -289,6 +289,18 @@ Expr *Optimizer::create_unary(
 // Run local optimizations.
 Declaration *Optimizer::local_opt(Declaration *decl)
 {
+    if (Declaration_variable *vdecl = as<Declaration_variable>(decl)) {
+        for (hlsl::Init_declarator &idecl : *vdecl) {
+            if (Expr *expr = idecl.get_initializer()) {
+                Expr *n_expr = local_opt(expr);
+                if (expr != n_expr) {
+                    idecl.set_initializer(n_expr);
+                }
+            }
+        }
+        return decl;
+    }
+
     return NULL;
 }
 

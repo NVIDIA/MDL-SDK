@@ -305,15 +305,6 @@ void Errors::Warning(int line, int col, const wchar_t *s) {
 	wprintf(L"-- line %d col %d: %ls\n", line, col, s);
 }
 
-void Errors::Warning(const wchar_t *s) {
-	wprintf(L"%ls\n", s);
-}
-
-void Errors::Exception(const wchar_t* s) {
-	wprintf(L"%ls", s); 
-	exit(1);
-}
-
 void Errors::Error(int line, int col, int code, Error_params const &params) {
 	wprintf(L"-- line %d col %d: Error code %d\n", line, col, code);
 	count++;

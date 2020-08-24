@@ -387,7 +387,7 @@ inline const T* matrix_base_ptr( const Matrix_struct<T,ROW,COL>& mat)
         The underlying POD type #mi::math::Matrix_struct.
 */
 template <typename T, Size ROW, Size COL>
-class Matrix : public Matrix_struct<T,ROW,COL>
+class Matrix : public Matrix_struct<T,ROW,COL> //-V690 PVS
 {
 public:
     typedef Matrix_struct<T,ROW,COL> Pod_type;     ///< POD class corresponding to this matrix.

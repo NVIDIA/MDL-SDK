@@ -63,7 +63,18 @@ Image_api_impl::Image_api_impl( mi::neuraylib::INeuray* neuray)
 
 Image_api_impl::~Image_api_impl()
 {
-    m_neuray = 0;
+    m_neuray = nullptr;
+}
+
+mi::neuraylib::ICanvas_cuda* Image_api_impl::create_canvas_cuda(
+    mi::Sint32 cuda_device_id,
+    const char* pixel_type,
+    mi::Uint32 width,
+    mi::Uint32 height,
+    mi::Uint32 layers,
+    mi::Float32 gamma) const
+{
+    return nullptr;
 }
 
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas(
@@ -78,7 +89,7 @@ mi::neuraylib::ICanvas* Image_api_impl::create_canvas(
 {
     IMAGE::Pixel_type pixel_type_enum = IMAGE::convert_pixel_type_string_to_enum( pixel_type);
     if( pixel_type_enum == IMAGE::PT_UNDEF)
-        return 0;
+        return nullptr;
 
     if( tile_width == 0)
         tile_width = width;
@@ -96,7 +107,7 @@ mi::neuraylib::ITile* Image_api_impl::create_tile(
 {
     IMAGE::Pixel_type pixel_type_enum = IMAGE::convert_pixel_type_string_to_enum( pixel_type);
     if( pixel_type_enum == IMAGE::PT_UNDEF)
-        return 0;
+        return nullptr;
 
     return m_image_module->create_tile( pixel_type_enum, width, height);
 }
@@ -163,15 +174,15 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
     const char* quality) const
 {
     if( !canvas || !image_format || !pixel_type)
-        return 0;
+        return nullptr;
 
     STLEXT::Likely<mi::Uint32> quality_likely = STRING::lexicographic_cast_s<mi::Uint32>( quality);
     if( !quality_likely.get_status())
-        return 0;
+        return nullptr;
 
-    mi::Uint32 quality_uint32 = *quality_likely.get_ptr();
+    mi::Uint32 quality_uint32 = *quality_likely.get_ptr(); //-V522 PVS
     if( quality_uint32 > 100)
-        return 0;
+        return nullptr;
 
     return m_image_module->create_buffer_from_canvas(
         canvas, image_format, pixel_type, quality_uint32);
@@ -182,10 +193,10 @@ mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_buffer(
     const char* image_format) const
 {
     if( !buffer || !image_format)
-        return 0;
+        return nullptr;
 
     DISK::Memory_reader_impl reader( buffer);
-    return m_image_module->create_canvas( &reader, image_format);
+    return m_image_module->create_canvas( IMAGE::Memory_based(), &reader, image_format);
 }
 
 bool Image_api_impl::supports_format_for_decoding(
@@ -193,7 +204,7 @@ bool Image_api_impl::supports_format_for_decoding(
 {
    const mi::neuraylib::IImage_plugin* plugin =
         m_image_module->find_plugin_for_import( image_format, reader);
-    return plugin != NULL;
+    return plugin != nullptr;
 }
 
 bool Image_api_impl::supports_format_for_encoding( const char* image_format) const
@@ -201,7 +212,7 @@ bool Image_api_impl::supports_format_for_encoding( const char* image_format) con
     const mi::neuraylib::IImage_plugin* plugin =
         m_image_module->find_plugin_for_export( image_format);
 
-    return plugin != NULL;
+    return plugin != nullptr;
 }
 
 mi::neuraylib::ICanvas* Image_api_impl::convert(
@@ -209,7 +220,7 @@ mi::neuraylib::ICanvas* Image_api_impl::convert(
 {
     IMAGE::Pixel_type pixel_type_enum = IMAGE::convert_pixel_type_string_to_enum( pixel_type);
     if( pixel_type_enum == IMAGE::PT_UNDEF)
-        return 0;
+        return nullptr;
 
     return m_image_module->convert_canvas( canvas, pixel_type_enum);
 }
@@ -232,18 +243,18 @@ mi::Uint32 Image_api_impl::get_bytes_per_component( const char* pixel_type) cons
 }
 
 mi::IArray* Image_api_impl::create_mipmaps(
-    const mi::neuraylib::ICanvas* canvas, 
+    const mi::neuraylib::ICanvas* canvas,
     mi::Float32 gamma) const
 {
     std::vector<mi::base::Handle<mi::neuraylib::ICanvas> > mipmaps;
     m_image_module->create_mipmaps(mipmaps, canvas, gamma);
 
     if (mipmaps.empty())
-        return 0;
+        return nullptr;
 
-    Array_impl* arr = new Array_impl(0, "Pointer<Interface>", mipmaps.size());
+    Array_impl* arr = new Array_impl(nullptr, "Pointer<Interface>", mipmaps.size());
     for(mi::Size i=0; i<mipmaps.size(); ++i)
-    { 
+    {
         mi::base::Handle<mi::base::IInterface> if_p (arr->get_element(i));
         mi::base::Handle<mi::IPointer> p(if_p->get_interface<mi::IPointer>());
         p->set_pointer(mipmaps[i].get());
@@ -266,3 +277,4 @@ mi::Sint32 Image_api_impl::shutdown()
 } // namespace NEURAY
 
 } // namespace MI
+

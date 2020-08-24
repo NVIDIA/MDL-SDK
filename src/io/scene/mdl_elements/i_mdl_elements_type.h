@@ -111,7 +111,7 @@ public:
     {
         mi::base::Handle<const IType> ptr_type( get_aliased_type());
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 
@@ -167,7 +167,7 @@ public:
 
     virtual const char* get_value_name( mi::Size index) const = 0;
 
-    virtual mi::Sint32 get_value_code( mi::Size index, mi::Sint32* errors = 0) const = 0;
+    virtual mi::Sint32 get_value_code( mi::Size index, mi::Sint32* errors = nullptr) const = 0;
 
     virtual mi::Size find_value( const char* name) const = 0;
 
@@ -218,7 +218,7 @@ public:
     {
         mi::base::Handle<const IType> ptr_type( get_component_type( index));
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 
@@ -239,7 +239,7 @@ public:
     {
         mi::base::Handle<const IType_atomic> ptr_type( get_element_type());
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 };
@@ -258,7 +258,7 @@ public:
     {
         mi::base::Handle<const IType_vector> ptr_type( get_element_type());
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 };
@@ -285,7 +285,7 @@ public:
     {
         mi::base::Handle<const IType> ptr_type( get_element_type());
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 
@@ -326,7 +326,7 @@ public:
     {
         mi::base::Handle<const IType> ptr_type( get_field_type( index));
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 
@@ -447,7 +447,7 @@ public:
     {
         mi::base::Handle<const IType> ptr_type( get_type( index));
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 
@@ -458,7 +458,7 @@ public:
     {
         mi::base::Handle<const IType> ptr_type( get_type( name));
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 
@@ -605,7 +605,7 @@ public:
     {
         mi::base::Handle<const IType> ptr_type( deserialize( deserializer));
         if( !ptr_type)
-            return 0;
+            return nullptr;
         return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
     }
 

@@ -29,6 +29,7 @@
 // examples/mdl_sdk/traversal/compiled_material_traverser_print.cpp
 
 #include "compiled_material_traverser_print.h"
+
 #include <iostream>
 #include <algorithm> 
 #include <utility>
@@ -48,11 +49,10 @@ static bool is_ternary_operator(mi::neuraylib::IFunction_definition::Semantics s
 static bool is_selector_operator(mi::neuraylib::IFunction_definition::Semantics semantic);
 static bool is_call_like_operator(mi::neuraylib::IFunction_definition::Semantics semantic);
 
-Compiled_material_traverser_print::Context::Context(mi::neuraylib::ITransaction* transaction, 
-                                                    mi::neuraylib::IMdl_compiler* compiler, 
-                                                    bool keep_structure)
+Compiled_material_traverser_print::Context::Context(
+    mi::neuraylib::ITransaction* transaction, 
+    bool keep_structure)
     : m_transaction(transaction)
-    , m_compiler(compiler)
     , m_keep_compiled_material_structure(keep_structure)
 {
     reset();
@@ -253,12 +253,18 @@ void Compiled_material_traverser_print::visit_begin(
                 const mi::neuraylib::IFunction_definition::Semantics semantic = func_def->
                     get_semantic();
 
-                std::string function_name = func_def->get_mdl_name();
-                function_name = function_name.substr(0, function_name.find('('));
+                std::string module_name = func_def->get_mdl_module_name();
+                bool is_builtins = module_name.substr(0, 12) == "::<builtins>";
+
+                std::string function_name;
+                if (is_builtins)
+                    function_name = func_def->get_mdl_simple_name();
+                else
+                    function_name = module_name + "::" +  func_def->get_mdl_simple_name();
 
                 // keep track of used modules and/or imports
                 const std::string m = func_def->get_module();
-                if (m != "mdl::<builtins>")
+                if (!is_builtins)
                 {
                     // type conversion using constructors can lead to invalid mdl code
                     // as these conversion constructors are created in the local module space
@@ -309,9 +315,7 @@ void Compiled_material_traverser_print::visit_begin(
                         if (drop_qualification)
                         {
                             // strip qualification part of the name
-                            const size_t pos = function_name.rfind("::");
-                            if (pos != std::string::npos)
-                                function_name = function_name.substr(pos + 2);
+                            function_name = func_def->get_mdl_simple_name();
                         }
                         else
                         {
@@ -718,8 +722,7 @@ void Compiled_material_traverser_print::visit_child(
                         expr_dcall->get_definition()));
                 const mi::neuraylib::IFunction_definition::Semantics semantic = func_def->
                     get_semantic();
-                std::string function_name = func_def->get_mdl_name();
-                function_name = function_name.substr(0, function_name.find('('));
+                std::string function_name = func_def->get_mdl_simple_name();
 
                 // check for special cases based on the semantic
 
@@ -785,7 +788,7 @@ void Compiled_material_traverser_print::visit_child(
                 
                 // error case (should not happen):
                 std::cerr << "[Compiled_material_traverser_print] ran into unhandled semantic: '"
-                          << function_name << "' Semantic:" << semantic << "\n";
+                          << func_def->get_mdl_name() << "' Semantic:" << semantic << "\n";
                 return;
             }
 
@@ -860,10 +863,9 @@ void Compiled_material_traverser_print::visit_end(
 
                 if (is_selector_operator(semantic))
                 {
-                    std::string selctor = func_def->get_mdl_name();
-                    selctor = selctor.substr(0, selctor.find('('));
-                    selctor = selctor.substr(selctor.rfind('.'));
-                    ctx->m_print << selctor;
+                    std::string selector = func_def->get_mdl_simple_name();
+                    selector = selector.substr(selector.rfind('.'));
+                    ctx->m_print << selector;
                     break;
                 }
 

@@ -161,9 +161,9 @@ private:
 
 template <typename T>
 Attribute_set_impl<T>::Attribute_set_impl()
-  : m_attribute_set( 0),
-    m_const_attribute_set( 0),
-    m_owner( 0)
+  : m_attribute_set( nullptr),
+    m_const_attribute_set( nullptr),
+    m_owner( nullptr)
 {
 }
 
@@ -219,7 +219,7 @@ const char* Attribute_set_impl<T>::get_attribute_type_name( const char* name) co
     std::string result =
         Attribute_set_impl_helper::get_attribute_type_name( attribute_set, this, name);
     if( result.empty())
-        return 0;
+        return nullptr;
     m_cached_type_names[name] = result;
     return m_cached_type_names[name].c_str();
 }
@@ -253,7 +253,7 @@ ATTR::Attribute_set* Attribute_set_impl<T>::get_attribute_set()
     // The magic constant 0x1 indicates that the underlying attribute set is constant (in contrast
     // to NULL which means that the default attribute set of scene elements should be used).
     if( m_attribute_set == (ATTR::Attribute_set*) 0x1) //-V566 PVS
-        return 0;
+        return nullptr;
     if( m_attribute_set == 0)
         m_attribute_set = this->get_db_element()->get_attributes();
     return m_attribute_set;

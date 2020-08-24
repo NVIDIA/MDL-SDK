@@ -86,7 +86,7 @@ bool Type_utilities::is_valid_array_attribute_type( const std::string& type_name
             = STRING::lexicographic_cast_s<mi::Size>( length_str);
         if( !length_likely.get_status())
             return false;
-        if( *length_likely.get_ptr() == 0)
+        if( *length_likely.get_ptr() == 0) //-V522 PVS
             return false;
     }
 
@@ -148,7 +148,7 @@ const char* Type_utilities::convert_type_code_to_attribute_type_name( ATTR::Type
 
     const char* type_name = convert_type_code_to_type_name( type_code);
     if( !type_name || !is_valid_attribute_type( type_name))
-        return 0;
+        return nullptr;
     return type_name;
 }
 
@@ -172,7 +172,7 @@ mi::Size Type_utilities::get_attribute_array_length( const std::string& type_nam
     std::string length = type_name.substr( left_bracket+1, right_bracket-left_bracket-1);
     STLEXT::Likely<mi::Size> length_likely = STRING::lexicographic_cast_s<mi::Size>( length);
     ASSERT( M_NEURAY_API, length_likely.get_status());
-    ASSERT( M_NEURAY_API, *length_likely.get_ptr() > 0);
+    ASSERT( M_NEURAY_API, *length_likely.get_ptr() > 0); //-V522 PVS
     return *length_likely.get_ptr();
 }
 
@@ -194,7 +194,7 @@ std::string Type_utilities::strip_array( const std::string& type_name, mi::Size&
             = STRING::lexicographic_cast_s<mi::Size>( length_str);
         if( !length_likely.get_status())
             return "";
-        if( *length_likely.get_ptr() == 0)
+        if( *length_likely.get_ptr() == 0) //-V522 PVS
             return "";
         length = *length_likely.get_ptr();
     } else
@@ -347,7 +347,7 @@ const char* Type_utilities::convert_type_code_to_type_name( ATTR::Type_code type
         init();
     Map_code_name::const_iterator it = s_map_code_name.find( type_code);
     if( it == s_map_code_name.end())
-        return 0;
+        return nullptr;
 
     if(    type_code == ATTR::TYPE_TEXTURE
         || type_code == ATTR::TYPE_LIGHTPROFILE
@@ -355,7 +355,7 @@ const char* Type_utilities::convert_type_code_to_type_name( ATTR::Type_code type
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "Using attributes of type \"%s\" is deprecated. Use type \"Ref\" instead.",
             it->second.c_str());
-        return 0;
+        return nullptr;
     }
 
     return it->second.c_str();
@@ -428,8 +428,6 @@ void Type_utilities::init()
 {
     if( s_initialized)
         return;
-
-    ASSERT( M_NEURAY_API, !s_initialized);
 
     // Types with a one-to-one mapping.
     register_mapping( "Boolean",               ATTR::TYPE_BOOLEAN);

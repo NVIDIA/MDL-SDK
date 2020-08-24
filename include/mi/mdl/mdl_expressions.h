@@ -449,7 +449,7 @@ T *as(IArgument *arg) {
 /// Cast to subtype or return NULL if types do not match.
 template<typename T>
 T const *as(IArgument const *arg) {
-    return (arg->get_kind() == T::s_kind) ? static_cast<T const *>(arg) : NULL;
+    return (arg->get_kind() == T::s_kind) ? static_cast<T const *>(arg) : 0;
 }
 
 /// Check if a value is of a certain type.

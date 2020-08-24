@@ -218,7 +218,9 @@ Item {
                     }
 
                     // init with the root level
-                    model: id_control.vm_navigation.create_root_level()
+                    model: id_control.vm_navigation
+                        ? id_control.vm_navigation.create_root_level()
+                        : null
 
                     // display package or module
                     delegate: NavPackage {

@@ -47,37 +47,37 @@ class Journal_type
     /// Constructor.
     /// \param type bitmask for journal entry
     inline explicit Journal_type(
-	Uint32 type=0);
+        Uint32 type=0);
 
     /// Copy constructor.
     /// \param j the other journal
     inline Journal_type(
-	const Journal_type& j);
+        const Journal_type& j);
 
     /// Assignment operator.
     /// \param j the other journal
     inline Journal_type& operator=(
-	const Journal_type& j);
+        const Journal_type& j);
 
     /// Add type.
     /// \param type new journal entry type
     inline void add_journal(
-	Uint32 type);
+        Uint32 type);
 
     /// Add type.
     /// \param j new journal entry
     inline void add_journal(
-	Journal_type j);
+        Journal_type j);
 
     /// Restrict to given types.
     /// \param mask restrict to this mask
     inline void restrict_journal(
-	Uint32 mask);
+        Uint32 mask);
 
     /// Restrict to given types.
     /// \param mask restrict to this journal
     inline void restrict_journal(
-	Journal_type mask);
+        Journal_type mask);
 
     /// Retrieve type.
     /// \return the stored journal type entry
@@ -87,10 +87,10 @@ class Journal_type
     /// \param mask the flag we are interested in
     /// \return whether the given mask is set
     inline bool is_set(
-	Journal_type mask) const;
+        Journal_type mask) const;
 
   private:
-    Uint32 m_type;				///< bitmask for journal entry
+    Uint32 m_type;                              ///< bitmask for journal entry
 };
 
 /// Equality operator for Journal_types.
@@ -117,24 +117,24 @@ static const Journal_type JOURNAL_ALL(0xffffffff);
 
 // Constructor.
 inline Journal_type::Journal_type(
-    Uint32 type)			// bitmask for journal entry
+    Uint32 type)                        // bitmask for journal entry
   : m_type(type)
 {}
 
 
 // Copy constructor.
 inline Journal_type::Journal_type(
-    const Journal_type& j)	 	// the other journal
+    const Journal_type& j)              // the other journal
   : m_type(j.get_type())
 {}
 
 
 // Assignment operator.
 inline Journal_type& Journal_type::operator=(
-    const Journal_type& j)		// the other journal
+    const Journal_type& j)              // the other journal
 {
     if (this == &j)
-	return *this;
+        return *this;
     m_type = j.get_type();
     return *this;
 }
@@ -142,7 +142,7 @@ inline Journal_type& Journal_type::operator=(
 
 // Add type.
 inline void Journal_type::add_journal(
-    Uint32 type)			// new journal entry type
+    Uint32 type)                        // new journal entry type
 {
     m_type |= type;
 }
@@ -150,7 +150,7 @@ inline void Journal_type::add_journal(
 
 // Add type.
 inline void Journal_type::add_journal(
-    Journal_type j)			// new journal entry
+    Journal_type j)                     // new journal entry
 {
     m_type |= j.get_type();
 }
@@ -158,7 +158,7 @@ inline void Journal_type::add_journal(
 
 // Restrict to given types.
 inline void Journal_type::restrict_journal(
-    Uint32 mask)			// restrict to this mask
+    Uint32 mask)                        // restrict to this mask
 {
     m_type &= mask;
 }
@@ -166,7 +166,7 @@ inline void Journal_type::restrict_journal(
 
 // Restrict to given types.
 inline void Journal_type::restrict_journal(
-    Journal_type mask)			// restrict to this journal
+    Journal_type mask)                  // restrict to this journal
 {
     m_type &= mask.get_type();
 }
@@ -189,8 +189,8 @@ inline bool Journal_type::is_set(
 
 // Equality operator for Journal_types.
 inline bool operator==(
-    const Journal_type& one,		// the one
-    const Journal_type& other)		// the other
+    const Journal_type& one,            // the one
+    const Journal_type& other)          // the other
 {
     return one.get_type() == other.get_type();
 }
@@ -198,8 +198,8 @@ inline bool operator==(
 
 // Unequality operator for Journal_types.
 inline bool operator!=(
-    const Journal_type& one,		// the one
-    const Journal_type& other)		// the other
+    const Journal_type& one,            // the one
+    const Journal_type& other)          // the other
 {
     return !(one == other);
 }

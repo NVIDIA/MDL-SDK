@@ -43,9 +43,10 @@
 using mi::base::Handle;
 using mi::base::ILogger;
 using mi::neuraylib::INeuray;
-using mi::neuraylib::IMdl_compiler;
 using mi::neuraylib::Neuray_factory;
 using mi::neuraylib::IMdl_i18n_configuration;
+using mi::neuraylib::IMdl_configuration;
+using mi::neuraylib::IPlugin_configuration;
 using namespace i18n;
 using std::size_t;
 using std::vector;
@@ -61,17 +62,18 @@ using std::set;
 /// Configure the MDL SDK with module search paths and load necessary plugins.
 void configuration(INeuray* neuray, ILogger* logger, Application::Options* options)
 {
-    Handle<IMdl_compiler> mdl_compiler(neuray->get_api_component<IMdl_compiler>());
-    mdl_compiler->set_logger(logger);
+    mi::base::Handle<IMdl_configuration> mdl_config(neuray->get_api_component<IMdl_configuration>());
+    mdl_config->set_logger(logger);
 
+    mi::base::Handle<IPlugin_configuration> plug_config(neuray->get_api_component<IPlugin_configuration>());
 #ifndef MI_PLATFORM_WINDOWS
-    mdl_compiler->load_plugin_library("nv_freeimage.so");
+    plug_config->load_plugin_library("nv_freeimage.so");
 #else
-    mdl_compiler->load_plugin_library("nv_freeimage.dll");
+    plug_config->load_plugin_library("nv_freeimage.dll");
 #endif
 
     // Start removing the current directory "." from the list of search paths
-    mdl_compiler->remove_module_path(".");
+    mdl_config->remove_mdl_path(".");
 
     // Gather list of path to add to MDL search path
     vector<string> directories;
@@ -104,7 +106,7 @@ void configuration(INeuray* neuray, ILogger* logger, Application::Options* optio
         string path(* it);
         Util::File::convert_symbolic_directory(path);
         check_success3(
-              mdl_compiler->add_module_path(path.c_str()) == 0
+            mdl_config->add_mdl_path(path.c_str()) == 0
             , Errors::ERR_MODULE_PATH_FAILURE
             , it->c_str()
         );

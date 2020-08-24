@@ -242,9 +242,9 @@ DB::Element_base* Image_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new DBIMAGE::Image;
 }
 
@@ -254,9 +254,9 @@ mi::base::IInterface* Image_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 0)
-        return 0;
+        return nullptr;
     return ( new Image_impl())->cast_to_major();
 }
 
@@ -311,13 +311,13 @@ const char* Image_impl::get_filename( mi::Uint32 uvtile_id) const
         ? image->get_filename( uvtile_id)
         : image->get_resolved_container_membername( uvtile_id);
 
-    return filename.empty() ? 0 : filename.c_str();
+    return filename.empty() ? nullptr : filename.c_str();
 }
 
 const char* Image_impl::get_original_filename() const
 {
     const std::string& filename = get_db_element()->get_original_filename();
-    return filename.empty() ? 0 : filename.c_str();
+    return filename.empty() ? nullptr : filename.c_str();
 }
 
 bool Image_impl::set_from_canvas( const mi::neuraylib::ICanvas* canvas)

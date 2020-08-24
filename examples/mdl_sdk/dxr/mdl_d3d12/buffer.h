@@ -34,9 +34,11 @@
 #include "common.h"
 #include "base_application.h"
 
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
+
+    // --------------------------------------------------------------------------------------------
 
     class Buffer : public Resource
     {
@@ -180,7 +182,7 @@ namespace mdl_d3d12
     {
     public:
         explicit Constant_buffer_base(
-            Base_application* app, 
+            Base_application* app,
             size_t size_in_byte,
             std::string debug_name)
 
@@ -257,6 +259,8 @@ namespace mdl_d3d12
         ComPtr<ID3D12Resource> m_resource;
     };
 
+    // --------------------------------------------------------------------------------------------
+
     template<typename T> class Dynamic_constant_buffer;
 
     template<typename TConstantStruct>
@@ -275,17 +279,14 @@ namespace mdl_d3d12
         /// constant data to be copied on update
         TConstantStruct data;
 
-        //TConstantStruct& data() { return data; }
-        //const TConstantStruct& data() const { return data; }
-
         // upload constant data to the GPU
         void upload() override
         {
             memcpy(m_mapped_data, &data, sizeof(TConstantStruct));
         }
-
     };
 
+    // --------------------------------------------------------------------------------------------
 
     template<typename TConstantStruct>
     class Dynamic_constant_buffer
@@ -335,6 +336,5 @@ namespace mdl_d3d12
         mutable size_t m_next_frame_index;
     };
 
-
-}
+}}} // mi::examples::mdl_d3d12
 #endif

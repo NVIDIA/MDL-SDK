@@ -871,7 +871,7 @@ inline bool isnan MI_PREVENT_MACRO_EXPAND (const Color& c)
 /// Encodes a color into RGBE representation.
 ///
 /// \note The alpha value is not part of the RGBE representation.
-inline void to_rgbe( const Color& color, Uint32& rgbe)
+MI_HOST_DEVICE_INLINE void to_rgbe( const Color& color, Uint32& rgbe)
 {
     to_rgbe( &color.r, rgbe);
 }
@@ -879,7 +879,7 @@ inline void to_rgbe( const Color& color, Uint32& rgbe)
 /// Encodes a color into RGBE representation.
 ///
 /// \note The alpha value is not part of the RGBE representation.
-inline void to_rgbe( const Color& color, Uint8 rgbe[4])
+MI_HOST_DEVICE_INLINE void to_rgbe( const Color& color, Uint8 rgbe[4])
 {
     to_rgbe( &color.r, rgbe);
 }
@@ -887,7 +887,7 @@ inline void to_rgbe( const Color& color, Uint8 rgbe[4])
 /// Decodes a color from RGBE representation.
 ///
 /// \note The alpha value is set to 1.0.
-inline void from_rgbe( const Uint8 rgbe[4], Color& color)
+MI_HOST_DEVICE_INLINE void from_rgbe( const Uint8 rgbe[4], Color& color)
 {
     from_rgbe( rgbe, &color.r);
     color.a = 1.0f;
@@ -896,7 +896,7 @@ inline void from_rgbe( const Uint8 rgbe[4], Color& color)
 /// Decodes a color from RGBE representation.
 ///
 /// \note The alpha value is set to 1.0.
-inline void from_rgbe( const Uint32 rgbe, Color& color)
+MI_HOST_DEVICE_INLINE void from_rgbe( const Uint32 rgbe, Color& color)
 {
     from_rgbe( rgbe, &color.r);
     color.a = 1.0f;

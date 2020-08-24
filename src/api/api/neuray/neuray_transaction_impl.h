@@ -251,7 +251,7 @@ private:
     /// \param tags_seen    Used to skip already handled graph nodes.
     void list_elements_internal(
         DB::Tag tag,
-        const std::regex* name_regex,
+        const std::wregex* name_regex,
         const std::set<SERIAL::Class_id>* class_ids,
         mi::IDynamic_array* result,
         std::set<DB::Tag>& tags_seen) const;

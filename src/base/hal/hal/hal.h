@@ -49,7 +49,7 @@ int get_errno();
 /// \param err the system error code
 /// \return error string describing the given system error code
 std::string strerror(
-    int		err);
+    int         err);
 
 /// Indicate whether we have somewhere to write stderr. Windows apps don't
 /// have a console and can not easily write msgs to stderr. No stderr-having
@@ -71,8 +71,8 @@ void fatal_exit(
 /// for server applications this should never happen and applications should
 /// not pop an endless stream of these (or even more than one)
 void message_box(
-    const char *caption,		// the caption for the box
-    const char *msg);		// the message to display
+    const char *caption,                // the caption for the box
+    const char *msg);           // the message to display
 
 enum Color {
     C_DEFAULT, C_BLACK, C_RED, C_GREEN, C_YELLOW,

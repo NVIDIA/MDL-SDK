@@ -798,6 +798,7 @@ public:
             llvm::GlobalValue::InternalLinkage,
             "switch_func",
             m_code_gen.get_llvm_module());
+        m_code_gen.set_llvm_function_attributes(switch_func);
 
         llvm::BasicBlock *start_block =
             llvm::BasicBlock::Create(llvm_context, "start", switch_func);
@@ -1003,6 +1004,14 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 {
     m_dist_func = &dist_func;
 
+#if 0
+    static int dumpid = 0;
+    std::string dumpname("df");
+    dumpname += std::to_string(dumpid++);
+    dumpname += ".gv";
+    m_dist_func->dump(dumpname.c_str());
+#endif
+
     IAllocator *alloc = m_arena.get_allocator();
 
     mi::base::Handle<ILambda_function> root_lambda_handle(m_dist_func->get_main_df());
@@ -1098,6 +1107,9 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         // force expression lambda function to be internal
         func->setLinkage(llvm::GlobalValue::InternalLinkage);
 
+        if (is_always_inline_enabled())
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+
         // if the result is not returned as an out parameter, mark the lambda function as read-only
         if ((flags & LLVM_context_data::FL_SRET) == 0) {
             func->setOnlyReadsMemory();
@@ -1161,6 +1173,9 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
         // set proper function name according to distribution function state
         func->setName(base_name + get_dist_func_state_suffix());
+
+        if (is_always_inline_enabled())
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
 
         // remember function as an exported function
         IGenerated_code_executable::Function_kind func_kind =
@@ -1373,8 +1388,7 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(DAG_call const *dag_ca
                   "chiang_hair_bsdf")
 
         default:
-            MDL_ASSERT(!is_df_semantics(sema) && "unsupported DF function found");
-            return NULL;
+            return NULL;  // unsupported DF, should be mapped to black DF
     }
 
     #undef SEMA_CASE
@@ -2194,6 +2208,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         llvm::GlobalValue::InternalLinkage,
                         "",
                         m_module);
+                    set_llvm_function_attributes(new_func);
                     new_func->takeName(func);
                     new_func->getBasicBlockList().splice(
                         new_func->begin(), func->getBasicBlockList());
@@ -2249,6 +2264,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         llvm::GlobalValue::InternalLinkage,
                         "",
                         m_module);
+                    set_llvm_function_attributes(new_func);
                     new_func->setName("gen_" + func->getName());
                     new_func->getBasicBlockList().splice(
                         new_func->begin(), old_func->getBasicBlockList());
@@ -2689,13 +2705,35 @@ Expression_result LLVM_code_generator::translate_precalculated_lambda(
     }
 
     // type doesn't matter or fits already?
-    if (expected_type == NULL || res.as_value(ctx)->getType() == expected_type) return res;
+    if (expected_type == NULL || res.get_value_type() == expected_type) return res;
 
     // convert to expected type
     return Expression_result::value(ctx.load_and_convert(expected_type, res.as_ptr(ctx)));
 }
 
+// Translate a DAG call argument which may be a precalculated lambda function to LLVM IR.
+Expression_result LLVM_code_generator::translate_call_arg(
+    Function_context &ctx,
+    DAG_node const   *arg,
+    llvm::Type       *expected_type)
+{
+    // translate constants directly
+    if (DAG_constant const *c = as<DAG_constant>(arg)) {
+        Expression_result res = translate_value(ctx, c->get_value());
+        if (res.get_value_type() == expected_type)
+            return res;
 
+        return Expression_result::value(ctx.load_and_convert(expected_type, res.as_ptr(ctx)));
+    }
+
+    // determine expression lambda index
+    MDL_ASSERT(arg->get_kind() == DAG_node::EK_CALL);
+    DAG_call const *arg_call = mi::mdl::cast<DAG_call>(arg);
+    MDL_ASSERT(arg_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
+    size_t lambda_index = strtoul(arg_call->get_name(), NULL, 10);
+
+    return translate_precalculated_lambda(ctx, lambda_index, expected_type);
+}
 
 // Get the BSDF parameter ID metadata for an instruction.
 int LLVM_code_generator::get_metadata_df_param_id(
@@ -3081,16 +3119,9 @@ void LLVM_code_generator::handle_df_array_parameter(
             color_array = ctx.create_local(color_array_type, "colors");
 
             for (int i = 0; i < elem_count; ++i) {
-                // the i-th element should have been rewritten to a lambda call
                 DAG_node const *color_node = arg_call->get_argument(i);
-                MDL_ASSERT(color_node->get_kind() == DAG_node::EK_CALL);
-                DAG_call const *color_call = mi::mdl::cast<DAG_call>(color_node);
-                MDL_ASSERT(color_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
-
-                // read precalculated lambda result
-                size_t lambda_index = strtoul(color_call->get_name(), NULL, 10);
-                Expression_result color_res = translate_precalculated_lambda(
-                    ctx, lambda_index, m_float3_struct_type);
+                Expression_result color_res = translate_call_arg(
+                    ctx, color_node, m_float3_struct_type);
 
                 // store result in colors array
                 llvm::Value *idxs[] = {
@@ -3156,19 +3187,8 @@ void LLVM_code_generator::handle_df_array_parameter(
                 // should be a BSDF_component constructor call
                 MDL_ASSERT(elem_node->get_kind() == DAG_node::EK_CALL);
                 DAG_call const *elem_call = mi::mdl::cast<DAG_call>(elem_node);
-
-                // the weight argument of the constructor should have been rewritten
-                // to a lambda call
                 DAG_node const *weight_node = elem_call->get_argument("weight");
-                MDL_ASSERT(weight_node->get_kind() == DAG_node::EK_CALL);
-                DAG_call const *weight_call = mi::mdl::cast<DAG_call>(weight_node);
-                MDL_ASSERT(weight_call->get_semantic() ==
-                    IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
-
-                // read precalculated lambda result
-                size_t lambda_index = strtoul(weight_call->get_name(), NULL, 10);
-                weight_res = translate_precalculated_lambda(
-                    ctx, lambda_index, weight_type);
+                weight_res = translate_call_arg(ctx, weight_node, weight_type);
 
                 // instantiate BSDF for component parameter of the constructor
                 DAG_node const *component_node = elem_call->get_argument("component");
@@ -3253,6 +3273,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
         llvm::GlobalValue::InternalLinkage,
         operator_name,
         m_module);
+    set_llvm_function_attributes(func);
 
     {
         // Context needs a non-empty start block, so create a jump to a second block
@@ -3271,13 +3292,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
 
         // Find lambda expression for condition and generate code
         DAG_node const *cond = dag_call->get_argument(0);
-        MDL_ASSERT(cond->get_kind() == DAG_node::EK_CALL);
-        DAG_call const *cond_call = mi::mdl::cast<DAG_call>(cond);
-        MDL_ASSERT(cond_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
-        size_t lambda_index = strtoul(cond_call->get_name(), NULL, 10);
-
-        Expression_result res = translate_precalculated_lambda(
-            ctx, lambda_index, m_type_mapper.get_bool_type());
+        Expression_result res = translate_call_arg(ctx, cond, m_type_mapper.get_bool_type());
 
         // Generate code for "if (cond) call[1](args); else call[2](args);"
 
@@ -3405,12 +3420,36 @@ llvm::Function *LLVM_code_generator::instantiate_df(
 
     df_lib_func = get_libbsdf_function(dag_call);
     if (df_lib_func == NULL) {
-        MDL_ASSERT(!"BSDF function not supported by libbsdf, yet");
-        return NULL;
+        char const *suffix;
+        switch (dag_call->get_type()->get_kind())
+        {
+            case IType::Kind::TK_EDF:
+                suffix = "_edf";
+                break;
+
+            case IType::Kind::TK_BSDF:
+            case IType::Kind::TK_HAIR_BSDF:  // same prototype as BSDF variant
+            default:
+                 suffix = "_bsdf";
+                 break;
+        }
+
+        mi::mdl::string func_name("gen_black", get_allocator());
+        func_name.append(suffix);
+        func_name.append(get_dist_func_state_suffix());
+
+        df_lib_func = m_module->getFunction(func_name.c_str());
+        if (df_lib_func == NULL) {
+            MDL_ASSERT(!"libbsdf is missing an implementation of bsdf(): black_*");
+            return NULL;
+        }
+        return df_lib_func;   // the black_bsdf needs no instantiation, return it directly
     }
 
     llvm::ValueToValueMapTy ValueMap;
     llvm::Function *bsdf_func = llvm::CloneFunction(df_lib_func, ValueMap);
+    if (is_always_inline_enabled())
+        bsdf_func->addFnAttr(llvm::Attribute::AlwaysInline);
 
     Function_context ctx(
         get_allocator(),
@@ -3438,24 +3477,13 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                     continue;
                 }
 
-                // determine expression lambda index
-                MDL_ASSERT(arg->get_kind() == DAG_node::EK_CALL);
-                DAG_call const *arg_call = mi::mdl::cast<DAG_call>(arg);
-                MDL_ASSERT(arg_call->get_semantic() == IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA);
-                size_t lambda_index = strtoul(arg_call->get_name(), NULL, 10);
-
                 ctx.move_to_body_start();
 
                 // special handling for handle parameters
                 if (is_elemental && param_idx == dag_call->get_argument_count() - 1 &&
                         strcmp(dag_call->get_parameter_name(param_idx), "handle") == 0) {
-                    mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
-                        m_dist_func->get_expr_lambda(lambda_index));
-
-                    MDL_ASSERT(is<DAG_constant>(expr_lambda->get_body())
-                        && "DF handle must be a constant");
-                    if (DAG_constant const *handle_const = as<DAG_constant>(
-                            expr_lambda->get_body())) {
+                    MDL_ASSERT(is<DAG_constant>(arg) && "DF handle must be a constant");
+                    if (DAG_constant const *handle_const = as<DAG_constant>(arg)) {
                         IValue const *handle_val = handle_const->get_value();
                         IValue_string const *handle_str = as<IValue_string>(handle_val);
                         MDL_ASSERT(handle_str && "DF handle must be string");
@@ -3479,8 +3507,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                     }
                 }
 
-                Expression_result res = translate_precalculated_lambda(
-                    ctx, lambda_index, elem_type);
+                Expression_result res = translate_call_arg(ctx, arg, elem_type);
                 inst->replaceAllUsesWith(res.as_ptr(ctx));
                 continue;
             }

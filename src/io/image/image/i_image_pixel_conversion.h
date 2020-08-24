@@ -53,8 +53,10 @@
  #include <xmmintrin.h>
 #endif
 
-#include <mi/math/color.h>
+#include <mi/math/function.h>
 #include <base/lib/log/i_log_assert.h>
+
+#include <algorithm>
 
 namespace MI {
 
@@ -74,7 +76,7 @@ namespace IMAGE {
 ///                   value. For decoding gamma compressed data into linear data the exponent is the
 ///                   gamma value itself, and for encoding linear data into gamma compressed data
 ///                   the exponent is the inverse gamma value.
-void adjust_gamma( mi::Float32* data, mi::Size count, mi::Uint32 components, mi::Float32 exponent);
+MI_HOST_DEVICE_INLINE void adjust_gamma( mi::Float32* data, mi::Size count, mi::Uint32 components, mi::Float32 exponent);
 
 /// Indicates whether a particular pixel type conversion is implemented.
 ///
@@ -87,7 +89,7 @@ void adjust_gamma( mi::Float32* data, mi::Size count, mi::Uint32 components, mi:
 /// \param Dest     The pixel type to convert to.
 /// \return         \c true if the pixel type conversion from \p Source to \p Dest is implemented,
 ///                 \c false otherwise.
-bool exists_pixel_conversion( Pixel_type Source, Pixel_type Dest);
+MI_HOST_DEVICE_INLINE bool exists_pixel_conversion( Pixel_type Source, Pixel_type Dest);
 
 /// Converts a contiguous region of pixels from the source format to the destination format.
 ///
@@ -102,7 +104,7 @@ bool exists_pixel_conversion( Pixel_type Source, Pixel_type Dest);
 /// \param Source   The pixel type of \p source.
 /// \param Dest     The pixel type of \p dest.
 /// \param count    The number of pixels to convert.
-bool convert(
+MI_HOST_DEVICE_INLINE bool convert(
     const void* source, void* dest, Pixel_type Source, Pixel_type Dest, mi::Size count = 1);
 
 /// Converts a rectangular region of pixels with arbitrary row strides from the source format to
@@ -128,7 +130,7 @@ bool convert(
 /// \param dest_stride     Offset between subsequent rows of \p dest (in bytes). Can be
 ///                        negative in order to flip the row order, but then \p dest must
 ///                        point to the first pixel of the last row.
-bool convert(
+MI_HOST_DEVICE_INLINE bool convert(
     const void* source, void* dest,
     Pixel_type Source, Pixel_type Dest,
     mi::Size width, mi::Size height,
@@ -139,7 +141,7 @@ bool convert(
 /// See #convert(const void*,void*,Pixel_type,Pixel_type,mi::Size) for argument details. The first
 /// pixel type argument there is a template parameter here.
 template <Pixel_type Source>
-bool convert( const void* source, void* dest, Pixel_type Dest, mi::Size count = 1);
+MI_HOST_DEVICE_INLINE bool convert( const void* source, void* dest, Pixel_type Dest, mi::Size count = 1);
 
 /// Converts rectangular region of pixels with arbitrary row strides from the source format to
 /// the destination format.
@@ -148,7 +150,7 @@ bool convert( const void* source, void* dest, Pixel_type Dest, mi::Size count = 
 /// mi::Difference) for argument details. The first pixel type argument there is a template
 /// parameter here.
 template <Pixel_type Source>
-bool convert(
+MI_HOST_DEVICE_INLINE bool convert(
     const void* source, void* dest,
     Pixel_type Dest,
     mi::Size width, mi::Size height,
@@ -160,7 +162,7 @@ bool convert(
 /// \param dest     The first pixel to store the result in pixel type \p Type.
 /// \param Type     The pixel type of \p source and \p dest.
 /// \param count    The number of pixels to copy.
-bool copy(
+MI_HOST_DEVICE_INLINE bool copy(
     const void* source, void* dest, Pixel_type Type, mi::Size count = 1);
 
 /// Copies a rectangular region of pixels with arbitrary row strides.
@@ -178,7 +180,7 @@ bool copy(
 /// \param dest_stride     Offset between subsequent rows of \p dest (in bytes). Can be
 ///                        negative in order to flip the row order, but then \p dest must
 ///                        point to the first pixel of the last row.
-bool copy(
+MI_HOST_DEVICE_INLINE bool copy(
     const void* source, void* dest,
     Pixel_type Type,
     mi::Size width, mi::Size height,
@@ -214,14 +216,14 @@ struct Pixel_converter
     ///
     /// \param source   The pixel to convert from pixel type \p Source.
     /// \param dest     The pixel to store the result in pixel type \p Dest.
-    static void convert( const Source_base_type* source, Dest_base_type* dest);
+    static MI_HOST_DEVICE_INLINE void convert( const Source_base_type* source, Dest_base_type* dest);
 
     /// Converts a contiguous region of pixels from the source format to the destination format.
     ///
     /// \param source   The first pixel to convert from pixel type \p Source.
     /// \param dest     The first pixel to store the result in pixel type \p Dest.
     /// \param count    The number of pixels to convert.
-    static void convert( const Source_base_type* source, Dest_base_type* dest, mi::Size count);
+    static MI_HOST_DEVICE_INLINE void convert( const Source_base_type* source, Dest_base_type* dest, mi::Size count);
 
     /// Converts a rectangular region of pixels with arbitrary row strides from the source format to
     /// the destination format.
@@ -238,7 +240,7 @@ struct Pixel_converter
     /// \param dest_stride     Offset between subsequent rows of \p dest (in bytes). Can be
     ///                        negative in order to flip the row order, but then \p dest must
     ///                        point to the first pixel of the last row.
-    static void convert(
+    static MI_HOST_DEVICE_INLINE void convert(
         const Source_base_type* source, Dest_base_type* dest,
         mi::Size width, mi::Size height,
         mi::Difference source_stride, mi::Difference dest_stride);
@@ -249,7 +251,7 @@ struct Pixel_converter
     /// the callers below.
     ///
     /// For documentation, see the corresponding method above.
-    static void convert( const void* source, void* dest, mi::Size count = 1);
+    static MI_HOST_DEVICE_INLINE void convert( const void* source, void* dest, mi::Size count = 1);
 
     /// Converts a rectangular region of pixels with arbitrary row strides from the source format to
     /// the destination format.
@@ -258,7 +260,7 @@ struct Pixel_converter
     /// the callers below.
     ///
     /// For documentation, see the corresponding method above.
-    static void convert(
+    static MI_HOST_DEVICE_INLINE void convert(
         const void* source, void* dest,
         mi::Size width, mi::Size height,
         mi::Difference source_stride, mi::Difference dest_stride);
@@ -283,14 +285,14 @@ struct Pixel_copier
     ///
     /// \param source   The pixel to copy from pixel type \p Type.
     /// \param dest     The pixel to store the result in pixel type \p Type.
-    static void copy( const Base_type* source, Base_type* dest);
+    static MI_HOST_DEVICE_INLINE void copy( const Base_type* source, Base_type* dest);
 
     /// Copies a contiguous region of pixels.
     ///
     /// \param source   The first pixel to copy from pixel type \p Type.
     /// \param dest     The first pixel to store the result in pixel type \p Type.
     /// \param count    The number of pixels to copy.
-    static void copy( const Base_type* source, Base_type* dest, mi::Size count);
+    static MI_HOST_DEVICE_INLINE void copy( const Base_type* source, Base_type* dest, mi::Size count);
 
     /// Copies a rectangular region of pixels with arbitrary row strides.
     ///
@@ -306,7 +308,7 @@ struct Pixel_copier
     /// \param dest_stride     Offset between subsequent rows of \p dest (in bytes). Can be
     ///                        negative in order to flip the row order, but then \p dest must
     ///                        point to the first pixel of the last row.
-    static void copy(
+    static MI_HOST_DEVICE_INLINE void copy(
         const Base_type* source, Base_type* dest,
         mi::Size width, mi::Size height,
         mi::Difference source_stride, mi::Difference dest_stride);
@@ -317,7 +319,7 @@ struct Pixel_copier
     /// the callers below.
     ///
     /// For documentation, see the corresponding method above.
-    static void copy( const void* source, void* dest, mi::Size count = 1);
+    static MI_HOST_DEVICE_INLINE void copy( const void* source, void* dest, mi::Size count = 1);
 
     /// Copies a rectangular region of pixels with arbitrary row strides.
     ///
@@ -325,7 +327,7 @@ struct Pixel_copier
     /// the callers below.
     ///
     /// For documentation, see the corresponding method above.
-    static void copy(
+    static MI_HOST_DEVICE_INLINE void copy(
         const void* source, void* dest,
         mi::Size width, mi::Size height,
         mi::Difference source_stride, mi::Difference dest_stride);
@@ -334,34 +336,50 @@ struct Pixel_copier
 // ---------- implementation -----------------------------------------------------------------------
 
 template <typename Src, typename Dest>
-inline void quantize_u(Dest& dest, const Src src)
+MI_HOST_DEVICE_INLINE void quantize_u(Dest& dest, const Src src)
 {
-    dest = quantize_unsigned<Dest>(std::max(src,0.0f)); // min(x,1.f) is done inside of quantize_unsigned
+#ifndef __CUDACC__
+    using mi::base::max;
+#endif
+    dest = quantize_unsigned<Dest>(max(src,0.0f)); // min(x,1.f) is done inside of quantize_unsigned
 }
 
 template <typename Src, typename Dest>
-inline void quantize_s(Dest& dest, const Src src)
+MI_HOST_DEVICE_INLINE void quantize_s(Dest& dest, const Src src)
 {
     dest = quantize_signed<Dest>(src);
 }
 
-inline void adjust_gamma(
+MI_HOST_DEVICE_INLINE void to_rgbe(mi::Float32 src, mi::Uint8 dest[3])
+{
+    const mi::Float32 tmp[3] = { src, src, src};
+    mi::math::to_rgbe(tmp, dest);
+}
+
+MI_HOST_DEVICE_INLINE void adjust_gamma(
     mi::Float32* const data, const mi::Size count, const mi::Uint32 components, const mi::Float32 exponent)
 {
     const mi::Uint32 active_components = std::min(components, 3u);
     for( mi::Size i = 0; i < count * components; i += components) {
+#ifdef __CUDACC__
+#pragma unroll
+#endif
         for ( mi::Uint32 c = 0; c < active_components; ++c) {
-            data[i+c] = mi::math::fast_pow( data[i+c], exponent);
+#ifdef __CUDACC__
+            data[i+c] = powf( data[i+c], exponent);
+#else
+            data[i+c] = mi::math::fast_pow( data[i+c], exponent); //!!
+#endif
         }
     }
 }
 
-inline bool exists_pixel_conversion( const Pixel_type Source, const Pixel_type Dest)
+MI_HOST_DEVICE_INLINE bool exists_pixel_conversion( const Pixel_type Source, const Pixel_type Dest)
 {
     return Source != PT_UNDEF && Dest != PT_UNDEF;
 }
 
-inline bool convert(
+MI_HOST_DEVICE_INLINE bool convert(
     const void* const source, void* const dest, Pixel_type Source, Pixel_type Dest, const mi::Size count)
 {
     if( Source == PT_SINT32)    Source = PT_RGBA;
@@ -391,7 +409,7 @@ inline bool convert(
     }
 }
 
-inline bool convert(
+MI_HOST_DEVICE_INLINE bool convert(
     const void* const source, void* const dest,
     Pixel_type Source, Pixel_type Dest,
     const mi::Size width, const mi::Size height,
@@ -427,7 +445,7 @@ inline bool convert(
 }
 
 template <Pixel_type Source>
-inline bool convert( const void* const source, void* const dest, Pixel_type Dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE bool convert( const void* const source, void* const dest, Pixel_type Dest, const mi::Size count)
 {
     if( Dest == PT_SINT32)      Dest = PT_RGBA;
     if( Dest == PT_FLOAT32_3)   Dest = PT_RGB_FP;
@@ -452,7 +470,7 @@ inline bool convert( const void* const source, void* const dest, Pixel_type Dest
 }
 
 template <Pixel_type Source>
-inline bool convert(
+MI_HOST_DEVICE_INLINE bool convert(
     const void* const source, void* const dest,
     Pixel_type Dest,
     const mi::Size width, const mi::Size height,
@@ -480,7 +498,7 @@ inline bool convert(
 #undef MI_IMAGE_ARGS
 }
 
-inline bool copy(
+MI_HOST_DEVICE_INLINE bool copy(
     const void* const source, void* const dest, Pixel_type Type, const mi::Size count)
 {
     if( Type == PT_SINT32)      Type = PT_RGBA;
@@ -503,7 +521,7 @@ inline bool copy(
     }
 }
 
-inline bool copy(
+MI_HOST_DEVICE_INLINE bool copy(
     const void* const source, void* const dest,
     Pixel_type Type,
     const mi::Size width, const mi::Size height,
@@ -532,16 +550,18 @@ inline bool copy(
 }
 
 template <Pixel_type Source, Pixel_type Dest>
-inline void Pixel_converter<Source,Dest>::convert(
+MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const Source_base_type* const source, Dest_base_type* const dest)
 {
+#ifndef __CUDACC__
     // Use exists_pixel_conversion( Source, Dest) to find out whether the conversion from
     // Source to Dest is supported.
     ASSERT( M_IMAGE, !"pixel type conversion not implemented for this combination");
+#endif
 }
 
 template <Pixel_type Source, Pixel_type Dest>
-inline void Pixel_converter<Source,Dest>::convert(
+MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const Source_base_type* source, Dest_base_type* dest, const mi::Size count)
 {
     for( mi::Size i = 0; i < count; ++i) {
@@ -552,7 +572,7 @@ inline void Pixel_converter<Source,Dest>::convert(
 }
 
 template <Pixel_type Source, Pixel_type Dest>
-inline void Pixel_converter<Source,Dest>::convert(
+MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const Source_base_type* const source, Dest_base_type* const dest,
     const mi::Size width, const mi::Size height,
     const mi::Difference source_stride, const mi::Difference dest_stride)
@@ -564,8 +584,8 @@ inline void Pixel_converter<Source,Dest>::convert(
     for( mi::Size y = 0; y < height; ++y) {
 
         // use source3 and dest3 instead of source2 and dest2 inside a row
-        const Source_base_type* source3 = reinterpret_cast<const Source_base_type*>( source2);
-        Dest_base_type*         dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
+        const Source_base_type* const source3 = reinterpret_cast<const Source_base_type*>( source2);
+        Dest_base_type*         const dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
 
         // call 3-args variant instead of explicit loop to benefit from its SSE specializations
         convert( source3, dest3, width);
@@ -576,42 +596,42 @@ inline void Pixel_converter<Source,Dest>::convert(
 }
 
 template <Pixel_type Source, Pixel_type Dest>
-inline void Pixel_converter<Source,Dest>::convert( const void* const source, void* const dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert( const void* const source, void* const dest, const mi::Size count)
 {
-    const Source_base_type* source2 = static_cast<const Source_base_type*>( source);
-    Dest_base_type* dest2           = static_cast<Dest_base_type*>( dest);
+    const Source_base_type* const source2 = static_cast<const Source_base_type*>( source);
+    Dest_base_type* const dest2           = static_cast<Dest_base_type*>( dest);
     convert( source2, dest2, count);
 }
 
 template <Pixel_type Source, Pixel_type Dest>
-inline void Pixel_converter<Source,Dest>::convert(
+MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const void* const source, void* const dest,
     const mi::Size width, const mi::Size height,
     const mi::Difference source_stride, const mi::Difference dest_stride)
 {
-    const Source_base_type* source2 = static_cast<const Source_base_type*>( source);
-    Dest_base_type* dest2           = static_cast<Dest_base_type*>( dest);
+    const Source_base_type* const source2 = static_cast<const Source_base_type*>( source);
+    Dest_base_type* const dest2           = static_cast<Dest_base_type*>( dest);
     convert( source2, dest2, width, height, source_stride, dest_stride);
 }
 
 template <Pixel_type Type>
-inline void Pixel_copier<Type>::copy( const Base_type* const source, Base_type* const dest)
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy( const Base_type* const source, Base_type* const dest)
 {
-    mi::Size bytes_per_pixel = Pixel_type_traits<Type>::s_components_per_pixel
-                             * sizeof( typename Pixel_type_traits<Type>::Base_type);
+    const mi::Size bytes_per_pixel = Pixel_type_traits<Type>::s_components_per_pixel
+                                   * sizeof( typename Pixel_type_traits<Type>::Base_type);
     memcpy( dest, source, bytes_per_pixel);
 }
 
 template <Pixel_type Type>
-inline void Pixel_copier<Type>::copy( const Base_type* const source, Base_type* const dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy( const Base_type* const source, Base_type* const dest, const mi::Size count)
 {
-    mi::Size bytes_per_pixel = Pixel_type_traits<Type>::s_components_per_pixel
-                             * sizeof( typename Pixel_type_traits<Type>::Base_type);
+    const mi::Size bytes_per_pixel = Pixel_type_traits<Type>::s_components_per_pixel
+                                   * sizeof( typename Pixel_type_traits<Type>::Base_type);
     memcpy( dest, source, count * bytes_per_pixel);
 }
 
 template <Pixel_type Type>
-inline void Pixel_copier<Type>::copy(
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
     const Base_type* const source, Base_type* const dest,
     const mi::Size width, const mi::Size height,
     const mi::Difference source_stride, const mi::Difference dest_stride)
@@ -646,7 +666,7 @@ inline void Pixel_copier<Type>::copy(
 }
 
 template <Pixel_type Type>
-inline void Pixel_copier<Type>::copy( const void* const source, void* dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy( const void* const source, void* dest, const mi::Size count)
 {
     const Base_type* const source2 = static_cast<const Base_type*>( source);
     Base_type* const dest2         = static_cast<Base_type*>( dest);
@@ -654,7 +674,7 @@ inline void Pixel_copier<Type>::copy( const void* const source, void* dest, cons
 }
 
 template <Pixel_type Type>
-inline void Pixel_copier<Type>::copy(
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
     const void* const source, void* const dest,
     const mi::Size width, const mi::Size height,
     const mi::Difference source_stride, const mi::Difference dest_stride)
@@ -668,72 +688,70 @@ inline void Pixel_copier<Type>::copy(
 
 // ---------- source PT_SINT8 ----------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_SINT8, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = src[0];
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = src[0];
     dest[3] = 255;
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::math::Color tmp( mi::Float32( src[0]) * mi::Float32( 1.0/255.0));
-    mi::math::to_rgbe( tmp, dest);
+    to_rgbe( src[0] * mi::Float32( 1.0/255.0), dest);
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::math::Color tmp( mi::Float32( src[0]) * mi::Float32( 1.0/255.0));
-    mi::math::to_rgbe( tmp, dest);
+    to_rgbe( src[0] * mi::Float32( 1.0/255.0), dest);
     dest[4] = 255;
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = mi::Uint16( mi::Float32( src[0]) * mi::Float32( 65535.0/255.0));
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = mi::Uint16( mi::Float32( src[0]) * mi::Float32( 65535.0/255.0));
     dest[3] = 65535;
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
 }
 
-template<> inline void Pixel_converter<PT_SINT8, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
@@ -742,32 +760,32 @@ template<> inline void Pixel_converter<PT_SINT8, PT_COLOR>::convert(
 
 // ---------- source PT_FLOAT32 --------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(*dest,*src); // actually SINT8 means UINT8 :/
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = src[0];
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(*dest,*src);
     dest[1] = dest[2] = dest[0];
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(*dest,*src);
@@ -775,29 +793,29 @@ template<> inline void Pixel_converter<PT_FLOAT32, PT_RGBA>::convert(
     dest[3] = 255;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3] = { src[0], src[0], src[0] };
+    const mi::Float32 tmp[3] = { src[0], src[0], src[0] };
     mi::math::to_rgbe( tmp, dest);
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3] = { src[0], src[0], src[0] };
+    const mi::Float32 tmp[3] = { src[0], src[0], src[0] };
     mi::math::to_rgbe( tmp, dest);
     dest[4] = 255;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(*dest,*src);
     dest[1] = dest[2] = dest[0];
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(*dest,*src);
@@ -805,13 +823,13 @@ template<> inline void Pixel_converter<PT_FLOAT32, PT_RGBA_16>::convert(
     dest[3] = 65535;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = src[0];
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = dest[1] = dest[2] = src[0];
@@ -820,26 +838,26 @@ template<> inline void Pixel_converter<PT_FLOAT32, PT_COLOR>::convert(
 
 // ---------- source PT_FLOAT32_2 ------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(*dest,(src[0]+src[1])*0.5f); // actually SINT8 means UINT8 :/
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = (src[0]+src[1]) * 0.5f;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
     dest[1] = src[1];
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -847,7 +865,7 @@ template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGB>::convert(
     dest[2] = 0;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -856,22 +874,22 @@ template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGBA>::convert(
     dest[3] = 255;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3] = { src[0], src[1], 0.0f };
+    const mi::Float32 tmp[3] = { src[0], src[1], 0.0f };
     mi::math::to_rgbe( tmp, dest);
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3] = { src[0], src[1], 0.0f };
+    const mi::Float32 tmp[3] = { src[0], src[1], 0.0f };
     mi::math::to_rgbe( tmp, dest);
     dest[4] = 255;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -879,7 +897,7 @@ template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGB_16>::convert(
     dest[2] = 0;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -888,7 +906,7 @@ template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGBA_16>::convert(
     dest[3] = 65535;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -896,7 +914,7 @@ template<> inline void Pixel_converter<PT_FLOAT32_2, PT_RGB_FP>::convert(
     dest[2] = 0.0f;
 }
 
-template<> inline void Pixel_converter<PT_FLOAT32_2, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_FLOAT32_2, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -907,7 +925,7 @@ template<> inline void Pixel_converter<PT_FLOAT32_2, PT_COLOR>::convert(
 
 // ---------- source PT_RGB ------------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_RGB, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint8( 0.27f * mi::Float32( src[0])
@@ -915,7 +933,7 @@ template<> inline void Pixel_converter<PT_RGB, PT_SINT8>::convert(
                        + 0.06f * mi::Float32( src[2]));
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( 0.27/255.0) * mi::Float32( src[0])
@@ -923,14 +941,14 @@ template<> inline void Pixel_converter<PT_RGB, PT_FLOAT32>::convert(
             + mi::Float32( 0.06/255.0) * mi::Float32( src[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
     dest[1] = mi::Float32( src[1]) * mi::Float32( 1.0/255.0);
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -938,7 +956,7 @@ template<> inline void Pixel_converter<PT_RGB, PT_RGB>::convert(
     dest[2] = src[2];
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -947,28 +965,28 @@ template<> inline void Pixel_converter<PT_RGB, PT_RGBA>::convert(
     dest[3] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/255.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/255.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/255.0)};
     mi::math::to_rgbe( tmp, dest);
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/255.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/255.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/255.0)};
     mi::math::to_rgbe( tmp, dest);
     dest[4] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint16( mi::Float32( src[0]) * mi::Float32( 65535.0/255.0));
@@ -976,7 +994,7 @@ template<> inline void Pixel_converter<PT_RGB, PT_RGB_16>::convert(
     dest[2] = mi::Uint16( mi::Float32( src[2]) * mi::Float32( 65535.0/255.0));
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint16( mi::Float32( src[0]) * mi::Float32( 65535.0/255.0));
@@ -985,7 +1003,7 @@ template<> inline void Pixel_converter<PT_RGB, PT_RGBA_16>::convert(
     dest[3] = 65535;
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
@@ -993,7 +1011,7 @@ template<> inline void Pixel_converter<PT_RGB, PT_RGB_FP>::convert(
     dest[2] = mi::Float32( src[2]) * mi::Float32( 1.0/255.0);
 }
 
-template<> inline void Pixel_converter<PT_RGB, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
@@ -1004,7 +1022,7 @@ template<> inline void Pixel_converter<PT_RGB, PT_COLOR>::convert(
 
 // ---------- source PT_RGBA -----------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_RGBA, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint8( 0.27f * mi::Float32( src[0])
@@ -1012,7 +1030,7 @@ template<> inline void Pixel_converter<PT_RGBA, PT_SINT8>::convert(
                        + 0.06f * mi::Float32( src[2]));
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( 0.27/255.0) * mi::Float32( src[0])
@@ -1020,14 +1038,14 @@ template<> inline void Pixel_converter<PT_RGBA, PT_FLOAT32>::convert(
             + mi::Float32( 0.06/255.0) * mi::Float32( src[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
     dest[1] = mi::Float32( src[1]) * mi::Float32( 1.0/255.0);
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1035,7 +1053,7 @@ template<> inline void Pixel_converter<PT_RGBA, PT_RGB>::convert(
     dest[2] = src[2];
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1044,28 +1062,28 @@ template<> inline void Pixel_converter<PT_RGBA, PT_RGBA>::convert(
     dest[3] = src[3];
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/255.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/255.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/255.0)};
     mi::math::to_rgbe( tmp, dest);
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/255.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/255.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/255.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/255.0)};
     mi::math::to_rgbe( tmp, dest);
     dest[4] = src[3];
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint16( mi::Float32( src[0]) * mi::Float32( 65535.0/255.0));
@@ -1073,7 +1091,7 @@ template<> inline void Pixel_converter<PT_RGBA, PT_RGB_16>::convert(
     dest[2] = mi::Uint16( mi::Float32( src[2]) * mi::Float32( 65535.0/255.0));
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint16( mi::Float32( src[0]) * mi::Float32( 65535.0/255.0));
@@ -1082,7 +1100,7 @@ template<> inline void Pixel_converter<PT_RGBA, PT_RGBA_16>::convert(
     dest[3] = mi::Uint16( mi::Float32( src[3]) * mi::Float32( 65535.0/255.0));
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
@@ -1090,7 +1108,7 @@ template<> inline void Pixel_converter<PT_RGBA, PT_RGB_FP>::convert(
     dest[2] = mi::Float32( src[2]) * mi::Float32( 1.0/255.0);
 }
 
-template<> inline void Pixel_converter<PT_RGBA, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/255.0);
@@ -1101,16 +1119,16 @@ template<> inline void Pixel_converter<PT_RGBA, PT_COLOR>::convert(
 
 // ---------- source PT_RGBE -----------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_RGBE, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
     mi::math::from_rgbe( src, tmp);
-    mi::Float32 value = 0.27f * tmp[0] + 0.67f * tmp[1] + 0.06f * tmp[2];
+    const mi::Float32 value = 0.27f * tmp[0] + 0.67f * tmp[1] + 0.06f * tmp[2];
     quantize_u(*dest,value); // actually SINT8 means UINT8 :/
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1118,7 +1136,7 @@ template<> inline void Pixel_converter<PT_RGBE, PT_FLOAT32>::convert(
     dest[0] = 0.27f * tmp[0] + 0.67f * tmp[1] + 0.06f * tmp[2];
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1127,7 +1145,7 @@ template<> inline void Pixel_converter<PT_RGBE, PT_FLOAT32_2>::convert(
     dest[1] = tmp[1];
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1137,7 +1155,7 @@ template<> inline void Pixel_converter<PT_RGBE, PT_RGB>::convert(
     quantize_u(dest[2],tmp[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1148,7 +1166,7 @@ template<> inline void Pixel_converter<PT_RGBE, PT_RGBA>::convert(
     dest[3] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1157,7 +1175,7 @@ template<> inline void Pixel_converter<PT_RGBE, PT_RGBE>::convert(
     dest[3] = src[3];
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1167,7 +1185,7 @@ template<> inline void Pixel_converter<PT_RGBE, PT_RGBEA>::convert(
     dest[4] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1177,7 +1195,7 @@ template<> inline void Pixel_converter<PT_RGBE, PT_RGB_16>::convert(
     quantize_u(dest[2],tmp[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1188,13 +1206,13 @@ template<> inline void Pixel_converter<PT_RGBE, PT_RGBA_16>::convert(
     dest[3] = 65535;
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::from_rgbe( src, dest);
 }
 
-template<> inline void Pixel_converter<PT_RGBE, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBE, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::from_rgbe( src, dest);
@@ -1203,16 +1221,16 @@ template<> inline void Pixel_converter<PT_RGBE, PT_COLOR>::convert(
 
 // ---------- source PT_RGBEA ----------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
     mi::math::from_rgbe( src, tmp);
-    mi::Float32 value = 0.27f * tmp[0] + 0.67f * tmp[1] + 0.06f * tmp[2];
+    const mi::Float32 value = 0.27f * tmp[0] + 0.67f * tmp[1] + 0.06f * tmp[2];
     quantize_u(*dest,value); // actually SINT8 means UINT8 :/
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1220,7 +1238,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_FLOAT32>::convert(
     dest[0] = 0.27f * tmp[0] + 0.67f * tmp[1] + 0.06f * tmp[2];
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1229,7 +1247,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_FLOAT32_2>::convert(
     dest[1] = tmp[1];
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1239,7 +1257,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_RGB>::convert(
     quantize_u(dest[2], tmp[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1250,7 +1268,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_RGBA>::convert(
     dest[3] = src[4];
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1259,7 +1277,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_RGBE>::convert(
     dest[3] = src[3];
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1269,7 +1287,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_RGBEA>::convert(
     dest[4] = src[4];
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1279,7 +1297,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_RGB_16>::convert(
     quantize_u(dest[2],tmp[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::Float32 tmp[3];
@@ -1290,13 +1308,13 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_RGBA_16>::convert(
     dest[3] = mi::Uint16( src[4] * mi::Float32( 65535.0/255.0));
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::from_rgbe( src, dest);
 }
 
-template<> inline void Pixel_converter<PT_RGBEA, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::from_rgbe( src, dest);
@@ -1305,7 +1323,7 @@ template<> inline void Pixel_converter<PT_RGBEA, PT_COLOR>::convert(
 
 // ---------- source PT_RGB_16 ---------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint8( (0.27f * mi::Float32( src[0])
@@ -1313,7 +1331,7 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_SINT8>::convert(
                         + 0.06f * mi::Float32( src[2])) * mi::Float32( 255.0/65535.0));
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = (0.27f * mi::Float32( src[0])
@@ -1321,14 +1339,14 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_FLOAT32>::convert(
              + 0.06f * mi::Float32( src[2])) * mi::Float32( 1.0/65535.0);
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
     dest[1] = mi::Float32( src[1]) * mi::Float32( 1.0/65535.0);
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = (src[0] >> 8);
@@ -1336,7 +1354,7 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_RGB>::convert(
     dest[2] = (src[2] >> 8);
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = (src[0] >> 8);
@@ -1345,28 +1363,28 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_RGBA>::convert(
     dest[3] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/65535.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/65535.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/65535.0)};
     mi::math::to_rgbe( tmp, dest);
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/65535.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/65535.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/65535.0)};
     mi::math::to_rgbe( tmp, dest);
     dest[4] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1374,7 +1392,7 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_RGB_16>::convert(
     dest[2] = src[2];
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1383,7 +1401,7 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_RGBA_16>::convert(
     dest[3] = 65535;
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
@@ -1391,7 +1409,7 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_RGB_FP>::convert(
     dest[2] = mi::Float32( src[2]) * mi::Float32( 1.0/65535.0);
 }
 
-template<> inline void Pixel_converter<PT_RGB_16, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_16, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
@@ -1402,7 +1420,7 @@ template<> inline void Pixel_converter<PT_RGB_16, PT_COLOR>::convert(
 
 // ---------- source PT_RGBA_16 --------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Uint8( (0.27f * mi::Float32( src[0])
@@ -1410,7 +1428,7 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_SINT8>::convert(
                         + 0.06f * mi::Float32( src[2])) * mi::Float32( 255.0/65535.0));
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = (0.27f * mi::Float32( src[0])
@@ -1418,14 +1436,14 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_FLOAT32>::convert(
              + 0.06f * mi::Float32( src[2])) * mi::Float32( 1.0/65535.0);
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
     dest[1] = mi::Float32( src[1]) * mi::Float32( 1.0/65535.0);
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = (src[0] >> 8);
@@ -1433,7 +1451,7 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_RGB>::convert(
     dest[2] = (src[2] >> 8);
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = (src[0] >> 8);
@@ -1442,28 +1460,28 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_RGBA>::convert(
     dest[3] = (src[3] >> 8);
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/65535.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/65535.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/65535.0)};
     mi::math::to_rgbe( tmp, dest);
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 tmp[3];
-    tmp[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
-    tmp[1] = mi::Float32( src[1]) * mi::Float32( 1.0/65535.0);
-    tmp[2] = mi::Float32( src[2]) * mi::Float32( 1.0/65535.0);
+    const mi::Float32 tmp[3] = {
+        mi::Float32( src[0]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[1]) * mi::Float32( 1.0/65535.0),
+        mi::Float32( src[2]) * mi::Float32( 1.0/65535.0)};
     mi::math::to_rgbe( tmp, dest);
     dest[4] = (src[3] >> 8);
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1471,7 +1489,7 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_RGB_16>::convert(
     dest[2] = src[2];
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1480,7 +1498,7 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_RGBA_16>::convert(
     dest[3] = src[3];
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
@@ -1488,7 +1506,7 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_RGB_FP>::convert(
     dest[2] = mi::Float32( src[2]) * mi::Float32( 1.0/65535.0);
 }
 
-template<> inline void Pixel_converter<PT_RGBA_16, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBA_16, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = mi::Float32( src[0]) * mi::Float32( 1.0/65535.0);
@@ -1499,27 +1517,27 @@ template<> inline void Pixel_converter<PT_RGBA_16, PT_COLOR>::convert(
 
 // ---------- source PT_RGB_FP ---------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 value = 0.27f * src[0] + 0.67f * src[1] + 0.06f * src[2];
+    const mi::Float32 value = 0.27f * src[0] + 0.67f * src[1] + 0.06f * src[2];
     quantize_u(*dest,value); // actually SINT8 means UINT8 :/
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = 0.27f * src[0] + 0.67f * src[1] + 0.06f * src[2];
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
     dest[1] = src[1];
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1527,7 +1545,7 @@ template<> inline void Pixel_converter<PT_RGB_FP, PT_RGB>::convert(
     quantize_u(dest[2],src[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1536,20 +1554,20 @@ template<> inline void Pixel_converter<PT_RGB_FP, PT_RGBA>::convert(
     dest[3] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::to_rgbe( src, dest);
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::to_rgbe( src, dest);
     dest[4] = 255;
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1557,7 +1575,7 @@ template<> inline void Pixel_converter<PT_RGB_FP, PT_RGB_16>::convert(
     quantize_u(dest[2],src[2]);
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1566,7 +1584,7 @@ template<> inline void Pixel_converter<PT_RGB_FP, PT_RGBA_16>::convert(
     dest[3] = 65535;
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1574,7 +1592,7 @@ template<> inline void Pixel_converter<PT_RGB_FP, PT_RGB_FP>::convert(
     dest[2] = src[2];
 }
 
-template<> inline void Pixel_converter<PT_RGB_FP, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1585,27 +1603,27 @@ template<> inline void Pixel_converter<PT_RGB_FP, PT_COLOR>::convert(
 
 // ---------- source PT_COLOR ----------------------------------------------------------------------
 
-template<> inline void Pixel_converter<PT_COLOR, PT_SINT8>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_SINT8>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    mi::Float32 value = 0.27f * src[0] + 0.67f * src[1] + 0.06f * src[2];
+    const mi::Float32 value = 0.27f * src[0] + 0.67f * src[1] + 0.06f * src[2];
     quantize_u(*dest,value); // actually SINT8 means UINT8 :/
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_FLOAT32>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_FLOAT32>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = 0.27f * src[0] + 0.67f * src[1] + 0.06f * src[2];
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_FLOAT32_2>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_FLOAT32_2>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
     dest[1] = src[1];
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_RGB>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_RGB>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1613,7 +1631,7 @@ template<> inline void Pixel_converter<PT_COLOR, PT_RGB>::convert(
     quantize_u(dest[2],src[2]);
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_RGBA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_RGBA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1623,20 +1641,20 @@ template<> inline void Pixel_converter<PT_COLOR, PT_RGBA>::convert(
 
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_RGBE>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::to_rgbe( src, dest);
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_RGBEA>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     mi::math::to_rgbe( src, dest);
     quantize_u(dest[4],src[3]);
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_RGB_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_RGB_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1644,7 +1662,7 @@ template<> inline void Pixel_converter<PT_COLOR, PT_RGB_16>::convert(
     quantize_u(dest[2],src[2]);
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_RGBA_16>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_RGBA_16>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     quantize_u(dest[0],src[0]);
@@ -1653,7 +1671,7 @@ template<> inline void Pixel_converter<PT_COLOR, PT_RGBA_16>::convert(
     quantize_u(dest[3],src[3]);
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_RGB_FP>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_RGB_FP>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1661,7 +1679,7 @@ template<> inline void Pixel_converter<PT_COLOR, PT_RGB_FP>::convert(
     dest[2] = src[2];
 }
 
-template<> inline void Pixel_converter<PT_COLOR, PT_COLOR>::convert(
+template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_COLOR>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
     dest[0] = src[0];
@@ -1670,6 +1688,7 @@ template<> inline void Pixel_converter<PT_COLOR, PT_COLOR>::convert(
     dest[3] = src[3];
 }
 
+#ifndef __CUDACC__
 #if defined(HAS_SSE) || defined(SSE_INTRINSICS)
 MI_FORCE_INLINE __m128i quantize_unsigned_sse(const float* const source)
 {
@@ -1698,7 +1717,7 @@ MI_FORCE_INLINE void quantize_unsigned_sse(__m128i* const dest, const float* con
 // ---------- source PT_RGB_FP, target PT_RGB ------------------------------------------------------
 
 template <>
-inline void Pixel_converter<PT_RGB_FP,PT_RGB>::convert(
+MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP,PT_RGB>::convert(
     const Source_base_type* const source, Dest_base_type* const dest, const mi::Size count)
 {
     // use source2 and dest2 instead of source and dest for easier pointer arithmetic
@@ -1737,7 +1756,7 @@ inline void Pixel_converter<PT_RGB_FP,PT_RGB>::convert(
 // ---------- source PT_RGBA_FP, target PT_COLOR --------------------------------------------------
 
 template <>
-inline void Pixel_converter<PT_COLOR,PT_RGBA>::convert(
+MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR,PT_RGBA>::convert(
     const Source_base_type* const source, Dest_base_type* const dest, const mi::Size count)
 {
     const float* source2 = reinterpret_cast<const float*>( source);
@@ -1770,6 +1789,8 @@ inline void Pixel_converter<PT_COLOR,PT_RGBA>::convert(
         dest3   += Pixel_type_traits<PT_RGBA>::s_components_per_pixel;
     }
 }
+
+#endif
 
 } // namespace IMAGE
 

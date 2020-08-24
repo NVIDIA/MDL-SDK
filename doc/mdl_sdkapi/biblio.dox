@@ -50,6 +50,12 @@
     NVIDIA Corporation, Santa Clara, California, United States,
     <i>NVIDIA Material Definition Language: Technical Introduction</i>, Version 1.0.
   </dd>
+  <dt>\anchor OGBS7 [OGBS7]</dt>
+  <dd>
+    IEEE and The Open Group,
+    <i>The Open Group Base Specifications Issue 7</i>, 2018 edition,
+    URL: http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap09.html#tag_09_04
+  </dd>
 </dl>
 
 */

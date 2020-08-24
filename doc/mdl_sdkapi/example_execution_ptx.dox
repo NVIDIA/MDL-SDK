@@ -166,7 +166,7 @@ At the end, we write the texture to disk.
 <dt><b>Loading textures (PTX)</b></dt>
 <dd><br>
 When the \c nv_freeimage plugin has been loaded via
-#mi::neuraylib::IMdl_compiler::load_plugin_library() before starting the MDL SDK, the SDK will
+#mi::neuraylib::IPlugin_configuration::load_plugin_library() before starting the MDL SDK, the SDK will
 automatically load textures on the host side for many common image formats and make them
 available via #mi::neuraylib::ITarget_code::get_texture().
 Note, that the first texture is always the invalid texture, so only if there is more than

@@ -69,6 +69,14 @@ public:
 
     const char* get_mdl_name() const;
 
+    mi::Size get_mdl_package_component_count() const;
+
+    const char* get_mdl_package_component_name( mi::Size index) const;
+
+    const char* get_mdl_simple_name() const;
+
+    mi::neuraylib::Mdl_version get_mdl_version() const;
+
     mi::Size get_import_count() const;
 
     const char* get_import( mi::Size index) const;
@@ -89,11 +97,13 @@ public:
 
     bool is_standard_module() const;
 
+    bool is_mdle_module() const;
+
     const mi::IArray* get_function_overloads(
         const char* name, const mi::neuraylib::IExpression_list* arguments) const;
 
     const mi::IArray* get_function_overloads(
-        const char* name, const char* param_sig) const;
+        const char* name, const mi::IArray* parameter_types) const;
 
     mi::Size get_resources_count() const;
 
@@ -109,18 +119,21 @@ public:
         mi::Size index) const;
 
     const mi::neuraylib::IAnnotation_definition* get_annotation_definition(
-        const char *name) const;
+        const char* name) const;
 
-    bool is_valid(mi::neuraylib::IMdl_execution_context *context) const;
+    bool is_valid( mi::neuraylib::IMdl_execution_context* context) const;
 
     mi::Sint32 reload(
         bool recursive,
-        mi::neuraylib::IMdl_execution_context *context);
+        mi::neuraylib::IMdl_execution_context* context);
 
     mi::Sint32 reload_from_string(
         const char* module_source,
         bool recursive,
-        mi::neuraylib::IMdl_execution_context *context);
+        mi::neuraylib::IMdl_execution_context* context);
+
+    const mi::IArray* deprecated_get_function_overloads(
+        const char* name, const char* param_sig) const;
 };
 
 } // namespace NEURAY

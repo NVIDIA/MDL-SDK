@@ -39,7 +39,7 @@
 #include <base/lib/mem/i_mem_consumption.h>
 #include <base/data/serial/i_serializer.h>
 
-#include "i_mdl_elements_expression.h"
+#include "mdl_elements_utilities.h"
 
 namespace MI {
 
@@ -230,7 +230,7 @@ public:
         const IType_enum::Values& values,
         const mi::base::Handle<const IAnnotation_block>& annotations,
         const IType_enum::Value_annotations& value_annotations)
-    : m_owner(mi::base::make_handle_dup(owner))
+    : m_owner(owner, mi::base::DUP_INTERFACE)
     , m_symbol(symbol)
     , m_predefined_id(id)
     , m_values(values)
@@ -505,7 +505,7 @@ public:
         const mi::base::Handle<const IAnnotation_block>& annotations,
         const IType_struct::Field_annotations& field_annotations)
     : Base()
-    , m_owner(mi::base::make_handle_dup(owner))
+    , m_owner(owner, mi::base::DUP_INTERFACE)
     , m_symbol(symbol)
     , m_predefined_id(id)
     , m_fields(fields)
@@ -1164,7 +1164,7 @@ const IType_enum* Type_factory::create_enum(
         *errors = -1;
         return nullptr;
     }
-    if (strncmp(symbol, "::", 2) != 0) {
+    if (!is_absolute(symbol)) {
         *errors = -2;
         return nullptr;
     }
@@ -1180,7 +1180,7 @@ const IType_enum* Type_factory::create_enum(
         Weak_enum_symbol_map::const_iterator it = m_enum_symbols.find(symbol);
         if (m_enum_symbols.find(symbol) != m_enum_symbols.end()) {
 
-            const IType_enum* type_enum = it->second;
+            const IType_enum* type_enum = it->second; //-V783 PVS
             if (!equivalent_enum_types(type_enum, id, values)) {
                 *errors = -4;
                 return nullptr;
@@ -1216,7 +1216,7 @@ const IType_struct* Type_factory::create_struct(
         *errors = -1;
         return nullptr;
     }
-    if (strncmp(symbol, "::", 2) != 0) {
+    if (!is_absolute(symbol)) {
         *errors = -2;
         return nullptr;
     }
@@ -1398,7 +1398,7 @@ const IType* Type_factory::deserialize(SERIAL::Deserializer* deserializer)
             mi::base::Handle<const IType> aliased_type(deserialize(deserializer));
             ASSERT(M_SCENE, aliased_type);
             const IType* result
-                = create_alias(aliased_type.get(), modifiers, symbol.empty() ? 0 : symbol.c_str());
+                = create_alias(aliased_type.get(), modifiers, symbol.empty() ? nullptr : symbol.c_str());
             return result;
         }
 
@@ -1562,8 +1562,8 @@ mi::Sint32 Type_factory::compare_static(
     if (lhs && !rhs) return +1;
     ASSERT(M_SCENE, lhs && rhs);
 
-    IType::Kind lhs_kind = lhs->get_kind();
-    IType::Kind rhs_kind = rhs->get_kind();
+    IType::Kind lhs_kind = lhs->get_kind(); //-V522 PVS
+    IType::Kind rhs_kind = rhs->get_kind(); //-V522 PVS
 
     if (lhs_kind < rhs_kind) return -1;
     if (lhs_kind > rhs_kind) return +1;
@@ -1649,8 +1649,8 @@ mi::Sint32 Type_factory::compare_static(const IType_list* lhs, const IType_list*
     if (lhs && !rhs) return +1;
     ASSERT(M_SCENE, lhs && rhs);
 
-    mi::Size lhs_n = lhs->get_size();
-    mi::Size rhs_n = rhs->get_size();
+    mi::Size lhs_n = lhs->get_size(); //-V522 PVS
+    mi::Size rhs_n = rhs->get_size(); //-V522 PVS
     if (lhs_n < rhs_n) return -1;
     if (lhs_n > rhs_n) return +1;
 

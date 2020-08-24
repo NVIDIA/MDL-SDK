@@ -170,21 +170,21 @@ private:
 
     void post_visit(IType_name *tname) MDL_FINAL;
 
-    void post_visit(IExpression_invalid *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_invalid *expr) MDL_FINAL;
 
-    void post_visit(IExpression_literal *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_literal *expr) MDL_FINAL;
 
-    void post_visit(IExpression_reference *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_reference *expr) MDL_FINAL;
 
-    void post_visit(IExpression_unary *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_unary *expr) MDL_FINAL;
 
-    void post_visit(IExpression_binary *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_binary *expr) MDL_FINAL;
 
-    void post_visit(IExpression_conditional *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_conditional *expr) MDL_FINAL;
 
-    void post_visit(IExpression_call *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_call *expr) MDL_FINAL;
 
-    void post_visit(IExpression_let *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_let *expr) MDL_FINAL;
 
     void post_visit(IStatement_invalid *stmt) MDL_FINAL;
 
@@ -538,18 +538,20 @@ void Function_hasher::post_visit(IArgument_positional *arg) {}
 
 void Function_hasher::post_visit(IType_name *tname) {}
 
-void Function_hasher::post_visit(IExpression_invalid *expr)
+IExpression *Function_hasher::post_visit(IExpression_invalid *expr)
 {
     hash(expr->get_kind());
+    return expr;
 }
 
-void Function_hasher::post_visit(IExpression_literal *expr)
+IExpression *Function_hasher::post_visit(IExpression_literal *expr)
 {
     hash(expr->get_kind());
     hash(expr->get_value());
+    return expr;
 }
 
-void Function_hasher::post_visit(IExpression_reference *expr)
+IExpression *Function_hasher::post_visit(IExpression_reference *expr)
 {
     hash(expr->get_kind());
 
@@ -559,38 +561,44 @@ void Function_hasher::post_visit(IExpression_reference *expr)
         IDefinition const *def = expr->get_definition();
         hash(def);
     }
+    return expr;
 }
 
-void Function_hasher::post_visit(IExpression_unary *expr)
+IExpression *Function_hasher::post_visit(IExpression_unary *expr)
 {
     // arguments are already hashed
     hash(expr->get_kind());
     hash(expr->get_operator());
+    return expr;
 }
 
-void Function_hasher::post_visit(IExpression_binary *expr)
+IExpression *Function_hasher::post_visit(IExpression_binary *expr)
 {
     // arguments are already hashed
     hash(expr->get_kind());
     hash(expr->get_operator());
+    return expr;
 }
 
-void Function_hasher::post_visit(IExpression_conditional *expr)
+IExpression *Function_hasher::post_visit(IExpression_conditional *expr)
 {
     // arguments are already hashed
     hash(expr->get_kind());
+    return expr;
 }
 
-void Function_hasher::post_visit(IExpression_call *expr)
+IExpression *Function_hasher::post_visit(IExpression_call *expr)
 {
     // arguments are already hashed
     hash(expr->get_kind());
+    return expr;
 }
 
-void Function_hasher::post_visit(IExpression_let *expr)
+IExpression *Function_hasher::post_visit(IExpression_let *expr)
 {
     // decls /expression are already hashed
     hash(expr->get_kind());
+    return expr;
 }
 
 void Function_hasher::post_visit(IStatement_invalid *stmt)
@@ -1117,18 +1125,19 @@ void Sema_hasher::compute_hashes()
     }
 }
 
-void Sema_hasher::post_visit(IExpression_call *call)
+IExpression *Sema_hasher::post_visit(IExpression_call *call)
 {
     IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
 
-    if (ref->is_array_constructor())
-        return;
+    if (ref->is_array_constructor()) {
+        return call;
+    }
 
     Definition *def = const_cast<Definition *>(impl_cast<Definition>(ref->get_definition()));
 
     if (def->has_flag(Definition::DEF_IS_IMPORTED)) {
         // ignored so far, so do not add them to the CG
-        return;
+        return call;
     }
 
     if (def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
@@ -1137,7 +1146,7 @@ void Sema_hasher::post_visit(IExpression_call *call)
 
         if (!is_user_type(ret_type)) {
             // compute hashes only for user type constructors
-            return;
+            return call;
         }
     }
 
@@ -1147,6 +1156,7 @@ void Sema_hasher::post_visit(IExpression_call *call)
         m_hashes[def] = NULL;
         m_wq.push(def);
     }
+    return call;
 }
 
 // Constructor.

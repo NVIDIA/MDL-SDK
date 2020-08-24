@@ -35,7 +35,7 @@
 #include <io/scene/scene/i_scene_scene_element.h>
 
 #include "i_mdl_elements_type.h" // needed by Visual Studio
-#include "i_mdl_elements_module.h" 
+#include "i_mdl_elements_module.h"
 
 namespace mi { namespace mdl { class IType; } }
 
@@ -68,6 +68,7 @@ public:
     /// Constructor.
     Mdl_material_instance(
         DB::Tag module_tag,
+        const char* module_db_name,
         DB::Tag definition_tag,
         Mdl_ident definition_ident,
         IExpression_list* arguments,
@@ -78,6 +79,8 @@ public:
 
     /// Copy constructor.
     Mdl_material_instance( const Mdl_material_instance& other);
+
+    Mdl_material_instance& operator=( const Mdl_material_instance&) = delete;
 
     // methods corresponding to mi::neuraylib::IMaterial_instance
 
@@ -209,7 +212,7 @@ public:
 
     SERIAL::Serializable* deserialize( SERIAL::Deserializer* deserializer);
 
-    void dump() const { dump( /*transaction*/ 0); }
+    void dump() const { dump( /*transaction*/ nullptr); }
 
     // methods of DB::Element_base
 
@@ -235,6 +238,7 @@ private:
     DB::Tag m_module_tag;                        ///< The corresponding MDL module. (*)
     DB::Tag m_definition_tag;                    ///< The corresponding material definition.
     Mdl_ident m_definition_ident;                ///< The corresponding material definition identifier.
+    std::string m_module_db_name;                ///< The DB name of the module. (*)
     std::string m_definition_name;               ///< The MDL name of the material definition. (*)
     std::string m_definition_db_name;            ///< The DB name of the material definition. (*)
     bool m_immutable;                            ///< The immutable flag (set for defaults).

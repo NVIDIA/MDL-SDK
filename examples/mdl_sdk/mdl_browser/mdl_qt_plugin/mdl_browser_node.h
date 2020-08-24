@@ -110,7 +110,7 @@ public:
     virtual ~Mdl_browser_node();
 
     // simple name of the package or module
-    const char* get_simple_name() const;
+    const char* get_entity_name() const;
 
     // qualified name of the package or module
     const char* get_qualified_name() const;

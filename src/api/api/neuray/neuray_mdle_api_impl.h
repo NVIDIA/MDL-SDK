@@ -64,10 +64,10 @@ namespace MDLC { class Mdlc_module; }
 
 namespace NEURAY {
 
-class Mdle_resource_mapper : public MI::NEURAY::Resource_callback
+class Mdle_resource_mapper : public Resource_callback
                            , public mi::mdl::IEncapsulate_tool_resource_collector
 {
-    typedef MI::NEURAY::Resource_callback Base;
+    typedef Resource_callback Base;
 public:
 
     explicit Mdle_resource_mapper(

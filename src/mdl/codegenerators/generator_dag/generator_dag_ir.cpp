@@ -232,7 +232,7 @@ private:
     : Base(id)
     , m_semantic(sema)
     , m_ret_type(ret_type)
-    , m_name(Arena_strdup(*arena, name))
+    , m_name(name)
     , m_name_hash(calc_name_hash(name) ^ size_t(sema) * 9)
     , m_parameter_names(arena)
     , m_arguments(arena)
@@ -1921,13 +1921,27 @@ IValue_matrix const *DAG_node_factory_impl::create_identity_matrix(
 }
 
 /// Check if the given expression is of matrix type.
+static bool is_matrix_typed(IType const *type) {
+    if (is_deriv_type(type))
+        type = get_deriv_base_type(type);
+    return as<IType_matrix>(type) != NULL;
+}
+
+/// Check if the given expression is of vector type.
+static bool is_vector_typed(IType const *type) {
+    if (is_deriv_type(type))
+        type = get_deriv_base_type(type);
+    return as<IType_vector>(type) != NULL;
+}
+
+/// Check if the given expression is of matrix type.
 static bool is_matrix_typed(DAG_node const *node) {
-    return as<IType_matrix>(node->get_type()) != NULL;
+    return is_matrix_typed(node->get_type());
 }
 
 /// Check if the given expression is of vector type.
 static bool is_vector_typed(DAG_node const *node) {
-    return as<IType_vector>(node->get_type()) != NULL;
+    return is_vector_typed(node->get_type());
 }
 
 // Normalize the arguments of a binary expression for better CSE support.
@@ -1944,7 +1958,7 @@ bool DAG_node_factory_impl::normalize(
             IType const *l_tp = l->get_type()->skip_type_alias();
             IType const *r_tp = r->get_type()->skip_type_alias();
 
-            if (is<IType_matrix>(l_tp) || is<IType_matrix>(r_tp)) {
+            if (is_matrix_typed(l_tp) || is_matrix_typed(r_tp)) {
                 // matrix multiplication is not symmetric
                 break;
             }
@@ -1953,11 +1967,11 @@ bool DAG_node_factory_impl::normalize(
             // The reason is simple: otherwise a vector*float inside a material class could be
             // turned into a float*vector inside a material instance, which might not be available
             // in the Db because it was never referenced ...
-            if (is<IType_vector>(r_tp) && !is<IType_vector>(l_tp)) {
+            if (is_vector_typed(r_tp) && !is_vector_typed(l_tp)) {
                 // swap
                 swap_args = true;
                 break;
-            } else if (is<IType_vector>(l_tp) && !is<IType_vector>(r_tp)) {
+            } else if (is_vector_typed(l_tp) && !is_vector_typed(r_tp)) {
                 // do nothing
                 break;
             }
@@ -2156,6 +2170,15 @@ IValue const *DAG_node_factory_impl::convert(
     return NULL;
 }
 
+/// Check if the given compound type has hidden fields.
+static bool have_hidden_fields(IType_compound const *c_type) {
+    if (IType_struct const *s_type = as<IType_struct>(c_type)) {
+        // currently, only the material emission type has hidden fields
+        return s_type->get_predefined_id() == IType_struct::SID_MATERIAL_EMISSION;
+    }
+    return false;
+}
+
 // Evaluate a constructor call.
 IValue const *DAG_node_factory_impl::evaluate_constructor(
     IValue_factory         &value_factory,
@@ -2165,7 +2188,6 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
 {
     switch (sema) {
     case IDefinition::DS_COPY_CONSTRUCTOR:
-        // there should be no copy constructors anymore at this point, but anyway
         MDL_ASSERT(arguments.size() == 1);
         return arguments[0];
     case IDefinition::DS_CONV_CONSTRUCTOR:
@@ -2182,10 +2204,38 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
                 }
             }
 
-            size_t n = c_type->get_compound_size();
-            MDL_ASSERT(arguments.size() == n);
+            size_t n_fields = c_type->get_compound_size();
+            size_t n_args   = arguments.size();
 
-            return value_factory.create_compound(c_type, n > 0 ? &arguments[0] : NULL, n);
+            if (n_fields != n_args && !have_hidden_fields(c_type)) {
+                // cannot fold
+                MDL_ASSERT(!"unexpected elemental constructor");
+                break;
+            }
+
+            VLA<IValue const *> values(get_allocator(), n_fields);
+
+            for (size_t i = 0; i < n_args; ++i) {
+                values[i] = arguments[i];
+            }
+
+            // fill hidden fields by their defaults
+            bool failed = false;
+            for (size_t i = n_args; i < n_fields; ++i) {
+                IType const *f_type = c_type->get_compound_type(int(i));
+
+                if (IType_enum const *e_type = as<IType_enum>(f_type)) {
+                    // for enum types, the default is always the first one
+                    values[i] = value_factory.create_enum(e_type, 0);
+                } else {
+                    failed = true;
+                    break;
+                }
+            }
+
+            if (!failed) {
+                return value_factory.create_compound(c_type, values.data(), n_fields);
+            }
         }
         // cannot fold
         break;
@@ -2345,34 +2395,45 @@ bool DAG_node_factory_impl::is_owner(DAG_node const *n) const
     return m_builder.get_arena()->contains(n);
 }
 
-void DAG_node_factory_impl::add_node_name(DAG_node const *node, char const *name)
+// Adds a name to a given DAG node.
+void DAG_node_factory_impl::add_node_name(
+    DAG_node const *node,
+    char const     *name)
 {
     m_temp_name_map[node] = Arena_strdup(*m_builder.get_arena(), name);
 }
 
-bool DAG_node_factory_impl::all_args_without_name(DAG_node const *args[], int n_args) const
+// Return true iff all arguments are without name.
+bool DAG_node_factory_impl::all_args_without_name(
+    DAG_node const *args[],
+    size_t         n_args) const
 {
     if (!m_expose_names_of_let_expressions) {
         MDL_ASSERT(m_temp_name_map.empty());
         return true;
     }
 
-    for (int i = 0; i < n_args; ++i)
+    for (size_t i = 0; i < n_args; ++i) {
         if (m_temp_name_map.find(args[i]) != m_temp_name_map.end())
             return false;
+    }
     return true;
 }
 
-bool DAG_node_factory_impl::all_args_without_name(DAG_call::Call_argument const args[], int n_args) const
+// Return true iff all arguments are without name.
+bool DAG_node_factory_impl::all_args_without_name(
+    DAG_call::Call_argument const args[],
+    size_t                        n_args) const
 {
     if (!m_expose_names_of_let_expressions) {
         MDL_ASSERT(m_temp_name_map.empty());
         return true;
     }
 
-    for (int i = 0; i < n_args; ++i)
+    for (size_t i = 0; i < n_args; ++i) {
         if (m_temp_name_map.find(args[i].arg) != m_temp_name_map.end())
             return false;
+    }
     return true;
 }
 
@@ -2902,12 +2963,10 @@ DAG_node_factory_impl::create_ternary_call(
     string name("", alloc);
 
     // special handling for internal derivative types
-    if (IType_struct const *st = as<IType_struct>(type)) {
-        if (st->get_symbol()->get_name()[0] == '#') {
-            // prefix name with '#' and use base type for the rest
-            name += '#';
-            type = st->get_compound_type(0);
-        }
+    if (is_deriv_type(type)) {
+        // prefix name with '#' and use base type for the rest
+        name += '#';
+        type = get_deriv_base_type(type);
     }
     name += get_ternary_operator_signature();
 
@@ -2986,6 +3045,11 @@ DAG_node_factory_impl::create_constructor_call(
     int                           num_call_args,
     IType const                   *ret_type)
 {
+    if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
+        // Remove copy constructor. This will not remove any names, so no check is needed here.
+        return call_args[0].arg;
+    }
+
     Value_vector values(num_call_args, NULL, get_allocator());
 
     bool all_args_const = true;

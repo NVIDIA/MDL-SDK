@@ -58,7 +58,7 @@
 
 #include <map>
 #include <string>
-
+#include <regex>
 namespace MI {
 namespace DB { class Transaction; }
 namespace SERIAL {
@@ -163,6 +163,18 @@ class Attr_module : public SYSTEM::IModule
         }
         return result;
     }
+
+    using Custom_attr_filters = std::vector<std::string>;
+
+    virtual const Custom_attr_filters& get_custom_attr_filters() const = 0;
+
+    virtual bool add_custom_attr_filter(const std::string& filter) = 0;
+
+    virtual bool remove_custom_attr_filter(const std::string& filter) = 0;
+
+    virtual void clear_custom_attr_filters() = 0;
+
+    virtual const std::wregex& get_custom_attr_filter() const = 0;
 
     /// Look up a type code given a type name. This uses a hash map, so it should
     /// be pretty fast. Returns \c TYPE_UNDEF if the look up fails.

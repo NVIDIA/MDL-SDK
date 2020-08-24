@@ -185,8 +185,8 @@ Canvas_impl::Canvas_impl(
 
     if( m_miplevel == 0) {
         mi::Uint32 miplevels = image_file2->get_miplevels();
-        LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-            "Loading image \"%s\", pixel type \"%s\", %dx%dx%d pixels, %d miplevel%s.",
+        LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, //-V576 PVS
+            "Loading image \"%s\", pixel type \"%s\", %ux%ux%u pixels, %u miplevel%s.",
             m_filename.c_str(), convert_pixel_type_enum_to_string( m_pixel_type),
             m_width, m_height, m_nr_of_layers, miplevels, miplevels == 1 ? "" : "s");
     }
@@ -203,6 +203,7 @@ Canvas_impl::Canvas_impl(
 }
 
 Canvas_impl::Canvas_impl(
+    Container_based,
     mi::neuraylib::IReader* reader,
     const std::string& archive_filename,
     const std::string& member_filename,
@@ -292,8 +293,8 @@ Canvas_impl::Canvas_impl(
 
     if( m_miplevel == 0) {
         mi::Uint32 miplevels = image_file2->get_miplevels();
-        LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-            "Loading image \"%s\" in \"%s\", pixel type \"%s\", %dx%dx%d pixels, %d miplevel%s.",
+        LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, //-V576 PVS
+            "Loading image \"%s\" in \"%s\", pixel type \"%s\", %ux%ux%u pixels, %u miplevel%s.",
             member_filename.c_str(), archive_filename.c_str(),
             convert_pixel_type_enum_to_string( m_pixel_type),
             m_width, m_height, m_nr_of_layers, miplevels, miplevels == 1 ? "" : "s");
@@ -337,8 +338,10 @@ Canvas_impl::Canvas_impl(
 }
 
 Canvas_impl::Canvas_impl(
+    Memory_based,
     mi::neuraylib::IReader* reader,
     const char* image_format,
+    const char* mdl_file_path,
     mi::Uint32 miplevel,
     mi::Uint32 tile_width,
     mi::Uint32 tile_height,
@@ -358,6 +361,10 @@ Canvas_impl::Canvas_impl(
         return;
     }
 
+    std::string log_identifier = mdl_file_path
+        ? std::string( "an image from MDL file path \"") + mdl_file_path + "\""
+        : std::string( "a memory-based image with image format \"") + image_format + "\"";
+
     m_nr_of_tiles = 0;
     m_tiles = 0;
 
@@ -371,8 +378,7 @@ Canvas_impl::Canvas_impl(
             = image_module->find_plugin_for_import( image_format, reader);
         if( !plugin) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "No image plugin found to handle a memory-based image with image format \"%s\".",
-                image_format);
+                "No image plugin found to handle %s.", log_identifier.c_str());
             *errors = -4;
             set_default_pink_dummy_canvas();
             return;
@@ -381,8 +387,7 @@ Canvas_impl::Canvas_impl(
         image_file2 = plugin->open_for_reading( reader);
         if( !image_file2.is_valid_interface()) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "The image plugin failed to import a memory-based image with image format \"%s\".",
-                image_format);
+                "The image plugin failed to import %s.", log_identifier.c_str());
             *errors = -5;
             set_default_pink_dummy_canvas();
             return;
@@ -411,8 +416,7 @@ Canvas_impl::Canvas_impl(
         || m_tile_height == 0
         || m_nr_of_layers == 0) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin failed to import a memory-based image with image format \"%s\".",
-            image_format);
+            "The image plugin failed to import %s.", log_identifier.c_str());
         *errors = -5;
         set_default_pink_dummy_canvas();
         return;
@@ -420,10 +424,17 @@ Canvas_impl::Canvas_impl(
 
     if( m_miplevel == 0) {
         mi::Uint32 miplevels = image_file2->get_miplevels();
-        LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-            "Loading memory-based image, pixel type \"%s\", %dx%dx%d pixels, %d miplevel%s.",
-            convert_pixel_type_enum_to_string( m_pixel_type),
-            m_width, m_height, m_nr_of_layers, miplevels, miplevels == 1 ? "" : "s");
+        if( mdl_file_path)
+            LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, //-V576 PVS
+                "Loading image from MDL file path \"%s\", pixel type \"%s\", %ux%ux%u pixels, "
+                "%u miplevel%s.",
+                mdl_file_path, convert_pixel_type_enum_to_string( m_pixel_type),
+                m_width, m_height, m_nr_of_layers, miplevels, miplevels == 1 ? "" : "s");
+        else
+            LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, //-V576 PVS
+                "Loading memory-based image, pixel type \"%s\", %ux%ux%u pixels, %u miplevel%s.",
+                convert_pixel_type_enum_to_string( m_pixel_type),
+                m_width, m_height, m_nr_of_layers, miplevels, miplevels == 1 ? "" : "s");
     }
 
     m_nr_of_tiles_x = (m_width  + m_tile_width  - 1) / m_tile_width;
@@ -444,8 +455,7 @@ Canvas_impl::Canvas_impl(
                 mi::Uint32 pixel_y = tile_y * m_tile_height;
                 if( !image_file2->read( m_tiles[index], pixel_x, pixel_y, z, m_miplevel)) {
                     LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                        "The image plugin failed to import a memory-based image with image format "
-                        "\"%s\".", image_format);
+                        "The image plugin failed to import %s.", log_identifier.c_str());
                     *errors = -5;
                     set_default_pink_dummy_canvas();
                     return;
@@ -605,8 +615,8 @@ void Canvas_impl::load_tile(
 {
     ASSERT( M_IMAGE, supports_lazy_loading());
 
-    std::string filename_error_msg;
-    mi::base::Handle<mi::neuraylib::IReader> reader( get_reader( filename_error_msg));
+    std::string log_identifier;
+    mi::base::Handle<mi::neuraylib::IReader> reader( get_reader( log_identifier));
     if( !reader)
         return;
 
@@ -620,7 +630,7 @@ void Canvas_impl::load_tile(
         = image_module->find_plugin_for_import( extension.c_str(), reader.get());
     if( !plugin) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "No image plugin found to handle \"%s\".", filename_error_msg.c_str());
+            "No image plugin found to handle \"%s\".", log_identifier.c_str());
         return;
     }
 
@@ -629,7 +639,7 @@ void Canvas_impl::load_tile(
     if( !image_file.is_valid_interface()) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import \"%s\".",
-            plugin->get_name(), filename_error_msg.c_str());
+            plugin->get_name(), log_identifier.c_str());
         return;
     }
 
@@ -638,7 +648,7 @@ void Canvas_impl::load_tile(
         if( !image_file->read( tile, x, y, z, m_miplevel)) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin \"%s\" failed to import \"%s\".",
-                plugin->get_name(), filename_error_msg.c_str());
+                plugin->get_name(), log_identifier.c_str());
             return;
         }
     } else {
@@ -653,28 +663,28 @@ void Canvas_impl::load_tile(
                     if( !image_file->read( m_tiles[index], x, y, layer, m_miplevel)) {
                          LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                              "The image plugin \"%s\" failed to import \"%s\".",
-                             plugin->get_name(), filename_error_msg.c_str());
+                             plugin->get_name(), log_identifier.c_str());
                          return;
                     }
                 }
     }
 }
 
-mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& filename_error_msg) const
+mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) const
 {
     ASSERT( M_IMAGE, supports_lazy_loading());
 
-    filename_error_msg.clear();
+    log_identifier.clear();
 
     // file-based
     if( !m_filename.empty()) {
 
-        filename_error_msg = m_filename;
+        log_identifier = m_filename;
 
         mi::base::Handle<DISK::File_reader_impl> reader( new DISK::File_reader_impl);
         if( !reader->open( m_filename.c_str())) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                 "Failed to open image file \"%s\".", filename_error_msg.c_str());
+                 "Failed to open image file \"%s\".", log_identifier.c_str());
             return 0;
         }
 
@@ -686,7 +696,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& filename_error_msg
     // archive-based
     if( !m_archive_filename.empty() && !m_member_filename.empty()) {
 
-        filename_error_msg = m_archive_filename + "\" in \"" + m_member_filename;
+        log_identifier = m_archive_filename + "\" in \"" + m_member_filename;
 
         SYSTEM::Access_module<Image_module> image_module( false);
         mi::base::Handle<IMdl_container_callback> callback(
@@ -695,7 +705,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& filename_error_msg
             callback->get_reader( m_archive_filename.c_str(), m_member_filename.c_str()));
         if( !reader) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                 "Failed to open image file \"%s\".", filename_error_msg.c_str());
+                 "Failed to open image file \"%s\".", log_identifier.c_str());
             return 0;
         }
 

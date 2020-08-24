@@ -359,8 +359,34 @@ public:
         AS_FORCE_32_BIT = 0xffffffffU            //   Undocumented, for alignment only.
     };
 
-    /// Returns the name of the annotation definition.
+    /// Returns the DB name of the module containing this annotation definition.
+    ///
+    /// The type of the module is #mi::neuraylib::IModule.
+    virtual const char* get_module() const = 0;
+
+    /// Returns the MDL name of the annotation definition.
     virtual const char* get_name() const = 0;
+
+    /// Returns the MDL name of the module containing this annotation definition.
+    virtual const char* get_mdl_module_name() const = 0;
+
+    /// Returns the simple MDL name of the annotation definition.
+    ///
+    /// The simple name is the last component of the MDL name, i.e., without any packages and
+    /// scope qualifiers, and without the parameter type names.
+    ///
+    /// \return         The simple MDL name of the annotation definition.
+    virtual const char* get_mdl_simple_name() const = 0;
+
+    /// Returns the type name of the parameter at \p index.
+    ///
+    /// \note The type names provided here are substrings of the MDL name returned by #get_name().
+    ///       They are provided here such that parsing of the MDL name is not necessary. However,
+    ///       for most use cases it is strongly recommended to use #get_parameter_types() instead.
+    ///
+    /// \param index    The index of the parameter.
+    /// \return         The type name of the parameter, or \c NULL if \p index is out of range.
+    virtual const char* get_mdl_parameter_type_name( Size index) const = 0;
 
     /// Returns the semantic of this annotation definition.
     virtual Semantics get_semantic() const = 0;
@@ -390,7 +416,7 @@ public:
 
     /// Indicates whether the annotation definition is exported by its module.
     virtual bool is_exported() const = 0;
-    
+
     /// Returns the annotations of this definition or \c NULL if no
     /// annotations exist.
     virtual const IAnnotation_block* get_annotations() const = 0;
@@ -425,7 +451,7 @@ public:
     ///
     /// The arguments of annotations are always constant expressions.
     virtual const IExpression_list* get_arguments() const = 0;
-    
+
     /// Returns the definition of this annotation.
     virtual const IAnnotation_definition* get_definition() const = 0;
 };

@@ -30,8 +30,9 @@
 #define API_API_NEURAY_NEURAY_MDL_EXECUTION_CONTEXT_IMPL_H
 
 #include <mi/neuraylib/imdl_execution_context.h>
-#include <mi/base/interface_implement.h>
 
+#include <string>
+#include <mi/base/interface_implement.h>
 
 namespace MI {
 
@@ -45,13 +46,12 @@ class Mdl_execution_context_impl
 {
 public:
 
-    // constructor 
     Mdl_execution_context_impl();
-    
-    // destructor 
+
     virtual ~Mdl_execution_context_impl();
-    
-    // public interface functions
+
+    // public API methods
+
     mi::Size get_messages_count() const final;
 
     mi::Size get_error_messages_count() const final;
@@ -60,6 +60,13 @@ public:
 
     const mi::neuraylib::IMessage* get_error_message(mi::Size index) const final;
 
+    void clear_messages() final;
+
+    void add_message(
+        mi::neuraylib::IMessage::Kind kind,
+        mi::base::Message_severity severity,
+        mi::Sint32 code,
+        const char* message) final;
 
     mi::Size get_option_count() const final;
 
@@ -69,31 +76,44 @@ public:
 
     mi::Sint32 get_option(const char* name, const char*& value) const final;
 
+    mi::Sint32 get_option(const char* name, mi::Sint32& value) const final;
+
     mi::Sint32 get_option(const char* name, mi::Float32& value) const final;
 
     mi::Sint32 get_option(const char* name, bool& value) const final;
 
-    mi::Sint32 get_option(const char* name, mi::base::IInterface** value) const final;
+    mi::Sint32 get_option(const char* name, const mi::base::IInterface** value) const final;
 
     mi::Sint32 set_option(const char* name, const char* value) final;
+
+    mi::Sint32 set_option(const char* name, mi::Sint32 value) final;
 
     mi::Sint32 set_option(const char* name, mi::Float32 value) final;
 
     mi::Sint32 set_option(const char* name, bool value) final;
 
-    mi::Sint32 set_option(const char* name, mi::base::IInterface* value) final;
+    mi::Sint32 set_option(const char* name, const mi::base::IInterface* value) final;
 
-    
-    // own stuff
+    // internal methods
 
-    MI::MDL::Execution_context& get_context() const;
-    
+    MDL::Execution_context& get_context() const;
+
 private:
 
-    MI::MDL::Execution_context* m_context;
+    MDL::Execution_context* m_context;
 };
 
-/// Unwrap execution context.
+/// Unwraps the passed execution context, i.e., casts to the implementation class.
+///
+/// Returns address of \p default_context if \p context is \c NULL.
+MDL::Execution_context* unwrap_context(
+    mi::neuraylib::IMdl_execution_context* context,
+    MDL::Execution_context& default_context);
+
+/// Unwraps the passed execution context, i.e., casts to the implementation class, clears
+/// all messages and sets the result to 0.
+///
+/// Uses \p default_context if \p context is \c NULL.
 MDL::Execution_context* unwrap_and_clear_context(
     mi::neuraylib::IMdl_execution_context* context,
     MDL::Execution_context& default_context);

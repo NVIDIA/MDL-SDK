@@ -247,6 +247,27 @@ unsigned Options_impl::get_unsigned_option(char const *name) const
     return 0;
 }
 
+// Get a float option.
+float Options_impl::get_float_option(char const *name) const
+{
+    int index = get_option_index(name);
+    if (index >= 0) {
+        if (char const *val = get_option_value(index)) {
+            float fval = 0.f;
+            if (sscanf(val, "%f", &fval) == 1)
+                return fval;
+            // unknown ...
+        }
+        if (char const *val = get_option_default_value(index)) {
+            float fval = 0.f;
+            if (sscanf(val, "%f", &fval) == 1)
+                return fval;
+        }
+        return 0.f;
+    }
+    MDL_ASSERT(!"float option does not exist");
+    return 0.f;
+}
 
 // Get a version option.
 bool Options_impl::get_version_option(char const *name, unsigned &major, unsigned &minor) const

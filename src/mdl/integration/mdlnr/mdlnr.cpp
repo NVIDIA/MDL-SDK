@@ -31,7 +31,9 @@
 #include <map>
 
 #include <mi/base/ilogger.h>
+#include <mi/base/plugin.h>
 #include <mi/mdl/mdl_code_generators.h>
+#include <mi/neuraylib/iplugin_api.h>
 
 #include <base/system/main/access_module.h>
 #include <base/system/main/module_registration.h>
@@ -39,6 +41,7 @@
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/config/config.h>
 #include <base/lib/mem/mem.h>
+#include <base/lib/plug/i_plug.h>
 #include <base/util/registry/i_config_registry.h>
 #include <base/data/serial/i_serializer.h>
 #include <base/system/stlext/i_stlext_no_unused_variable_warning.h>
@@ -185,11 +188,9 @@ Module_registration_entry *Mdlc_module::get_instance()
 
 Mdlc_module_impl::Mdlc_module_impl()
   : m_mdl(0)
-  , m_used_with_mdl_sdk(false) /*arbitrary*/
-  , m_used_with_mdl_sdk_set(false)
   , m_code_cache(0)
   , m_implicit_cast_enabled(true)
-  , m_expose_names_of_let_expressions(false)
+  , m_expose_names_of_let_expressions(true)
   , m_module_wait_queue(0)
 {
 }
@@ -225,42 +226,45 @@ bool Mdlc_module_impl::init()
 #endif
 
     m_mdl = mi::mdl::initialize(m_allocator.get());
-    if (m_mdl != NULL) {
-        m_mdl->install_search_path(MDL_search_path::create(m_allocator.get()));
+    if (!m_mdl)
+        return false;
 
-        // retrieve MDL parameters
-        SYSTEM::Access_module<CONFIG::Config_module> config_module(/*deferred=*/false);
-        CONFIG::Config_registry const                &registry = config_module->get_configuration();
-        mi::mdl::Options                             &options = m_mdl->access_options();
+    m_mdl->install_search_path(MDL_search_path::create(m_allocator.get()));
 
-        int opt_level = 0;
-        if (registry.get_value("mdl_opt_level", opt_level)) {
-            options.set_option(
-                mi::mdl::MDL::option_opt_level, std::to_string(opt_level).c_str());
-        }
+    // retrieve MDL parameters
+    SYSTEM::Access_module<CONFIG::Config_module> config_module(/*deferred=*/false);
+    CONFIG::Config_registry const                &registry = config_module->get_configuration();
+    mi::mdl::Options                             &options = m_mdl->access_options();
 
-        // neuray always runs in "relaxed" mode for compatibility with old releases
-        options.set_option(mi::mdl::MDL::option_strict, "false");
-
-
-        mi::mdl::Allocator_builder builder(m_allocator.get());
-
-        // 8MB cache size by default
-        size_t cache_size = 8*1024*1024, v;
-        if (registry.get_value("mdl_target_code_cache_size", v)) {
-            cache_size = v;
-        }
-
-        m_code_cache = builder.create<mi::mdl::Code_cache>(m_allocator.get(), cache_size);
-
-        m_module_wait_queue = new MDL::Mdl_module_wait_queue();
-        return true;
+    int opt_level = 0;
+    if (registry.get_value("mdl_opt_level", opt_level)) {
+        options.set_option(
+            mi::mdl::MDL::option_opt_level, std::to_string(opt_level).c_str());
     }
-    return false;
+
+    // neuray always runs in "relaxed" mode for compatibility with old releases
+    options.set_option(mi::mdl::MDL::option_strict, "false");
+
+
+    mi::mdl::Allocator_builder builder(m_allocator.get());
+
+    // 8MB cache size by default
+    size_t cache_size = 8*1024*1024, v;
+    if (registry.get_value("mdl_target_code_cache_size", v)) {
+        cache_size = v;
+    }
+
+    m_code_cache = builder.create<mi::mdl::Code_cache>(m_allocator.get(), cache_size);
+
+    m_module_wait_queue = new MDL::Mdl_module_wait_queue();
+
+
+    return true;
 }
 
 void Mdlc_module_impl::exit()
 {
+    
     if (m_mdl) {
         m_mdl->release();
         m_mdl = NULL;
@@ -277,14 +281,11 @@ void Mdlc_module_impl::exit()
     // We need to reset m_allocator here for symmetry reasons (and not rely on the destructor).
 #ifdef DEBUG
     if (g_dbg_allocator) {
-#if 0
-        // Disabled because prod/lib/mdl_sdk/test_imdl_module fails. This needs to be fixed first.
         SYSTEM::Access_module<MEM::Mem_module> mem_module(/*deferred=*/false);
         mem_module->set_exit_cb(NULL);
         m_allocator.reset();
         delete g_dbg_allocator;
         g_dbg_allocator = NULL;
-#endif
     } else {
         // The debug allocator was destroyed by flush_dbg_allocator() without taking m_allocator
         // into account. The pointer in m_allocator is now dangling and there is no way to reset
@@ -347,20 +348,6 @@ mi::mdl::ILambda_function *Mdlc_module_impl::deserialize_lambda_function(
     return m_mdl->deserialize_lambda(&mdl_deserializer);
 }
 
-void Mdlc_module_impl::set_used_with_mdl_sdk(bool flag)
-{
-    ASSERT(M_MDLC, !m_used_with_mdl_sdk_set);
-    m_used_with_mdl_sdk_set = true;
-    m_used_with_mdl_sdk = flag;
-
-}
-
-bool Mdlc_module_impl::get_used_with_mdl_sdk() const
-{
-    ASSERT(M_MDLC, m_used_with_mdl_sdk_set);
-    return m_used_with_mdl_sdk;
-}
-
 
 void Mdlc_module_impl::client_build_version(const char* build, const char* bridge_protocol) const
 {
@@ -402,6 +389,12 @@ bool Mdlc_module_impl::get_expose_names_of_let_expressions() const
 MDL::Mdl_module_wait_queue* Mdlc_module_impl::get_module_wait_queue() const
 {
     return m_module_wait_queue;
+}
+
+bool Mdlc_module_impl::is_valid_mdl_core_plugin(
+    const char* type, const char* name, const char* filename)
+{
+    return false;
 }
 
 } // namespace MDLC

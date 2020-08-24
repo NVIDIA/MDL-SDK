@@ -84,7 +84,7 @@ public:
     ///                          Path to a thumbnail image representing the exported material or
     ///                          function.
     ///                          Can be either an absolute MDL url or a file system path.
-    ///                        - #mi::base::IInterface \b user_files \n
+    ///                        - #mi::base::IInterface* \b user_files \n
     ///                          A static or dynamic array of structures of type \c Mdle_user_file
     ///                          pointing to additional user content (files) that should be added to
     ///                          the MDLE archive. Can be \c NULL.\n

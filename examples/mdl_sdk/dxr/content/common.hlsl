@@ -29,9 +29,9 @@
 #ifndef MDL_DXR_EXAMPLE_COMMON_HLSL
 #define MDL_DXR_EXAMPLE_COMMON_HLSL
 
- // macros the append the target code ID to the function name.
- // this is required because the resulting DXIL libraries will be linked to same pipeline object
- // and for that, the entry point names have to be unique.
+// macros the append the target code ID to the function name.
+// this is required because the resulting DXIL libraries will be linked to same pipeline object
+// and for that, the entry point names have to be unique.
 #define export_name_impl(name, id) name ## _ ## id
 #define export_name_impl_2(name, id) export_name_impl(name, id)
 #define export_name(name) export_name_impl_2(name, TARGET_CODE_ID)
@@ -47,7 +47,7 @@ cbuffer SceneConstants : register(b1)
     float total_time;
     float delta_time;
 
-    // (progressive) rendering 
+    // (progressive) rendering
     uint progressive_iteration;
     uint max_ray_depth;
     uint iterations_per_frame;
@@ -62,17 +62,19 @@ cbuffer SceneConstants : register(b1)
     float3 point_light_position;
     float3 point_light_intensity;
 
-    // environment light
-    float environment_intensity_factor;
-
     // gamma correction while rendering to the frame buffer
     float output_gamma_correction;
+
+    // environment light
+    float environment_intensity_factor;
+    float environment_inv_integral;
 
     // when auxiliary buffers are enabled, this index is used to select to one to display
     uint display_buffer_index;
 }
 
 // Ray typed, has to match with CPU version
+#if defined(WITH_ENUM_SUPPORT)
 enum RayType
 {
     RAY_TYPE_RADIANCE = 0,
@@ -81,7 +83,14 @@ enum RayType
     RAY_TYPE_COUNT,
     RAY_TYPE_FORCE_32_BIT = 0xffffffffU
 };
+#else
+    #define RayType uint
+    #define RAY_TYPE_RADIANCE   0
+    #define RAY_TYPE_SHADOW     1
+    #define RAY_TYPE_COUNT      (RAY_TYPE_SHADOW + 1)
+#endif
 
+#if defined(WITH_ENUM_SUPPORT)
 enum RadianceHitInfoFlags
 {
     FLAG_NONE = 0,
@@ -89,6 +98,13 @@ enum RadianceHitInfoFlags
     FLAG_DONE = 2,
     FLAG_FIRST_PATH_SEGMENT = 4
 };
+#else
+    #define RadianceHitInfoFlags uint
+    #define FLAG_NONE               0
+    #define FLAG_INSIDE             1
+    #define FLAG_DONE               2
+    #define FLAG_FIRST_PATH_SEGMENT 4
+#endif
 
 void add_flag(inout uint flags, uint to_add) { flags |= to_add; }
 void toggle_flag(inout uint flags, uint to_toggle) { flags ^= to_toggle; }
@@ -105,7 +121,7 @@ struct RadianceHitInfo
     float3 ray_direction_next;
 
     uint seed;
-    float last_pdf;
+    float last_bsdf_pdf;
     uint flags;
 };
 
@@ -122,34 +138,60 @@ struct Attributes
     float2 bary;
 };
 
+// Helper to make NaN and INF values visible in the output image.
+float3 encode_errors(float3 color)
+{
+    return any(isnan(color) | isinf(color)) ? float3(0.0f, 0.0f, 1.0e+30f) : color;
+}
 
 //-------------------------------------------------------------------------------------------------
 // Scene Data API
 //-------------------------------------------------------------------------------------------------
 
-/// interpolation of the data over the primitive 
-enum SceneDataInterpolationMode
-{
-    SCENE_DATA_INTERPOLATION_MODE_NONE = 0,
-    SCENE_DATA_INTERPOLATION_MODE_LINEAR = 1,
-    SCENE_DATA_INTERPOLATION_MODE_NEAREST = 2,
-};
+/// interpolation of the data over the primitive
+#if defined(WITH_ENUM_SUPPORT)
+    enum SceneDataInterpolationMode
+    {
+        SCENE_DATA_INTERPOLATION_MODE_NONE = 0,
+        SCENE_DATA_INTERPOLATION_MODE_LINEAR = 1,
+        SCENE_DATA_INTERPOLATION_MODE_NEAREST = 2,
+    };
+#else
+    #define SceneDataInterpolationMode uint
+    #define SCENE_DATA_INTERPOLATION_MODE_NONE      0
+    #define SCENE_DATA_INTERPOLATION_MODE_LINEAR    1
+    #define SCENE_DATA_INTERPOLATION_MODE_NEAREST   2
+#endif
 
 /// Scope a scene data element belongs to
-enum SceneDataKind
-{
-    SCENE_DATA_KIND_NONE = 0,
-    SCENE_DATA_KIND_VERTEX = 1,
-    SCENE_DATA_KIND_INSTANCE = 2,
-};
+#if defined(WITH_ENUM_SUPPORT)
+    enum SceneDataKind
+    {
+        SCENE_DATA_KIND_NONE = 0,
+        SCENE_DATA_KIND_VERTEX = 1,
+        SCENE_DATA_KIND_INSTANCE = 2,
+    };
+#else
+    #define SceneDataKind uint
+    #define SCENE_DATA_KIND_NONE        0
+    #define SCENE_DATA_KIND_VERTEX      1
+    #define SCENE_DATA_KIND_INSTANCE    2
+#endif
 
 /// Basic element type of the scene data
-enum SceneDataElementType
-{
-    SCENE_DATA_ELEMENT_TYPE_FLOAT = 0,
-    SCENE_DATA_ELEMENT_TYPE_INT = 1,
-    SCENE_DATA_ELEMENT_TYPE_COLOR = 2
-};
+#if defined(WITH_ENUM_SUPPORT)
+    enum SceneDataElementType
+    {
+        SCENE_DATA_ELEMENT_TYPE_FLOAT = 0,
+        SCENE_DATA_ELEMENT_TYPE_INT = 1,
+        SCENE_DATA_ELEMENT_TYPE_COLOR = 2
+    };
+#else
+    #define SceneDataElementType uint
+    #define SCENE_DATA_ELEMENT_TYPE_FLOAT   0
+    #define SCENE_DATA_ELEMENT_TYPE_INT     1
+    #define SCENE_DATA_ELEMENT_TYPE_COLOR   2
+#endif
 
 // Infos about the interleaved vertex layout (compressed)
 struct SceneDataInfo
@@ -186,7 +228,7 @@ struct SceneDataInfo
     }
 
     /// The offset to the data element within an interleaved vertex buffer, or the absolute
-    /// offset to the base (e.g. of the geometry data) in non-interleaved buffers 
+    /// offset to the base (e.g. of the geometry data) in non-interleaved buffers
     uint GetByteOffset()
     {
         return packed_data.y;
@@ -220,18 +262,25 @@ struct DXRRendererState
     // barycentric coordinates of the hit point within the triangle
     float3 barycentric;
 };
-// use this structure as renderer state int the MDL shading state material 
+// use this structure as renderer state int the MDL shading state material
 #define RENDERER_STATE_TYPE DXRRendererState
 
 
 // Positions, normals, and tangents are mandatory for this renderer. The vertex buffer always
 // contains this data at the beginning of the (interleaved) per vertex data.
-enum VertexByteOffset
-{
-    VERT_BYTEOFFSET_POSITION = 0,
-    VERT_BYTEOFFSET_NORMAL = 12,
-    VERT_BYTEOFFSET_TANGENT = 24,
-};
+#if defined(WITH_ENUM_SUPPORT)
+    enum VertexByteOffset
+    {
+        VERT_BYTEOFFSET_POSITION = 0,
+        VERT_BYTEOFFSET_NORMAL = 12,
+        VERT_BYTEOFFSET_TANGENT = 24,
+    };
+#else
+    #define VertexByteOffset uint
+    #define VERT_BYTEOFFSET_POSITION    0
+    #define VERT_BYTEOFFSET_NORMAL      12
+    #define VERT_BYTEOFFSET_TANGENT     24
+#endif
 
 //-------------------------------------------------------------------------------------------------
 // random number generator based on the Optix SDK
@@ -289,6 +338,16 @@ float4 rnd4(inout uint prev)
 }
 
 //-------------------------------------------------------------------------------------------------
+// Math helper
+//-------------------------------------------------------------------------------------------------
+
+// convert float4x3 to 4x4, to be compatible with the slang compiler
+float4x4 to4x4(float3x4 source)
+{
+    return float4x4(source[0], source[1], source[2], float4(0.0f, 0.0f, 0.0f, 1.0f));
+}
+
+//-------------------------------------------------------------------------------------------------
 // Environment
 //-------------------------------------------------------------------------------------------------
 
@@ -296,33 +355,27 @@ struct Environment_sample_data
 {
     uint alias;
     float q;
-    float pdf;
 };
 
 float3 environment_evaluate(
-    Texture2D<float4> lat_long_tex, 
+    Texture2D<float4> lat_long_tex,
     StructuredBuffer<Environment_sample_data> sample_buffer,
-    float3 normalized_dir, 
+    float3 normalized_dir,
     out float pdf)
 {
     // assuming lat long
     const float u = atan2(normalized_dir.z, normalized_dir.x) * 0.5f * M_ONE_OVER_PI + 0.5f;
     const float v = acos(-normalized_dir.y) * M_ONE_OVER_PI;
 
-    // get pdf
-    uint width, height;
-    lat_long_tex.GetDimensions(width, height);
-    const uint x = min(uint(u * float(width)), width - 1);
-    const uint y = min(uint(v * float(height)), height - 1);
-    pdf = sample_buffer[y * width + x].pdf;
-
-    // get radiance
-    return environment_intensity_factor * lat_long_tex.SampleLevel(
+    // get radiance and calculate pdf
+    float3 t = lat_long_tex.SampleLevel(
         sampler_latlong, float2(u, v), /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0).xyz;
+    pdf = max(t.x, max(t.y, t.z)) * environment_inv_integral;
+    return t * environment_intensity_factor;
 }
 
 float3 environment_sample(
-    Texture2D<float4> lat_long_tex, 
+    Texture2D<float4> lat_long_tex,
     StructuredBuffer<Environment_sample_data> sample_buffer,
     inout uint seed,
     out float3 to_light,
@@ -355,7 +408,6 @@ float3 environment_sample(
 
     const uint py = env_idx / width;
     const uint px = env_idx % width;
-    pdf = sample_buffer[env_idx].pdf;
 
     // uniformly sample spherical area of pixel
     const float u = float(px + xi.y) / float(width);
@@ -371,10 +423,12 @@ float3 environment_sample(
     const float sin_theta = sin(theta);
     to_light = float3(cos_phi * sin_theta, -cos_theta, sin_phi * sin_theta);
 
-    // lookup filtered value
+    // lookup filtered value and calculate pdf
     const float v = theta * M_ONE_OVER_PI;
-    return environment_intensity_factor * lat_long_tex.SampleLevel(
+    float3 t = lat_long_tex.SampleLevel(
         sampler_latlong, float2(u, v), /*mipmaplevel=*/ 0.0f, /*mipoffset=*/0).xyz;
+    pdf = max(t.x, max(t.y, t.z)) * environment_inv_integral;
+    return t * environment_intensity_factor;
 }
 
 //-------------------------------------------------------------------------------------------------

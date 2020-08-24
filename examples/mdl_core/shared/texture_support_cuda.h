@@ -41,10 +41,16 @@
 
 #define USE_SMOOTHERSTEP_FILTER
 
-typedef mi::mdl::tct_deriv_float2       tct_deriv_float2;
-typedef mi::mdl::Texture_handler_base   Texture_handler_base;
-typedef mi::mdl::stdlib::Tex_wrap_mode  Tex_wrap_mode;
-typedef mi::mdl::stdlib::Mbsdf_part     Mbsdf_part;
+typedef mi::mdl::tct_deriv_float                     tct_deriv_float;
+typedef mi::mdl::tct_deriv_float2                    tct_deriv_float2;
+typedef mi::mdl::tct_deriv_arr_float_2               tct_deriv_arr_float_2;
+typedef mi::mdl::tct_deriv_arr_float_3               tct_deriv_arr_float_3;
+typedef mi::mdl::tct_deriv_arr_float_4               tct_deriv_arr_float_4;
+typedef mi::mdl::Shading_state_material_with_derivs  Shading_state_material_with_derivs;
+typedef mi::mdl::Shading_state_material              Shading_state_material;
+typedef mi::mdl::Texture_handler_base                Texture_handler_base;
+typedef mi::mdl::stdlib::Tex_wrap_mode               Tex_wrap_mode;
+typedef mi::mdl::stdlib::Mbsdf_part                  Mbsdf_part;
 
 
 // Custom structure representing an MDL texture, containing filtered and unfiltered CUDA texture
@@ -125,6 +131,10 @@ __device__ inline void store_result3(float res[3], float v0, float v1, float v2)
 }
 
 
+// ------------------------------------------------------------------------------------------------
+// Textures
+// ------------------------------------------------------------------------------------------------
+
 // Applies wrapping and cropping to the given coordinate.
 // Note: This macro returns if wrap mode is clip and the coordinate is out of range.
 #define WRAP_AND_CROP_OR_RETURN_BLACK(val, inv_dim, wrap_mode, crop_vals, store_res_func)    \
@@ -180,9 +190,6 @@ __device__ inline void store_result3(float res[3], float v0, float v1, float v2)
 #define APPLY_SMOOTHERSTEP_FILTER()
 #endif
 
-// ------------------------------------------------------------------------------------------------
-// Textures
-// ------------------------------------------------------------------------------------------------
 
 // Implementation of tex::lookup_float4() for a texture_2d texture.
 extern "C" __device__ void tex_lookup_float4_2d(
@@ -241,7 +248,6 @@ extern "C" __device__ void tex_lookup_deriv_float4_2d(
 
     store_result4(result, tex2DGrad<float4>(tex.filtered_object, u, v, coord->dx, coord->dy));
 }
-
 
 // Implementation of tex::lookup_float3() for a texture_2d texture.
 extern "C" __device__ void tex_lookup_float3_2d(
@@ -640,6 +646,218 @@ extern "C" __device__ void df_bsdf_measurement_albedos(
 
 
 // ------------------------------------------------------------------------------------------------
+// Scene data (dummy functions)
+// ------------------------------------------------------------------------------------------------
+
+#ifndef TEX_SUPPORT_NO_DUMMY_SCENEDATA
+
+// Implementation of scene_data_isvalid().
+extern "C" __device__ bool scene_data_isvalid(
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id)
+{
+    return false;
+}
+
+// Implementation of scene_data_lookup_float4().
+extern "C" __device__ void scene_data_lookup_float4(
+    float                                  result[4],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[4],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+    result[3] = default_value[3];
+}
+
+// Implementation of scene_data_lookup_float3().
+extern "C" __device__ void scene_data_lookup_float3(
+    float                                  result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[3],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+}
+
+// Implementation of scene_data_lookup_color().
+extern "C" __device__ void scene_data_lookup_color(
+    float                                  result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[3],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+}
+
+// Implementation of scene_data_lookup_float2().
+extern "C" __device__ void scene_data_lookup_float2(
+    float                                  result[2],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[2],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+}
+
+// Implementation of scene_data_lookup_float().
+extern "C" __device__ float scene_data_lookup_float(
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    return default_value;
+}
+
+// Implementation of scene_data_lookup_int4().
+extern "C" __device__ void scene_data_lookup_int4(
+    int                                    result[4],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int const                              default_value[4],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+    result[3] = default_value[3];
+}
+
+// Implementation of scene_data_lookup_int3().
+extern "C" __device__ void scene_data_lookup_int3(
+    int                                    result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int const                              default_value[3],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+}
+
+// Implementation of scene_data_lookup_int2().
+extern "C" __device__ void scene_data_lookup_int2(
+    int                                    result[2],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int const                              default_value[2],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+}
+
+// Implementation of scene_data_lookup_int().
+extern "C" __device__ int scene_data_lookup_int(
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int                                    default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    return default_value;
+}
+
+// Implementation of scene_data_lookup_float4() with derivatives.
+extern "C" __device__ void scene_data_lookup_deriv_float4(
+    tct_deriv_arr_float_4                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_4 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+// Implementation of scene_data_lookup_float3() with derivatives.
+extern "C" __device__ void scene_data_lookup_deriv_float3(
+    tct_deriv_arr_float_3                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_3 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+// Implementation of scene_data_lookup_color() with derivatives.
+extern "C" __device__ void scene_data_lookup_deriv_color(
+    tct_deriv_arr_float_3                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_3 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+// Implementation of scene_data_lookup_float2() with derivatives.
+extern "C" __device__ void scene_data_lookup_deriv_float2(
+    tct_deriv_arr_float_2                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_2 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+// Implementation of scene_data_lookup_float() with derivatives.
+extern "C" __device__ void scene_data_lookup_deriv_float(
+    tct_deriv_float                       *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_float const                 *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+#endif  // TEX_SUPPORT_NO_DUMMY_SCENEDATA
+
+
+// ------------------------------------------------------------------------------------------------
 // Vtables
 // ------------------------------------------------------------------------------------------------
 
@@ -668,7 +886,17 @@ __device__ mi::mdl::Texture_handler_vtable tex_vtable = {
     df_bsdf_measurement_evaluate,
     df_bsdf_measurement_sample,
     df_bsdf_measurement_pdf,
-    df_bsdf_measurement_albedos
+    df_bsdf_measurement_albedos,
+    scene_data_isvalid,
+    scene_data_lookup_float,
+    scene_data_lookup_float2,
+    scene_data_lookup_float3,
+    scene_data_lookup_float4,
+    scene_data_lookup_int,
+    scene_data_lookup_int2,
+    scene_data_lookup_int3,
+    scene_data_lookup_int4,
+    scene_data_lookup_color,
 };
 
 // The vtable containing all texture access handlers required by the generated code
@@ -696,7 +924,22 @@ __device__ mi::mdl::Texture_handler_deriv_vtable tex_deriv_vtable = {
     df_bsdf_measurement_evaluate,
     df_bsdf_measurement_sample,
     df_bsdf_measurement_pdf,
-    df_bsdf_measurement_albedos
+    df_bsdf_measurement_albedos,
+    scene_data_isvalid,
+    scene_data_lookup_float,
+    scene_data_lookup_float2,
+    scene_data_lookup_float3,
+    scene_data_lookup_float4,
+    scene_data_lookup_int,
+    scene_data_lookup_int2,
+    scene_data_lookup_int3,
+    scene_data_lookup_int4,
+    scene_data_lookup_color,
+    scene_data_lookup_deriv_float,
+    scene_data_lookup_deriv_float2,
+    scene_data_lookup_deriv_float3,
+    scene_data_lookup_deriv_float4,
+    scene_data_lookup_deriv_color,
 };
 
 #endif  // TEXTURE_SUPPORT_CUDA_H

@@ -37,8 +37,12 @@
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
-#include <mi/neuraylib/imdl_compiler.h>
 
+#include <base/data/serial/i_serial_buffer_serializer.h>
+#include <base/data/serial/i_serializer.h>
+
+#include <mi/neuraylib/imdl_backend.h>
+#include <mi/neuraylib/imdl_backend_api.h>
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
 
 namespace mi { namespace mdl {
@@ -46,9 +50,15 @@ class IGenerated_code_executable;
 class IGenerated_code_lambda_function;
 } }
 
+namespace mi { namespace neuraylib {
+class IBuffer;
+} }
+
 namespace MI {
 
+namespace SERIAL { class Buffer_serializer; }
 namespace DB { class Transaction; }
+namespace NEURAY { class Mdl_llvm_backend; }
 namespace MDLRT { class Resource_handler; }
 
 namespace BACKENDS {
@@ -56,17 +66,30 @@ namespace BACKENDS {
 class Target_value_layout;
 
 /// Structure containing information about a callable function.
-struct Callable_function_info
+class Callable_function_info : public MI::SERIAL::Serializable
 {
+public:
+    /// Constructor.
     Callable_function_info(
         std::string const &name,
         mi::neuraylib::ITarget_code::Distribution_kind dist_kind,
         mi::neuraylib::ITarget_code::Function_kind kind,
-        mi::Size arg_block_index)
+        mi::Size arg_block_index,
+        mi::neuraylib::ITarget_code::State_usage state_usage)
     : m_name( name)
     , m_dist_kind( dist_kind)
     , m_kind( kind)
     , m_arg_block_index( arg_block_index)
+    , m_state_usage( state_usage)
+    {}
+
+    /// Default Constructor used for deserialization.
+    Callable_function_info()
+        : m_name()
+        , m_dist_kind(mi::neuraylib::ITarget_code::DK_INVALID)
+        , m_kind(mi::neuraylib::ITarget_code::FK_INVALID)
+        , m_arg_block_index(static_cast<mi::Size>(-1))
+        , m_state_usage(0)
     {}
 
     /// The name of the callable function.
@@ -87,12 +110,33 @@ struct Callable_function_info
 
     /// The DF handle name table.
     std::vector<std::string> m_df_handle_name_table;
+
+    /// The state usage of the callable function.
+    mi::neuraylib::ITarget_code::State_usage m_state_usage;
+
+    /// Required for serialization.
+    MI::SERIAL::Class_id get_class_id() const override
+    {
+        return MI::SERIAL::class_id_unknown;
+    }
+
+    /// Serialize the fields of this structure.
+    const MI::SERIAL::Serializable* serialize(
+        MI::SERIAL::Serializer* serializer) const override;
+
+    /// Deserialize the fields of this structure.
+    MI::SERIAL::Serializable* deserialize(
+        MI::SERIAL::Deserializer* deserializer) override;
 };
 
 /// Implementation of #mi::neuraylib::ITarget_code.
 class Target_code : public mi::base::Interface_implement<mi::neuraylib::ITarget_code>
 {
 public:
+
+    /// Default Constructor used for deserialization
+    /// and as base constructor (C++11 delegated constructor).
+    Target_code();
 
     /// Constructor from executable code.
     ///
@@ -103,20 +147,24 @@ public:
     /// \param use_derivatives  True if derivative support is enabled for the generated code
     /// \param use_builtin_resource_handler True, if the builtin texture runtime is supposed to be
     ///                         used when running x86 code.
+    /// \param be_kind     Kind of back-end that created this target code object.
     Target_code(
         mi::mdl::IGenerated_code_executable* code,
         MI::DB::Transaction* transaction,
         bool string_ids,
         bool use_derivatives,
-        bool use_builtin_resource_handler);
+        bool use_builtin_resource_handler,
+        mi::neuraylib::IMdl_backend_api::Mdl_backend_kind be_kind);
 
 
     /// Constructor for link mode.
     ///
     /// \param string_ids  True if string arguments inside target argument blocks
     ///                    are mapped to identifiers
+    /// \param be_kind     Kind of back-end that created this target code object.
     Target_code(
-        bool string_ids);
+        bool string_ids,
+        mi::neuraylib::IMdl_backend_api::Mdl_backend_kind be_kind);
 
     /// Finalization method for link mode for executable code.
     void finalize( mi::mdl::IGenerated_code_executable* code,
@@ -125,6 +173,9 @@ public:
 
 
     // API methods
+
+    /// Returns the kind of backend this information belongs to.
+    mi::neuraylib::IMdl_backend_api::Mdl_backend_kind get_backend_kind() const override;
 
     /// Returns the represented target code in ASCII representation.
     const char* get_code() const override;
@@ -164,10 +215,11 @@ public:
     ///                   index, or \c NULL if \p index is out of range.
     const char* get_texture(Size index) const override;
 
-    /// Returns the mdl url of a texture resource used by the target code.
+    /// Returns the MDL URL of a texture resource used by the target code if no database
+    /// element is associated to the resource.
     ///
     /// \param index      The index of the texture resource.
-    /// \return           The mdl url of the texture resource of the given
+    /// \return           The MDL URL of the texture resource of the given
     ///                   index, or \c NULL if \p index is out of range.
     const char* get_texture_url(Size index) const override;
 
@@ -183,7 +235,7 @@ public:
     ///
     /// \param index      The index of the texture resource.
     /// \return           The gamma of the texture resource of the given
-    ///                   index, or \c NULL if \p index is out of range.
+    ///                   index, or \c GM_GAMMA_UNKNOWN if \p index is out of range.
     mi::neuraylib::ITarget_code::Gamma_mode get_texture_gamma(Size index) const override;
 
     /// Returns the texture shape of a given texture resource used by the target code.
@@ -291,6 +343,9 @@ public:
         const mi::neuraylib::ICompiled_material *material,
         mi::neuraylib::ITarget_resource_callback *resource_callback) const override;
 
+    /// Returns the number of target argument blocks / block layouts.
+    Size get_argument_layout_count() const override;
+
     /// Get a captured arguments block layout if available.
     ///
     /// \param index   The index of the target argument block.
@@ -313,7 +368,22 @@ public:
     /// Returns the name of a light profile resource used by the target code.
     const char* get_light_profile(Size index) const override;
 
-    /// Returns the number of bsdf measurement resources used by the target code.
+    /// Returns the MDL URL of a light profile resource used by the target code.
+    ///
+    /// \param index      The index of the light profile resource.
+    /// \return           The MDL URL of the light profile resource of the given
+    ///                   index, or \c NULL if \p index is out of range.
+    const char* get_light_profile_url(Size index) const override;
+
+    /// Returns the owner module name of a relative light profile URL.
+    ///
+    /// \param index      The index of the light profile resource.
+    /// \return           The owner module name of the light profile resource of the given
+    ///                   index, or \c NULL if \p index is out of range or the owner
+    ///                   module is not provided.
+    const char* get_light_profile_owner_module(Size index) const override;
+
+    /// Returns the number of BSDF measurement resources used by the target code.
     Size get_bsdf_measurement_count() const override;
 
     /// Returns the number of BSDF measurement resources coming from the body of expressions
@@ -324,8 +394,23 @@ public:
     ///                   to more than one call to a link unit add function.
     Size get_body_bsdf_measurement_count() const override;
 
-    /// Returns the name of a bsdf measurement resource used by the target code.
+    /// Returns the name of a BSDF measurement resource used by the target code.
     const char* get_bsdf_measurement(Size index) const override;
+
+    /// Returns the MDL URL of a BSDF measurement resource used by the target code.
+    ///
+    /// \param index      The index of the BSDF measurement resource.
+    /// \return           The MDL URL of the BSDF measurement resource of the given
+    ///                   index, or \c NULL if \p index is out of range.
+    const char* get_bsdf_measurement_url(Size index) const override;
+
+    /// Returns the owner module name of a relative BSDF measurement URL.
+    ///
+    /// \param index      The index of the BSDF measurement resource.
+    /// \return           The owner module name of the BSDF measurement resource of the given
+    ///                   index, or \c NULL if \p index is out of range or the owner
+    ///                   module is not provided.
+    const char* get_bsdf_measurement_owner_module(Size index) const override;
 
     /// Returns the number of string constants used by the target code.
     Size get_string_constant_count() const override;
@@ -360,9 +445,9 @@ public:
     ///
     /// \param index   The index of the callable function.
     ///
-    /// \return The distribution kind of the callable function 
+    /// \return The distribution kind of the callable function
     ///         or \c DK_INVALID if \p index was invalid.
-    Distribution_kind get_callable_function_distribution_kind( 
+    Distribution_kind get_callable_function_distribution_kind(
         Size index) const override;
 
 
@@ -400,11 +485,20 @@ public:
     const char* get_callable_function_df_handle(Size func_index, Size handle_index)
         const override;
 
+    /// Returns the potential render state usage of callable function in the target code.
+    ///
+    /// If the corresponding property bit is not set, it is guaranteed that the
+    /// code does not use the associated render state property.
+    ///
+    /// \return The potential render state usage of the callable function
+    ///         or \c 0 if \p index was invalid.
+    State_usage get_callable_function_render_state_usage(Size index) const override;
+
     /// Run this code on the native CPU.
     ///
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
-    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
     ///                         texture lookup functions. Can be NULL if the built-in resource
     ///                         handler is used.
     /// \param[out] result      The result will be written to.
@@ -426,7 +520,7 @@ public:
     ///
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
-    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
     ///                         texture lookup functions. Can be NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
@@ -453,7 +547,7 @@ public:
     ///
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
-    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined 
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
     ///                         texture lookup functions. Can be NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
@@ -476,7 +570,7 @@ public:
     /// \param[in]    index         The index of the callable function.
     /// \param[inout] data          The input and output fields for the BSDF sampling.
     /// \param[in]    state         The core state.
-    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined 
+    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined
     ///                             texture lookup functions. Can be NULL if the built-in resource
     ///                             handler is used.
     /// \param[in]    cap_args      The captured arguments to use for the execution.
@@ -500,7 +594,7 @@ public:
     /// \param[in]    index         The index of the callable function.
     /// \param[inout] data          The input and output fields for the BSDF evaluation.
     /// \param[in]    state         The core state.
-    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined 
+    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined
     ///                             texture lookup functions. Can be NULL if the built-in resource
     ///                             handler is used.
     /// \param[in]    cap_args      The captured arguments to use for the execution.
@@ -525,7 +619,7 @@ public:
     /// \param[in]    index         The index of the callable function.
     /// \param[inout] data          The input and output fields for the BSDF PDF calculation.
     /// \param[in]    state         The core state.
-    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined 
+    /// \param[in]    tex_handler   Texture handler containing the vtable for the user-defined
     ///                             texture lookup functions. Can be NULL if the built-in resource
     ///                             handler is used.
     /// \param[in]    cap_args      The captured arguments to use for the execution.
@@ -602,13 +696,15 @@ public:
     /// \param kind             the kind of the function
     /// \param arg_block_index  the argument block index associated with this function or ~0
     ///                         if no argument block is used
+    /// \param state_usage      the state usage of the function
     ///
     /// \return  The index of this function.
-    size_t add_function( 
-        const std::string& name, 
-        Distribution_kind dist_kind, 
-        Function_kind kind, 
-        mi::Size arg_block_index);
+    size_t add_function(
+        const std::string& name,
+        Distribution_kind dist_kind,
+        Function_kind kind,
+        mi::Size arg_block_index,
+        State_usage state_usage);
 
     /// Set a function prototype for a callable function.
     ///
@@ -626,7 +722,7 @@ public:
     /// \param shape                 the texture shape of the texture
     /// \param sema                  the semantic of the texture, typically \c DS_UNKNOWN.
     void add_texture_index(
-        size_t index, 
+        size_t index,
         const std::string& name,
         const std::string& mdl_url,
         float gamma,
@@ -637,13 +733,21 @@ public:
     ///
     /// \param index  the texture index as used in compiled code
     /// \param name   the name of the DB element this index refers to.
-    void add_light_profile_index( size_t index, const std::string& name);
+    /// \param mdl_url               the mdl url.
+    void add_light_profile_index(
+        size_t index,
+        const std::string& name,
+        const std::string& mdl_url);
 
     /// Registers a used bsdf measurement index.
     ///
     /// \param index  the texture index as used in compiled code
     /// \param name   the name of the DB element this index refers to.
-    void add_bsdf_measurement_index( size_t index, const std::string& name);
+    /// \param mdl_url               the mdl url.
+    void add_bsdf_measurement_index(
+        size_t index,
+        const std::string& name,
+        const std::string& mdl_url);
 
     /// Registers a used string constant index.
     ///
@@ -704,6 +808,19 @@ public:
         mi::Size &ry,
         mi::Size &rz);
 
+    /// Indicates whether the target code can be serialized.
+    bool supports_serialization() const final;
+
+    /// Stores the data of this object into a buffer that can used in an external cache.
+    const mi::neuraylib::IBuffer* serialize(
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    /// Called from the back-end to restore an instance of this class.
+    bool deserialize(
+        mi::mdl::ICode_generator* code_gen,
+        const mi::neuraylib::IBuffer* buffer,
+        mi::neuraylib::IMdl_execution_context* context);
+
 private:
     /// Destructor.
     ~Target_code();
@@ -711,6 +828,9 @@ private:
 private:
     /// If native code was generated, its interface.
     mutable mi::base::Handle<mi::mdl::IGenerated_code_lambda_function> m_native_code;
+
+    /// The kind of backend this information belongs to.
+    mi::neuraylib::IMdl_backend_api::Mdl_backend_kind m_backend_kind;
 
     /// The code.
     std::string m_code;
@@ -724,8 +844,72 @@ private:
     /// The list of all callable function infos.
     std::vector<Callable_function_info> m_callable_function_infos;
 
+    /// Helper value type for resource entries.
+    struct Resource_info : public MI::SERIAL::Serializable {
+        /// Constructor.
+        Resource_info(
+            std::string const &db_name,
+            std::string const &mdl_url,
+            std::string const &owner)
+        : m_db_name(db_name)
+        , m_mdl_url(mdl_url)
+        , m_owner_module(owner)
+        {
+        }
+
+        /// Default Constructor used for deserialization.
+        Resource_info()
+            : m_db_name()
+            , m_mdl_url()
+            , m_owner_module()
+        {
+        }
+
+        /// Get the database name of the resource.
+        char const *get_db_name() const
+        {
+            return m_db_name.c_str();
+        }
+
+        /// Get the mdl url of the resource.
+        char const *get_mdl_url() const
+        {
+            return m_mdl_url.c_str();
+        }
+
+        /// Get the owner module name of the resource.
+        char const *get_owner() const
+        {
+            return m_owner_module.c_str();
+        }
+
+        /// Required for serialization.
+        MI::SERIAL::Class_id get_class_id() const final
+        {
+            return MI::SERIAL::class_id_unknown;
+        }
+
+        /// Serialize the fields of this structure.
+        const MI::SERIAL::Serializable* serialize(
+            MI::SERIAL::Serializer* serializer) const override;
+
+        /// Deserialize the fields of this structure.
+        MI::SERIAL::Serializable* deserialize(
+            MI::SERIAL::Deserializer* deserializer) override;
+
+    private:
+        /// The db name of the resource.
+        std::string m_db_name;
+
+        /// The mdl url of the resource.
+        std::string m_mdl_url;
+
+        /// The owner module name of the resource.
+        std::string m_owner_module;
+    };
+
     /// Helper value type for texture entries.
-    struct Texture_info {
+    struct Texture_info : public Resource_info {
         /// Constructor.
         Texture_info(
             std::string const &db_name,
@@ -734,31 +918,20 @@ private:
             float gamma,
             Texture_shape shape,
             mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
-        : m_db_name(db_name)
-        , m_mdl_url(mdl_url)
-        , m_owner_module(owner)
+        : Resource_info(db_name, mdl_url, owner)
         , m_gamma(gamma)
         , m_texture_shape(shape)
         , m_df_data_kind(df_data_kind)
         {
         }
 
-        /// Get the database name of the texture.
-        char const *get_db_name() const 
+        /// Default Constructor used for deserialization.
+        Texture_info()
+            : Resource_info()
+            , m_gamma(0.0f)
+            , m_texture_shape(mi::neuraylib::ITarget_code::Texture_shape_invalid)
+            , m_df_data_kind(mi::mdl::IValue_texture::BDK_NONE)
         {
-            return m_db_name.c_str();
-        }
-
-        /// Get the mdl url of the texture.
-        char const *get_mdl_url() const
-        { 
-            return m_mdl_url.c_str();
-        }
-
-        /// Get the owner module name of the texture.
-        char const *get_owner() const
-        {
-            return m_owner_module.c_str();
         }
 
         /// Get the texture gamma
@@ -770,21 +943,18 @@ private:
         /// Get the semantic of the texture.
         mi::mdl::IValue_texture::Bsdf_data_kind get_df_data_kind() const { return m_df_data_kind; }
 
+        const MI::SERIAL::Serializable* serialize(
+            MI::SERIAL::Serializer* serializer) const override;
+
+        MI::SERIAL::Serializable* deserialize(
+            MI::SERIAL::Deserializer* deserializer) override;
+
     private:
-        /// The db name of the texture.
-        std::string  m_db_name;
-
-        /// The mdl url of the texture.
-        std::string  m_mdl_url;
-
-        /// The owner module name of the texture.
-        std::string m_owner_module;
-
         /// Texture gamma.
         float m_gamma;
 
         /// The shape of the texture.
-        Texture_shape   m_texture_shape;
+        mi::neuraylib::ITarget_code::Texture_shape m_texture_shape;
 
         /// The kind of the texture.
         mi::mdl::IValue_texture::Bsdf_data_kind m_df_data_kind;
@@ -816,14 +986,14 @@ private:
     mi::Size m_body_texture_count;
 
     /// The light profile resource table.
-    std::vector<std::string> m_light_profile_table;
+    std::vector<Resource_info> m_light_profile_table;
 
     /// The number of light profiles coming from the body of expressions
     /// (not only from material arguments). -1 if invalid.
     mi::Size m_body_light_profile_count;
 
     /// The bsdf measurement resource table.
-    std::vector<std::string> m_bsdf_measurement_table;
+    std::vector<Resource_info> m_bsdf_measurement_table;
 
     /// The number of BSDF measurements coming from the body of expressions
     /// (not only from material arguments). -1 if invalid.
@@ -833,17 +1003,28 @@ private:
     std::vector<std::string> m_string_constant_table;
 
     /// Helper class for handling segments.
-    class Segment {
+    class Segment : public MI::SERIAL::Serializable {
     public:
         /// Constructor.
         ///
         /// \param name  the name of the segment
-        /// \param data  points to the start of the segment blob
+        /// \param data  points to the start of the segment blob, will be copied
         /// \param size  the size of the segment blob
-        Segment( const char* name, const unsigned char* data, mi::Size size)
-        : m_name( name)
-        , m_data( data)
-        , m_size( size)
+        Segment(const char* name, const unsigned char* data, mi::Size size)
+            : m_name(name)
+            , m_data()
+        {
+            if (data && size > 0)
+            {
+                m_data.resize(size);
+                memcpy(m_data.data(), data, size);
+            }
+        }
+
+        /// Default Constructor used for deserialization.
+        Segment()
+            : m_name("")
+            , m_data()
         {
         }
 
@@ -851,22 +1032,32 @@ private:
         const char* get_name() const { return m_name.c_str(); }
 
         /// Get the data.
-        const unsigned char* get_data() const { return m_data; }
+        const unsigned char* get_data() const { return m_data.data(); }
 
         /// Get the size.
-        mi::Size get_size() const { return m_size; }
+        mi::Size get_size() const { return m_data.size(); }
+
+        /// Required for serialization.
+        MI::SERIAL::Class_id get_class_id() const final
+        {
+            return MI::SERIAL::class_id_unknown;
+        }
+
+        /// Serialize the fields of this structure.
+        const MI::SERIAL::Serializable* serialize(
+            MI::SERIAL::Serializer* serializer) const final;
+
+        /// Deserialize the fields of this structure.
+        MI::SERIAL::Serializable* deserialize(
+            MI::SERIAL::Deserializer* deserializer) final;
 
     private:
         std::string m_name;
-        const unsigned char* m_data;
-        mi::Size m_size;
+        std::vector<unsigned char> m_data;
     };
 
     /// The list of all segments.
     std::vector<Segment> m_data_segments;
-
-    /// The list of all segment data blobs.
-    std::vector<const unsigned char*> m_data;
 
     /// The layouts of the captured arguments blocks.
     std::vector<mi::base::Handle<MI::BACKENDS::Target_value_layout const> > m_cap_arg_layouts;

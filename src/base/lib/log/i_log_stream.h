@@ -50,118 +50,123 @@ public:
     typedef MI::SYSTEM::Module_id       Module_id;
     typedef MI::LOG::ILogger::Category  Category_id;
 
-protected:
-    Base(Module_id mid, Category_id cid) : m_mid(mid), m_cid(cid) { }
+    Base(Module_id mid, Category_id cid, const mi::base::Message_details& det={})
+    : m_mid(mid)
+    , m_cid(cid)
+    , m_details(det)
+    {}
 
-    const Module_id   m_mid;
-    const Category_id m_cid;
+protected:
+    const Module_id             m_mid;
+    const Category_id           m_cid;
+    mi::base::Message_details   m_details;
 };
 
 
 struct Fatal : public Base
 {
-    Fatal(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Fatal()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->fatal(m_mid, m_cid, 0, "%s", s.c_str());
+            mod_log->fatal(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Error : public Base
 {
-    Error(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Error()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->error(m_mid, m_cid, 0, "%s", s.c_str());
+            mod_log->error(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Warning : public Base
 {
-    Warning(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Warning()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->warning(m_mid, m_cid, 0, "%s", s.c_str());
+            mod_log->warning(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Stat : public Base
 {
-    Stat(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Stat()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->stat(m_mid, m_cid, "%s", s.c_str());
+            mod_log->stat(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Vstat : public Base
 {
-    Vstat(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Vstat()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->vstat(m_mid, m_cid, "%s", s.c_str());
+            mod_log->vstat(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Progress : public Base
 {
-    Progress(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Progress()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->progress(m_mid, m_cid, 0, "%s", s.c_str());
+            mod_log->progress(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Info : public Base
 {
-    Info(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Info()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->info(m_mid, m_cid, "%s", s.c_str());
+            mod_log->info(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Debug : public Base
 {
-    Debug(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Debug()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->debug(m_mid, m_cid, "%s", s.c_str());
+            mod_log->debug(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 
 
 struct Vdebug : public Base
 {
-    Vdebug(Module_id mid, Category_id cid) : Base(mid, cid) { }
+    using Base::Base;
     ~Vdebug()
     {
         const std::string& s = str();
         if (!s.empty())
-            mod_log->vdebug(m_mid, m_cid, "%s", s.c_str());
+            mod_log->vdebug(m_mid, m_cid, m_details, "%s", s.c_str());
     }
 };
 

@@ -815,7 +815,11 @@ void File_resolver::split_module_file_system_path(
     size_t strip_dotdot = 0;
     while (module_nesting_level-- > 0) {
         size_t last_sep = current_search_path.find_last_of(sep);
-        MDL_ASSERT(last_sep != string::npos);
+        if (last_sep == string::npos) {
+            current_module_path = "";
+            csp_is_container = false;
+            return;
+        }
         if (last_sep < container_pos) {
             // do NOT remove the archive name, thread its ':' like '/'
             last_sep = container_pos - 1;
@@ -948,6 +952,11 @@ string File_resolver::normalize_file_path(
     bool         cwd_is_archive,
     string const &current_module_path)
 {
+    if (file_path.rfind(".mdle:") != std::string::npos) {
+        // Assume, this MDL URL is prefixed by an MDLe name, forming an absolute URL
+        return file_path;
+    }
+
     // strict relative file paths
     if (file_path[0] == '.' &&
         (file_path[1] == '/' || (file_path[1] == '.' && file_path[2] == '/')))
@@ -962,7 +971,7 @@ string File_resolver::normalize_file_path(
         }
 
         // reject invalid strict relative file paths
-        if( !check_no_dots_strict_relative(file_path.c_str(), nesting_level))
+        if (!check_no_dots_strict_relative(file_path.c_str(), nesting_level))
             return string(m_alloc);
 
         // reject if file does not exist w.r.t. current working directory
@@ -984,8 +993,8 @@ string File_resolver::normalize_file_path(
     if (!check_no_dots(file_path.c_str()))
         return string(m_alloc);
 
-    // absolute file paths
-    if (is_path_absolute(file_path.c_str())) {
+    // absolute file paths (note: this is an URL, not a file on the OS file system)
+    if (!file_path.empty() && file_path[0] == '/') {
         // canonical path is the same as the file path
         return file_path;
     }
@@ -1635,7 +1644,7 @@ string File_resolver::resolve_filename(
         owner_is_string_module ? "" : module_file_system_path, m_alloc);
 
     // check if this is an mdle or a resource inside one
-    bool is_mdle = false;
+    bool is_mdle_module = false;
     if (is_resource && module_name != NULL) {
         size_t l = strlen(module_name);
         if (l > 5 &&
@@ -1645,7 +1654,7 @@ string File_resolver::resolve_filename(
             module_name[l - 2] == 'l' &&
             module_name[l - 1] == 'e') {
 
-           is_mdle = true;
+           is_mdle_module = true;
         }
     } else {
         size_t l = url.size();
@@ -1656,7 +1665,7 @@ string File_resolver::resolve_filename(
             url[l - 2] == 'l' &&
             url[l - 1] == 'e') {
 
-            is_mdle = true;
+            is_mdle_module = true;
         }
     }
 
@@ -1808,7 +1817,7 @@ string File_resolver::resolve_filename(
 
     string resolved_file_system_location(m_alloc);
     // Step 2.1 check for MDLe existence
-    if (is_mdle) {
+    if (is_mdle_module) {
         string file(m_alloc);
 
         if (is_resource) {
@@ -1816,7 +1825,7 @@ string File_resolver::resolve_filename(
             file = simplify_path(file, os_separator());
             if (!is_url_absolute(file.c_str())) {
 
-                // skip first slash 
+                // skip first slash
                 // TODO fix earlier
                 if (file[0] == os_separator())
                     file = file.substr(1);
@@ -1993,11 +2002,13 @@ IMDL_import_result *File_resolver::resolve_import(
         owner_filename = NULL;
 
     if (m_external_resolver.is_valid_interface()) {
-        return m_external_resolver->resolve_module(
-                import_file.c_str(),
+        IMDL_import_result *result = m_external_resolver->resolve_module(
+                import_name,
                 owner_filename,
                 owner_name,
                 &pos);
+        m_msgs.copy_messages(m_external_resolver->access_messages());
+        return result;
     }
 
     string os_file_name(m_alloc);
@@ -2053,6 +2064,16 @@ IMDL_resource_set *File_resolver::resolve_resource(
     if (owner_filename != NULL && owner_filename[0] == '\0')
         owner_filename = NULL;
 
+    if (m_external_resolver.is_valid_interface()) {
+        IMDL_resource_set *result = m_external_resolver->resolve_resource_file_name(
+            import_file,
+            owner_filename,
+            owner_name,
+            &pos);
+        m_msgs.copy_messages(m_external_resolver->access_messages());
+        return result;
+    }
+
     // Make owner file system path absolute
     string owner_filename_str(m_alloc);
     if (owner_filename == NULL) {
@@ -2060,14 +2081,6 @@ IMDL_resource_set *File_resolver::resolve_resource(
     } else {
         MDL_ASSERT(is_path_absolute(owner_filename));
         owner_filename_str = owner_filename;
-    }
-
-    if (m_external_resolver.is_valid_interface()) {
-        return m_external_resolver->resolve_resource_file_name(
-            import_file,
-            owner_filename,
-            owner_name,
-            &pos);
     }
 
     UDIM_mode udim_mode = NO_UDIM;
@@ -2774,8 +2787,10 @@ char const *MDL_import_result::get_file_name() const
 }
 
 // Return an input stream to the given entity if found, NULL otherwise.
-IInput_stream *MDL_import_result::open(Thread_context &ctx) const
+IInput_stream *MDL_import_result::open(IThread_context *context) const
 {
+    Thread_context *ctx = impl_cast<Thread_context>(context);
+
     if (m_os_file_name.empty())
         return NULL;
 
@@ -2804,27 +2819,27 @@ IInput_stream *MDL_import_result::open(Thread_context &ctx) const
         // load a pre-released version (0.2) will probably get an error at some point in time
         case EC_PRE_RELEASE_VERSION:
         {
-            string msg(ctx.access_messages_impl().format_msg(
+            string msg(ctx->access_messages_impl().format_msg(
                 MDLE_PRE_RELEASE_VERSION, 'E', Error_params(alloc).add(m_os_file_name)));
-            ctx.access_messages_impl().add_warning_message(
+            ctx->access_messages_impl().add_warning_message(
                 MDLE_PRE_RELEASE_VERSION, 'E', 0, &zero, msg.c_str());
             break;
         }
 
         case EC_CRC_ERROR:
         {
-            string msg(ctx.access_messages_impl().format_msg(
+            string msg(ctx->access_messages_impl().format_msg(
                 MDLE_CRC_ERROR, 'E', Error_params(alloc).add(m_os_file_name)));
-            ctx.access_messages_impl().add_error_message(
+            ctx->access_messages_impl().add_error_message(
                 MDLE_CRC_ERROR, 'E', 0, &zero, msg.c_str());
             break;
         }
 
         default:
         {
-            string msg(ctx.access_messages_impl().format_msg(
+            string msg(ctx->access_messages_impl().format_msg(
                 MDLE_IO_ERROR, 'E', Error_params(alloc).add(m_os_file_name)));
-            ctx.access_messages_impl().add_error_message(
+            ctx->access_messages_impl().add_error_message(
                 MDLE_IO_ERROR, 'E', 0, &zero, msg.c_str());
             break;
         }
@@ -2903,36 +2918,6 @@ IMDL_resource_set *Entity_resolver::resolve_resource_file_name(
         file_path,
         owner_name,
         owner_file_path);
-}
-
-// Opens a resource.
-IMDL_resource_reader *Entity_resolver::open_resource(
-    char const     *file_path,
-    char const     *owner_file_path,
-    char const     *owner_name,
-    Position const *pos)
-{
-    Position_impl zero(0, 0, 0, 0);
-
-    if (pos == NULL)
-        pos = &zero;
-
-    m_msg_list.clear();
-
-    mi::base::Handle<IMDL_resource_set> res(m_resolver.resolve_resource(
-        *pos,
-        file_path,
-        owner_name,
-        owner_file_path));
-
-    if (!res.is_valid_interface())
-        return NULL;
-
-    MDL_ASSERT(
-        res->get_udim_mode() == NO_UDIM &&
-        "open_resource() cannot be used to open a UDIM mask");
-
-    return res->open_reader(0);
 }
 
 // Resolve a module name.

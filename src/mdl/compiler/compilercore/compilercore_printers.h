@@ -115,7 +115,7 @@ public:
         entries[Sc::C_COMMENT] =    Color_entry(Color::GREEN,   false, Color::DEFAULT, false);
     }
 
-    Color_entry &operator[](ISyntax_coloring::Syntax_elements index)
+    Color_entry &operator[](ISyntax_coloring::Syntax_elements index) //-V302
     {
         return entries[index];
     }

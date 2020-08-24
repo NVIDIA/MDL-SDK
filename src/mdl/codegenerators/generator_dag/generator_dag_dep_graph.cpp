@@ -458,16 +458,18 @@ private:
     }
 
     /// Post visit a call.
-    void post_visit(IExpression_call *call) MDL_FINAL
+    IExpression *post_visit(IExpression_call *call) MDL_FINAL
     {
         IExpression_reference const *ref = as<IExpression_reference>(call->get_reference());
-        if (ref == NULL)
-            return;
+        if (ref == NULL) {
+            return call;
+        }
         if (ref->is_array_constructor()) {
             // add a reference to the DAG array constructor here
             IType_factory   *fact = m_module->get_type_factory();
             Dependence_node *node = m_dg.get_node(
                 get_array_constructor_signature(),
+                get_array_constructor_signature_without_suffix(),
                 /*dag_alias_name=*/NULL,
                 /*dag_preset_name=*/NULL,
                 IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
@@ -477,27 +479,24 @@ private:
 
             m_curr->add_edge(m_arena, node, m_inside_parameter);
 
-            return;
+            return call;
         }
 
         IDefinition const *callee = ref->get_definition();
 
         IDefinition::Semantics sema = callee->get_semantics();
-        if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
-            // no copy constructors in the DAG representation
-            return;
-        }
         if (sema == IDefinition::DS_INVALID_REF_CONSTRUCTOR) {
             // invalid ref is always folded in the DAG representation
-            return;
+            return call;
         }
 
         Dependence_node *node = NULL;
 
         if (m_restricted) {
             Def_node_map::const_iterator it = m_known_callees.find(callee);
-            if (it == m_known_callees.end())
-                return;
+            if (it == m_known_callees.end()) {
+                return call;
+            }
 
             node = it->second;
         } else {
@@ -516,24 +515,26 @@ private:
         }
 
         m_curr->add_edge(m_arena, node, m_inside_parameter);
+        return call;
     }
 
     /// Post-visit a binary expression.
-    void post_visit(IExpression_binary *expr) MDL_FINAL
+    IExpression *post_visit(IExpression_binary *expr) MDL_FINAL
     {
         if (m_restricted) {
             // all operators are already created
-            return;
+            return expr;
         }
 
         IExpression_binary::Operator op = expr->get_operator();
 
         if (op == IExpression_binary::OK_ASSIGN || op == IExpression_binary::OK_SEQUENCE) {
             // these operators are NEVER used inside DAG, ignore them
-            return;
+            return expr;
         }
 
         string name(m_dag_builder.get_binary_name(expr));
+        string simple_name(m_dag_builder.get_binary_name(expr, false));
         unsigned flags = is_local_operator(name) ? 0 : Dependence_node::FL_IS_BUILTIN;
 
         if (flags == 0 && m_inside_preset) {
@@ -554,6 +555,7 @@ private:
             };
             node = m_dg.get_node(
                 name.c_str(),
+                simple_name.c_str(),
                 /*dag_alias_name=*/NULL,
                 /*dag_preset_name=*/NULL,
                 IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
@@ -570,6 +572,7 @@ private:
             };
             node = m_dg.get_node(
                 name.c_str(),
+                simple_name.c_str(),
                 /*dag_alias_name=*/NULL,
                 /*dag_preset_name=*/NULL,
                 operator_to_semantic(op),
@@ -589,6 +592,7 @@ private:
 
             node = m_dg.get_node(
                 name.c_str(),
+                simple_name.c_str(),
                 /*dag_alias_name=*/NULL,
                 /*dag_preset_name=*/NULL,
                 operator_to_semantic(op),
@@ -598,14 +602,15 @@ private:
         }
 
         m_curr->add_edge(m_arena, node, m_inside_parameter);
+        return expr;
     }
 
     /// Post-visit an unary expression.
-    void post_visit(IExpression_unary *expr) MDL_FINAL
+    IExpression *post_visit(IExpression_unary *expr) MDL_FINAL
     {
         if (m_restricted) {
             // all operators are already created
-            return;
+            return expr;
         }
 
         IExpression_unary::Operator op = expr->get_operator();
@@ -622,13 +627,14 @@ private:
         case IExpression_unary::OK_POST_INCREMENT:
         case IExpression_unary::OK_POST_DECREMENT:
             // these operators are not supported in the DAG representation
-            return;
+            return expr;
 
         case IExpression_unary::OK_CAST:
             break;
         }
 
         string name(m_dag_builder.get_unary_name(expr));
+        string simple_name(m_dag_builder.get_unary_name(expr, false));
         unsigned flags = is_local_operator(name) ? 0 : Dependence_node::FL_IS_BUILTIN;
 
         IExpression const *arg = expr->get_argument();
@@ -639,6 +645,7 @@ private:
 
         Dependence_node *node = m_dg.get_node(
             name.c_str(),
+            simple_name.c_str(),
             /*dag_alias_name=*/NULL,
             /*dag_preset_name=*/NULL,
             operator_to_semantic(op),
@@ -647,14 +654,15 @@ private:
             flags);
 
         m_curr->add_edge(m_arena, node, m_inside_parameter);
+        return expr;
     }
 
     /// Post-visit a conditional expression.
-    void post_visit(IExpression_conditional *expr) MDL_FINAL
+    IExpression *post_visit(IExpression_conditional *expr) MDL_FINAL
     {
         if (m_restricted) {
             // all operators are already created
-            return;
+            return expr;
         }
 
         IExpression const *cond = expr->get_condition();
@@ -674,6 +682,7 @@ private:
 
         Dependence_node *node = m_dg.get_node(
             get_ternary_operator_signature(),
+            get_ternary_operator_signature_without_suffix(),
             /*dag_alias_name=*/NULL,
             /*dag_preset_name=*/NULL,
             operator_to_semantic(IExpression::OK_TERNARY),
@@ -682,6 +691,7 @@ private:
             Dependence_node::FL_IS_BUILTIN);
 
         m_curr->add_edge(m_arena, node, m_inside_parameter);
+        return expr;
     }
 
     /// Check if the name of a given operator refers to a "local" one.
@@ -732,17 +742,17 @@ private:
     }
 
     /// Handle array sizes.
-    void post_visit(IExpression_reference *ref_expr) MDL_FINAL
+    IExpression *post_visit(IExpression_reference *ref_expr) MDL_FINAL
     {
         IDefinition const *def = ref_expr->get_definition();
         if (def == NULL) {
             // array constructor
-            return;
+            return ref_expr;
         }
 
         if (def->get_kind() != IDefinition::DK_ARRAY_SIZE) {
             // not an array size symbol
-            return;
+            return ref_expr;
         }
 
         // The only source of array sizes here should be parameters (and temporaries?).
@@ -750,6 +760,7 @@ private:
         MDL_ASSERT(
             find_parameter_for_size(def->get_symbol()) != NULL &&
             "could not find parameter for array size");
+        return ref_expr;
     }
 
     // Find a parameter for a given array size.
@@ -1036,6 +1047,7 @@ Dependence_node::Dependence_node(
     size_t            id,
     IDefinition const *def,
     char const        *dag_name,
+    char const        *dag_simple_name,
     char const        *dag_alias_name,
     char const        *dag_preset_name,
     unsigned          flags,
@@ -1047,6 +1059,7 @@ Dependence_node::Dependence_node(
 , m_n_params(0)
 , m_flags(flags)
 , m_dag_name(dag_name)
+, m_dag_simple_name(dag_simple_name)
 , m_dag_alias_name(dag_alias_name)
 , m_dag_preset_name(dag_preset_name)
 , m_next(next)
@@ -1091,6 +1104,7 @@ Dependence_node::Dependence_node(
     IType const                *ret_type,
     Array_ref<Parameter> const &c_params,
     char const                 *dag_name,
+    char const                 *dag_simple_name,
     char const                 *dag_alias_name,
     char const                 *dag_preset_name,
     unsigned                   flags,
@@ -1102,6 +1116,7 @@ Dependence_node::Dependence_node(
 , m_n_params(0)
 , m_flags(flags)
 , m_dag_name(dag_name)
+, m_dag_simple_name(dag_simple_name)
 , m_dag_alias_name(dag_alias_name)
 , m_dag_preset_name(dag_preset_name)
 , m_next(next)
@@ -1347,9 +1362,10 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
     }
 
     // create a new one
-    char const *dag_name        = NULL;
-    char const *dag_alias_name  = NULL;
-    char const *dag_preset_name = NULL;
+    char const *dag_name                     = NULL;
+    char const *dag_simple_name              = NULL;
+    char const *dag_alias_name               = NULL;
+    char const *dag_preset_name              = NULL;
 
     unsigned flags = 0;
 
@@ -1364,13 +1380,17 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
             // an exported import
             flags |= Dependence_node::FL_IS_EXPORTED;
 
-            dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, module).c_str());
+            dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, module, true).c_str());
+            dag_simple_name
+                = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
 
             dag_alias_name =
                 Arena_strdup(m_arena, m_dag_builder.def_to_name(def, owner.get()).c_str());
         } else {
             // only imported
-            dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, owner.get()).c_str());
+            dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, owner.get(), true).c_str());
+            dag_simple_name
+                = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
         }
 
         // check for preset
@@ -1393,10 +1413,14 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
             // can only be a built-in constructor: put it to builtins, for the DAG
             // backend this comes from the "builtin" module
             dag_name = Arena_strdup(
-                m_arena, m_dag_builder.def_to_name(def, (char const *)NULL).c_str());
+                m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, true).c_str());
+            dag_simple_name = Arena_strdup(
+                m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
             flags |= m_is_builtins ? 0 : Dependence_node::FL_IS_BUILTIN;
         } else {
-            dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, module).c_str());
+            dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, module, true).c_str());
+            dag_simple_name
+                = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
         }
 
         // check for preset
@@ -1413,6 +1437,7 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
         m_next_id++,
         def,
         dag_name,
+        dag_simple_name,
         dag_alias_name,
         dag_preset_name,
         flags,
@@ -1427,6 +1452,7 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
 // Get the DAG dependency node for the given entity.
 Dependence_node *DAG_dependence_graph::get_node(
     char const                                  *dag_name,
+    char const                                  *dag_simple_name,
     char const                                  *dag_alias_name,
     char const                                  *dag_preset_name,
     IDefinition::Semantics                      sema,
@@ -1444,10 +1470,13 @@ Dependence_node *DAG_dependence_graph::get_node(
     }
 
     // store the name
-    dag_name = Arena_strdup(m_arena, dag_name);
+    dag_name                     = Arena_strdup(m_arena, dag_name);
+    dag_simple_name              = Arena_strdup(m_arena, dag_simple_name);
 
     if (dag_alias_name != NULL)
         dag_alias_name = Arena_strdup(m_arena, dag_alias_name);
+    if (dag_preset_name != NULL)
+        dag_preset_name = Arena_strdup(m_arena, dag_preset_name);
 
     Dependence_node *n = m_builder.create<Dependence_node>(
         &m_arena,
@@ -1456,6 +1485,7 @@ Dependence_node *DAG_dependence_graph::get_node(
         ret_type,
         params,
         dag_name,
+        dag_simple_name,
         dag_alias_name,
         dag_preset_name,
         flags,
@@ -1586,14 +1616,10 @@ void DAG_dependence_graph::create_exported_nodes(
     switch (type->get_kind()) {
     case IType::TK_FUNCTION:
         {
-            IDefinition::Semantics sema = def->get_semantics();
-            if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
-                // copy constructors are of no semantic value in MDL, do not export them
-                return;
-            }
-
             Dependence_node *n = get_node(def);
             m_exported_nodes.push_back(n);
+
+            IDefinition::Semantics sema = def->get_semantics();
 
             if (sema == IDefinition::DS_ELEM_CONSTRUCTOR) {
                 // create field access functions here
@@ -1609,18 +1635,22 @@ void DAG_dependence_graph::create_exported_nodes(
                         ISymbol const *parameter_symbol;
                         f_type->get_parameter(l, parameter_type, parameter_symbol);
 
-                        string field_access(name);
-                        field_access += '.';
-                        field_access += parameter_symbol->get_name();
-                        field_access += '(';
-                        field_access += m_dag_builder.type_to_name(ret_type);
-                        field_access += ')';
+                        // name and simple name are identical for builtin types
+                        string dag_simple_name(name);
+                        dag_simple_name += '.';
+                        dag_simple_name += parameter_symbol->get_name();
+
+                        string dag_name(dag_simple_name);
+                        dag_name += '(';
+                        dag_name += m_dag_builder.type_to_name(ret_type);
+                        dag_name += ')';
 
                         // we don't have the symbol here
                         Dependence_node::Parameter param(ret_type, "s");
 
                         n = get_node(
-                            field_access.c_str(),
+                            dag_name.c_str(),
+                            dag_simple_name.c_str(),
                             /*dag_alias_name=*/NULL,
                             /*dag_preset_name=*/NULL,
                             IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
@@ -1641,33 +1671,31 @@ void DAG_dependence_graph::create_exported_nodes(
             // add all constructors of the struct type
             for (int k = 0; k < ctor_count; ++k) {
                 IDefinition const *ctor_def = module->get_type_constructor(s_type, k);
-                IDefinition::Semantics sema = ctor_def->get_semantics();
 
-                if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
-                    // copy constructors are of no semantic value in MDL, do not export them
-                    continue;
-                }
-                
                 Dependence_node *n = get_node(ctor_def);
                 m_exported_nodes.push_back(n);
 
+                IDefinition::Semantics sema = ctor_def->get_semantics();
                 if (sema == IDefinition::DS_ELEM_CONSTRUCTOR) {
                     // create field access nodes here
-                    string name  = m_dag_builder.type_to_name(s_type);
+                    string name        = m_dag_builder.type_to_name(s_type);
+                    string simple_name(m_arena.get_allocator());
+
+                    size_t pos = name.find_last_of(':');
+                    if (pos != string::npos) {
+                        simple_name = name.substr(pos + 1);
+                    } else {
+                        simple_name = name;
+                    }
+
                     string alias(m_arena.get_allocator());
 
                     if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
                         // remap the type name here, it is imported, we need an alias
-                        alias  = module->get_name();
-                        alias += "::";
-
-                        size_t pos = name.find_last_of(':');
-                        if (pos != string::npos) {
-                            alias += name.substr(pos + 1);
-                        } else {
-                            alias += name;
-                        }
-                        name.swap(alias);
+                        alias = name;
+                        name = module->get_name();
+                        name += "::";
+                        name += simple_name;
                     }
 
                     for (int l = 0, n_fields = s_type->get_field_count(); l < n_fields; ++l) {
@@ -1679,22 +1707,25 @@ void DAG_dependence_graph::create_exported_nodes(
                         string field_access(m_arena.get_allocator());
                         field_access += '.';
                         field_access += field_symbol->get_name();
-                        field_access += '(';
-                        field_access += m_dag_builder.type_to_name(s_type);
-                        field_access += ')';
 
-                        if (!alias.empty()) {
-                            alias = alias + field_access;
-                        }
+                        string signature_suffix(m_arena.get_allocator());
+                        signature_suffix += '(';
+                        signature_suffix += m_dag_builder.type_to_name(s_type);
+                        signature_suffix += ')';
 
-                        field_access = name + field_access;
+                        string dag_name        = name + field_access + signature_suffix;
+                        string dag_simple_name = simple_name + field_access;
+                        string dag_alias_name(m_arena.get_allocator());
+                        if (!alias.empty())
+                            dag_alias_name = alias + field_access + signature_suffix;
 
                         // we don't have the symbol here
                         Dependence_node::Parameter param(s_type, "s");
 
                         n = get_node(
-                            field_access.c_str(),
-                            alias.empty() ? NULL : alias.c_str(),
+                            dag_name.c_str(),
+                            dag_simple_name.c_str(),
+                            dag_alias_name.empty() ? NULL : dag_alias_name.c_str(),
                             /*dag_preset_name=*/NULL,
                             IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS,
                             field_type,
@@ -1713,12 +1744,6 @@ void DAG_dependence_graph::create_exported_nodes(
             int ctor_count = module->get_type_constructor_count(enum_type);
             for (int k = 0; k < ctor_count; ++k) {
                 IDefinition const *ctor_def = module->get_type_constructor(enum_type, k);
-                IDefinition::Semantics sema = ctor_def->get_semantics();
-
-                if (sema == IDefinition::DS_COPY_CONSTRUCTOR) {
-                    // copy constructors are of no semantic value in MDL, do not export them
-                    continue;
-                }
 
                 Dependence_node *n = get_node(ctor_def);
                 m_exported_nodes.push_back(n);
@@ -1754,6 +1779,7 @@ void DAG_dependence_graph::create_dag_index_function(
 
     Dependence_node *n = get_node(
         "operator[](<0>[],int)",
+        "operator[]",
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         operator_to_semantic(IExpression::OK_ARRAY_INDEX),
@@ -1773,6 +1799,7 @@ Dependence_node *DAG_dependence_graph::create_dag_array_len_operator(
 
     Dependence_node *n = get_node(
         "operator_len(<0>[])",
+        "operator_len",
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
@@ -1800,6 +1827,7 @@ void DAG_dependence_graph::create_dag_ternary_operator(
 
     Dependence_node *n = get_node(
         get_ternary_operator_signature(),
+        get_ternary_operator_signature_without_suffix(),
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         operator_to_semantic(IExpression::OK_TERNARY),
@@ -1818,6 +1846,7 @@ void DAG_dependence_graph::create_dag_array_constructor(
     // Create the magic array constructor. There is only one now.
     Dependence_node *n = get_node(
         get_array_constructor_signature(),
+        get_array_constructor_signature_without_suffix(),
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
@@ -1829,19 +1858,23 @@ void DAG_dependence_graph::create_dag_array_constructor(
 }
 
 // Create the one-and-only cast operator.
-void DAG_dependence_graph::create_dag_cast_operator(IType const *int_type)
+void DAG_dependence_graph::create_dag_cast_operator(IType const *any_type)
 {
     MDL_ASSERT(m_is_builtins);
+
+    Dependence_node::Parameter params[] = {
+        Dependence_node::Parameter(any_type, "cast")
+    };
 
     // Create the magic cast operator. There is only one.
     Dependence_node *n = get_node(
         "operator_cast(<0>)",
+        "operator_cast",
         /*dag_alias_name=*/NULL,
         /*dag_preset_name=*/NULL,
         operator_to_semantic(IExpression::OK_CAST),
-        // Arg, no way to express "Any type" here, but we need one return type.
-        int_type,
-        Array_ref<Dependence_node::Parameter>(),
+        any_type,
+        params,
         Dependence_node::FL_IS_EXPORTED);
     m_exported_nodes.push_back(n);
 }

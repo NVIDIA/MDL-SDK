@@ -42,7 +42,7 @@
 #include "../cache/mdl_cache.h"
 #include "cache/mdl_cache_serializer_xml_impl.h"
 
-namespace 
+namespace
 {
     std::string safe_str(const char* string)
     {
@@ -55,16 +55,16 @@ View_model::View_model(mi::neuraylib::INeuray* neuray,
                        Mdl_browser_callbacks* callbacks,
                        bool cache_rebuild,
                        const char* application_folder)
-    : m_neuray(mi::base::make_handle_dup(neuray))
-    , m_transaction(mi::base::make_handle_dup(transaction))
+    : m_neuray(neuray, mi::base::DUP_INTERFACE)
+    , m_transaction(transaction, mi::base::DUP_INTERFACE)
     , m_selection_model(nullptr)
     , m_selection_proxy_model(nullptr)
-    , m_settings(Platform_helper::get_executable_directory() + "/settings.xml")
+    , m_settings(mi::examples::io::get_executable_folder() + "/settings.xml")
     , m_callbacks(callbacks)
 {
     // use the discovered tree of the cache to be consistent regards to changes since then
     m_cache = new Mdl_cache();
-    const std::string cache_path = Platform_helper::get_executable_directory() + "/mdl_cache.xml";
+    const std::string cache_path = mi::examples::io::get_executable_folder() + "/mdl_cache.xml";
     const Mdl_cache_serializer_xml_impl serializer;
 
     // discard cache if specified on the command line
@@ -79,12 +79,12 @@ View_model::View_model(mi::neuraylib::INeuray* neuray,
     // check if the local is still the same
     mi::base::Handle<mi::neuraylib::IMdl_i18n_configuration> i18n_configuration(
         neuray->get_api_component<mi::neuraylib::IMdl_i18n_configuration>());
-   
+
     std::string system_keyword = i18n_configuration->get_system_keyword();
     std::string current_locale = safe_str(i18n_configuration->get_locale());
     if (current_locale == system_keyword)
         current_locale = safe_str(i18n_configuration->get_system_locale());
-    
+
     const std::string cache_locale = safe_str(m_cache->get_locale());
 
     if (current_locale != cache_locale)
@@ -140,27 +140,27 @@ View_model::View_model(mi::neuraylib::INeuray* neuray,
     // we want to count the elements that are not filter on a per package/module base
     // therefore we reset the counter "before" filtering
     connect(m_selection_proxy_model, &VM_sel_proxy_model::filtering_about_to_start,
-            [this]() 
-            { 
-                m_browser_tree->reset_presentation_counters(); 
+            [this]()
+            {
+                m_browser_tree->reset_presentation_counters();
             });
 
     // increase the counter for each accepted element at the corresponding package/module
     connect(m_selection_proxy_model, &VM_sel_proxy_model::filtered_element,
-            [this](VM_sel_element* element, FFilter_level level) 
-            { 
-                if((static_cast<size_t>(level) 
+            [this](VM_sel_element* element, FFilter_level level)
+            {
+                if((static_cast<size_t>(level)
                    | static_cast<size_t>(FFilter_level::FL_SELECTION_IN_NAVIGATION))
                     == static_cast<size_t>(FFilter_level::FL_All))
                     m_browser_tree->increment_presentation_counter(
-                        element->get_cache_element()->get_module()); 
+                        element->get_cache_element()->get_module());
             });
 
     // and update the recursive count after the last element has been filtered
     connect(m_selection_proxy_model, &VM_sel_proxy_model::filtering_finshed,
-            [this]() 
-            { 
-                m_browser_tree->gather_presentation_counters(); 
+            [this]()
+            {
+                m_browser_tree->gather_presentation_counters();
             });
 
     // every time the query changed, the filter changed and we need to update the view model
@@ -179,9 +179,8 @@ View_model::View_model(mi::neuraylib::INeuray* neuray,
             m_selection_proxy_model, SLOT(set_selected_module(VM_nav_package*)),
             Qt::ConnectionType::DirectConnection);
 
-    m_application_folder = QString(application_folder);
-    m_application_folder.replace('\\', '/');
-    m_application_folder.append('/');
+    std::string application_folder_std = mi::examples::io::normalize(application_folder) + "/";
+    m_application_folder = QString(application_folder_std.c_str());
 }
 
 View_model::~View_model()
@@ -217,7 +216,7 @@ Q_INVOKABLE void View_model::set_result_and_close(const QString& text)
 Q_INVOKABLE void View_model::accept()
 {
     if (m_callbacks && m_callbacks->on_accepted)
-        m_callbacks->on_accepted(m_result.toUtf8().data());
+        m_callbacks->on_accepted(m_result.toUtf8().constData());
 }
 
 Q_INVOKABLE void View_model::reject()

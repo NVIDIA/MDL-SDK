@@ -332,7 +332,7 @@ public:
         Transaction_impl* transaction,
         const char* type_name,
         mi::Uint32 argc = 0,
-        const mi::base::IInterface* argv[] = 0) const;
+        const mi::base::IInterface* argv[] = nullptr) const;
 
     /// Creates an instance of a type (not (yet) connected with DB).
     ///
@@ -356,7 +356,7 @@ public:
         Transaction_impl* transaction,
         const char* type_name,
         mi::Uint32 argc = 0,
-        const mi::base::IInterface* argv[] = 0) const
+        const mi::base::IInterface* argv[] = nullptr) const
     {
         mi::base::IInterface* ptr_iinterface = create_type_instance(
             transaction, type_name, argc, argv);
@@ -423,7 +423,7 @@ private:
         Transaction_impl* transaction,
         const char* class_name,
         mi::Uint32 argc = 0,
-        const mi::base::IInterface* argv[] = 0) const;
+        const mi::base::IInterface* argv[] = nullptr) const;
 
     /// Creates an instance of a class (not (yet) connected with DB).
     ///
@@ -448,7 +448,7 @@ private:
         Transaction_impl* transaction,
         const char* class_name,
         mi::Uint32 argc = 0,
-        const mi::base::IInterface* argv[] = 0) const
+        const mi::base::IInterface* argv[] = nullptr) const
     {
         mi::base::IInterface* ptr_iinterface
             = create_class_instance( transaction, class_name, argc, argv);

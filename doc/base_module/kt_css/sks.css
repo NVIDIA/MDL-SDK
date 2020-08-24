@@ -28,11 +28,11 @@ html { margin: 4%; background-color: black; }
 .footeritem { padding: 0 .75em; display: inline-block; }
 .rightjustify img { padding-left: 30px; }
 a { outline: 0; }
-a:link, a:visited { color: #10467f; font-weight:normal; text-decoration: none; }
-a:hover { text-decoration: underline; }
-a.internal:hover { text-decoration: none; }
-a.headerlink { color: black; }
-a[name] { text-decoration: none; }
+a:link, a:visited { color: #10467f; outline: 0; font-weight:normal; text-decoration: none; }
+a:hover { text-decoration: underline; outline: 0; }
+a.internal:hover { text-decoration: none; outline: 0; }
+a.headerlink { color: black; outline: 0; }
+a[name] { text-decoration: none; outline: 0; }
 .ui-tooltip { box-shadow: none; border-radius: 0px; border: 0; padding: 5px 10px; margin: 0px; background-color: #DCE1DC; }
 .ui-tooltip-content { font-family: 'Libre Baskerville', serif;; font-size: 90%; color: black; background-color: #DCE1DC; border: 0; }
 .chapter { text-align: right; width: 2em; display:inline-block; padding-right: 1em; padding-bottom: .125em; font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; font-weight: normal; font-size: 1.25em; }

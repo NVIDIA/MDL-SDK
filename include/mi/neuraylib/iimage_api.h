@@ -41,6 +41,7 @@ namespace neuraylib {
 
 class IBuffer;
 class ICanvas;
+class ICanvas_cuda;
 class IReader;
 class ITile;
 
@@ -123,6 +124,34 @@ public:
         const char* pixel_type,
         Uint32 width,
         Uint32 height) const = 0;
+
+#ifndef MI_SKIP_WITH_MDL_SDK_DOXYGEN
+    /// Creates a CUDA canvas with given pixel type, width, height, and layers.
+    ///
+    /// \see #create_canvas()
+    /// \see #mi::neuraylib::IGpu_description::get_cuda_device_id()
+    ///
+    /// \param cuda_device_id The CUDA ID of the device on which the canvas will reside.
+    ///                     Note that this is the CUDA device ID, not the 1-based GPU index
+    ///                     used in \if IRAY_API #mi::neuraylib::IRendering_configuration.
+    ///                     \else #mi::neuraylib::IDice_configuration. \endif
+    /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of
+    ///                     supported pixel types.
+    /// \param width        The desired width.
+    /// \param height       The desired height.
+    /// \param layers       The desired number of layers.
+    /// \param gamma        The desired gamma value. The special value 0.0 represents the default
+    ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
+    /// \return             The requested canvas, or \c NULL in case of invalid parameters or
+    ///                     CUDA errors.
+#endif // MI_SKIP_WITH_MDL_SDK_DOXYGEN
+    virtual ICanvas_cuda* create_canvas_cuda(
+        Sint32 cuda_device_id,
+        const char* pixel_type,
+        Uint32 width,
+        Uint32 height,
+        Uint32 layers = 1,
+        Float32 gamma = 0.0f) const = 0;
 
     //@}
     /// \name Conversion between canvases and raw memory buffers

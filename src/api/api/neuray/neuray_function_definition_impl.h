@@ -69,7 +69,16 @@ public:
 
     const char* get_mdl_name() const final;
 
+    const char* get_mdl_module_name() const final;
+
+    const char* get_mdl_simple_name() const final;
+
+    const char* get_mdl_parameter_type_name( Size index) const final;
+
     const char* get_prototype() const final;
+
+    void get_mdl_version(
+        mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const final;
 
     mi::neuraylib::IFunction_definition::Semantics get_semantic() const final;
 
@@ -107,9 +116,9 @@ public:
 
     mi::neuraylib::IFunction_call* create_function_call(
         const mi::neuraylib::IExpression_list* arguments,
-        mi::Sint32* errors = 0) const final;
+        mi::Sint32* errors = nullptr) const final;
 
-    const mi::neuraylib::IExpression_direct_call* get_body() const final;
+    const mi::neuraylib::IExpression* get_body() const final;
 
     mi::Size get_temporary_count() const final;
 

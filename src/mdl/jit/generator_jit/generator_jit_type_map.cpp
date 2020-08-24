@@ -109,15 +109,18 @@ Type_mapper::Type_mapper(
 // int/float arrays needed in glue code / state interface
 , m_type_arr_int_2(llvm::ArrayType::get(m_type_int, 2))
 , m_type_arr_int_3(llvm::ArrayType::get(m_type_int, 3))
+, m_type_arr_int_4(llvm::ArrayType::get(m_type_int, 4))
 
 , m_type_arr_float_2(llvm::ArrayType::get(m_type_float, 2))
 , m_type_arr_float_3(llvm::ArrayType::get(m_type_float, 3))
 , m_type_arr_float_4(llvm::ArrayType::get(m_type_float, 4))
 
+, m_type_deriv_float(NULL)
 , m_type_deriv_float2(NULL)
 , m_type_deriv_float3(NULL)
 , m_type_deriv_arr_float_2(NULL)
 , m_type_deriv_arr_float_3(NULL)
+, m_type_deriv_arr_float_4(NULL)
 
 // matrix types ...
 , m_type_float2x2(NULL)
@@ -292,11 +295,15 @@ Type_mapper::Type_mapper(
     m_type_color = m_type_float3;
 
     if (use_derivatives()) {
+        m_type_deriv_float = lookup_deriv_type(m_type_float);
+
         m_type_deriv_arr_float_2 = lookup_deriv_type(m_type_arr_float_2);
         m_type_deriv_float2 = lookup_deriv_type(m_type_float2);
 
         m_type_deriv_arr_float_3 = lookup_deriv_type(m_type_arr_float_3);
         m_type_deriv_float3 = lookup_deriv_type(m_type_float3);
+
+        m_type_deriv_arr_float_4 = lookup_deriv_type(m_type_arr_float_4);
     }
 
     bool vec_in_structs = !target_supports_pointers();
@@ -420,11 +427,18 @@ int Type_mapper::get_state_index(
             return 11;
         }
         return -1;
-    case STATE_CORE_ARG_BLOCK_OFFSET:
-        if (state_includes_arg_block_offset()) {
+    case STATE_CORE_METERS_PER_SCENE_UNIT:
+        if (state_includes_uniform_state()) {
             if (use_bitangents())
                 return 11;
             return 12;
+        }
+        return -1;
+    case STATE_CORE_ARG_BLOCK_OFFSET:
+        if (state_includes_arg_block_offset()) {
+            if (use_bitangents())
+                return 12;
+            return 13;
         }
         return -1;
     }
@@ -627,7 +641,8 @@ llvm::StructType *Type_mapper::lookup_deriv_type(
 llvm::StructType *Type_mapper::lookup_deriv_type(llvm::Type *type) const
 {
     Deriv_type_map::const_iterator it(m_deriv_type_cache.find(type));
-    if (it != m_deriv_type_cache.end()) return it->second;
+    if (it != m_deriv_type_cache.end())
+        return it->second;
 
     llvm::Type *member_types[3] = { type, type, type };
     llvm::StructType *res = llvm::StructType::get(m_context, member_types, /*isPacked=*/ false);
@@ -687,14 +702,16 @@ bool Type_mapper::is_floating_point_based_type(IType const *type) const
 // Get the base value type of a derivative type.
 mi::mdl::IType const *Type_mapper::get_deriv_base_type(mi::mdl::IType const *type) const
 {
-    if (!is_deriv_type(type)) return NULL;
+    if (!is_deriv_type(type))
+        return NULL;
     return cast<mi::mdl::IType_struct>(type)->get_compound_type(0);
 }
 
 // Get the base value LLVM type of a derivative LLVM type.
 llvm::Type *Type_mapper::get_deriv_base_type(llvm::Type *type) const
 {
-    if (!is_deriv_type(type)) return NULL;
+    if (!is_deriv_type(type))
+        return NULL;
     return type->getStructElementType(0);
 }
 
@@ -702,10 +719,19 @@ llvm::Type *Type_mapper::get_deriv_base_type(llvm::Type *type) const
 // non-derivative types.
 mi::mdl::IType const *Type_mapper::skip_deriv_type(mi::mdl::IType const *type) const
 {
-    if (!is_deriv_type(type)) return type;
+    if (!is_deriv_type(type))
+        return type;
     return cast<mi::mdl::IType_struct>(type)->get_compound_type(0);
 }
 
+// Skip to the base value LLVM type of a derivative LLVM type or just return the type itself
+// for non-derivative types.
+llvm::Type *Type_mapper::skip_deriv_type(llvm::Type *type) const
+{
+    if (!is_deriv_type(type))
+        return type;
+    return type->getStructElementType(0);
+}
 
 // Checks if a given type needs reference return calling convention.
 bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
@@ -1340,6 +1366,7 @@ llvm::StructType *Type_mapper::construct_state_core_type(
     members.push_back(float4x4_type);        // world-to-object transform matrix
     members.push_back(float4x4_type);        // object-to-world transform matrix
     members.push_back(int_type);             // state::object_id() result
+    members.push_back(float_type);           // state::meters_per_scene_unit() result
     if (state_includes_arg_block_offset()) {
         members.push_back(int_type);
     }
@@ -1370,6 +1397,7 @@ llvm::StructType *Type_mapper::construct_state_core_type(
             Float4_struct const *world_to_object;         ///< world-to-object transform matrix
             Float4_struct const *object_to_world;         ///< object-to-world transform matrix
             int                 object_id;                ///< state::object_id() result
+            float               meters_per_scene_unit;    ///< state::meters_per_scene_unit() result
         };
 
         // IRAY SDK state
@@ -1413,6 +1441,9 @@ llvm::StructType *Type_mapper::construct_state_core_type(
                 MDL_ASSERT(
                     sl->getElementOffset(get_state_index(STATE_CORE_OBJECT_ID))
                     == offsetof(IRAY_State, object_id));
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_METERS_PER_SCENE_UNIT))
+                    == offsetof(IRAY_State, meters_per_scene_unit));
             }
         } else {
             MDL_ASSERT(sl->getSizeInBytes() == sizeof(SDK_State));
@@ -1454,6 +1485,9 @@ llvm::StructType *Type_mapper::construct_state_core_type(
                 MDL_ASSERT(
                     sl->getElementOffset(get_state_index(STATE_CORE_OBJECT_ID))
                     == offsetof(SDK_State, object_id));
+                MDL_ASSERT(
+                    sl->getElementOffset(get_state_index(STATE_CORE_METERS_PER_SCENE_UNIT))
+                    == offsetof(SDK_State, meters_per_scene_unit));
             }
         }
     }
@@ -1540,10 +1574,11 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::Type *void_type                  = get_void_type();
     llvm::Type *bool_type                  = get_bool_type();
     llvm::Type *arr_float_2_ptr_type       = get_arr_float_2_ptr_type();
-    llvm::Type *arr_float_4_ptr_type       = get_arr_float_4_ptr_type();
     llvm::Type *arr_float_3_ptr_type       = get_arr_float_3_ptr_type();
+    llvm::Type *arr_float_4_ptr_type       = get_arr_float_4_ptr_type();
     llvm::Type *arr_int_2_ptr_type         = get_arr_int_2_ptr_type();
     llvm::Type *arr_int_3_ptr_type         = get_arr_int_3_ptr_type();
+    llvm::Type *arr_int_4_ptr_type         = get_arr_int_4_ptr_type();
     llvm::Type *float_type                 = get_float_type();
     llvm::Type *int_type                   = get_int_type();
 
@@ -1572,6 +1607,23 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::FunctionType *df_bsdf_measurement_sample_type     = NULL;
     llvm::FunctionType *df_bsdf_measurement_pdf_type        = NULL;
     llvm::FunctionType *df_bsdf_measurement_albedos_type    = NULL;
+
+    llvm::FunctionType *scene_data_isvalid_type       = NULL;
+    llvm::FunctionType *scene_data_lookup_float_type  = NULL;
+    llvm::FunctionType *scene_data_lookup_float2_type = NULL;
+    llvm::FunctionType *scene_data_lookup_float3_type = NULL;
+    llvm::FunctionType *scene_data_lookup_float4_type = NULL;
+    llvm::FunctionType *scene_data_lookup_int_type    = NULL;
+    llvm::FunctionType *scene_data_lookup_int2_type   = NULL;
+    llvm::FunctionType *scene_data_lookup_int3_type   = NULL;
+    llvm::FunctionType *scene_data_lookup_int4_type   = NULL;
+    llvm::FunctionType *scene_data_lookup_color_type  = NULL;
+
+    llvm::FunctionType *scene_data_lookup_deriv_float_type  = NULL;
+    llvm::FunctionType *scene_data_lookup_deriv_float2_type = NULL;
+    llvm::FunctionType *scene_data_lookup_deriv_float3_type = NULL;
+    llvm::FunctionType *scene_data_lookup_deriv_float4_type = NULL;
+    llvm::FunctionType *scene_data_lookup_deriv_color_type  = NULL;
 
     {
         // virtual void tex_lookup_<T>_2d(
@@ -1959,8 +2011,144 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
     }
 
+    {
+        llvm::Type *args[] = {
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type
+        };
+
+        scene_data_isvalid_type =
+            llvm::FunctionType::get(bool_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            float_type,
+            bool_type
+        };
+
+        scene_data_lookup_float_type =
+            llvm::FunctionType::get(float_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            arr_float_2_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            arr_float_2_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_float2_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            arr_float_3_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            arr_float_3_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_float3_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            arr_float_4_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            arr_float_4_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_float4_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            int_type,
+            bool_type
+        };
+
+        scene_data_lookup_int_type =
+            llvm::FunctionType::get(int_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            arr_int_2_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            arr_int_2_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_int2_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            arr_int_3_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            arr_int_3_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_int3_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            arr_int_4_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            arr_int_4_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_int4_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        llvm::Type *args[] = {
+            arr_float_3_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            int_type,
+            arr_float_3_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_color_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
     // currently we support only these
-    llvm::Type *vtable_members[] = {
+    llvm::SmallVector<llvm::Type *, 38> vtable_members;
+    vtable_members.append({
         get_ptr(tex_lookup_float4_2d_type),
         get_ptr(tex_lookup_float3_2d_type),
         get_ptr(tex_texel_float4_2d_type),
@@ -1984,6 +2172,96 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         get_ptr(df_bsdf_measurement_sample_type),
         get_ptr(df_bsdf_measurement_pdf_type),
         get_ptr(df_bsdf_measurement_albedos_type),
+        get_ptr(scene_data_isvalid_type),
+        get_ptr(scene_data_lookup_float_type),
+        get_ptr(scene_data_lookup_float2_type),
+        get_ptr(scene_data_lookup_float3_type),
+        get_ptr(scene_data_lookup_float4_type),
+        get_ptr(scene_data_lookup_int_type),
+        get_ptr(scene_data_lookup_int2_type),
+        get_ptr(scene_data_lookup_int3_type),
+        get_ptr(scene_data_lookup_int4_type),
+        get_ptr(scene_data_lookup_color_type),
+    });
+
+    if (use_derivatives()) {
+        {
+            llvm::Type *args[] = {
+                get_ptr(get_deriv_float_type()),
+                self_ptr_type,
+                m_type_state_core_ptr,
+                int_type,
+                get_ptr(get_deriv_float_type()),
+                bool_type
+            };
+
+            scene_data_lookup_deriv_float_type =
+                llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        }
+
+        {
+            llvm::Type *args[] = {
+                get_ptr(get_deriv_arr_float_2_type()),
+                self_ptr_type,
+                m_type_state_core_ptr,
+                int_type,
+                get_ptr(get_deriv_arr_float_2_type()),
+                bool_type
+            };
+
+            scene_data_lookup_deriv_float2_type =
+                llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        }
+
+        {
+            llvm::Type *args[] = {
+                get_ptr(get_deriv_arr_float_3_type()),
+                self_ptr_type,
+                m_type_state_core_ptr,
+                int_type,
+                get_ptr(get_deriv_arr_float_3_type()),
+                bool_type
+            };
+
+            scene_data_lookup_deriv_float3_type =
+                llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        }
+
+        {
+            llvm::Type *args[] = {
+                get_ptr(get_deriv_arr_float_4_type()),
+                self_ptr_type,
+                m_type_state_core_ptr,
+                int_type,
+                get_ptr(get_deriv_arr_float_4_type()),
+                bool_type
+            };
+
+            scene_data_lookup_deriv_float4_type =
+                llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        }
+
+        {
+            llvm::Type *args[] = {
+                get_ptr(get_deriv_arr_float_3_type()),
+                self_ptr_type,
+                m_type_state_core_ptr,
+                int_type,
+                get_ptr(get_deriv_arr_float_3_type()),
+                bool_type
+            };
+
+            scene_data_lookup_deriv_color_type =
+                llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+        }
+
+        vtable_members.append({
+            get_ptr(scene_data_lookup_deriv_float_type),
+            get_ptr(scene_data_lookup_deriv_float2_type),
+            get_ptr(scene_data_lookup_deriv_float3_type),
+            get_ptr(scene_data_lookup_deriv_float4_type),
+            get_ptr(scene_data_lookup_deriv_color_type),
+        });
     };
 
     llvm::StructType *vtable_type =

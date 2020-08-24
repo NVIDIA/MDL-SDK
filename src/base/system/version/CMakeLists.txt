@@ -31,6 +31,7 @@ set(PROJECT_NAME base-system-version)
 
 # collect sources
 set(PROJECT_HEADERS
+    "i_version.h"
     "version.h"
     )
 

@@ -52,7 +52,7 @@ create_from_base_preset(
     NAMESPACE mdl_sdk
     OUTPUT_NAME "mdl_browser"
     SOURCES ${PROJECT_SOURCES}
-    WINDOWS_UNICODE
+    EXAMPLE
 )
 
 # additional definitions

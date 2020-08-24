@@ -47,32 +47,12 @@
 #include <mdl/compiler/compilercore/compilercore_modules.h>
 #include <mi/mdl/mdl_module_transformer.h>
 
+// Disable false positives (claiming expressions involving "class_id" always being true or false)
+//-V:class_id:547 PVS
+
 namespace MI {
 
 namespace MDL {
-
-namespace {
-
-/// Add message to context
-mi::Sint32 add_error_message(
-    MDL::Execution_context* context,
-    const std::string& message,
-    mi::Sint32 result)
-{
-    if (!context)
-        return -1;
-
-    const MDL::Message err(
-        mi::base::MESSAGE_SEVERITY_ERROR, message, -1, MI::MDL::Message::MSG_INTEGRATION);
-
-    context->add_error_message(err);
-    context->add_message(err);
-    context->set_result(result);
-
-    return -1;
-}
-
-} // namespace
 
 Mdl_module_builder::New_parameter::New_parameter(
     const mi::mdl::ISymbol* sym,
@@ -88,13 +68,13 @@ Mdl_module_builder::New_parameter::New_parameter(
 
 Mdl_module_builder::Mdl_module_builder(
     mi::mdl::IMDL* imdl,
-    MI::DB::Transaction* transaction,
+    DB::Transaction* transaction,
     const char* module_name,
     mi::mdl::IMDL::MDL_version version,
     bool allow_compatible_types,
     bool inline_mdle,
     MI::MDL::Execution_context* context)
-: m_mdl(mi::base::make_handle_dup(imdl))
+: m_mdl(imdl, mi::base::DUP_INTERFACE)
 , m_transaction(transaction)
 , m_thread_context(nullptr)
 , m_module(nullptr)
@@ -114,19 +94,14 @@ Mdl_module_builder::Mdl_module_builder(
     context->clear_messages();
 
     // Reject invalid module names (in particular, names containing slashes and backslashes).
-    if (!MI::MDL::Mdl_module::is_valid_module_name(module_name, m_mdl.get())) {
+    if (!is_valid_module_name(module_name)) {
         add_error_message(
             context, "The module name " + std::string(module_name) + " is invalid.", -1);
         return;
     }
 
     // Create module
-    m_thread_context = m_mdl->create_thread_context();
-
-    const char* enable_experimental = context->get_option<bool>(MDL_CTX_OPTION_EXPERIMENTAL)
-        ? "true" : "false";
-    m_thread_context->access_options().set_option(
-        MDL_OPTION_EXPERIMENTAL_FEATURES, enable_experimental);
+    m_thread_context = create_thread_context( m_mdl.get(), context);
 
     m_module = m_mdl->create_module(m_thread_context.get(), module_name, version);
     if (!m_module) {
@@ -206,21 +181,28 @@ mi::mdl::IType_name* create_return_type_name(
 }
 
 template <class T>
-const char* get_mdl_definition(
+std::string get_mdl_definition_name_without_parameter_types(
+    DB::Transaction* transaction,
     DB::Access<T> prototype);
 
 template <>
-const char* get_mdl_definition(
+std::string get_mdl_definition_name_without_parameter_types(
+    DB::Transaction* transaction,
     DB::Access<Mdl_material_instance> prototype)
 {
-    return prototype->get_mdl_material_definition();
+    const std::string& def_name = get_db_name( prototype->get_mdl_material_definition());
+    DB::Access<Mdl_material_definition> def( transaction->name_to_tag( def_name.c_str()), transaction);
+    return def->get_mdl_name_without_parameter_types();
 }
 
 template <>
-const char* get_mdl_definition(
+std::string get_mdl_definition_name_without_parameter_types(
+    DB::Transaction* transaction,
     DB::Access<Mdl_function_call> prototype)
 {
-    return prototype->get_mdl_function_definition();
+    const std::string& def_name = get_db_name( prototype->get_mdl_function_definition());
+    DB::Access<Mdl_function_definition> def( transaction->name_to_tag( def_name.c_str()), transaction);
+    return def->get_mdl_name_without_parameter_types();
 }
 
 template <class T>
@@ -309,7 +291,7 @@ bool has_uniform_return_qualifier(Mdl_function_definition const* func)
 
 template <typename T>
 mi::Sint32 Mdl_module_builder::add_intern(
-    MI::DB::Tag prototype_tag,
+    DB::Tag prototype_tag,
     const char* simple_name,
     const MI::MDL::IExpression_list* defaults,
     const MI::MDL::IAnnotation_block* annotations,
@@ -318,12 +300,12 @@ mi::Sint32 Mdl_module_builder::add_intern(
     bool is_exported,
     MI::MDL::Execution_context* context)
 {
-    MI::SERIAL::Class_id id = m_transaction->get_class_id(prototype_tag);
-    ASSERT(M_SCENE, id == T::id);
+    SERIAL::Class_id class_id = m_transaction->get_class_id(prototype_tag);
+    ASSERT(M_SCENE, class_id == T::id);
 
     DB::Access<T> prototype(prototype_tag, m_transaction);
 
-    // check that the provided arguments are parameters of the material definition
+    // check that the provided arguments are parameters of definition
     // and that their types match the expected types
     mi::base::Handle<const IType_list> expected_types(prototype->get_parameter_types());
     std::vector<bool> needs_cast(expected_types->get_size(), false);
@@ -360,12 +342,15 @@ mi::Sint32 Mdl_module_builder::add_intern(
         maps_to_mdl_function = false;
     }
 
+    // variants implies MDL function
+    ASSERT(M_SCENE, !is_variant || maps_to_mdl_function);
+
     mi::mdl::IExpression_call* call_to_prototype = nullptr;
     if (maps_to_mdl_function) {
         // create call expression
-        const char* prototype_name = prototype->get_mdl_name();
+        const std::string& prototype_name = prototype->get_mdl_name_without_parameter_types();
         const mi::mdl::IExpression_reference* prototype_ref
-            = signature_to_reference(m_module.get(), prototype_name, m_name_mangler.get());
+            = signature_to_reference(m_module.get(), prototype_name.c_str(), m_name_mangler.get());
         call_to_prototype = m_ef->create_call(prototype_ref);
     }
 
@@ -421,13 +406,13 @@ mi::Sint32 Mdl_module_builder::add_intern(
             m_symbol_importer->collect_imports(arg_expr);
 
             const mi::mdl::ISymbol* param_symbol = m_nf->create_symbol(param_name);
-            const mi::mdl::ISimple_name* param_simple_name = 
+            const mi::mdl::ISimple_name* param_simple_name =
                 m_nf->create_simple_name(param_symbol);
 
             if (is_variant) {
                 const mi::mdl::IArgument* argument =
                     m_ef->create_named_argument(param_simple_name, arg_expr);
-                call_to_prototype->add_argument(argument);
+                call_to_prototype->add_argument(argument); //-V522 PVS
             }
             else {
                 // create a new parameter that is added to the created function/material
@@ -440,7 +425,7 @@ mi::Sint32 Mdl_module_builder::add_intern(
                 // get parameter annotations
                 mi::base::Handle<const IAnnotation_block> anno_block(
                     param_annotations->get_annotation_block(param_name));
-                mi::mdl::IAnnotation_block* mdl_annotations = 0;
+                mi::mdl::IAnnotation_block* mdl_annotations = nullptr;
                 if (!create_annotations(anno_block.get(), mdl_annotations, context, /*skip_unused=*/true))
                     return -1;
 
@@ -453,7 +438,7 @@ mi::Sint32 Mdl_module_builder::add_intern(
                     const mi::mdl::IExpression_reference* ref = ast_builder.to_reference(param_symbol);
                     const mi::mdl::IArgument* call_argument =
                         m_ef->create_named_argument(param_simple_name, ref);
-                    call_to_prototype->add_argument(call_argument);
+                    call_to_prototype->add_argument(call_argument); //-V595 PVS
                 }
                 else {
                     ast_builder.declare_parameter(param_symbol, argument);
@@ -465,7 +450,7 @@ mi::Sint32 Mdl_module_builder::add_intern(
     // add imports required by arguments
     if (call_to_prototype)
         m_symbol_importer->collect_imports(call_to_prototype);
-   
+
     // create return type for function/material
     mi::mdl::IType_name* return_type_type_name
         = create_return_type_name(m_transaction, m_module.get(), prototype);
@@ -479,20 +464,19 @@ mi::Sint32 Mdl_module_builder::add_intern(
 
     // create body for new material/function
     mi::mdl::IStatement* body;
-    if (id == ID_MDL_FUNCTION_DEFINITION && !is_variant) {
+    if (class_id == ID_MDL_FUNCTION_DEFINITION && !is_variant) {
         mi::mdl::IStatement_compound* comp = m_sf->create_compound();
         if (maps_to_mdl_function) {
             comp->add_statement(
                 m_sf->create_return(call_to_prototype));
-        }
-        else {
+        } else {
             mi::base::Handle<const IType> ret_type(get_return_type(prototype));
-            std::string def = ast_builder.dag_unmangle(prototype->get_mdl_name());
+            std::string def = prototype->get_mdl_name_without_parameter_types();
             const mi::mdl::IExpression *ret_expr = ast_builder.transform_call(
                 ret_type,
                 sema,
                 def,
-                defaults->get_size(),
+                defaults ? defaults->get_size() : 0,
                 mi::base::make_handle_dup(defaults),
                 true);
 
@@ -500,19 +484,18 @@ mi::Sint32 Mdl_module_builder::add_intern(
                 m_sf->create_return(ret_expr));
         }
         body = comp;
-    }
-    else
+    } else
         body = m_sf->create_expression(call_to_prototype);
 
     // create new function
     const mi::mdl::ISymbol* symbol_to_add = m_nf->create_symbol(simple_name);
-    const mi::mdl::ISimple_name* simple_name_to_add = 
+    const mi::mdl::ISimple_name* simple_name_to_add =
         m_nf->create_simple_name(symbol_to_add);
 
     mi::mdl::IDeclaration_function* declaration_to_add = m_df->create_function(
         return_type_type_name,
-        /*ret_annotations=*/0,
-        simple_name_to_add, 
+        /*ret_annotations=*/nullptr,
+        simple_name_to_add,
         /*is_clone=*/is_variant,
         body,
         /*annotation=*/nullptr,
@@ -541,7 +524,7 @@ mi::Sint32 Mdl_module_builder::add_intern(
 }
 
 mi::Sint32 Mdl_module_builder::add_material_or_function(
-    MI::DB::Tag prototype_tag,
+    DB::Tag prototype_tag,
     const char* name,
     const MI::MDL::IExpression_list* defaults,
     const MI::MDL::IAnnotation_block* annotations,
@@ -550,10 +533,6 @@ mi::Sint32 Mdl_module_builder::add_material_or_function(
     MI::MDL::Execution_context* context)
 {
     if (!clear_and_check_valid(context)) return -1;
-
-    // Calling this method without valid name should no longer happen. If this assertion does not
-    // trigger, remove code path to compute orig_name and case distinction in add_intern().
-    ASSERT(M_SCENE, name);
 
     // wraps the function/material to add into a call that simply forwards all parameters
     // along with annotations
@@ -565,35 +544,27 @@ mi::Sint32 Mdl_module_builder::add_material_or_function(
         DB::Access<Mdl_material_definition> prototype(prototype_tag, m_transaction);
         const MI::MDL::Mdl_material_definition* prototype_def = prototype.get_ptr();
 
-        // get the original name of the material
-        if (!name) {
-            org_name = prototype_def->get_mdl_name();
-            size_t pos = org_name.find_last_of(':');
-            if (pos != std::string::npos)
-                org_name = org_name.substr(pos + 1);
-        }
-
         mi::base::Handle<const MI::MDL::IExpression_list> prototype_defaults;
         mi::base::Handle<const MI::MDL::IAnnotation_block> prototype_annotations;
 
         // get defaults from prototype if requested
-        if( defaults == nullptr) {
+        if (!defaults) {
             prototype_defaults = prototype_def->get_defaults();
             defaults = prototype_defaults.get();
         }
 
         // get annotations from prototype if requested
-        if( annotations == nullptr) {
+        if (!annotations) {
             prototype_annotations = prototype->get_annotations();
             annotations = prototype_annotations.get();
         }
-        
-        ASSERT(M_SCENE, ret_annotations == nullptr || ret_annotations->get_size() == 0);
+
+        ASSERT(M_SCENE, !ret_annotations || ret_annotations->get_size() == 0);
 
         // create the definition
         mi::Sint32 index = add_intern<Mdl_material_definition>(
             prototype_tag,
-            (name != nullptr) ? name : org_name.c_str(),
+            name,
             defaults,
             annotations,
             /*return_annotations*/ nullptr,
@@ -609,39 +580,28 @@ mi::Sint32 Mdl_module_builder::add_material_or_function(
         const MI::MDL::Mdl_function_definition* prototype_def = prototype.get_ptr();
 
         // check for unsupported functions
-        if (!is_supported_prototype(prototype_def, /*for_variant=*/false))
+        if( !is_supported_prototype(prototype_def, /*for_variant=*/false))
             return add_error_message(
                 context, "This kind of function is not supported as a prototype.", -5);
-
-        // get the original name of the function
-        if (!name) {
-            org_name = prototype_def->get_mdl_name();
-            size_t pos = org_name.find_first_of('(');
-            if (pos == std::string::npos)
-                pos = 0;
-            pos = org_name.find_last_of(':', pos);
-            if (pos != std::string::npos)
-                org_name = org_name.substr(pos + 1);
-        }
 
         mi::base::Handle<const MI::MDL::IExpression_list> prototype_defaults;
         mi::base::Handle<const MI::MDL::IAnnotation_block> prototype_annotations;
         mi::base::Handle<const MI::MDL::IAnnotation_block> prototype_return_annotations;
 
         // get defaults from prototype if requested
-        if( defaults == nullptr) {
+        if (!defaults) {
             prototype_defaults = prototype_def->get_defaults();
             defaults = prototype_defaults.get();
         }
 
         // get annotations from prototype if requested
-        if( annotations == nullptr) {
+        if (!annotations) {
             prototype_annotations = prototype->get_annotations();
             annotations = prototype_annotations.get();
         }
 
         // get return annotations from prototype if requested
-        if( ret_annotations == nullptr) {
+        if (!ret_annotations) {
             prototype_return_annotations = prototype->get_return_annotations();
             ret_annotations = prototype_return_annotations.get();
         }
@@ -649,7 +609,7 @@ mi::Sint32 Mdl_module_builder::add_material_or_function(
         // create the definition
         mi::Sint32 index = add_intern<Mdl_function_definition>(
             prototype_tag,
-            (name != nullptr) ? name : org_name.c_str(),
+            name,
             defaults,
             annotations,
             ret_annotations,
@@ -666,7 +626,7 @@ mi::Sint32 Mdl_module_builder::add_material_or_function(
 }
 
 mi::Sint32 Mdl_module_builder::add_variant(
-    const MI::DB::Tag prototype_tag,
+    const DB::Tag prototype_tag,
     const char* name,
     const MI::MDL::IExpression_list* defaults,
     const MI::MDL::IAnnotation_block* annotations,
@@ -885,7 +845,7 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
     mi::mdl::IDefinition::Semantics sema = get_mdl_semantic(prototype);
     // some semantics require special handling
     bool maps_to_mdl_function = true;
-    if (semantic_is_operator(sema) || 
+    if (semantic_is_operator(sema) ||
         sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
 
         maps_to_mdl_function = false;
@@ -905,13 +865,14 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
     // create the body
 
     mi::mdl::IExpression_call *call = nullptr;
-    const char *definition_name = get_mdl_definition(prototype);
+    const std::string& definition_name
+        = get_mdl_definition_name_without_parameter_types( m_transaction, prototype);
     if (maps_to_mdl_function) {
 
         // call to prototype
         const mi::mdl::IExpression_reference *ref = signature_to_reference(
             m_module.get(),
-            definition_name,
+            definition_name.c_str(),
             m_name_mangler.get());
         call = m_ef->create_call(ref);
     }
@@ -949,10 +910,10 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
             vdecl->add_variable(ast_builder.to_simple_name(tmp_sym), init);
 
             if (md->m_is_material)
-                mlet->add_declaration(vdecl);
+                mlet->add_declaration(vdecl); //-V522 //-V595 PVS
             else {
                 mi::mdl::IStatement_declaration *sdecl = m_sf->create_declaration(vdecl);
-                fbody->add_statement(sdecl);
+                fbody->add_statement(sdecl); //-V522 PVS
             }
 
             const char* pname = args->get_name(i);
@@ -961,7 +922,7 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
             const mi::mdl::IExpression_reference *ref = ast_builder.to_reference(tmp_sym);
 
             if (maps_to_mdl_function)
-                call->add_argument(m_ef->create_named_argument(psname, ref));
+                call->add_argument(m_ef->create_named_argument(psname, ref)); //-V522 //-V595 PVS
             else {
                 new_variables.push_back(New_parameter(tmp_sym, arg, mi::base::Handle<IAnnotation_block>(), false));
             }
@@ -998,9 +959,11 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
                 ast_builder.declare_parameter(vd.get_sym(), vd.get_init());
 
             mi::base::Handle<const IType> ret_type(get_return_type(prototype));
-            std::string def = ast_builder.dag_unmangle(get_mdl_definition(prototype));
+
+            std::string def_name_without_parameter_types
+                = get_mdl_definition_name_without_parameter_types(m_transaction, prototype);
             ret_expr = ast_builder.transform_call(
-                ret_type, sema, def, n_callee_params, args, true);
+                ret_type, sema, def_name_without_parameter_types, n_callee_params, args, true);
         }
 
         // 3) return statement for functions
@@ -1009,7 +972,7 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
 
         body = fbody;
     }
-   
+
     mi::mdl::IDeclaration_function *fdecl = m_df->create_function(
         ret_type_tn,
         mdl_ret_annotation_block,
@@ -1043,7 +1006,7 @@ mi::Sint32 Mdl_module_builder::add_function_intern(
         const mi::mdl::ISimple_name* sname = m_nf->create_simple_name(pd.get_sym());
         const mi::mdl::IExpression* init = ast_builder.transform_expr(pd.get_init());
 
-        mi::mdl::IAnnotation_block* p_annos = 0;
+        mi::mdl::IAnnotation_block* p_annos = nullptr;
         mi::Sint32 result = create_annotations(
             pd.get_annos().get(), p_annos, /*skip_unused=*/false);
         if (result != 0)
@@ -1106,20 +1069,19 @@ bool Mdl_module_builder::add_annotation(
     const char* anno_name = annotation->get_name();
 
     // skip deprecated annotations
-    if (strchr(anno_name, '$') != nullptr) {
+    if (is_deprecated(anno_name)) {
         context->add_message(
             MI::MDL::Message(mi::base::MESSAGE_SEVERITY_WARNING,
-            MI::STRING::formatted_string("Skipped deprecated annotation: %s.", anno_name),
+            STRING::formatted_string("Skipped deprecated annotation: %s.", anno_name),
             0, MI::MDL::Message::MSG_INTEGRATION));
         return true;
     }
 
-    mi::base::Handle<const IExpression_list> anno_args(annotation->get_arguments());
-    mi::Sint32 result = add_annotation(mdl_annotation_block, anno_name, anno_args.get());
+    mi::Sint32 result = add_annotation(mdl_annotation_block, annotation);
     if (result != 0) {
         context->add_error_message(
             MI::MDL::Message(mi::base::MESSAGE_SEVERITY_ERROR,
-            MI::STRING::formatted_string("Failed to add annotation: %s.", anno_name),
+            STRING::formatted_string("Failed to add annotation: %s.", anno_name),
             result, MI::MDL::Message::MSG_INTEGRATION));
         return false;
     }
@@ -1135,7 +1097,7 @@ bool Mdl_module_builder::set_return_annotations(
         return false;
 
     // convert the annotations block
-    mi::mdl::IAnnotation_block* mdl_annotation_block = 0;
+    mi::mdl::IAnnotation_block* mdl_annotation_block = nullptr;
     if (!create_annotations(annotations, mdl_annotation_block, context, /*skip_unused=*/false))
         return false;
 
@@ -1280,7 +1242,7 @@ mi::Sint32 Mdl_module_builder::create_annotations(
 {
     if (!annotation_block)
     {
-        mdl_annotation_block = 0;
+        mdl_annotation_block = nullptr;
         return 0;
     }
 
@@ -1291,8 +1253,7 @@ mi::Sint32 Mdl_module_builder::create_annotations(
         const char* anno_name = anno->get_name();
         if (skip_unused && strcmp(anno_name, "::anno::unused()") == 0)
             continue;
-        mi::base::Handle<const IExpression_list> anno_args(anno->get_arguments());
-        mi::Sint32 result = add_annotation(mdl_annotation_block, anno_name, anno_args.get());
+        mi::Sint32 result = add_annotation(mdl_annotation_block, anno.get());
         if (result != 0)
             return result;
     }
@@ -1303,86 +1264,50 @@ mi::Sint32 Mdl_module_builder::create_annotations(
 
 mi::Sint32 Mdl_module_builder::add_annotation(
     mi::mdl::IAnnotation_block* mdl_annotation_block,
-    const char* annotation_name,
-    const MI::MDL::IExpression_list* annotation_args)
+    const MI::MDL::IAnnotation* annotation)
 {
-    if (strncmp(annotation_name, "::", 2) != 0)
+    const char* annotation_name = annotation->get_name();
+    if( !is_absolute( annotation_name))
         return -10;
 
-    std::string annotation_name_str = add_mdl_db_prefix(annotation_name);
-    size_t mdle_offset = annotation_name_str.find(".mdle::");
-    bool is_mdle_annotation = mdle_offset != std::string::npos; // true only for MDLE
-    size_t prefix_length = is_mdle_annotation ? 4 : 3;          // mdle or mdl 
-    mdle_offset = is_mdle_annotation ? (mdle_offset + 7) : 0;   // offset to get after the file ext.
-                                                                // avoid problems with '(' in path
-
-    // compute DB name of module containing the annotation
-    std::string anno_db_module_name = annotation_name_str;
-    size_t left_paren = anno_db_module_name.find('(', mdle_offset);
-    if (left_paren == std::string::npos)
-        return -10;
-    anno_db_module_name = anno_db_module_name.substr(0, left_paren);
-    size_t last_double_colon = anno_db_module_name.rfind("::");
-    if (last_double_colon == std::string::npos)
-        return -10;
-    anno_db_module_name = anno_db_module_name.substr(0, last_double_colon);
-
-    // get definition of the annotation
-    DB::Tag anno_db_module_tag = m_transaction->name_to_tag(anno_db_module_name.c_str());
-    if (!anno_db_module_tag)
-        return -10;
-    DB::Access<Mdl_module> anno_db_module(anno_db_module_tag, m_transaction);
-    mi::base::Handle<const mi::mdl::IModule> anno_mdl_module(anno_db_module->get_mdl_module());
-    std::string annotation_name_wo_signature = 
-        annotation_name_str.substr(prefix_length, left_paren - prefix_length);
-
-    // handle leading slash on windows
-    size_t mdle_prefix_slash_offset = 0;
-    if (is_mdle_annotation && 
-        annotation_name_wo_signature[0] == ':' &&
-        annotation_name_wo_signature[1] == ':' &&
-        annotation_name_wo_signature[2] == '/' &&
-        isalpha(annotation_name_wo_signature[3]) &&
-        annotation_name_wo_signature[4] == ':')
-    {
-        // the module name does not have this extra slash, only the db_name
-        annotation_name_wo_signature[2] = ':';
-        annotation_name_wo_signature = annotation_name_wo_signature.substr(1);
-        mdle_prefix_slash_offset = 1;
-    }
-
-    std::string signature = annotation_name_str.substr(
-        left_paren + 1, annotation_name_str.size() - left_paren - 2);
-    const mi::mdl::IDefinition* definition = anno_mdl_module->find_annotation(
-        annotation_name_wo_signature.c_str(), signature.c_str());
-    if (!definition)
+    mi::base::Handle<const IAnnotation_definition> definition(
+        annotation->get_definition( m_transaction));
+    if( !definition)
         return -10;
 
-    // compute IQualified_name for annotation name
-    mi::mdl::IQualified_name* anno_qualified_name = m_nf->create_qualified_name();
-    anno_qualified_name->set_absolute();
-    size_t start = prefix_length + 2 + // skip leading "mdle::" or "mdl::"
-                   mdle_prefix_slash_offset; // additional '/' on windows
-    while (true)
-    {
-        size_t end = annotation_name_str.find("::", start);
-        if (end == std::string::npos || end >= left_paren)
-            end = left_paren;
-        std::string chunk = annotation_name_str.substr(start, end - start);
-        const mi::mdl::ISymbol* anno_symbol
-            = m_nf->create_symbol(chunk.c_str());
-        const mi::mdl::ISimple_name* anno_simple_name = m_nf->create_simple_name(anno_symbol);
-        anno_qualified_name->add_component(anno_simple_name);
-        if (end == left_paren)
-            break;
-        start = end + 2;
-    }
+    // get DB and MDL module of the annotation
+    std::string module_name = definition->get_mdl_module_name();
+    std::string db_module_name = get_db_name( module_name);
+    DB::Tag module_tag = m_transaction->name_to_tag( db_module_name.c_str());
+    if( !module_tag)
+        return -10;
+    DB::Access<Mdl_module> db_module( module_tag, m_transaction);
+    mi::base::Handle<const mi::mdl::IModule> mdl_module( db_module->get_mdl_module());
+
+    // get parameter types
+    std::vector<const char*> parameter_type_names_c_str;
+    mi::Size n = definition->get_parameter_count();
+    for( mi::Size i = 0; i < n; ++i)
+        parameter_type_names_c_str.push_back( definition->get_mdl_parameter_type_name( i));
+
+    // check that there is such an annotation
+    std::string annotation_name_without_parameter_types
+        = definition->get_mdl_name_without_parameter_types();
+    const mi::mdl::IDefinition* anno_def = mdl_module->find_annotation(
+        annotation_name_without_parameter_types.c_str(),
+        n > 0 ? &parameter_type_names_c_str[0] : nullptr,
+        n);
+    if( !anno_def)
+        return -10;
+
+    const mi::mdl::IQualified_name* anno_qualified_name = signature_to_qualified_name(
+        m_nf, annotation_name_without_parameter_types.c_str(), /*mangler*/ nullptr);
 
     // create annotation
     mi::mdl::IAnnotation* anno = m_af->create_annotation(anno_qualified_name);
 
     // store parameter types from annotation definition in a map by parameter name
-    const mi::mdl::IType* type = definition->get_type();
+    const mi::mdl::IType* type = anno_def->get_type();
     ASSERT(M_SCENE, type->get_kind() == mi::mdl::IType::TK_FUNCTION);
     const mi::mdl::IType_function* type_function = mi::mdl::as<mi::mdl::IType_function>(type);
     std::map<std::string, const mi::mdl::IType*> parameter_types;
@@ -1396,6 +1321,7 @@ mi::Sint32 Mdl_module_builder::add_annotation(
     }
 
     // convert arguments
+    mi::base::Handle<const IExpression_list> annotation_args( annotation->get_arguments());
     mi::Size argument_count = annotation_args->get_size();
     for (mi::Size i = 0; i < argument_count; ++i)
     {
@@ -1407,25 +1333,6 @@ mi::Sint32 Mdl_module_builder::add_annotation(
             return -9;
         mi::base::Handle<const IValue> arg_value(arg_expr->get_value());
         mi::base::Handle<const IType> arg_type(arg_value->get_type());
-
-        // The legacy API always provided "argument" as argument name. Since it supported only
-        // single string arguments we mapped that argument name to the correct one if all these
-        // conditions are met. This was also done for the current API since we were not able to
-        // tell them apart here.
-        if (i == 0
-            && parameter_count == 1
-            && argument_count == 1
-            && strcmp(arg_name, "argument") == 0
-            && arg_type->get_kind() == IType::TK_STRING)
-        {
-            const char* correct_arg_name = parameter_types.begin()->first.c_str();
-            if (strcmp( arg_name, correct_arg_name) != 0)
-            {
-                LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_DATABASE,
-                    "Use of dummy annotation argument name \"argument\" is deprecated.");
-                arg_name = correct_arg_name;
-            }
-        }
 
         const mi::mdl::IType* mdl_parameter_type = parameter_types[arg_name];
         if (!mdl_parameter_type)

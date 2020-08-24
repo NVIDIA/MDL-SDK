@@ -42,7 +42,6 @@ using std::endl;
 using std::find;
 using std::map;
 using mi::base::Handle;
-using mi::neuraylib::IMdl_compiler;
 using mi::neuraylib::IMdl_info;
 
 int Help::execute()

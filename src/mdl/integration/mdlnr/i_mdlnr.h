@@ -90,16 +90,6 @@ public:
     /// The type of the callback used to register MDL types with the API.
     typedef void Register_mdl_type_with_api(const MDL::IType*);
 
-    /// Sets whether the MDL integration is to be used by the Iray SDK or MDL SDK.
-    ///
-    /// Can be set only once.
-    virtual void set_used_with_mdl_sdk(bool flag) = 0;
-
-    /// Indicates whether the MDL integration is to be used by the Iray SDK or MDL SDK.
-    ///
-    /// Can be queried only after it has been set with #set_used_with_mdl_sdk().
-    virtual bool get_used_with_mdl_sdk() const = 0;
-
     /// Called whenever a Bridge client connects or a .cb file is loaded to inform about 
     /// the build and bridge protocol of the client that connects or saved the snapshot. 
     /// Can be used to implement hacky workarounds.

@@ -138,7 +138,7 @@ string get_type_value_rep(
             if (arraysize > 1)
                 result << '[';
             for (int a=0; a < arraysize; ++a) {
-                if (a && a < arraysize)
+                if (a)
                     result << ", ";
                 for (int i=0; i < count; ++i) {
                     switch(type) {
@@ -806,8 +806,8 @@ void dump_attr_values(
         mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE,"%s%s %s %s",
             tabs(depth).c_str(),code_name,type.get_type_name().c_str(),name);
         // dump the first string - it is actually a Tag
-        Uint32 tag = DB::Tag(*reinterpret_cast<const DB::Tag*>(data)).get_uint();
-        mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE,"%stag %d", tabs(depth+1).c_str(), tag);
+        const Uint32 tag = DB::Tag(*reinterpret_cast<const DB::Tag*>(data)).get_uint();
+        mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE,"%stag %u", tabs(depth+1).c_str(), tag);
 
         int field_index = 0;
         for (const Type *c = type.get_child(); c; c = c->get_next()) {

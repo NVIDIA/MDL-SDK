@@ -31,13 +31,20 @@
 #ifndef TEXTURE_SUPPORT_H
 #define TEXTURE_SUPPORT_H
 
-#include <mi/mdl_sdk.h>
+#include "example_shared.h"
 
 #define USE_SMOOTHERSTEP_FILTER
 
-
-typedef mi::neuraylib::Texture_handler_base Texture_handler_base;
-typedef mi::neuraylib::Tex_wrap_mode Tex_wrap_mode;
+typedef mi::neuraylib::tct_deriv_float                     tct_deriv_float;
+typedef mi::neuraylib::tct_deriv_float2                    tct_deriv_float2;
+typedef mi::neuraylib::tct_deriv_arr_float_2               tct_deriv_arr_float_2;
+typedef mi::neuraylib::tct_deriv_arr_float_3               tct_deriv_arr_float_3;
+typedef mi::neuraylib::tct_deriv_arr_float_4               tct_deriv_arr_float_4;
+typedef mi::neuraylib::Shading_state_material_with_derivs  Shading_state_material_with_derivs;
+typedef mi::neuraylib::Shading_state_material              Shading_state_material;
+typedef mi::neuraylib::Texture_handler_base                Texture_handler_base;
+typedef mi::neuraylib::Texture_handler_deriv_base          Texture_handler_deriv_base;
+typedef mi::neuraylib::Tex_wrap_mode                       Tex_wrap_mode;
 
 // Custom structure representing an MDL texture
 struct Texture
@@ -70,6 +77,15 @@ struct Texture
 
 // The texture handler structure required by the MDL SDK with custom additional fields.
 struct Texture_handler : Texture_handler_base {
+    // additional data for the texture access functions can be provided here
+    size_t         num_textures;       // the number of textures used by the material
+                                       // (without the invalid texture)
+    Texture const *textures;           // the textures used by the material
+                                       // (without the invalid texture)
+};
+
+// The texture handler structure required by the MDL SDK with custom additional fields.
+struct Texture_handler_deriv : Texture_handler_deriv_base {
     // additional data for the texture access functions can be provided here
     size_t         num_textures;       // the number of textures used by the material
                                        // (without the invalid texture)
@@ -123,6 +139,11 @@ static inline void store_result3(float res[3], const float v0, const float v1, c
     res[1] = v1;
     res[2] = v2;
 }
+
+
+// ------------------------------------------------------------------------------------------------
+// Textures
+// ------------------------------------------------------------------------------------------------
 
 static inline mi::Float32 u2f_rn(const mi::Uint32 u) {
     return (mi::Float32) u;
@@ -253,6 +274,31 @@ void tex_lookup_float4_2d(
     tex_lookup2D(result, tex, coord, wrap_u, wrap_v, crop_u, crop_v);
 }
 
+/// Implementation of \c tex::lookup_float4() for a texture_2d texture with derivatives.
+/// Note: derivatives are just ignored in this example runtime
+void tex_lookup_deriv_float4_2d(
+    mi::Float32 result[4],
+    const mi::neuraylib::Texture_handler_base *self_base,
+    mi::Uint32 texture_idx,
+    const tct_deriv_float2 *coord,
+    mi::neuraylib::Tex_wrap_mode wrap_u,
+    mi::neuraylib::Tex_wrap_mode wrap_v,
+    const mi::Float32 crop_u[2],
+    const mi::Float32 crop_v[2])
+{
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
+        // invalid texture returns zero
+        store_result4(result, 0.0f);
+        return;
+    }
+
+    mi::Float32 uv[2] = { coord->val.x, coord->val.y };
+    Texture const &tex = self->textures[texture_idx - 1];
+    tex_lookup2D(result, tex, uv, wrap_u, wrap_v, crop_u, crop_v);
+}
+
 /// Implementation of \c tex::lookup_float3() for a texture_2d texture.
 void tex_lookup_float3_2d(
     mi::Float32 result[3],
@@ -274,6 +320,35 @@ void tex_lookup_float3_2d(
 
     mi::Float32 c[4];
     tex_lookup_float4_2d(c, self, texture_idx, coord, wrap_u, wrap_v, crop_u, crop_v);
+
+    result[0] = c[0];
+    result[1] = c[1];
+    result[2] = c[2];
+}
+
+/// Implementation of \c tex::lookup_float3() for a texture_2d texture with derivatives.
+/// Note: derivatives are just ignored in this example runtime
+void tex_lookup_deriv_float3_2d(
+    mi::Float32 result[3],
+    const mi::neuraylib::Texture_handler_base *self_base,
+    mi::Uint32 texture_idx,
+    const tct_deriv_float2 *coord,
+    mi::neuraylib::Tex_wrap_mode wrap_u,
+    mi::neuraylib::Tex_wrap_mode wrap_v,
+    const mi::Float32 crop_u[2],
+    const mi::Float32 crop_v[2])
+{
+    Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
+
+    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
+        // invalid texture returns zero
+        store_result3(result, 0.0f);
+        return;
+    }
+
+    mi::Float32 c[4];
+    mi::Float32 uv[2] = { coord->val.x, coord->val.y };
+    tex_lookup_float4_2d(c, self, texture_idx, uv, wrap_u, wrap_v, crop_u, crop_v);
 
     result[0] = c[0];
     result[1] = c[1];
@@ -415,7 +490,7 @@ void tex_resolution_3d(
 }
 
 /// Implementation of \c tex::texture_isvalid() function.
-bool tex_isvalid(
+bool tex_texture_isvalid(
     const mi::neuraylib::Texture_handler_base *self_base,
     mi::Uint32 texture_idx)
 {
@@ -423,9 +498,14 @@ bool tex_isvalid(
     return texture_idx != 0 && texture_idx - 1 < self->num_textures;
 }
 
+
+// ------------------------------------------------------------------------------------------------
+// Light Profiles (dummy functions)
+// ------------------------------------------------------------------------------------------------
+
 /// Implementation of \c df::light_profile_power() for a light profile.
 /// Note: The example does not support light profiles.
-mi::Float32 light_profile_power(
+mi::Float32 df_light_profile_power(
     const Texture_handler_base *self,
     mi::Uint32                  light_profile_idx)
 {
@@ -433,7 +513,7 @@ mi::Float32 light_profile_power(
 }
 
 /// Implementation of \c df::light_profile_maximum() for a light profile.
-mi::Float32 light_profile_maximum(
+mi::Float32 df_light_profile_maximum(
     const Texture_handler_base *self,
     mi::Uint32                  light_profile_idx)
 {
@@ -441,7 +521,7 @@ mi::Float32 light_profile_maximum(
 }
 
 /// Implementation of \c df::light_profile_isvalid() for a light profile.
-bool light_profile_isvalid(
+bool df_light_profile_isvalid(
     const Texture_handler_base *self,
     mi::Uint32                  light_profile_idx)
 {
@@ -449,7 +529,7 @@ bool light_profile_isvalid(
 }
 
 /// Implementation of \c df::light_profile_evaluate() for a light profile.
-mi::Float32 light_profile_evaluate(
+mi::Float32 df_light_profile_evaluate(
     const Texture_handler_base *self,
     mi::Uint32 light_profile_idx,
     const float theta_phi[2])
@@ -458,7 +538,7 @@ mi::Float32 light_profile_evaluate(
 }
 
 /// Implementation of \c df::light_profile_sample() for a light profile.
-void light_profile_sample(
+void df_light_profile_sample(
     mi::Float32 result[3], // theta, phi, pdf
     const Texture_handler_base *self,
     mi::Uint32 light_profile_idx,
@@ -470,7 +550,7 @@ void light_profile_sample(
 }
 
 /// Implementation of \c df::light_profile_pdf() for a light profile.
-mi::Float32 light_profile_pdf(
+mi::Float32 df_light_profile_pdf(
     const Texture_handler_base *self,
     mi::Uint32 light_profile_idx,
     const float theta_phi[2])
@@ -478,9 +558,14 @@ mi::Float32 light_profile_pdf(
     return 0.0f;
 }
 
+
+// ------------------------------------------------------------------------------------------------
+// BSDF measurements (dummy functions)
+// ------------------------------------------------------------------------------------------------
+
 /// Implementation of \c df::bsdf_measurement_isvalid() for a light profile.
 /// Note: The example does not support BSDF measurements.
-bool bsdf_measurement_isvalid(
+bool df_bsdf_measurement_isvalid(
     const Texture_handler_base *self,
     mi::Uint32                  bsdf_measurement_index)
 {
@@ -488,7 +573,7 @@ bool bsdf_measurement_isvalid(
 }
 
 /// Implementation of \c df::bsdf_measurement_resolution().
-void bsdf_measurement_resolution(
+void df_bsdf_measurement_resolution(
     mi::Uint32 result[3],
     const Texture_handler_base *self,
     mi::Uint32 bsdf_measurement_index,
@@ -500,7 +585,7 @@ void bsdf_measurement_resolution(
 }
 
 /// Implementation of \c df::bsdf_measurement_evaluate() for an MBSDF.
-void bsdf_measurement_evaluate(
+void df_bsdf_measurement_evaluate(
     mi::Float32 result[3],
     const Texture_handler_base  *self,
     mi::Uint32 bsdf_measurement_index,
@@ -514,7 +599,7 @@ void bsdf_measurement_evaluate(
 }
 
 /// Implementation of \c df::bsdf_measurement_sample() for an MBSDF.
-void bsdf_measurement_sample(
+void df_bsdf_measurement_sample(
     mi::Float32 result[3],
     const Texture_handler_base *self,
     mi::Uint32 bsdf_measurement_index,
@@ -528,7 +613,7 @@ void bsdf_measurement_sample(
 }
 
 /// Implementation of \c df::bsdf_measurement_pdf() for an MBSDF.
-mi::Float32 bsdf_measurement_pdf(
+mi::Float32 df_bsdf_measurement_pdf(
     const Texture_handler_base *self,
     mi::Uint32 bsdf_measurement_index,
     const mi::Float32 theta_phi_in[2],
@@ -539,7 +624,7 @@ mi::Float32 bsdf_measurement_pdf(
 }
 
 /// Implementation of \c df::bsdf_measurement_albedos() for an MBSDF.
-void bsdf_measurement_albedos(
+void df_bsdf_measurement_albedos(
     mi::Float32 result[4],
     const Texture_handler_base *self,
     mi::Uint32 bsdf_measurement_index,
@@ -549,8 +634,220 @@ void bsdf_measurement_albedos(
     result[1] = 0.0f;
     result[2] = 0.0f;
     result[3] = 0.0f;
-
 }
+
+
+// ------------------------------------------------------------------------------------------------
+// Scene data (dummy functions)
+// ------------------------------------------------------------------------------------------------
+
+/// Implementation of scene_data_isvalid().
+bool scene_data_isvalid(
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id)
+{
+    return false;
+}
+
+/// Implementation of scene_data_lookup_float4().
+void scene_data_lookup_float4(
+    float                                  result[4],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[4],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+    result[3] = default_value[3];
+}
+
+/// Implementation of scene_data_lookup_float3().
+void scene_data_lookup_float3(
+    float                                  result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[3],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+}
+
+/// Implementation of scene_data_lookup_color().
+void scene_data_lookup_color(
+    float                                  result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[3],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+}
+
+/// Implementation of scene_data_lookup_float2().
+void scene_data_lookup_float2(
+    float                                  result[2],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[2],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+}
+
+/// Implementation of scene_data_lookup_float().
+float scene_data_lookup_float(
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    return default_value;
+}
+
+/// Implementation of scene_data_lookup_int4().
+void scene_data_lookup_int4(
+    int                                    result[4],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int const                              default_value[4],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+    result[3] = default_value[3];
+}
+
+/// Implementation of scene_data_lookup_int3().
+void scene_data_lookup_int3(
+    int                                    result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int const                              default_value[3],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+    result[2] = default_value[2];
+}
+
+/// Implementation of scene_data_lookup_int2().
+void scene_data_lookup_int2(
+    int                                    result[2],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int const                              default_value[2],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    result[0] = default_value[0];
+    result[1] = default_value[1];
+}
+
+/// Implementation of scene_data_lookup_int().
+int scene_data_lookup_int(
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    int                                    default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    return default_value;
+}
+
+/// Implementation of scene_data_lookup_float4() with derivatives.
+void scene_data_lookup_deriv_float4(
+    tct_deriv_arr_float_4                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_4 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+/// Implementation of scene_data_lookup_float3() with derivatives.
+void scene_data_lookup_deriv_float3(
+    tct_deriv_arr_float_3                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_3 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+/// Implementation of scene_data_lookup_color() with derivatives.
+void scene_data_lookup_deriv_color(
+    tct_deriv_arr_float_3                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_3 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+/// Implementation of scene_data_lookup_float2() with derivatives.
+void scene_data_lookup_deriv_float2(
+    tct_deriv_arr_float_2                 *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_arr_float_2 const           *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+/// Implementation of scene_data_lookup_float() with derivatives.
+void scene_data_lookup_deriv_float(
+    tct_deriv_float                       *result,
+    Texture_handler_base const            *self_base,
+    Shading_state_material_with_derivs    *state,
+    unsigned                               scene_data_id,
+    tct_deriv_float const                 *default_value,
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    *result = *default_value;
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// Vtables
+// ------------------------------------------------------------------------------------------------
 
 mi::neuraylib::Texture_handler_vtable tex_vtable = {
     tex_lookup_float4_2d,
@@ -563,19 +860,70 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     tex_lookup_float3_cube,
     tex_resolution_2d,
     tex_resolution_3d,
-    tex_isvalid,
-    light_profile_power,
-    light_profile_maximum,
-    light_profile_isvalid,
-    light_profile_evaluate,
-    light_profile_sample,
-    light_profile_pdf,
-    bsdf_measurement_isvalid,
-    bsdf_measurement_resolution,
-    bsdf_measurement_evaluate,
-    bsdf_measurement_sample,
-    bsdf_measurement_pdf,
-    bsdf_measurement_albedos
+    tex_texture_isvalid,
+    df_light_profile_power,
+    df_light_profile_maximum,
+    df_light_profile_isvalid,
+    df_light_profile_evaluate,
+    df_light_profile_sample,
+    df_light_profile_pdf,
+    df_bsdf_measurement_isvalid,
+    df_bsdf_measurement_resolution,
+    df_bsdf_measurement_evaluate,
+    df_bsdf_measurement_sample,
+    df_bsdf_measurement_pdf,
+    df_bsdf_measurement_albedos,
+    scene_data_isvalid,
+    scene_data_lookup_float,
+    scene_data_lookup_float2,
+    scene_data_lookup_float3,
+    scene_data_lookup_float4,
+    scene_data_lookup_int,
+    scene_data_lookup_int2,
+    scene_data_lookup_int3,
+    scene_data_lookup_int4,
+    scene_data_lookup_color,
+};
+
+mi::neuraylib::Texture_handler_deriv_vtable tex_deriv_vtable = {
+    tex_lookup_deriv_float4_2d,
+    tex_lookup_deriv_float3_2d,
+    tex_texel_float4_2d,
+    tex_lookup_float4_3d,
+    tex_lookup_float3_3d,
+    tex_texel_float4_3d,
+    tex_lookup_float4_cube,
+    tex_lookup_float3_cube,
+    tex_resolution_2d,
+    tex_resolution_3d,
+    tex_texture_isvalid,
+    df_light_profile_power,
+    df_light_profile_maximum,
+    df_light_profile_isvalid,
+    df_light_profile_evaluate,
+    df_light_profile_sample,
+    df_light_profile_pdf,
+    df_bsdf_measurement_isvalid,
+    df_bsdf_measurement_resolution,
+    df_bsdf_measurement_evaluate,
+    df_bsdf_measurement_sample,
+    df_bsdf_measurement_pdf,
+    df_bsdf_measurement_albedos,
+    scene_data_isvalid,
+    scene_data_lookup_float,
+    scene_data_lookup_float2,
+    scene_data_lookup_float3,
+    scene_data_lookup_float4,
+    scene_data_lookup_int,
+    scene_data_lookup_int2,
+    scene_data_lookup_int3,
+    scene_data_lookup_int4,
+    scene_data_lookup_color,
+    scene_data_lookup_deriv_float,
+    scene_data_lookup_deriv_float2,
+    scene_data_lookup_deriv_float3,
+    scene_data_lookup_deriv_float4,
+    scene_data_lookup_deriv_color,
 };
 
 #endif

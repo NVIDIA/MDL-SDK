@@ -129,7 +129,8 @@ class Deserializer_marker_helper
 {
 public:
     Deserializer_marker_helper()
-        : m_last_marker(NO_MARKER)
+        : m_checksum()
+        , m_last_marker(NO_MARKER)
     {}
 
     /// Update crc for given partial buffer.

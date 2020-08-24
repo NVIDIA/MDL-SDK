@@ -37,7 +37,8 @@
 #include <QQuickImageProvider>
 #include <QtGui/QImage>
 
-#include <mi/base/handle.h>
+#include "example_shared.h"
+
 namespace mi
 {
     namespace neuraylib

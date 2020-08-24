@@ -108,7 +108,7 @@ Element_base* Access_base::set_access(
         "Access will return empty element (transaction no longer open or "
         "fragmented jobs have been cancelled).");
 #endif
-    m_pointer = m_transaction->construct_empty_element(id);
+    m_pointer = m_transaction->construct_empty_element(id); //-V779 PVS
     return m_pointer;
 }
 
@@ -173,7 +173,7 @@ Element_base* Access_base::set_edit(
 const SCHED::Job* Access_base::get_job() const
 {
     MI_ASSERT(false);
-    if (m_tag.is_invalid() || !m_transaction || !m_info->get_is_job())
+    if (m_tag.is_invalid() || !m_transaction || !m_info->get_is_job()) //-V779 PVS
         return nullptr;
     return m_info->get_job();
 }

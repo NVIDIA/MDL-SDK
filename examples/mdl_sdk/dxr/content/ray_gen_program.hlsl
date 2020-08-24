@@ -41,11 +41,11 @@ cbuffer CameraParams : register(b0)
 
 // Ray tracing output texture, accessed as a UAV
 RWTexture2D<float4> OutputBuffer : register(u0,space0); // 32bit floating point precision
-RWTexture2D<float4> FrameBuffer  : register(u1,space0); // 8bit 
+RWTexture2D<float4> FrameBuffer  : register(u1,space0); // 8bit
 
 // for some post processing effects or for AI denoising, auxiliary outputs are required.
 // from the MDL material perspective albedo (approximation) and normals can be generated.
-#ifdef ENABLE_AUXILIARY
+#if defined(ENABLE_AUXILIARY)
     // in order to limit the payload size, this data is written directly from the hit programs
     RWTexture2D<float4> AlbedoBuffer : register(u2,space0);
     RWTexture2D<float4> NormalBuffer : register(u3,space0);
@@ -65,7 +65,7 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     payload.contribution = float3(0.0f, 0.0f, 0.0f);
     payload.weight = float3(1.0f, 1.0f, 1.0f);
     payload.seed = seed;
-    payload.last_pdf = -1.0f;
+    payload.last_bsdf_pdf = DIRAC;
     payload.flags = FLAG_FIRST_PATH_SEGMENT;
 
     [loop]
@@ -73,7 +73,7 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     {
         TraceRay(
             SceneBVH,               // AccelerationStructure
-            RAY_FLAG_NONE,          // RayFlags 
+            RAY_FLAG_NONE,          // RayFlags
             0xFF /* allow all */,   // InstanceInclusionMask
             RAY_TYPE_RADIANCE,      // RayContributionToHitGroupIndex
             RAY_TYPE_COUNT,         // MultiplierForGeometryContributionToHitGroupIndex
@@ -92,7 +92,7 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     }
 
     // pick up the probably altered seed
-    seed = payload.seed; 
+    seed = payload.seed;
 
     // clamp fireflies
     float3 contribution = payload.contribution;
@@ -103,18 +103,17 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
             contribution *= firefly_clamp_threshold / lum;
     }
 
-    // check for errors
-    contribution = any(isinf(contribution) | isnan(contribution)) ? float3(0.0f, 0.0f, 1.0e+10f) : contribution;
-    return contribution;
+    // check for errors and return
+    return encode_errors(contribution);
 }
 
 // ------------------------------------------------------------------------------------------------
 // main entry point
 // ------------------------------------------------------------------------------------------------
 
-[shader("raygeneration")] 
-void RayGenProgram() 
-{   
+[shader("raygeneration")]
+void RayGenProgram()
+{
     // Get the location within the dispatched 2D grid of work items
     // (often maps to pixels, so this could represent a pixel coordinate).
     uint3 launch_index = DispatchRaysIndex();
@@ -126,7 +125,7 @@ void RayGenProgram()
     ray.TMin = 0.0f;
     ray.TMax = 10000.0f;
 
-    #ifdef ENABLE_AUXILIARY
+    #if defined(ENABLE_AUXILIARY)
         // in order to limit the payload size, this data is written directly from the hit programs
         // for a progressive refinement of the buffer content we store the current value locally
         // this has other costs: register usage + additional reads/writes to global memory (here)
@@ -149,7 +148,6 @@ void RayGenProgram()
     for (uint it_frame = 0; it_frame < iterations_per_frame; ++it_frame)
     {
         uint it = progressive_iteration + it_frame;
-        
 
         // random number seed
         unsigned int seed = tea(
@@ -172,8 +170,8 @@ void RayGenProgram()
         float it_weight = 1.0f / float(it + 1);
         OutputBuffer[launch_index.xy] = lerp(OutputBuffer[launch_index.xy], float4(result, 1.0f), it_weight);
 
-        #ifdef ENABLE_AUXILIARY
-            // note, while the 'OutputBuffer' contains converging image, the auxiliary buffers contain 
+        #if defined(ENABLE_AUXILIARY)
+            // note, while the 'OutputBuffer' contains converging image, the auxiliary buffers contain
             // only the last values and 'tmp_*' stores the converged data
             tmp_albedo = lerp(tmp_albedo, AlbedoBuffer[launch_index.xy], it_weight);
             tmp_normal = lerp(tmp_normal, NormalBuffer[launch_index.xy], it_weight);
@@ -184,14 +182,14 @@ void RayGenProgram()
     float3 color = OutputBuffer[launch_index.xy].xyz;
 
     // apply exposure
-    color *= pow(2.0f, exposure_compensation); 
+    color *= pow(2.0f, exposure_compensation);
 
     // Tone-mapping
     color.x *= (1.0f + color.x * burn_out) / (1.0f + color.x);
     color.y *= (1.0f + color.y * burn_out) / (1.0f + color.y);
     color.z *= (1.0f + color.z * burn_out) / (1.0f + color.z);
 
-    #ifdef ENABLE_AUXILIARY
+    #if defined(ENABLE_AUXILIARY)
 
     // safe normalize
     bool valid_normal = false;
@@ -225,7 +223,7 @@ void RayGenProgram()
     FrameBuffer[launch_index.xy] = float4(pow(color, output_gamma_correction), 1.0f);
 
     // write auxiliary buffer
-    #ifdef ENABLE_AUXILIARY
+    #if defined(ENABLE_AUXILIARY)
         AlbedoBuffer[launch_index.xy] = tmp_albedo;
         NormalBuffer[launch_index.xy] = tmp_normal;
     #endif

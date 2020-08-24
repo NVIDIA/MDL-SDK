@@ -116,12 +116,12 @@ std::string find_file_on_paths(
     std::string fullpath = find_file_on_path(file_name);
 
     if (fullpath.empty()) {
-	while (iter != end) {
-	    fullpath = find_file_on_path(file_name, *iter);
-	    if (!fullpath.empty())
-		break;
-	    ++iter;
-	}
+        while (iter != end) {
+            fullpath = find_file_on_path(file_name, *iter);
+            if (!fullpath.empty())
+                break;
+            ++iter;
+        }
     }
     return fullpath;
 }

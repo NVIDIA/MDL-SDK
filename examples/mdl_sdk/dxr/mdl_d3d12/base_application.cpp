@@ -35,43 +35,52 @@
 #include "window_image_file.h"
 #include "window_win32.h"
 
-
-namespace mdl_d3d12
+namespace mi { namespace examples { namespace mdl_d3d12
 {
-    Base_application_message_interface::Base_application_message_interface(
-        Base_application* app, 
-        HINSTANCE instance)
 
-        : m_app(app)
-        , m_instance(instance)
-    {
-    }
+Base_application_message_interface::Base_application_message_interface(
+    Base_application* app,
+    HINSTANCE instance)
 
-    void Base_application_message_interface::key_down(uint8_t key)
-    {
-        m_app->key_down(key);
-    }
+    : m_app(app)
+    , m_instance(instance)
+{
+}
 
-    void Base_application_message_interface::key_up(uint8_t key)
-    {
-        m_app->key_up(key);
-    }
+// ------------------------------------------------------------------------------------------------
 
-    void Base_application_message_interface::paint()
-    {
-        m_app->update();
-        m_app->render();
-    }
+void Base_application_message_interface::key_down(uint8_t key)
+{
+    m_app->key_down(key);
+}
 
-    void Base_application_message_interface::resize(size_t width, size_t height, double dpi)
-    {
-        m_app->flush_command_queues();
-        m_app->m_window->resize(width, height, dpi);
-    }
+void Base_application_message_interface::key_up(uint8_t key)
+{
+    m_app->key_up(key);
+}
 
+// ------------------------------------------------------------------------------------------------
+
+void Base_application_message_interface::paint()
+{
+    m_app->update();
+    m_app->render();
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Base_application_message_interface::resize(size_t width, size_t height, double dpi)
+{
+    m_app->flush_command_queues();
+    m_app->m_window->resize(width, height, dpi);
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 
 Base_application::Base_application()
     : m_window(nullptr)
+    , m_scene_is_updating_next(false)
 {
     m_update_args.frame_number = 0;
     m_update_args.elapsed_time = 0.0;
@@ -82,11 +91,14 @@ Base_application::Base_application()
     m_render_args.back_buffer_rtv = {0};
 }
 
-Base_application::~Base_application() 
+// ------------------------------------------------------------------------------------------------
+
+Base_application::~Base_application()
 {
     log_set_file_path(nullptr); // close the file if there is one
 }
 
+// ------------------------------------------------------------------------------------------------
 
 int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdShow)
 {
@@ -128,9 +140,9 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
         delete queue.second;
 
     delete m_window;
+    delete m_mdl_sdk;
     delete m_resource_descriptor_heap;
     delete m_render_target_descriptor_heap;
-    delete m_mdl_sdk;
     m_device = nullptr;
     m_factory = nullptr;
 
@@ -147,6 +159,8 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
     return return_code;
 }
 
+// ------------------------------------------------------------------------------------------------
+
 Command_queue* Base_application::get_command_queue(D3D12_COMMAND_LIST_TYPE type)
 {
     auto found = m_command_queues.find(type);
@@ -158,21 +172,29 @@ Command_queue* Base_application::get_command_queue(D3D12_COMMAND_LIST_TYPE type)
     return new_queue;
 }
 
+// ------------------------------------------------------------------------------------------------
+
 void Base_application::flush_command_queues()
 {
     for (auto&& it : m_command_queues)
         it.second->flush();
 }
 
+// ------------------------------------------------------------------------------------------------
+
 Descriptor_heap* Base_application::get_resource_descriptor_heap()
 {
     { return m_resource_descriptor_heap; }
 }
 
+// ------------------------------------------------------------------------------------------------
+
 Descriptor_heap* Base_application::get_render_target_descriptor_heap()
 {
     { return m_render_target_descriptor_heap; }
 }
+
+// ------------------------------------------------------------------------------------------------
 
 bool Base_application::initialize_internal(Base_options* options)
 {
@@ -210,8 +232,8 @@ bool Base_application::initialize_internal(Base_options* options)
     }
     #endif
 
-    if (log_on_failure(CreateDXGIFactory2(dxgi_factory_flags, IID_PPV_ARGS(&m_factory)), 
-        "Failed to create DXGI Factory.", SRC)) 
+    if (log_on_failure(CreateDXGIFactory2(dxgi_factory_flags, IID_PPV_ARGS(&m_factory)),
+        "Failed to create DXGI Factory.", SRC))
         return false;
 
 
@@ -231,7 +253,7 @@ bool Base_application::initialize_internal(Base_options* options)
         DXGI_ADAPTER_DESC1 desc;
         adapter->GetDesc1(&desc);
 
-        // check if a device fits the requirements 
+        // check if a device fits the requirements
         if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
             continue;
 
@@ -239,7 +261,7 @@ bool Base_application::initialize_internal(Base_options* options)
     }
 
     // sort by dedicated memory, assuming that is a good heuristic
-    std::sort(available_adapters.begin(), available_adapters.end(), 
+    std::sort(available_adapters.begin(), available_adapters.end(),
         [](const adapter_pair& a, const adapter_pair& b)
         {
             return a.desc.DedicatedVideoMemory > b.desc.DedicatedVideoMemory;
@@ -248,14 +270,14 @@ bool Base_application::initialize_internal(Base_options* options)
     // allow the user to select a certain GPU
     if (available_adapters.size() > 1)
     {
-        std::string msg = 
+        std::string msg =
             "Multiple GPUs detected, run with option '--gpu <num>' to select a specific one."
             "\n                      Default is the first one (from the top) that supports RTX:";
 
         for (size_t i = 0; i < available_adapters.size(); ++i)
         {
-            std::string name = wstr_to_str(available_adapters[i].desc.Description);
-            msg += "\n                      - [" + std::to_string(i) + "] " + name;
+            msg += "\n                      - [" + std::to_string(i) + "] " +
+                mi::examples::strings::wstr_to_str(available_adapters[i].desc.Description);
         }
 
         log_info(msg);
@@ -272,7 +294,7 @@ bool Base_application::initialize_internal(Base_options* options)
     // iterate over available devices and use the first that fits the requirements
     for (adapter_pair& pair : available_adapters)
     {
-        std::string name = wstr_to_str(pair.desc.Description);
+        std::string name = mi::examples::strings::wstr_to_str(pair.desc.Description);
 
         // create the device context
         if (SUCCEEDED(D3D12CreateDevice(
@@ -324,14 +346,14 @@ bool Base_application::initialize_internal(Base_options* options)
             NewFilter.DenyList.pSeverityList = Severities;
 
             if(log_on_failure(pInfoQueue->PushStorageFilter(&NewFilter),
-                "Failed to setup D3D debug messages", SRC)) 
+                "Failed to setup D3D debug messages", SRC))
                 return false;
         }
     }
     #endif
 
     // check if the device context is still valid
-    if(log_on_failure(m_device->GetDeviceRemovedReason(), 
+    if(log_on_failure(m_device->GetDeviceRemovedReason(),
        "Created device is in invalid state.", SRC))
        return false;
 
@@ -352,9 +374,13 @@ bool Base_application::initialize_internal(Base_options* options)
     return true;
 }
 
+// ------------------------------------------------------------------------------------------------
 
 void Base_application::update()
 {
+    m_update_args.scene_is_updating = m_scene_is_updating_next;
+    m_render_args.scene_is_updating = m_scene_is_updating_next;
+
     // allow the application to adapt to new resolutions
     if ((m_window->get_width() != m_render_args.backbuffer_width) ||
         (m_window->get_height() != m_render_args.backbuffer_height))
@@ -383,6 +409,8 @@ void Base_application::update()
     update(m_update_args);
 }
 
+// ------------------------------------------------------------------------------------------------
+
 void Base_application::render()
 {
     m_render_args.back_buffer = m_window->get_back_buffer();
@@ -394,4 +422,4 @@ void Base_application::render()
     m_render_args.frame_number++;
 }
 
-} // mdl_d3d12
+}}} // mi::examples::mdl_d3d12

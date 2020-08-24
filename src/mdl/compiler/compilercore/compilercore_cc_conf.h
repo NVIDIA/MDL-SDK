@@ -131,6 +131,15 @@
 #define MDL_ALWAYS_INLINE
 #endif
 
+/// MDL_CHECK_RESULT - Mark function whose return value should not be ignored.
+#if defined(__GNUC__) && (__GNUC__ >= 4)
+#define MDL_CHECK_RESULT __attribute__ ((warn_unused_result))
+#elif defined(_MSC_VER) && (_MSC_VER >= 1700)
+#define MDL_CHECK_RESULT _Check_return_
+#else
+#define MDL_CHECK_RESULT
+#endif
+
 #if __cplusplus >= 201103L
 #define MDL_STD_HAS_UNORDERED 1
 #elif defined(_MSC_VER) && __cplusplus >= 199711L

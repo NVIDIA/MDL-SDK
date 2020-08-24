@@ -38,7 +38,6 @@ using namespace i18n;
 using mi::base::Handle;
 using mi::neuraylib::INeuray;
 using mi::neuraylib::IModule;
-using mi::neuraylib::IMdl_compiler;
 using mi::neuraylib::IAnnotation;
 using mi::neuraylib::IAnnotation_list;
 using mi::neuraylib::IAnnotation_block;
@@ -55,6 +54,7 @@ using mi::neuraylib::IMdl_discovery_result;
 using mi::neuraylib::IMdl_package_info;
 using mi::neuraylib::IMdl_info;
 using mi::neuraylib::IMdl_module_info;
+using mi::neuraylib::IMdl_impexp_api;
 using mi::IString;
 using std::string;
 using std::vector;
@@ -326,9 +326,9 @@ class Module_annotations
 private:
     mi::Sint32 load_module(mi::neuraylib::ITransaction * transaction) const
     {
-        Handle<IMdl_compiler> mdl_compiler(
-            Application::theApp().neuray()->get_api_component<IMdl_compiler>());
-        return mdl_compiler->load_module(transaction, m_qualified_name.c_str());
+        Handle<IMdl_impexp_api> mdl_impexp_api(
+            Application::theApp().neuray()->get_api_component<IMdl_impexp_api>());
+        return mdl_impexp_api->load_module(transaction, m_qualified_name.c_str());
     }
 public:
     Module_annotations(const std::string & qualified_name)
@@ -363,8 +363,8 @@ bool load_module(const std::string & qualified_name)
     Handle<IDatabase> database(nr->get_api_component<IDatabase>());
     Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
     Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
-    Handle<IMdl_compiler> mdl_compiler(nr->get_api_component<IMdl_compiler>());
-    const mi::Sint32 rtn = mdl_compiler->load_module(transaction.get(), qualified_name.c_str());
+    Handle<IMdl_impexp_api> mdl_impexp_api(nr->get_api_component<IMdl_impexp_api>());
+    const mi::Sint32 rtn = mdl_impexp_api->load_module(transaction.get(), qualified_name.c_str());
     transaction->commit();
     return (0 == rtn);
 }

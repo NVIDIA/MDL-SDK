@@ -2,7 +2,7 @@ var search_targets =
 [/*jshint multistr: true */
 
   ["1 Introduction", [
-    ["definitions", "1001", "The Material Definition Language (MDL) module <tt>nvidia::core_definitions</tt> contains a collection of MDL materials that can either be used independently ( <i>simple materials </i>) or in combination with other materials through the use of <i>material combiners </i> and <i>material modifiers </i>. <i>Texturing functions </i> provide further control and refinement of material parameter values. Together, materials, combiners, modfiers and the texturing functions can simulate complex, real-world models of appearance."]
+    ["definitions", "1001", "The Material Definition Language (MDL) module <tt>nvidia::core_definitions</tt> contains a collection of MDL materials that can either be used independently ( <i>simple materials </i>) or in combination with other materials through the use of <i>material combiners </i> and <i>material modifiers </i>. <i>Texturing functions </i> provide further control and refinement of material parameter values. Together, materials, combiners, modifiers and the texturing functions can simulate complex, real-world models of appearance."]
   ]],
   ["2.1 Simple materials", [
     ["definitions", "1002", "Simple materials can either be used directly to model real world materials with matching behavior or can be used as components when creating more complex materials using material combiners or material modifiers."]
@@ -281,7 +281,7 @@ var search_targets =
     ["definitions", "1257", "Metallic material"],
     ["definitions", "1258", "bool"],
     ["definitions", "1259", "false"],
-    ["definitions", "1260", "If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the index of refraction (Fresnell effect)."],
+    ["definitions", "1260", "If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the index of refraction (Fresnel effect)."],
     ["definitions", "1261", "Reflection weight"],
     ["definitions", "1262", "float"],
     ["definitions", "1263", "1.0"],
@@ -317,7 +317,7 @@ var search_targets =
     ["definitions", "1293", "Transmission weight"],
     ["definitions", "1294", "float"],
     ["definitions", "1295", "0.0"],
-    ["definitions", "1296", "Weights how much light passes through the object vs it's diffuse reflectivity Values must be between 0.0 and 1.0."],
+    ["definitions", "1296", "Weights how much light passes through the object vs its diffuse reflectivity Values must be between 0.0 and 1.0."],
     ["definitions", "1297", "IOR"],
     ["definitions", "1298", "float"],
     ["definitions", "1299", "1.5"],
@@ -336,7 +336,7 @@ var search_targets =
     ["definitions", "1312", "Attach bump or normal maps here."]
   ]],
   ["2.1.10 Flaky Paint", [
-    ["definitions", "1313", "A multi layer paint material featuring metallic flakesflakes. It is made up of a diffuse base, a flake layer and a clearcoat layer."],
+    ["definitions", "1313", "A multi layer paint material featuring metallic flakes. It is made up of a diffuse base, a flake layer and a clearcoat layer."],
     ["definitions", "1314", "Parameters:"],
     ["definitions", "1315", "name"],
     ["definitions", "1316", "type"],
@@ -373,7 +373,7 @@ var search_targets =
     ["definitions", "1347", "IOR"],
     ["definitions", "1348", "float"],
     ["definitions", "1349", "1.6"],
-    ["definitions", "1350", "termines reflectivity of the clear coat. Realistic values are between 1.0 and 4.0."],
+    ["definitions", "1350", "Determines reflectivity of the clear coat. Realistic values are between 1.0 and 4.0."],
     ["definitions", "1351", "Coat roughness"],
     ["definitions", "1352", "float"],
     ["definitions", "1353", "0.0"],
@@ -440,14 +440,14 @@ var search_targets =
     ["definitions", "1408", "Reflection weight"],
     ["definitions", "1409", "float"],
     ["definitions", "1410", "0.3"],
-    ["definitions", "1411", "The oacity of the metallic coat. Values must be between 0.0 and 1.0."],
+    ["definitions", "1411", "The opacity of the metallic coat. Values must be between 0.0 and 1.0."],
     ["definitions", "1412", "Bumps"],
     ["definitions", "1413", "float3"],
     ["definitions", "1414", "no bumps"],
     ["definitions", "1415", "Attach bump or normal maps here."]
   ]],
   ["2.2.3 Apply a cover of dust", [
-    ["definitions", "1416", "A diffuse dust cover thats more visible towards the edges of an object."],
+    ["definitions", "1416", "A diffuse dust cover that's more visible towards the edges of an object."],
     ["definitions", "1417", "Parameters:"],
     ["definitions", "1418", "name"],
     ["definitions", "1419", "type"],
@@ -668,7 +668,7 @@ var search_targets =
     ["definitions", "1618", "1000"],
     ["definitions", "1619", "the brightness of the emitted light"],
     ["definitions", "1620", "Unit for emission"],
-    ["definitions", "1621", "emmission unit type"],
+    ["definitions", "1621", "emission unit type"],
     ["definitions", "1622", "lumen&#47;m2"],
     ["definitions", "1623", "supported units are lumen&#47;m2,lumen,candela, nit (candela&#47;m2)"]
   ]],
@@ -692,7 +692,7 @@ var search_targets =
     ["definitions", "1640", "1000"],
     ["definitions", "1641", "the brightness of the emitted light"],
     ["definitions", "1642", "Unit for emission"],
-    ["definitions", "1643", "emmission unit type"],
+    ["definitions", "1643", "emission unit type"],
     ["definitions", "1644", "lumen&#47;m2"],
     ["definitions", "1645", "supported units are lumen&#47;m2,lumen,candela, nit (candela&#47;m2)"]
   ]],
@@ -732,7 +732,7 @@ var search_targets =
     ["definitions", "1676", "1000.0"],
     ["definitions", "1677", "The brightness of the light source"],
     ["definitions", "1678", "Unit for emission"],
-    ["definitions", "1679", "emmission unit type"],
+    ["definitions", "1679", "emission unit type"],
     ["definitions", "1680", "lumen&#47;m2"],
     ["definitions", "1681", "supported units are lumen&#47;m2,lumen,candela, nit (candela&#47;m2)"]
   ]],
@@ -756,7 +756,7 @@ var search_targets =
     ["definitions", "1698", "30.0"],
     ["definitions", "1699", "Larger values lead to more focused spotlights."],
     ["definitions", "1700", "Unit for emission"],
-    ["definitions", "1701", "emmission unit type"],
+    ["definitions", "1701", "emission unit type"],
     ["definitions", "1702", "lumen&#47;m2"],
     ["definitions", "1703", "supported units are lumen&#47;m2,lumen,candela, nit (candela&#47;m2)"]
   ]],
@@ -780,8 +780,8 @@ var search_targets =
     ["definitions", "1720", "1000.0"],
     ["definitions", "1721", "The brightness of the light source."]
   ]],
-  ["Texturing functions can be used to add variation to many features of a material. They can for example be used to change the color across an object, the intensities of reflections or add variations to an otherwise smooth surface through bump maps. nvidia::core_definitions suppports texturing using bitmap textures as well as a selection of procedural textures to add variation. Most texturing functions come in 2 flavours: 1 variant suitable to add bumps to a material and one variant to add color or vary roughness or reflectivity. 3.1 Bitmap texture (color/float variant)", [
-    ["definitions", "1722", "This function allows texturing using image files of various file formates. It is suitable for adding variation to color or float type parameters. Parameters:"],
+  ["Texturing functions can be used to add variation to many features of a material. They can for example be used to change the color across an object, the intensities of reflections or add variations to an otherwise smooth surface through bump maps. nvidia::core_definitions supports texturing using bitmap textures as well as a selection of procedural textures to add variation. Most texturing functions come in 2 flavors: 1 variant suitable to add bumps to a material and one variant to add color or vary roughness or reflectivity. 3.1 Bitmap texture (color/float variant)", [
+    ["definitions", "1722", "This function allows texturing using image files of various file formats. It is suitable for adding variation to color or float type parameters. Parameters:"],
     ["definitions", "1723", "name"],
     ["definitions", "1724", "type"],
     ["definitions", "1725", "default"],
@@ -792,15 +792,15 @@ var search_targets =
     ["definitions", "1731", "Scalar mode"],
     ["definitions", "1732", "enum"],
     ["definitions", "1733", "\"Average\""],
-    ["definitions", "1734", "Defines what should happen if a color texture is used on a \"float\" type parameter. By defaul, the average value is used."],
+    ["definitions", "1734", "Defines what should happen if a color texture is used on a \"float\" type parameter. By default, the average value is used."],
     ["definitions", "1735", "Brightness"],
     ["definitions", "1736", "float"],
     ["definitions", "1737", "1.0"],
-    ["definitions", "1738", "A controll to vary the brightness of the image before use."],
+    ["definitions", "1738", "A control to vary the brightness of the image before use."],
     ["definitions", "1739", "Contrast"],
     ["definitions", "1740", "float"],
     ["definitions", "1741", "1.0"],
-    ["definitions", "1742", "A controll to vary the contrast of the image before use."],
+    ["definitions", "1742", "A control to vary the contrast of the image before use."],
     ["definitions", "1743", "UV space index"],
     ["definitions", "1744", "int"],
     ["definitions", "1745", "0"],
@@ -827,7 +827,7 @@ var search_targets =
     ["definitions", "1766", "If set to true, texture will not repeat. Outside of the texture, color will be black and the scalar value will be 0."]
   ]],
   ["3.2 Bitmap texture (bump variant)", [
-    ["definitions", "1767", "Allows texturing using image files of various file formates. The image is interpreted as a hight map to compute the bumpiness. Parameters:"],
+    ["definitions", "1767", "Allows texturing using image files of various file formats. The image is interpreted as a height map to compute the bumpiness. Parameters:"],
     ["definitions", "1768", "name"],
     ["definitions", "1769", "type"],
     ["definitions", "1770", "default"],
@@ -838,7 +838,7 @@ var search_targets =
     ["definitions", "1776", "Bump mode"],
     ["definitions", "1777", "enum"],
     ["definitions", "1778", "\"Average\""],
-    ["definitions", "1779", "Defines what should happen if a color texture is used on a \"float\" type parameter. By defaul, the average value is used."],
+    ["definitions", "1779", "Defines what should happen if a color texture is used on a \"float\" type parameter. By default, the average value is used."],
     ["definitions", "1780", "Bump strength"],
     ["definitions", "1781", "float"],
     ["definitions", "1782", "1.0"],
@@ -899,7 +899,7 @@ var search_targets =
     ["definitions", "1836", "Controls the scale of the texture on the object. Higher values result on higher repetition of the image."]
   ]],
   ["3.4 3d checker texture (color/float variant)", [
-    ["definitions", "1837", "Allows texturing using a 3 dimensional checkerboard pattern. 3D textures use all not just uv but uvw or object space (xyz) coordinates. If \"w\" coordinates are not explicitely provided they are set to 0. Parameters:"],
+    ["definitions", "1837", "Allows texturing using a 3 dimensional checkerboard pattern. 3D textures use all not just uv but uvw or object space (xyz) coordinates. If \"w\" coordinates are not explicitly provided they are set to 0. Parameters:"],
     ["definitions", "1838", "name"],
     ["definitions", "1839", "type"],
     ["definitions", "1840", "default"],
@@ -913,7 +913,7 @@ var search_targets =
     ["definitions", "1848", "0% black"],
     ["definitions", "1849", "2nd checker color."],
     ["definitions", "1850", "Blur"],
-    ["definitions", "1851", "floar"],
+    ["definitions", "1851", "float"],
     ["definitions", "1852", "0.0"],
     ["definitions", "1853", "Higher values lead to a blurring of the checker tiles."],
     ["definitions", "1854", "Use Object Space"],
@@ -948,7 +948,7 @@ var search_targets =
     ["definitions", "1881", "1"],
     ["definitions", "1882", "The strength of the bump mapping effect."],
     ["definitions", "1883", "Blur"],
-    ["definitions", "1884", "floar"],
+    ["definitions", "1884", "float"],
     ["definitions", "1885", "0.0"],
     ["definitions", "1886", "Higher values lead to a blurring of the checker tiles."],
     ["definitions", "1887", "Use Object Space"],
@@ -1323,7 +1323,7 @@ var search_targets =
     ["definitions", "2243", "color_layer_screen"],
     ["definitions", "2244", "1 - ((1 - B) * (1 - A))"],
     ["definitions", "2245", "color_layer_overlay"],
-    ["definitions", "2246", "For each channel individualy: if A < 0.5: B * A * 2, else: 2 * (B + A - B * A - 0.5)"],
+    ["definitions", "2246", "For each channel individually: if A < 0.5: B * A * 2, else: 2 * (B + A - B * A - 0.5)"],
     ["definitions", "2247", "color_layer_brightness"],
     ["definitions", "2248", "Hue of the A layer combined with the intensity of the B"],
     ["definitions", "2249", "color_layer_color"],
@@ -1353,9 +1353,9 @@ var search_targets =
     ["definitions", "2273", "color_layer_phoenix"],
     ["definitions", "2274", "Minimum of both layers minus the maximum of both layers (plus 1.0)"],
     ["definitions", "2275", "color_layer_hardlight"],
-    ["definitions", "2276", "For each channel individualy: if B > 0.5: B * A * 2, else: 2 * (B + A - B * A - 0.5)"],
+    ["definitions", "2276", "For each channel individually: if B > 0.5: B * A * 2, else: 2 * (B + A - B * A - 0.5)"],
     ["definitions", "2277", "color_layer_hardmix"],
-    ["definitions", "2278", "For each channel individualy: (B + A < = 1) ? 0 : 1"],
+    ["definitions", "2278", "For each channel indiviually: (B + A < = 1) ? 0 : 1"],
     ["definitions", "2279", "color_layer_lineardodge"],
     ["definitions", "2280", "B + A (clamped)"],
     ["definitions", "2281", "color_layer_linearburn"],
@@ -1404,7 +1404,7 @@ var section_headers = {
   "2.3.2 Spotlight emission": ["definitions", "spotlight-emission"],
   "2.3.3 IES file based emission": ["definitions", "ies-file-based-emission"],
   "3 Texturing functions": ["definitions", "texturing-functions"],
-  "Texturing functions can be used to add variation to many features of a material. They can for example be used to change the color across an object, the intensities of reflections or add variations to an otherwise smooth surface through bump maps. nvidia::core_definitions suppports texturing using bitmap textures as well as a selection of procedural textures to add variation. Most texturing functions come in 2 flavours: 1 variant suitable to add bumps to a material and one variant to add color or vary roughness or reflectivity. 3.1 Bitmap texture (color/float variant)": ["definitions", "bitmap-texture-color-float-variant-"],
+  "Texturing functions can be used to add variation to many features of a material. They can for example be used to change the color across an object, the intensities of reflections or add variations to an otherwise smooth surface through bump maps. nvidia::core_definitions supports texturing using bitmap textures as well as a selection of procedural textures to add variation. Most texturing functions come in 2 flavors: 1 variant suitable to add bumps to a material and one variant to add color or vary roughness or reflectivity. 3.1 Bitmap texture (color/float variant)": ["definitions", "bitmap-texture-color-float-variant-"],
   "3.2 Bitmap texture (bump variant)": ["definitions", "bitmap-texture-bump-variant-"],
   "3.3 Normalmap texture": ["definitions", "normalmap-texture"],
   "3.4 3d checker texture (color/float variant)": ["definitions", "3d-checker-texture-color-float-variant-"],

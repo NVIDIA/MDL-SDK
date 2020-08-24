@@ -59,16 +59,16 @@ class Zip_file : public IFile
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     bool open(
-	const char* path,
-	IFile::Mode mode = IFile::M_READ);
+        const char* path,
+        IFile::Mode mode = IFile::M_READ);
     /// Open a file by path. To open stdin/stdout, set path to empty string and pass the
     /// corresponding mode, ie M_READ for stdin and M_WRITE for stdout.
     /// \param path (already substituted) path to file
     /// \param mode opening mode
     /// \return true=ok, false=fail (see error())
     bool open(
-	const std::string& path,
-	IFile::Mode mode = IFile::M_READ);
+        const std::string& path,
+        IFile::Mode mode = IFile::M_READ);
 
     /// Close the file.
     /// \return success, ie false if internal close failed.
@@ -84,8 +84,8 @@ class Zip_file : public IFile
     /// \param num copy this many bytes (63 valid bits)
     /// \return # chars read, -1 = error
     Sint64 read(
-	char* buf,
-	Uint64 num);
+        char* buf,
+        Uint64 num);
 
     /// Read a line ending with a newline or EOF from the open file. Leave
     /// newlines in the returned buffer.
@@ -93,16 +93,16 @@ class Zip_file : public IFile
     /// \param num copy this many bytes or until \n\0
     /// \return true=ok, false=fail (see error())
     bool readline(
-	char* line,
-	int num) { abort(); return false; }
+        char* line,
+        int num) { abort(); return false; }
     /// Read a line ending with an EOL or EOF from the open file. Note that the line will be
     /// stripped of whitespaces, if not told otherwise.
     /// \param line copy data here
     /// \param strip strip whitespaces?
     /// \return true=ok, false=fail (see error())
     bool read_line(
-	std::string& line,
-	bool strip=true) { abort(); return false; }
+        std::string& line,
+        bool strip=true) { abort(); return false; }
 
     /// Write raw data to a file
     /// 64 bit platform:
@@ -114,28 +114,28 @@ class Zip_file : public IFile
     /// \param num write this many bytes(63 valid bits)
     /// \return # chars written, -1 = error
     Sint64 write(
-	const char* buf,
-	Uint64 num) { abort(); return -1; }
+        const char* buf,
+        Uint64 num) { abort(); return -1; }
 
     /// Write a line to open file. Any newlines must be in <line>, writeline
     /// doesn't add one.
     /// \param line write this string
     /// \return true=ok, false=fail (see error())
     bool writeline(
-	const char* line) { abort(); return false; }
+        const char* line) { abort(); return false; }
 
     /// Write a formatted string to an open file.
     /// \param fmt format string with %X
     int printf(
-	const char* fmt,
-	...) PRINTFLIKE2  { abort(); return -1; }
+        const char* fmt,
+        ...) PRINTFLIKE2  { abort(); return -1; }
 
     /// Write a formatted string to an open file.
     /// \param fmt format string with %X
     /// \param args arguments for %X
     int vprintf(
-	const char* fmt,
-	va_list args) { abort(); return -1; }
+        const char* fmt,
+        va_list args) { abort(); return -1; }
 
     /// Flush buffered output data to the file.
     /// \return success
@@ -154,8 +154,8 @@ class Zip_file : public IFile
     /// \param whence 0=absolute, 1=relative, 2=rel to eof
     /// \return success
     bool seek(
-	Sint64 offset,
-	int whence=0);
+        Sint64 offset,
+        int whence=0);
 
     /// Retrieve the current absolute position in the file where the next byte
     /// would be read or written. This is 0 after opening except in append mode.
@@ -203,8 +203,8 @@ class Zip_file : public IFile
 
 private:
     gzFile m_file;
-    std::string m_path;			///< last path passed to open()
-    Sint64 m_file_size;				///< size of compressed file
+    std::string m_path;                 ///< last path passed to open()
+    Sint64 m_file_size;                         ///< size of compressed file
 
     Zip_file(const Zip_file&);
     Zip_file& operator=(const Zip_file&);

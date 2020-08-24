@@ -112,19 +112,19 @@ Position_impl const *Message::get_position() const
 }
 
 // Get the number of notes attached to this message.
-int Message::get_note_count() const
+size_t Message::get_note_count() const
 {
     return m_notes.size();
 }
 
 // Get the note at note_index attached to the message at message_index.
-IMessage const *Message::get_note(int index) const
+IMessage const *Message::get_note(size_t index) const
 {
     return m_notes.at(index);
 }
 
 // Add a note to this message.
-int Message::add_note(Message *note)
+size_t Message::add_note(Message *note)
 {
     return insert_message(m_notes, note);
 }
@@ -173,31 +173,31 @@ Message::Message(
 }
 
 // Get the number of messages.
-int Messages_impl::get_message_count() const
+size_t Messages_impl::get_message_count() const
 {
     return m_msgs.size();
 }
 
 // Get the message at index.
-IMessage const *Messages_impl::get_message(int index) const
+IMessage const *Messages_impl::get_message(size_t index) const
 {
     return m_msgs.at(index);
 }
 
 // Get number of error messages.
-int Messages_impl::get_error_message_count() const
+size_t Messages_impl::get_error_message_count() const
 {
     return m_err.size();
 }
 
 // Get the error message at index.
-IMessage const *Messages_impl::get_error_message(int index) const
+IMessage const *Messages_impl::get_error_message(size_t index) const
 {
     return m_err.at(index);
 }
 
 // Add a message.
-int Messages_impl::add_message(
+size_t Messages_impl::add_message(
     IMessage::Severity severity,
     int                code,
     char               msg_class,
@@ -213,8 +213,8 @@ int Messages_impl::add_message(
 }
 
 // Add a note to a message.
-int Messages_impl::add_note(
-    int                index,
+size_t Messages_impl::add_note(
+    size_t             index,
     IMessage::Severity severity,
     int                code,
     char               msg_class,
@@ -230,7 +230,7 @@ int Messages_impl::add_note(
 }
 
 // Add a message.
-int Messages_impl::add_message(
+size_t Messages_impl::add_message(
     IMessage::Severity sev,
     int                code,
     char               msg_class,
@@ -247,8 +247,8 @@ int Messages_impl::add_message(
 }
 
 // Add a note to a message.
-int Messages_impl::add_note(
-    int                message_index,
+size_t Messages_impl::add_note(
+    size_t             message_index,
     IMessage::Severity sev,
     int                code,
     char               msg_class,
@@ -263,7 +263,7 @@ int Messages_impl::add_note(
 }
 
 // Add an error message.
-int Messages_impl::add_error_message(
+size_t Messages_impl::add_error_message(
     int            code,
     char           msg_class,
     size_t         mod_id,
@@ -274,7 +274,7 @@ int Messages_impl::add_error_message(
 }
 
 // Add a warning message.
-int Messages_impl::add_warning_message(
+size_t Messages_impl::add_warning_message(
     int            code,
     char           msg_class,
     size_t         mod_id,
@@ -285,7 +285,7 @@ int Messages_impl::add_warning_message(
 }
 
 // Add an informational message.
-int Messages_impl::add_info_message(
+size_t Messages_impl::add_info_message(
     int            code,
     char           msg_class,
     size_t         mod_id,
@@ -296,8 +296,8 @@ int Messages_impl::add_info_message(
 }
 
 // Add an imported message to a message.
-int Messages_impl::add_imported(
-     int            message_index,
+size_t Messages_impl::add_imported(
+     size_t         message_index,
      size_t         fname_id,
      IMessage const *msg)
 {
@@ -382,7 +382,7 @@ void Messages_impl::clear()
 // Copy messages from another list to this.
 void Messages_impl::copy_messages(Messages const &src)
 {
-    for (int i = 0, n = src.get_message_count(); i < n; ++i) {
+    for (size_t i = 0, n = src.get_message_count(); i < n; ++i) {
         IMessage const *msg = src.get_message(i);
 
         char const *fname = msg->get_file();
@@ -396,7 +396,7 @@ void Messages_impl::copy_messages(Messages const &src)
             msg->get_position(),
             msg->get_string());
 
-        for (int j = 0, m = msg->get_note_count(); j < m; ++j) {
+        for (size_t j = 0, m = msg->get_note_count(); j < m; ++j) {
             IMessage const *note = msg->get_note(j);
 
             char const *fname = note->get_file();

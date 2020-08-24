@@ -74,7 +74,7 @@ namespace MI {
 
 namespace NEURAY {
 
-mi::neuraylib::IFactory* s_factory = 0;
+mi::neuraylib::IFactory* s_factory = nullptr;
 
 Factory_impl::Factory_impl( Class_factory* class_factory)
   : m_class_factory( class_factory)
@@ -83,7 +83,7 @@ Factory_impl::Factory_impl( Class_factory* class_factory)
 
 Factory_impl::~Factory_impl()
 {
-    m_class_factory = 0;
+    m_class_factory = nullptr;
 }
 
 mi::base::IInterface* Factory_impl::create(
@@ -91,7 +91,7 @@ mi::base::IInterface* Factory_impl::create(
     mi::Uint32 argc,
     const mi::base::IInterface* argv[])
 {
-    return m_class_factory->create_type_instance( 0, type_name, argc, argv);
+    return m_class_factory->create_type_instance( nullptr, type_name, argc, argv);
 }
 
 mi::Uint32 Factory_impl::assign_from_to(
@@ -127,7 +127,7 @@ mi::Uint32 Factory_impl::assign_from_to(
 mi::IData* Factory_impl::clone( const mi::IData* source, mi::Uint32 options)
 {
     if( !source)
-        return 0;
+        return nullptr;
 
     // handle IData_simple
     mi::base::Handle<const mi::IData_simple> source_simple(
@@ -142,7 +142,7 @@ mi::IData* Factory_impl::clone( const mi::IData* source, mi::Uint32 options)
         return clone( source_collection.get(), options);
 
     ASSERT( M_NEURAY_API, false);
-    return 0;
+    return nullptr;
 }
 
 mi::Sint32 Factory_impl::compare( const mi::IData* lhs, const mi::IData* rhs)
@@ -152,8 +152,8 @@ mi::Sint32 Factory_impl::compare( const mi::IData* lhs, const mi::IData* rhs)
     if(  lhs && !rhs) return +1;
     ASSERT( M_NEURAY_API, lhs && rhs);
 
-    const char* lhs_type = lhs->get_type_name();
-    const char* rhs_type = rhs->get_type_name();
+    const char* lhs_type = lhs->get_type_name(); //-V522 PVS
+    const char* rhs_type = rhs->get_type_name(); //-V522 PVS
     int type_cmp = strcmp( lhs_type, rhs_type);
     if( type_cmp != 0)
     	return type_cmp;
@@ -181,10 +181,10 @@ mi::Sint32 Factory_impl::compare( const mi::IData* lhs, const mi::IData* rhs)
 const mi::IString* Factory_impl::dump( const mi::IData* data, const char* name, mi::Size depth)
 {
     if( !data)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
-    dump( /*transaction*/ 0, name, data, depth, s);
+    dump( /*transaction*/ nullptr, name, data, depth, s);
     mi::IString* result = create<mi::IString>( "String");
     result->set_c_str( s.str().c_str());
     return result;
@@ -197,7 +197,7 @@ const mi::IString* Factory_impl::dump(
     mi::Size depth)
 {
     if( !data)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
     dump( transaction, name, data, depth, s);
@@ -209,7 +209,7 @@ const mi::IString* Factory_impl::dump(
 const mi::IStructure_decl* Factory_impl::get_structure_decl( const char* structure_name) const
 {
    if( !structure_name)
-        return 0;
+        return nullptr;
 
     return m_class_factory->get_structure_decl( structure_name);
 }
@@ -217,7 +217,7 @@ const mi::IStructure_decl* Factory_impl::get_structure_decl( const char* structu
 const mi::IEnum_decl* Factory_impl::get_enum_decl( const char* enum_name) const
 {
    if( !enum_name)
-        return 0;
+        return nullptr;
 
     return m_class_factory->get_enum_decl( enum_name);
 }
@@ -382,7 +382,7 @@ mi::Uint32 Factory_impl::assign_from_to(
                         = STRING::lexicographic_cast_s<mi::Size>( key);
                     if( !index_likely.get_status())
                         continue;
-                    mi::Size index = *index_likely.get_ptr();
+                    mi::Size index = *index_likely.get_ptr(); //-V522 PVS
                     if( index+1 > max_index_plus_one)
                         max_index_plus_one = index+1;
                 }
@@ -479,8 +479,8 @@ mi::Uint32 Factory_impl::assign_from_to(
             continue;
         }
 
-        source_value_interface = 0;
-        target_value_interface = 0;
+        source_value_interface = nullptr;
+        target_value_interface = nullptr;
 
         // invoke assign_from_to() for this key, and set the target value for this key again
         result |= assign_from_to( source_value_data.get(), target_value_data.get(), options);
@@ -606,7 +606,7 @@ mi::Uint32 Factory_impl::assign_from_to(
     // deep assignment, source has NULL pointer
     mi::base::Handle<mi::base::IInterface> source_pointer( source->get_pointer());
     if( !source_pointer.is_valid_interface()) {
-        target->set_pointer( 0);
+        target->set_pointer( nullptr);
         return 0;
     }
 
@@ -641,7 +641,7 @@ mi::Uint32 Factory_impl::assign_from_to(
     // deep assignment, source has NULL pointer
     mi::base::Handle<const mi::base::IInterface> source_pointer( source->get_pointer());
     if( !source_pointer.is_valid_interface()) {
-        target->set_pointer( 0);
+        target->set_pointer( nullptr);
         return 0;
     }
 
@@ -761,7 +761,7 @@ mi::IData_collection* Factory_impl::clone( const mi::IData_collection* source, m
         return clone( source_map.get(), options);
 
     ASSERT( M_NEURAY_API, false);
-    return 0;
+    return nullptr;
 }
 
 mi::IRef* Factory_impl::clone( const mi::IRef* source, mi::Uint32 options)
@@ -786,7 +786,7 @@ mi::IPointer* Factory_impl::clone( const mi::IPointer* source, mi::Uint32 option
     if( (options & DEEP_ASSIGNMENT_OR_CLONE) == 0) {
         mi::IPointer* target = create_with_transaction<mi::IPointer>( source_type_name, source);
         if( !target)
-            return 0;
+            return nullptr;
         mi::Uint32 result = target->set_pointer( source->get_pointer());
         ASSERT( M_NEURAY_API, result == 0);
         boost::ignore_unused( result);
@@ -801,15 +801,15 @@ mi::IPointer* Factory_impl::clone( const mi::IPointer* source, mi::Uint32 option
     // deep clone, non-NULL pointer
     mi::base::Handle<mi::IData> source_pointer_data( source->get_pointer<mi::IData>());
     if( !source_pointer_data.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::base::Handle<mi::IData> target_pointer_data(
         clone( source_pointer_data.get(), options));
     if( !target_pointer_data.is_valid_interface())
-        return 0;
+        return nullptr;
 
     mi::IPointer* target = create_with_transaction<mi::IPointer>( source_type_name, source);
     if( !target)
-        return 0;
+        return nullptr;
     mi::Uint32 result = target->set_pointer( target_pointer_data.get());
     ASSERT( M_NEURAY_API, result == 0);
     boost::ignore_unused( result);
@@ -827,7 +827,7 @@ mi::IConst_pointer* Factory_impl::clone( const mi::IConst_pointer* source, mi::U
         mi::IConst_pointer* target
             = create_with_transaction<mi::IConst_pointer>( source_type_name, source);
         if( !target)
-            return 0;
+            return nullptr;
         mi::Uint32 result = target->set_pointer( source->get_pointer());
         ASSERT( M_NEURAY_API, result == 0);
         boost::ignore_unused( result);
@@ -842,16 +842,16 @@ mi::IConst_pointer* Factory_impl::clone( const mi::IConst_pointer* source, mi::U
     // deep clone, non-NULL pointer
     mi::base::Handle<const mi::IData> source_pointer_data( source->get_pointer<mi::IData>());
     if( !source_pointer_data.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IData> target_pointer_data(
         clone( source_pointer_data.get(), options));
     if( !target_pointer_data.is_valid_interface())
-        return 0;
+        return nullptr;
 
     mi::IConst_pointer* target
         = create_with_transaction<mi::IConst_pointer>( source_type_name, source);
     if( !target)
-        return 0;
+        return nullptr;
     mi::Uint32 result = target->set_pointer( target_pointer_data.get());
     ASSERT( M_NEURAY_API, result == 0);
     boost::ignore_unused( result);
@@ -876,13 +876,13 @@ mi::IDynamic_array* Factory_impl::clone( const mi::IDynamic_array* source, mi::U
     mi::IDynamic_array* target
         = create_with_transaction<mi::IDynamic_array>( source->get_type_name(), source);
     if( !target)
-        return 0;
+        return nullptr;
 
     mi::Uint32 result = assign_from_to( source, target, options);
     if( result != 0) {
         // might happen for non-IData's
         target->release();
-        return 0;
+        return nullptr;
     }
 
     return target;
@@ -894,13 +894,13 @@ mi::IArray* Factory_impl::clone( const mi::IArray* source, mi::Uint32 options)
 
     mi::IArray* target = create_with_transaction<mi::IArray>( source->get_type_name(), source);
     if( !target)
-        return 0;
+        return nullptr;
 
     mi::Uint32 result = assign_from_to( source, target, options);
     if( result != 0) {
         // might happen for non-IData's
         target->release();
-        return 0;
+        return nullptr;
     }
 
     return target;
@@ -913,7 +913,7 @@ mi::IStructure* Factory_impl::clone( const mi::IStructure* source, mi::Uint32 op
     mi::IStructure* target
         = create_with_transaction<mi::IStructure>( source->get_type_name(), source);
     if( !target)
-        return 0;
+        return nullptr;
 
     mi::Size n = source->get_length();
     for( mi::Size i = 0; i < n; ++i) {
@@ -928,7 +928,7 @@ mi::IStructure* Factory_impl::clone( const mi::IStructure* source, mi::Uint32 op
             source_value_interface->get_interface<mi::IData>());
         if( !source_value_data.is_valid_interface()) {
             target->release();
-            return 0;
+            return nullptr;
         }
 
         // clone source value
@@ -936,7 +936,7 @@ mi::IStructure* Factory_impl::clone( const mi::IStructure* source, mi::Uint32 op
         if( !target_value_data.is_valid_interface()) {
             // might happen for non-IData's or no longer registered type names
             target->release();
-            return 0;
+            return nullptr;
         }
 
         // and set clone in target
@@ -952,7 +952,7 @@ mi::IMap* Factory_impl::clone( const mi::IMap* source, mi::Uint32 options)
 
     mi::IMap* target = create_with_transaction<mi::IMap>( source->get_type_name(), source);
     if( !target)
-        return 0;
+        return nullptr;
 
     mi::Size n = source->get_length();
     for( mi::Size i = 0; i < n; ++i) {
@@ -967,7 +967,7 @@ mi::IMap* Factory_impl::clone( const mi::IMap* source, mi::Uint32 options)
             source_value_interface->get_interface<mi::IData>());
         if( !source_value_data.is_valid_interface()) {
             target->release();
-            return 0;
+            return nullptr;
         }
 
         // clone source value
@@ -975,7 +975,7 @@ mi::IMap* Factory_impl::clone( const mi::IMap* source, mi::Uint32 options)
         if( !target_value_data.is_valid_interface()) {
             // might happen for non-IData's or no longer registered type names
             target->release();
-            return 0;
+            return nullptr;
         }
 
         // and insert clone into map
@@ -1165,7 +1165,7 @@ mi::Sint32 Factory_impl::compare( const mi::IRef* lhs, const mi::IRef* rhs)
     if( !lhs_name && !rhs_name) return 0;
 
     ASSERT( M_NEURAY_API, lhs_name && rhs_name);
-    return strcmp( lhs_name, rhs_name);
+    return strcmp( lhs_name, rhs_name); //-V575
 }
 
 mi::Sint32 Factory_impl::compare( const mi::IEnum* lhs, const mi::IEnum* rhs)
@@ -1284,7 +1284,7 @@ mi::neuraylib::ITransaction* Factory_impl::get_transaction( const mi::IData* dat
 
     // extract transaction from ICompound
     if( data->compare_iid( mi::ICompound::IID()))
-        return 0;
+        return nullptr;
 
     // all interfaces derived from IData_collection should be handled now
     ASSERT( M_NEURAY_API, !data->compare_iid( mi::IData_collection::IID()));
@@ -1304,7 +1304,7 @@ mi::neuraylib::ITransaction* Factory_impl::get_transaction( const mi::IData* dat
         return impl->get_transaction();
     }
 
-    return 0;
+    return nullptr;
 }
 
 mi::base::IInterface* Factory_impl::create_with_transaction(
@@ -1321,7 +1321,7 @@ mi::base::IInterface* Factory_impl::create_with_transaction(
     // type names. Extract transaction from prototype for fallback.
     mi::base::Handle<mi::neuraylib::ITransaction> transaction( get_transaction( prototype));
     if( !transaction.is_valid_interface())
-        return 0;
+        return nullptr;
 
     // This create() call might fail for non-IData's (not supported via the general factory) or no
     // longer registered type names.

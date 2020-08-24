@@ -59,7 +59,7 @@ private:
     void compute_hashes();
 
     /// Post visit a call expression.
-    void post_visit(IExpression_call *expr) MDL_FINAL;
+    IExpression *post_visit(IExpression_call *expr) MDL_FINAL;
 
     /// Get the allocator.
     IAllocator *get_allocator() const { return m_cg.get_allocator(); }

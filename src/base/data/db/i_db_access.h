@@ -86,15 +86,15 @@ class Access_base
     ~Access_base();
 
     /// Return the pointer to the job, if this is a job or NULL, otherwise.
-    /// \return				The job
+    /// \return                         The job
     const SCHED::Job* get_job() const;
 
     /// Get the transaction this object belongs to
-    /// \return				The transaction
+    /// \return                         The transaction
     Transaction* get_transaction() const { return m_transaction; }
 
     /// Return the tag this object references.
-    /// \return				The tag
+    /// \return                         The tag
     Tag get_tag() const { return m_tag; }
 
     /// Return the base pointer to the DB element
@@ -104,11 +104,11 @@ class Access_base
     Element_base* get_base_ptr() { return m_pointer; }
 
     /// Check if the pointer is set to a valid tag or to 0.
-    /// \return				True if it is set to a valid tag, 0 otherwise.
+    /// \return                         True if it is set to a valid tag, 0 otherwise.
     bool is_valid() const { return m_info != nullptr; }
 
     /// Return whether pointer is set to a valid tag.
-    /// \return				True if it is set to a valid tag, 0 otherwise.
+    /// \return                         True if it is set to a valid tag, 0 otherwise.
     bool operator!() const { return !this->is_valid(); }
 
     /// Get the unique id of a certain tag version. The result of a database lookup on a certain
@@ -118,7 +118,7 @@ class Access_base
     /// means, that it may be used to identify this version. The database guarantees, that any
     /// legal change to the data (done through an edit) will also change this id.
     /// NOTE: The value obtained is valid host locally, only.
-    /// \return			The tag version
+    /// \return                 The tag version
     Tag_version get_tag_version() const;
 
     /// Set this access to point to a new tag, possibly within a new transaction.
@@ -129,11 +129,11 @@ class Access_base
     /// If the argument is 0, then only the old element will be unpinned (if it
     /// was pointing somewhere) because 0 is no valid tag.
     ///
-    /// \param tag			The new tag
-    /// \param transaction		The new transaction
-    /// \param id			The expected class id of the new tag.
-    /// \param wait			Should the access wait if the tag is not yet available
-    ///					or return immediately?
+    /// \param tag                      The new tag
+    /// \param transaction              The new transaction
+    /// \param id                       The expected class id of the new tag.
+    /// \param wait                     Should the access wait if the tag is not yet available
+    ///                                 or return immediately?
     Element_base* set_access( Tag tag,
                               Transaction* transaction,
                               SERIAL::Class_id id,
@@ -144,7 +144,7 @@ private:
     ///
     /// Used to implement copy constructor and assignment operator.
     ///
-    /// \param source			The source for copying.
+    /// \param source                   The source for copying.
     Element_base* set_access( const Access_base& source);
 
 public:
@@ -156,10 +156,10 @@ public:
     /// If the argument is 0, then only the old element will be unpinned (if it
     /// was pointing somewhere) because 0 is no valid tag.
     ///
-    /// \param tag			The new tag
-    /// \param transaction		The new transaction
-    /// \param id			The expected class id of the new tag.
-    /// \param journal type		The initial journal flags of this edit.
+    /// \param tag                      The new tag
+    /// \param transaction              The new transaction
+    /// \param id                       The expected class id of the new tag.
+    /// \param journal type             The initial journal flags of this edit.
     Element_base* set_edit( Tag tag,
                             Transaction* transaction,
                             SERIAL::Class_id id,
@@ -170,7 +170,7 @@ public:
 
     /// Return the journal flags
     ///
-    /// \return				The journal flags accumulated during this edit.
+    /// \return                         The journal flags accumulated during this edit.
     Journal_type get_journal_flags() const { return m_journal_type; }
 
     /// Set the journal flags of the edit. This can be done until the edit goes out of scope or set
@@ -179,7 +179,7 @@ public:
     /// many times and always overwrites the old flags. Together with get_journal_flags it can be
     /// used to add the flags successively. Precondition: this has to be an edit.
     ///
-    /// \param type			The new set of journal flags
+    /// \param type                     The new set of journal flags
     void set_journal_flags( Journal_type type) { 
         ASSERT(M_DB, m_is_edit);
         m_journal_type = type;
@@ -190,7 +190,7 @@ public:
     /// are not known from the beginning but become clear, later. This is efficient and can be used
     /// many times to aggregate flags. Precondition: this has to be an edit.
     ///
-    /// \param type			The new set of journal flags
+    /// \param type                     The new set of journal flags
     void add_journal_flags( Journal_type type) { 
         ASSERT(M_DB, m_is_edit);
         m_journal_type.add_journal( type);
@@ -245,7 +245,7 @@ private:
 ///
 ///      // Use the smart pointer in the same way a pointer to a texture would
 ///      // be used. Note that trying to change the data would result in a
-///	// compile time error message!
+///     // compile time error message!
 ///      int width = texture->get_width();
 ///
 ///      ...
@@ -263,8 +263,8 @@ template <class T, bool WAIT = true> class Access : public Access_base
 
     /// Constructor.
     ///
-    /// \param tag			The tag to access
-    /// \param transaction		The transaction for the access
+    /// \param tag                      The tag to access
+    /// \param transaction              The transaction for the access
     Access( const Typed_tag<T>& tag, Transaction* transaction)
     {
         set_access(tag.get_untyped(), transaction, T::id, WAIT);
@@ -273,7 +273,7 @@ template <class T, bool WAIT = true> class Access : public Access_base
 
     /// Copy constructor.
     ///
-    /// \param source			The source access object.
+    /// \param source                   The source access object.
     Access( const Access_base& source)
         : Access_base( source)
     {
@@ -282,7 +282,7 @@ template <class T, bool WAIT = true> class Access : public Access_base
 
     /// Copy constructor.
     ///
-    /// \param source			The source access object.
+    /// \param source                   The source access object.
     Access( const Access<T, WAIT>& source)
         : Access_base( source)
     {
@@ -297,8 +297,8 @@ template <class T, bool WAIT = true> class Access : public Access_base
     /// If the argument is 0, then only the old element will be unpinned (if it was pointing
     /// somewhere) because 0 is no valid tag.
     ///
-    /// \param tag			The new tag
-    /// \param transaction		The new transaction
+    /// \param tag                      The new tag
+    /// \param transaction              The new transaction
     void set( Typed_tag<T> const & tag = Typed_tag<T>(),
               Transaction* transaction = 0)
     {
@@ -308,7 +308,7 @@ template <class T, bool WAIT = true> class Access : public Access_base
 
     /// Set the access object to the same values as the source
     ///
-    /// \param source			The source access object.
+    /// \param source                   The source access object.
     void operator=( const Access<T,WAIT>& source)
     {
         Access_base::operator=( source);
@@ -317,7 +317,7 @@ template <class T, bool WAIT = true> class Access : public Access_base
 
     /// Set the access object to the same values as the source
     ///
-    /// \param source			The source access object.
+    /// \param source                   The source access object.
     void operator=( const Access_base& source)
     {
         Access_base::operator=( source);
@@ -327,7 +327,7 @@ template <class T, bool WAIT = true> class Access : public Access_base
     /// Access operator. This is const because it does not allow jobs and applications to change
     /// database elements.
     ///
-    /// \return				The pointer this points to.
+    /// \return                         The pointer this points to.
     const T* operator->() const
     {
         ASSERT(M_DB, get_base_ptr()); // catch attempt to dereference an unset Access<T>
@@ -338,7 +338,7 @@ template <class T, bool WAIT = true> class Access : public Access_base
     /// should be used carefully, since it circumvents this smart pointer wrapper - as soon as the
     /// destructor was executed the retrieved pointer is undefined.
     ///
-    /// \return				The pointer this points to.
+    /// \return                         The pointer this points to.
     const T* get_ptr() const { return static_cast<const T*>( get_base_ptr()); }
 };
 
@@ -378,9 +378,9 @@ template <class T> class Edit : public Access<T>
 
     /// Constructor.
     ///
-    /// \param tag			The tag to edit
-    /// \param transaction		The transaction for the access
-    /// \param journal_type		The type for journal entries
+    /// \param tag                      The tag to edit
+    /// \param transaction              The transaction for the access
+    /// \param journal_type             The type for journal entries
     Edit( const Typed_tag<T>& tag,
           Transaction* transaction,
           Journal_type journal_type = JOURNAL_ALL)
@@ -393,8 +393,8 @@ template <class T> class Edit : public Access<T>
     /// Constructor. This can be used to get an Edit pointer from an Access pointer, when it gets
     /// clear that the element has to be edited.
     ///
-    /// \param source			The source access object
-    /// \param journal_type		The type for journal entries
+    /// \param source                   The source access object
+    /// \param journal_type             The type for journal entries
     Edit( const Access<T>& source,
           Journal_type journal_type = JOURNAL_ALL)
     {
@@ -420,9 +420,9 @@ template <class T> class Edit : public Access<T>
     /// If the argument is 0, then only the old element will be unpinned (if it was pointing
     /// somewhere) because 0 is no valid tag.
     ///
-    /// \param tag			The tag to edit
-    /// \param transaction		The transaction for the access
-    /// \param journal_type		The type for journal entries
+    /// \param tag                      The tag to edit
+    /// \param transaction              The transaction for the access
+    /// \param journal_type             The type for journal entries
     void set( const Typed_tag<T>& tag = Tag(),
               Transaction* transaction = 0,
               Journal_type journal_type = JOURNAL_ALL)
@@ -436,7 +436,7 @@ template <class T> class Edit : public Access<T>
     /// database elements. This means when setting an Edit class element to an element, a new
     /// version of the element will be created.
     ///
-    /// \return				The pointer this points to.
+    /// \return                         The pointer this points to.
     T* operator->()
     {
         ASSERT(M_DB, get_base_ptr()); // catch attempt to dereference an unset Edit<T>
@@ -447,7 +447,7 @@ template <class T> class Edit : public Access<T>
     /// element. Useful if the Edit is a member of a class and you want to call a const method
     /// of T from a const method of that class.
     ///
-    /// \return				The pointer this points to.
+    /// \return                         The pointer this points to.
     const T* operator->() const
     {
         ASSERT(M_DB, get_base_ptr()); // catch attempt to dereference an unset Edit<T>
@@ -458,14 +458,14 @@ template <class T> class Edit : public Access<T>
     /// Note that this method should be used carefully, since it circumvents this smart pointer
     /// wrapper - as soon as the destructor was executed the retrieved pointer is undefined.
     ///
-    /// \return				The pointer this points to.
+    /// \return                         The pointer this points to.
     T* get_ptr() { return static_cast<T*>(get_base_ptr()); }
 
     /// Retrieve the internal object pointer. Useful for convenience only.
     /// Note that this method should be used carefully, since it circumvents this smart pointer
     /// wrapper - as soon as the destructor was executed the retrieved pointer is undefined.
     ///
-    /// \return				The pointer this points to.
+    /// \return                         The pointer this points to.
     const T* get_ptr() const { return static_cast<const T*>(get_base_ptr()); }
 
 private:

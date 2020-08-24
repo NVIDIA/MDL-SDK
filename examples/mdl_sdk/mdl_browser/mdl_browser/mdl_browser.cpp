@@ -55,6 +55,8 @@ int run_demo_qt_application(Mdl_qt_plugin_interface* plugin,
     QQuickStyle::setStyle("Material");
     #if defined(Q_OS_WIN)
         QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+        // QCoreApplication::setAttribute(Qt::AA_UseDesktopOpenGL); // hangs in remote desktop mode
+        QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
     #endif
 
     // create a Qt application
@@ -63,18 +65,16 @@ int run_demo_qt_application(Mdl_qt_plugin_interface* plugin,
     QQmlApplicationEngine engine;
 
     // create and pass the context
-    Mdl_qt_plugin_context plugin_context;
-    plugin_context.neuray = mi::base::make_handle_dup(neuray);
-    plugin_context.transaction = mi::base::make_handle_dup(transaction);
+    Mdl_qt_plugin_context plugin_context(neuray, transaction);
     plugin_context.rebuild_module_cache = options.cache_rebuild;
     plugin->set_context(&engine, &plugin_context);
 
-    // setup callbacks to get the result (not required) 
-    plugin_context.mdl_browser.on_accepted = [&](const std::string& s)
+    // setup callbacks to get the result (not required)
+    plugin_context.get_mdl_browser_callbacks()->on_accepted = [&](const std::string& s)
     {
-        std::cerr << "[info] Selection: " << s.c_str() << "\n";
+        std::cout << "[info] Selection: " << s.c_str() << "\n";
     };
-    plugin_context.mdl_browser.on_rejected = [&]()
+    plugin_context.get_mdl_browser_callbacks()->on_rejected = [&]()
     {
         std::cout << "[info] Selection: nothing\n";
     };
@@ -100,13 +100,11 @@ int run_non_qt_application(Mdl_qt_plugin_interface* plugin,
     do
     {
         // create and pass the context for the (next) invocation of the browser
-        Mdl_qt_plugin_context plugin_context;
-        plugin_context.neuray = mi::base::make_handle_dup(neuray);
-        plugin_context.transaction = mi::base::make_handle_dup(transaction);
-        plugin_context.rebuild_module_cache = options.cache_rebuild;
+        Mdl_qt_plugin_context* plugin_context = new Mdl_qt_plugin_context(neuray, transaction);
+        plugin_context->rebuild_module_cache = options.cache_rebuild;
 
         Mdl_qt_plguin_browser_handle selection_handle;
-        plugin->show_select_material_dialog(&plugin_context, selection_handle);
+        plugin->show_select_material_dialog(plugin_context, &selection_handle);
 
         // ...
         // do something else in your application
@@ -115,17 +113,20 @@ int run_non_qt_application(Mdl_qt_plugin_interface* plugin,
         selection_handle.thread.join();
         if (selection_handle.accepted)
         {
-            std::cout << "[info] Selection: " << selection_handle.result << "\n";
+            // (only) output consumed by an application that uses this browser
+            // instead of implementing an own one
+            std::cout << selection_handle.result;
         }
         else
         {
-            std::cout << "[info] Selection: nothing\n";
+            std::cout << "[info] nothing selected\n";
         }
+        std::cout << std::flush;
+        delete plugin_context;
 
     } while (options.keep_open);
 
-    keep_console_open();
-    return 0;
+    exit_success();
 }
 
 
@@ -137,15 +138,28 @@ int MAIN_UTF8(int argc, char* argv[])
     // Access the MDL SDK
     // every application that used the MDL SDK does this in some way
     mi::base::Handle<mi::neuraylib::INeuray> neuray(load_mdl_sdk(options));
-    if (!neuray) return -1;
+    if (!neuray)
+    {
+        std::cout << "[MDL Browser] Failed to load the MDL SDK libraries.\n";
+        return -1;
+    }
 
     // create a transaction that used for loading modules and building the cache
     mi::base::Handle<mi::neuraylib::ITransaction> transaction(create_transaction(neuray.get()));
-    if (!transaction) return -1;
+    if (!transaction)
+    {
+        std::cout << "[MDL Browser] Failed to create a DB transaction.\n";
+        return -1;
+    }
 
     // load and initialize the MDL Qt Plugin
     Mdl_qt_plugin_interface* plugin = Mdl_qt_plugin_interface::load(
-        get_executable_folder().c_str());
+        mi::examples::io::get_executable_folder().c_str());
+    if (!plugin)
+    {
+        std::cout << "[MDL Browser] Failed to load the MdlQtPlugin.\n";
+        return -1;
+    }
 
     // depending on the use-case, the browser can be used from the as standalone windows in case
     // of an application that is not using Qt so far. If the application is based on Qt, the
@@ -159,9 +173,18 @@ int MAIN_UTF8(int argc, char* argv[])
     // unload the plugin
     plugin->unload();
 
-    // close the MDL SDK 
+    // close the MDL SDK
     transaction->commit();
-    neuray->shutdown();
+    transaction = nullptr;
+
+    // Shut down the MDL SDK
+    if (neuray->shutdown() != 0)
+        std::cerr << "Failed to shutdown the SDK.\n";
+
+    // Unload the MDL SDK
+    neuray = nullptr;
+    if (!mi::examples::mdl::unload())
+        std::cerr << "Failed to unload the SDK.\n";
 
     return exit_code;
 }

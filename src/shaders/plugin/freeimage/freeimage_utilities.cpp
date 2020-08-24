@@ -30,6 +30,10 @@
 
 #include "freeimage_utilities.h"
 
+#if defined(MI_COMPILER_GCC)
+#include <x86intrin.h>
+#endif
+
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/iwriter.h>
 
@@ -183,46 +187,129 @@ mi::Uint32 get_bytes_per_pixel( const char* pixel_type)
     return 0;
 }
 
-char* get_scanline( FIBITMAP* bitmap, mi::Uint32 y)
+static char* get_scanline( FIBITMAP* bitmap, mi::Uint32 y)
 {
     return static_cast<char*>( static_cast<void*>( FreeImage_GetScanLine( bitmap, y)));
 }
+
+// Rotate p_val32 by p_nBits bits to the left
+#ifndef ROL32
+#if defined(_MSC_VER) || defined(MI_COMPILER_ICC) || (defined(MI_COMPILER_GCC) && !defined(MI_COMPILER_CLANG))
+#define ROL32(p_val32,p_nBits) _rotl(p_val32,p_nBits)
+#else
+#define ROL32(p_val32,p_nBits) (((p_val32)<<(p_nBits))|((p_val32)>>(32-(p_nBits))))
+#endif
+#endif
 
 bool copy_from_bitmap_to_tile(
     FIBITMAP* bitmap, mi::Uint32 x_start, mi::Uint32 y_start, mi::neuraylib::ITile* tile)
 {
     // Compute the rectangular region that is to be copied
-    mi::Uint32 tile_width  = tile->get_resolution_x();
-    mi::Uint32 tile_height = tile->get_resolution_y();
-    mi::Uint32 bitmap_width  = FreeImage_GetWidth( bitmap);
-    mi::Uint32 bitmap_height = FreeImage_GetHeight( bitmap);
-    mi::Uint32 x_end = std::min( x_start + tile_width,  bitmap_width);
-    mi::Uint32 y_end = std::min( y_start + tile_height, bitmap_height);
+    const mi::Uint32 tile_width  = tile->get_resolution_x();
+    const mi::Uint32 tile_height = tile->get_resolution_y();
+    const mi::Uint32 bitmap_width  = FreeImage_GetWidth( bitmap);
+    const mi::Uint32 bitmap_height = FreeImage_GetHeight( bitmap);
+    const mi::Uint32 x_end = std::min( x_start + tile_width,  bitmap_width);
+    const mi::Uint32 y_end = std::min( y_start + tile_height, bitmap_height);
 
-    const char* pixel_type = tile->get_type();
+    const char* const pixel_type = tile->get_type();
 
+#if(FI_RGBA_RED == 2) && (FI_RGBA_GREEN == 1) && (FI_RGBA_BLUE == 0) && (FI_RGBA_ALPHA == 3)
     if( strcmp( pixel_type, "Rgb" ) == 0 || strcmp( pixel_type, "Rgba" ) == 0) {
 
-        // Copy pixel data pixel by pixel due to the different RGB component order.
-        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
-        assert( bytes_per_pixel == 3 || bytes_per_pixel == 4);
-        char* dest = static_cast<char*>( tile->get_data());
-        for( mi::Uint32 y = y_start; y < y_end; ++y) {
-            const char* src = get_scanline( bitmap, y) + x_start * bytes_per_pixel;
-            for( mi::Uint32 x = x_start; x < x_end; ++x) {
-                dest[0] = src[FI_RGBA_RED];
-                dest[1] = src[FI_RGBA_GREEN];
-                dest[2] = src[FI_RGBA_BLUE];
-                if( bytes_per_pixel == 4)
-                    dest[3] = src[FI_RGBA_ALPHA];
-                src  += bytes_per_pixel;
-                dest += bytes_per_pixel;
-            }
-            dest += (x_start + tile_width - x_end) * bytes_per_pixel;
+#if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) //!! meh, otherwise needs special GCC compile flags //!! also, testing with VC2015, there was no real benefit using SSSE3, so most likely memory limited
+        static int ssse3_supported = -1;
+        if(ssse3_supported == -1)
+        {
+            int cpuInfo[4];
+            __cpuid(cpuInfo,1);
+            ssse3_supported = (cpuInfo[2] & (1 << 9));
         }
+#endif
+        // Copy pixel data pixel by pixel due to the different RGB component order.
+        const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
+        assert( bytes_per_pixel == 3 || bytes_per_pixel == 4);
+        const char* __restrict src_start = static_cast<char*>(static_cast<void*>(FreeImage_GetBits(bitmap)));
+        const size_t pitch = FreeImage_GetPitch(bitmap);
+
+        if (bytes_per_pixel == 4)
+        {
+            for (mi::Uint32 y = y_start; y < y_end; ++y) {
+                mi::Uint32* const __restrict dest = static_cast<mi::Uint32*>(tile->get_data()) + y*tile_width + x_start;
+                const mi::Uint32* const __restrict src = reinterpret_cast<const mi::Uint32*>(src_start + y*pitch + x_start*4);
+                mi::Uint32 x = 0;
+                const mi::Uint32 xe = x_end-x_start;
+#if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
+                if(ssse3_supported)
+                {
+                    const __m128i mask = _mm_setr_epi8(2,1,0,3, 6,5,4,7, 10,9,8,11, 14,13,12,15);
+                    for(; x < (xe & 0xFFFFFFFCu); x+=4)
+                        _mm_storeu_si128((__m128i*)(dest+x), _mm_shuffle_epi8(_mm_loadu_si128((__m128i*)(src+x)), mask)); //!! aligned loads/store?
+                }
+#endif
+                for (; x < xe; ++x) {
+                    const mi::Uint32 tmp0 = src[x];
+                    const mi::Uint32 tmp00 = (tmp0 & 0xFF00FFu);
+                    dest[x] = (tmp0 & 0xFF00FF00u) | ROL32(tmp00, 16); // swap R & B
+                }
+            }
+        }
+        else
+        {
+            char* __restrict dest = static_cast<char*>(tile->get_data());
+            for (mi::Uint32 y = y_start; y < y_end; ++y) {
+                const char* __restrict src = src_start + y*pitch + x_start * 3;
+                mi::Uint32 x = 0;
+                const mi::Uint32 xe = x_end - x_start;
+#if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
+                if(ssse3_supported)
+                {
+                    const __m128i mask0 = _mm_setr_epi8(2,1,0, 5,4,3, 8,7,6, 11,10,9, 14,13,12, 15); //!! last entry
+                    const __m128i mask1 = _mm_setr_epi8(0,1, 4,3,2, 7,6,5, 10,9,8, 13,12,11, 14,15); //!! first & last entries
+                    const __m128i mask2 = _mm_setr_epi8(0, 3,2,1, 6,5,4, 9,8,7, 12,11,10, 15,14,13); //!! first entry
+                    for(; x < (xe & 0xFFFFFFF0u); x+=16,src+=48,dest+=48) {
+                        const __m128i c[3] = {_mm_loadu_si128((__m128i*)src),_mm_loadu_si128((__m128i*)(src+16)),_mm_loadu_si128((__m128i*)(src+32))}; //!! aligned loads/store?
+                        _mm_storeu_si128((__m128i*)(dest   ), _mm_shuffle_epi8(c[0], mask0));
+                        _mm_storeu_si128((__m128i*)(dest+16), _mm_shuffle_epi8(c[1], mask1));
+                        _mm_storeu_si128((__m128i*)(dest+32), _mm_shuffle_epi8(c[2], mask2));
+                        dest[15] = src[17]; //!! fix up the 4 wrong locations, meh!
+                        dest[17] = src[15];
+                        dest[30] = src[32];
+                        dest[32] = src[30];
+                    }
+                } else
+#endif
+                for (; x < (xe & 0xFFFFFFFCu); x+=4,src+=12,dest+=12) {
+                    const mi::Uint32* __restrict const src4 = reinterpret_cast<const mi::Uint32*>(src);
+                    const mi::Uint32 tmp0 = src4[0]; // BGRB
+                    const mi::Uint32 tmp1 = src4[1]; // GRBG
+                    const mi::Uint32 tmp2 = src4[2]; // RBGR
+                    mi::Uint32* __restrict const dest4 = reinterpret_cast<mi::Uint32*>(dest);
+                    const mi::Uint32 tmp00 = (tmp0 & 0xFF00FFu) | (tmp1 & 0xFF00u);
+                    dest4[0] = (tmp0 & 0xFF00u) | ROL32(tmp00, 16);
+                    const mi::Uint32 tmp11 = (tmp0 & 0xFF000000u) | (tmp2 & 0xFFu);
+                    dest4[1] = (tmp1 & 0xFF0000FFu) | ROL32(tmp11, 16);
+                    const mi::Uint32 tmp22 = (tmp2 & 0xFF00FF00u) | (tmp1 & 0xFF0000u);
+                    dest4[2] = (tmp2 & 0xFF0000u) | ROL32(tmp22, 16);
+                }
+                // finish up the leftovers
+                for (; x < xe; ++x,src+=3,dest+=3) {
+                    dest[0] = src[FI_RGBA_RED];
+                    dest[1] = src[FI_RGBA_GREEN];
+                    dest[2] = src[FI_RGBA_BLUE];
+                }
+                dest += (x_start + tile_width - x_end) * 3;
+            }
+        }
+
         return true;
 
-    } else if( strcmp( pixel_type, "Sint32" ) == 0
+    } else if(
+#else // little endian: just memcpy these types
+    if(        strcmp( pixel_type, "Rgb"    ) == 0
+        ||     strcmp( pixel_type, "Rgba"   ) == 0 ||
+#endif
+               strcmp( pixel_type, "Sint32" ) == 0
         ||     strcmp( pixel_type, "Float32") == 0
         ||     strcmp( pixel_type, "Rgb_16" ) == 0
         ||     strcmp( pixel_type, "Rgba_16") == 0
@@ -230,12 +317,14 @@ bool copy_from_bitmap_to_tile(
         ||     strcmp( pixel_type, "Color"  ) == 0) {
 
         // Copy pixel data using memcpy() for each scanline.
-        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
+        const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
         assert( bytes_per_pixel > 0);
-        mi::Uint32 bytes_per_scanline = (x_end-x_start) * bytes_per_pixel;
-        char* dest = static_cast<char*>( tile->get_data());
+        const mi::Uint32 bytes_per_scanline = (x_end-x_start) * bytes_per_pixel;
+        char* __restrict dest = static_cast<char*>( tile->get_data());
+        const char* __restrict src_start = static_cast<char*>(static_cast<void*>(FreeImage_GetBits(bitmap)));
+        const size_t pitch = FreeImage_GetPitch(bitmap);
         for( mi::Uint32 y = y_start; y < y_end; ++y) {
-            const char* src = get_scanline( bitmap, y) + x_start * bytes_per_pixel;
+            const char* __restrict src = src_start + y*pitch + x_start * bytes_per_pixel;
             memcpy( dest, src, bytes_per_scanline);
             dest += tile_width * bytes_per_pixel;
         }

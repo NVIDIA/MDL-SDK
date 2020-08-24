@@ -46,7 +46,7 @@ namespace SERIAL {
 class Serializer_impl : public Serializer, public MI::MEM::Allocatable
 {
 public:
-    Serializer_impl() : m_id_counter(1) { }
+    Serializer_impl() : m_id_counter(1), m_helper() { }
 
     virtual ~Serializer_impl() { };
 
@@ -192,8 +192,6 @@ public:
     void release(const char *str);
 
     void read(Serializable* object) { object->deserialize(this); }
-
-    static void read_direct(Deserializer* deserializer, char* buffer, size_t size);
 
     bool check_extension();
 

@@ -513,7 +513,7 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
 
             IExpression const *n_cond = local_opt(cond);
             if (n_cond != cond)
-                if_stmt->set_condition(cond);
+                if_stmt->set_condition(n_cond);
 
             if (IExpression_literal const *lit = as<IExpression_literal>(n_cond)) {
                 IValue_bool const *val = cast<IValue_bool>(lit->get_value());
@@ -980,6 +980,9 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
             IExpression const *lhs = local_opt(binary->get_left_argument());
             IExpression const *rhs = local_opt(binary->get_right_argument());
 
+            binary->set_left_argument(lhs);
+            binary->set_right_argument(rhs);
+
             // normalize: literal to RIGHT
             switch (op) {
             case IExpression_binary::OK_MULTIPLY:
@@ -996,6 +999,74 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                     IExpression const *t = lhs;
                     lhs = rhs;
                     rhs = t;
+                }
+                break;
+
+            case IExpression_binary::OK_LOGICAL_AND:
+                {
+                    if (IExpression_literal const *l_c = as<IExpression_literal>(lhs)) {
+                        IValue const *l_v = l_c->get_value();
+
+                        if (l_v->is_one()) {
+                            // true && x ==> RESULT_TYPE(x)
+                            return promote(rhs, binary->get_type());
+                        } else if (l_v->is_zero()) {
+                            // false && x ==> RESULT_TYPE(false)
+                            return promote(l_c, binary->get_type());
+                        }
+                    }
+
+                    if (IExpression_literal const *r_c = as<IExpression_literal>(rhs)) {
+                        IValue const *r_v = r_c->get_value();
+
+                        if (r_v->is_one()) {
+                            // x && true ==> RESULT_TYPE(x)
+                            return promote(lhs, binary->get_type());
+                        } else if (r_v->is_zero()) {
+                            // x && false ==> x,RESULT_TYPE(false)
+                            if (!has_side_effect(lhs)) {
+                                return promote(r_c, binary->get_type());
+                            }
+                            return create_binary(
+                                IExpression_binary::OK_SEQUENCE,
+                                lhs, rhs,
+                                expr->access_position());
+                        }
+                    }
+                }
+                break;
+
+            case IExpression_binary::OK_LOGICAL_OR:
+                {
+                    if (IExpression_literal const *l_c = as<IExpression_literal>(lhs)) {
+                        IValue const *l_v = l_c->get_value();
+
+                        if (l_v->is_one()) {
+                            // true || x ==> RESULT_TYPE(true)
+                            return promote(l_c, binary->get_type());
+                        } else if (l_v->is_zero()) {
+                            // false || x ==> RESULT_TYPE(x)
+                            return promote(rhs, binary->get_type());
+                        }
+                    }
+
+                    if (IExpression_literal const *r_c = as<IExpression_literal>(rhs)) {
+                        IValue const *r_v = r_c->get_value();
+
+                        if (r_v->is_one()) {
+                            // x || true ==> x,RESULT_TYPE(true)
+                            if (!has_side_effect(lhs)) {
+                                return promote(r_c, binary->get_type());
+                            }
+                            return create_binary(
+                                IExpression_binary::OK_SEQUENCE,
+                                lhs, rhs,
+                                expr->access_position());
+                        } else if (r_v->is_zero()) {
+                            // x || false ==> RESULT_TYPE(x)
+                            return promote(lhs, binary->get_type());
+                        }
+                    }
                 }
                 break;
 

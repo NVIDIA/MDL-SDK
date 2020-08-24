@@ -72,7 +72,7 @@ public:
     ///       (see #get_function_definition()).
     virtual const char* get_mdl_function_definition() const = 0;
 
-    /// Indicates whether this call is and instance of the array constructor.
+    /// Indicates whether this call is an instance of the array constructor.
     ///
     /// \see \ref mi_neuray_mdl_arrays
     inline bool is_array_constructor() const

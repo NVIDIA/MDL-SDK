@@ -1,0 +1,70 @@
+mdl 1.3;
+
+import ::df::*;
+import ::state::*;
+import ::math::*;
+
+export material diffuse(
+    color tint = color(0.8, 0.6, 0.1)
+) = material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(tint: tint)
+    )
+);
+
+export material glossy(
+    color tint = color(0.8, 0.6, 0.1),
+    color tint_back = color(0.1, 0.35, 0.05),
+    float roughness = 0.2,
+    int stripes = 16
+) = let
+{
+    bsdf layer = df::simple_glossy_bsdf(roughness_u: roughness);
+    float3 tex_coord3 = state::texture_coordinate(0);
+    float opacity = math::sin(tex_coord3.x * math::PI * float(stripes));
+    float opacity_pow = 1.0f - math::pow(opacity, 4.0f);
+} in material(
+    surface: material_surface(
+        scattering: df::fresnel_layer(
+            base: df::diffuse_reflection_bsdf(tint : tint),
+            layer: layer,
+            ior: color(1.5)
+        )
+    ),
+    backface: material_surface(
+        scattering : df::fresnel_layer(
+            base : df::diffuse_reflection_bsdf(tint : tint_back),
+            layer : layer,
+            ior : color(1.5)
+        )
+    ),
+    geometry: material_geometry(
+        cutout_opacity : opacity_pow
+    ),
+    thin_walled: true
+);
+
+export material rough_glass(
+    uniform float ior = 1.4,
+    float roughness = 0.01
+) = material(
+    surface: material_surface(
+        scattering: df::microfacet_ggx_smith_bsdf(
+            roughness_u:  roughness,
+            mode: df::scatter_reflect_transmit
+        )
+    ),
+    ior: color(ior)
+);
+
+export material glow(
+    color emission_color = color(0.25, 0.5, 0.75),
+    float intensity = 10.0
+) = material(
+    surface: material_surface(
+        emission:  material_emission (
+            emission: df::diffuse_edf(),
+            intensity: emission_color * intensity
+        )
+    )
+);

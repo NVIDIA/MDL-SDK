@@ -55,7 +55,7 @@ DB::Element_base* Function_definition_impl::create_db_element(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return new MDL::Mdl_function_definition;
 }
 
@@ -65,7 +65,7 @@ mi::base::IInterface* Function_definition_impl::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( argc != 0)
-        return 0;
+        return nullptr;
     return (new Function_definition_impl())->cast_to_major();
 }
 
@@ -84,10 +84,31 @@ const char* Function_definition_impl::get_mdl_name() const
     return get_db_element()->get_mdl_name();
 }
 
+const char* Function_definition_impl::get_mdl_module_name() const
+{
+    return get_db_element()->get_mdl_module_name();
+}
+
+const char* Function_definition_impl::get_mdl_simple_name() const
+{
+    return get_db_element()->get_mdl_simple_name();
+}
+
+const char* Function_definition_impl::get_mdl_parameter_type_name( Size index) const
+{
+    return get_db_element()->get_mdl_parameter_type_name( index);
+}
+
 const char* Function_definition_impl::get_prototype() const
 {
     DB::Tag tag = get_db_element()->get_prototype();
     return get_db_transaction()->tag_to_name( tag);
+}
+
+void Function_definition_impl::get_mdl_version(
+    mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const
+{
+    return get_db_element()->get_mdl_version( since, removed);
 }
 
 mi::neuraylib::IFunction_definition::Semantics Function_definition_impl::get_semantic() const
@@ -204,19 +225,19 @@ mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
     boost::shared_ptr<MDL::Mdl_function_call> db_call(
         get_db_element()->create_function_call( get_db_transaction(), arguments_int.get(), errors));
     if( !db_call)
-        return 0;
+        return nullptr;
     mi::neuraylib::IFunction_call* api_call
         = get_transaction()->create<mi::neuraylib::IFunction_call>(  "__Function_call");
     static_cast<Function_call_impl* >( api_call)->get_db_element()->swap( *db_call.get());
     return api_call;
 }
 
-const mi::neuraylib::IExpression_direct_call* Function_definition_impl::get_body() const
+const mi::neuraylib::IExpression* Function_definition_impl::get_body() const
 {
     mi::base::Handle<Expression_factory> ef( get_transaction()->get_expression_factory());
-    mi::base::Handle<const MDL::IExpression_direct_call> result_int(
+    mi::base::Handle<const MDL::IExpression> result_int(
         get_db_element()->get_body( get_db_transaction()));
-    return ef->create<mi::neuraylib::IExpression_direct_call>(
+    return ef->create<mi::neuraylib::IExpression>(
         result_int.get(), this->cast_to_major());
 }
 

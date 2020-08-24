@@ -48,31 +48,31 @@ namespace NEURAY {
 MDL::IValue* get_internal_value( mi::neuraylib::IValue* value)
 {
     if( !value)
-        return 0;
+        return nullptr;
     mi::base::Handle<IValue_wrapper> value_wrapper( value->get_interface<IValue_wrapper>());
     if( !value_wrapper)
-        return 0;
+        return nullptr;
     return value_wrapper->get_internal_value();
 }
 
 const MDL::IValue* get_internal_value( const mi::neuraylib::IValue* value)
 {
     if( !value)
-        return 0;
+        return nullptr;
     mi::base::Handle<const IValue_wrapper> value_wrapper( value->get_interface<IValue_wrapper>());
     if( !value_wrapper)
-        return 0;
+        return nullptr;
     return value_wrapper->get_internal_value();
 }
 
 const MDL::IValue_list* get_internal_value_list( const mi::neuraylib::IValue_list* value_list)
 {
     if( !value_list)
-        return 0;
+        return nullptr;
     mi::base::Handle<const IValue_list_wrapper> value_list_wrapper(
         value_list->get_interface<IValue_list_wrapper>());
     if( !value_list_wrapper)
-        return 0;
+        return nullptr;
     return value_list_wrapper->get_internal_value_list();
 }
 
@@ -364,101 +364,101 @@ const MDL::IValue_list* Value_list::get_internal_value_list() const
 mi::neuraylib::IValue_bool* Value_factory::create_bool( bool value) const
 {
     mi::base::Handle<MDL::IValue_bool> result_int( m_vf->create_bool( value));
-    return new Value_bool( this, result_int.get(), /*owner*/ 0);
+    return new Value_bool( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_int* Value_factory::create_int( mi::Sint32 value) const
 {
     mi::base::Handle<MDL::IValue_int> result_int( m_vf->create_int( value));
-    return new Value_int( this, result_int.get(), /*owner*/ 0);
+    return new Value_int( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_enum* Value_factory::create_enum(
     const mi::neuraylib::IType_enum* type, mi::Size index) const
 {
     if( !type)
-        return 0;
+        return nullptr;
     mi::base::Handle<const MDL::IType_enum> type_int(
         get_internal_type<MDL::IType_enum>( type));
     mi::base::Handle<MDL::IValue_enum> result_int( m_vf->create_enum( type_int.get(), index));
-    return new Value_enum( this, result_int.get(), /*owner*/ 0);
+    return new Value_enum( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_float* Value_factory::create_float( mi::Float32 value) const
 {
     mi::base::Handle<MDL::IValue_float> result_int( m_vf->create_float( value));
-    return new Value_float( this, result_int.get(), /*owner*/ 0);
+    return new Value_float( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_double* Value_factory::create_double( mi::Float64 value) const
 {
     mi::base::Handle<MDL::IValue_double> result_int( m_vf->create_double( value));
-    return new Value_double( this, result_int.get(), /*owner*/ 0);
+    return new Value_double( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_string* Value_factory::create_string( const char* value) const
 {
     mi::base::Handle<MDL::IValue_string> result_int( m_vf->create_string( value));
-    return new Value_string( this, result_int.get(), /*owner*/ 0);
+    return new Value_string( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_string_localized* Value_factory::create_string_localized( const char* value, const char* original) const
 {
     mi::base::Handle<MDL::IValue_string_localized> result_int( m_vf->create_string_localized( value, original));
-    return new Value_string_localized( this, result_int.get(), /*owner*/ 0);
+    return new Value_string_localized( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_vector* Value_factory::create_vector(
     const mi::neuraylib::IType_vector* type) const
 {
     if( !type)
-        return 0;
+        return nullptr;
     mi::base::Handle<const MDL::IType_vector> type_int(
         get_internal_type<MDL::IType_vector>( type));
     mi::base::Handle<MDL::IValue_vector> result_int( m_vf->create_vector( type_int.get()));
-    return new Value_vector( this, result_int.get(), /*owner*/ 0);
+    return new Value_vector( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_matrix* Value_factory::create_matrix(
     const mi::neuraylib::IType_matrix* type) const
 {
     if( !type)
-        return 0;
+        return nullptr;
     mi::base::Handle<const MDL::IType_matrix> type_int(
         get_internal_type<MDL::IType_matrix>( type));
     mi::base::Handle<MDL::IValue_matrix> result_int( m_vf->create_matrix( type_int.get()));
-    return new Value_matrix( this, result_int.get(), /*owner*/ 0);
+    return new Value_matrix( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_color* Value_factory::create_color(
     mi::Float32 red, mi::Float32 green, mi::Float32 blue) const
 {
     mi::base::Handle<MDL::IValue_color> result_int( m_vf->create_color( red, green, blue));
-    return new Value_color( this, result_int.get(), /*owner*/ 0);
+    return new Value_color( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_array* Value_factory::create_array(
     const mi::neuraylib::IType_array* type) const
 {
     if( !type)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const MDL::IType_array> type_int(
         get_internal_type<MDL::IType_array>( type));
     mi::base::Handle<MDL::IValue_array> result_int( m_vf->create_array( type_int.get()));
-    return new Value_array( this, result_int.get(), /*owner*/ 0);
+    return new Value_array( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_struct* Value_factory::create_struct(
     const mi::neuraylib::IType_struct* type) const
 {
     if( !type)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const MDL::IType_struct> type_int(
         get_internal_type<MDL::IType_struct>( type));
     mi::base::Handle<MDL::IValue_struct> result_int( m_vf->create_struct( type_int.get()));
-    return new Value_struct( this, result_int.get(), /*owner*/ 0);
+    return new Value_struct( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_texture* Value_factory::create_texture(
@@ -466,18 +466,18 @@ mi::neuraylib::IValue_texture* Value_factory::create_texture(
     const char* value) const
 {
     if( !type)
-        return 0;
+        return nullptr;
 
     DB::Transaction* db_transaction = get_db_transaction();
     DB::Tag tag = value ? db_transaction->name_to_tag( value) : DB::Tag();
     if( value && !tag)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const MDL::IType_texture> type_int(
         get_internal_type<MDL::IType_texture>( type));
     mi::base::Handle<MDL::IValue_texture> result_int(
         m_vf->create_texture( type_int.get(), tag));
-    return new Value_texture( this, m_transaction.get(), result_int.get(), /*owner*/ 0);
+    return new Value_texture( this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_light_profile* Value_factory::create_light_profile(
@@ -486,11 +486,11 @@ mi::neuraylib::IValue_light_profile* Value_factory::create_light_profile(
     DB::Transaction* db_transaction = get_db_transaction();
     DB::Tag tag = value ? db_transaction->name_to_tag( value) : DB::Tag();
     if( value && !tag)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<MDL::IValue_light_profile> result_int(
         m_vf->create_light_profile( tag));
-    return new Value_light_profile( this, m_transaction.get(), result_int.get(), /*owner*/ 0);
+    return new Value_light_profile( this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_bsdf_measurement* Value_factory::create_bsdf_measurement(
@@ -499,27 +499,27 @@ mi::neuraylib::IValue_bsdf_measurement* Value_factory::create_bsdf_measurement(
     DB::Transaction* db_transaction = get_db_transaction();
     DB::Tag tag = value ? db_transaction->name_to_tag( value) : DB::Tag();
     if( value && !tag)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<MDL::IValue_bsdf_measurement> result_int(
         m_vf->create_bsdf_measurement( tag));
-    return new Value_bsdf_measurement( this, m_transaction.get(), result_int.get(), /*owner*/ 0);
+    return new Value_bsdf_measurement( this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_invalid_df* Value_factory::create_invalid_df(
     const mi::neuraylib::IType_reference* type) const
 {
     if( !type)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const MDL::IType_reference> type_int(
         get_internal_type<MDL::IType_reference>( type));
     mi::base::Handle<MDL::IValue_invalid_df> result_int(
         m_vf->create_invalid_df( type_int.get()));
     if( !result_int)
-        return 0;
+        return nullptr;
 
-    return new Value_invalid_df( this, result_int.get(), /*owner*/ 0);
+    return new Value_invalid_df( this, result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue* Value_factory::create(
@@ -527,20 +527,20 @@ mi::neuraylib::IValue* Value_factory::create(
 {
     mi::base::Handle<const MDL::IType> type_int( get_internal_type( type));
     mi::base::Handle<MDL::IValue> result_int( m_vf->create( type_int.get()));
-    return create( result_int.get(), /*owner*/ 0);
+    return create( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_list* Value_factory::create_value_list() const
 {
     mi::base::Handle<MDL::IValue_list> result_int( m_vf->create_value_list());
-    return create_value_list( result_int.get(), /*owner*/ 0);
+    return create_value_list( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue* Value_factory::clone( const mi::neuraylib::IValue* value) const
 {
     mi::base::Handle<const MDL::IValue> value_int( get_internal_value( value));
     mi::base::Handle<MDL::IValue> result_int( m_vf->clone( value_int.get()));
-    return create( result_int.get(), /*owner*/ 0);
+    return create( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_list* Value_factory::clone(
@@ -548,7 +548,7 @@ mi::neuraylib::IValue_list* Value_factory::clone(
 {
     mi::base::Handle<const MDL::IValue_list> value_list_int( get_internal_value_list( value_list));
     mi::base::Handle<MDL::IValue_list> result_int( m_vf->clone( value_list_int.get()));
-    return create_value_list( result_int.get(), /*owner*/ 0);
+    return create_value_list( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::Sint32 Value_factory::compare(
@@ -571,7 +571,7 @@ const mi::IString* Value_factory::dump(
     const mi::neuraylib::IValue* value, const char* name, mi::Size depth) const
 {
     if( !value)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const MDL::IValue> value_int( get_internal_value( value));
     DB::Transaction* db_transaction = get_db_transaction();
@@ -582,7 +582,7 @@ const mi::IString* Value_factory::dump(
     const mi::neuraylib::IValue_list* list, const char* name, mi::Size depth) const
 {
     if( !list)
-        return 0;
+        return nullptr;
 
     mi::base::Handle<const MDL::IValue_list> list_int( get_internal_value_list( list));
     DB::Transaction* db_transaction = get_db_transaction();
@@ -593,7 +593,7 @@ mi::neuraylib::IValue* Value_factory::create(
     MDL::IValue* value, const mi::base::IInterface* owner) const
 {
     if( !value)
-        return 0;
+        return nullptr;
 
     MDL::IValue::Kind kind = value->get_kind();
 
@@ -668,11 +668,11 @@ mi::neuraylib::IValue* Value_factory::create(
         }
         case MDL::IValue::VK_FORCE_32_BIT:
             ASSERT( M_SCENE, false);
-            return 0;
+            return nullptr;
     };
 
    ASSERT( M_SCENE, false);
-   return 0;
+   return nullptr;
 }
 
 const mi::neuraylib::IValue* Value_factory::create(
@@ -685,7 +685,7 @@ mi::neuraylib::IValue_list* Value_factory::create_value_list(
     MDL::IValue_list* value_list, const mi::base::IInterface* owner) const
 {
     if( !value_list)
-        return 0;
+        return nullptr;
     return new Value_list( this, value_list, owner);
 }
 
@@ -698,7 +698,7 @@ const mi::neuraylib::IValue_list* Value_factory::create_value_list(
 DB::Transaction* Value_factory::get_db_transaction() const
 {
     if( !m_transaction)
-        return 0;
+        return nullptr;
 
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     return transaction_impl->get_db_transaction();

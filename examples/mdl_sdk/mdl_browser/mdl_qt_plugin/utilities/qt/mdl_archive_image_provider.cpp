@@ -29,8 +29,6 @@
 
 #include "mdl_archive_image_provider.h"
 #include "utilities/string_helper.h"
-#include <mi/mdl_sdk.h>
-#include <mi/neuraylib/ireader.h>
 
 Mdl_archive_image_provider::Mdl_archive_image_provider(mi::neuraylib::INeuray* neuray)
     : QQuickImageProvider(QQuickImageProvider::Pixmap)
@@ -38,7 +36,7 @@ Mdl_archive_image_provider::Mdl_archive_image_provider(mi::neuraylib::INeuray* n
     m_mdl_archive_api = neuray->get_api_component<mi::neuraylib::IMdl_archive_api>();
 }
 
-QPixmap Mdl_archive_image_provider::requestPixmap(const QString& id, QSize* size, 
+QPixmap Mdl_archive_image_provider::requestPixmap(const QString& id, QSize* size,
                                                   const QSize& requestedSize)
 {
     // split into archive and file name

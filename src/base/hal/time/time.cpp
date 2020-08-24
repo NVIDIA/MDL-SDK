@@ -51,6 +51,8 @@
 #endif
 #include <ctime>
 #include <cstring>
+#include <atomic>
+
 
 namespace MI
 {
@@ -132,15 +134,11 @@ std::string Time::interval_to_string() const
     seconds %= 60u;
 
     char buffer[256];
-    int	 len;
-    if (days > 0)
-    {
+    int	 len = 0;
+    if (days > 0) {
 	len = snprintf(buffer, sizeof(buffer), "%u days, ", days);
     }
-    else
-	len = 0;
-    len += snprintf( buffer + len, sizeof(buffer) - len, "%02u:%02u:%02u.%02u", hours, minutes,
-	seconds, fraction);
+    snprintf( buffer + len, sizeof(buffer) - len, "%02u:%02u:%02u.%02u", hours, minutes, seconds, fraction);
     return buffer;
 }
 
@@ -148,14 +146,14 @@ std::string Time::interval_to_string() const
 // Get the cached time or, if the boolean flag is set, update it first.
 Time get_cached_system_time(const bool call_update_first)
 {
-    static Time cached_time;
+    static std::atomic<double> cached_time;
 
     if (call_update_first)
     {
 #ifndef WIN_NT
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	cached_time = Time((double)tv.tv_sec + (double)tv.tv_usec * 1.0e-6);
+	cached_time = (double)tv.tv_sec + (double)tv.tv_usec * 1.0e-6;
 #else
 	static bool init = false;
 	static double inv_frequency;
@@ -170,11 +168,11 @@ Time get_cached_system_time(const bool call_update_first)
 	}
 	LARGE_INTEGER counter;
 	QueryPerformanceCounter(&counter);
-	cached_time = Time((double)counter.QuadPart * inv_frequency);
+	cached_time = (double)counter.QuadPart * inv_frequency;
 #endif
     }
 
-    return cached_time;
+    return Time(cached_time);
 }
 
 Time get_time()

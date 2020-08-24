@@ -27,7 +27,7 @@
  **************************************************************************************************/
 
 mdl 1.2;
-//    anno::version_number(0,1,11,0),
+//    anno::version_number(0,1,12,0),
 
 import ::df::*;
 import ::state::*;
@@ -37,9 +37,9 @@ import ::tex::*;
 import ::anno::*;
 
 
-export using base import texture_return;
-export using base import mono_mode;
-export using base import color_layer_mode;
+export using ::base import texture_return;
+export using ::base import mono_mode;
+export using ::base import color_layer_mode;
 
 export enum material_type
 [[
@@ -133,7 +133,10 @@ uniform float4x4 rotation_translation_scale(
 export annotation suitable_as_light();
 export annotation type_of_material(material_type type);
 export annotation ui_position(int position);
-export annotation typical_object_size(float size);
+export annotation dimension(float dimension);
+export annotation dimension(float2 dimension);
+export annotation dimension(float3 dimension);
+export annotation typical_object_size(float size); //migt be deprecated soon
 
 const string COPYRIGHT = "Copyright 2020 NVIDIA Corporation. All rights reserved.";
 
@@ -158,7 +161,7 @@ export texture_return blend_colors(
     anno::display_name("Blend colors"),
     anno::description("Allows combining textures in varied ways"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -247,7 +250,7 @@ export texture_return file_texture(
     anno::display_name("Bitmap texture"),
     anno::description("Allows texturing using image files of various file formats"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -368,7 +371,7 @@ export texture_return perlin_noise_texture(
     anno::display_name("Perlin noise texture"),
     anno::description("Allow texturing with a random noise pattern"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -471,7 +474,7 @@ export float3 perlin_noise_bump_texture(
     anno::display_name("Perlin noise texture"),
     anno::description("Allows texturing a random noise pattern"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -577,7 +580,7 @@ export texture_return worley_noise_texture(
     anno::display_name("Cellular noise texture"),
     anno::description("Allow texturing with a cell forming pattern"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -671,7 +674,7 @@ export float3 worley_noise_bump_texture(
     anno::display_name("Cellular noise texture"),
     anno::description("Allow texturing with a cell forming pattern"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -798,7 +801,7 @@ export texture_return flow_noise_texture(
     anno::display_name("Flow noise texture"),
     anno::description("Allow texturing with a 2D noise pattern suitable for waves"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -921,7 +924,7 @@ export float3 flow_noise_bump_texture(
     anno::display_name("Flow noise texture"),
     anno::description("Allow texturing with a 2D noise pattern suitable for waves"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1008,7 +1011,7 @@ export texture_return checker_texture(
     anno::display_name("3d checker texture"),
     anno::description("Allows texturing a checkerboard pattern"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1084,7 +1087,7 @@ export float3 checker_bump_texture(
     anno::display_name("3d checker texture"),
     anno::description("Allows texturing a checkerboard pattern"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1166,7 +1169,7 @@ export float3 file_bump_texture(
     anno::display_name("Bitmap texture"),
     anno::description("Allows texturing using image files of various file formats"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1243,7 +1246,7 @@ export float3 normalmap_texture(
     anno::display_name("Normalmap texture"),
     anno::description("Allows the use of tangent space normal maps"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1288,7 +1291,7 @@ export material diffuse(
     anno::description("A basic diffuse material"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(simple_material),
     typical_object_size(1.0),
    anno::key_words(string[]("generic"))
@@ -1350,7 +1353,7 @@ export material scratched_metal(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","metal"))
 ]]
  = let{
@@ -1418,7 +1421,7 @@ export material metal(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","metal"))
 ]]
  = let{
@@ -1479,7 +1482,7 @@ export material plastic(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","dielectric","plastic","wood","stone"))
 ]]
  = let{
@@ -1563,7 +1566,7 @@ export material scratched_plastic(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","dielectric","plastic","wood","stone"))
 ]]
  = let{
@@ -1647,7 +1650,7 @@ export material retroreflective(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","retroreflective","roadsign","stone"))
 ]]
  = let{
@@ -1806,7 +1809,7 @@ export material flex_material(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(complex_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","complex"))
 ]]
  = let{
@@ -1896,7 +1899,7 @@ export material thin_glass(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","dielectric","glass"))
 ]]
  = let{
@@ -1968,7 +1971,7 @@ export material thin_translucent(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","dielectric","leaves","paper","sheets"))
 ]]
  = let{
@@ -2058,7 +2061,7 @@ export material thick_glass(
     anno::description("A basic transmissive dielectric with refraction and coloring in the volume"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     typical_object_size(1.0),
     type_of_material(simple_material),
     anno::key_words(string[]("generic","dielectric","glass"))
@@ -2162,7 +2165,7 @@ export material thick_translucent(
     anno::description("A subsurface scattering material"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(simple_material),
     typical_object_size(1.0),
     anno::key_words(string[]("generic","dielectric","wax","milk"))
@@ -2224,7 +2227,7 @@ export material blend(
     anno::description("Blend surface characteristics of 2 materials or mask them using a texture"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(combiner_material),
     typical_object_size(1.0),
     anno::key_words(string[]("combiner","generic"))
@@ -2290,7 +2293,7 @@ export material apply_clearcoat(
     anno::description("Apply clear coat to an existing material"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2342,7 +2345,7 @@ export material apply_thinfilm(
     anno::description("Apply thin film to an existing material"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2401,7 +2404,7 @@ export material apply_metalcoat(
     anno::description("Apply metal coat to an existing material"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2462,7 +2465,7 @@ export material apply_dustcover(
     anno::description("Apply a diffuse cover of dust or dirt"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     typical_object_size(1.0),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2527,7 +2530,7 @@ export material apply_colorfalloff_v2(
     anno::description("Makes the color view dependent"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2585,7 +2588,7 @@ export material apply_colorfalloff(
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     anno::hidden(),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2650,7 +2653,7 @@ export material apply_metallicflakes(
     anno::description("Apply layer of metallic flakes to an existing material"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2754,7 +2757,7 @@ export material flake_paint(
     anno::copyright_notice(COPYRIGHT),
     type_of_material(complex_material),
     typical_object_size(1.0),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("complex","carpaint"))
 ]]
  = let{
@@ -2809,7 +2812,7 @@ export material add_cutout(
     anno::description("Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
@@ -2877,7 +2880,7 @@ export material add_simple_sticker(
     anno::description("A quick way for adding simple stickers to a material. The sticker is a simple dielectric and needs a mask to define its extent"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
@@ -2920,7 +2923,7 @@ export material add_globalbump(
     anno::description("Adds global bumpmap to existing materials. Local bump map of the base material is preserved"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
@@ -2957,7 +2960,7 @@ export material add_displacement(
     anno::description("Adds displacement to existing materials"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
     typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
@@ -3004,7 +3007,7 @@ export material add_emission(
     anno::display_name("Add emission"),
     anno::description("Adds emission to a material"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     typical_object_size(1.0),
@@ -3055,7 +3058,7 @@ export material add_thermal_emission(
     anno::display_name("Add thermal emission"),
     anno::description("Adds emission to a material, color is based on a \"color temperature\""),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     typical_object_size(1.0),
@@ -3110,7 +3113,7 @@ export material light_omni (
     anno::description("Emissive material emitting in all directions"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("lightsource")),
     typical_object_size(1.0),
     suitable_as_light()
@@ -3160,7 +3163,7 @@ export material light_spot (
     anno::description("Emissive material emitting focused in one direction"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("lightsource")),
     typical_object_size(1.0),
     suitable_as_light()
@@ -3212,7 +3215,7 @@ export material light_ies (
     anno::description("Emissive material emitting as described in an IES file"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,9,0),
+    anno::version_number(0,1,10,0),
     anno::key_words(string[]("lightsource")),
     typical_object_size(1.0),
     suitable_as_light()

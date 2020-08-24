@@ -40,6 +40,10 @@ else()
     set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo" CACHE STRING "Build types available to IDEs." FORCE)
 endif()
 
+# Set the C/C++ specified in the projects as requirements
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
 # IDE Setup
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)  # Generate folders for IDE targets
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_cmake")
@@ -70,6 +74,16 @@ define_property(TARGET PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO
 define_property(TARGET PROPERTY VS_DEBUGGER_ENV_VARS
     BRIEF_DOCS "List of environment variables that are added to the Visual Studio debugger."
     FULL_DOCS "List of environment variables that are added to the Visual Studio debugger. Usually added by dependency scripts. Requires a call to 'TARGET_CREATE_VS_USER_SETTINGS' after adding all dependencies."
+    )
+
+define_property(TARGET PROPERTY VS_DEBUGGER_COMMAND
+    BRIEF_DOCS "Executable that is called when running the debugger in Visual Studio."
+    FULL_DOCS "Executable that is called when running the debugger in Visual Studio. Usually added by dependency scripts. Requires a call to 'set_property' after adding all dependencies."
+    )
+
+define_property(TARGET PROPERTY VS_DEBUGGER_COMMAND_ARGUMENTS
+    BRIEF_DOCS "List of arguments that are passed the debugging command in Visual Studio."
+    FULL_DOCS "List of arguments that are passed the debugging command in Visual Studio. Usually added by dependency scripts. Requires a call to 'set_property' after adding all dependencies."
     )
 
 # set platform variable
@@ -141,6 +155,8 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS_RELWITHDEBINFO:     " ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
 endif()
 
+option(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES "Links the MSCV dynamic runtime (\\MD) instead of static (\\MT)." OFF)
+
 # check for dependencies
 # pre-declare all options that are used
 # in order to show them in CMake-Gui, even the script stops because of an error.
@@ -148,6 +164,8 @@ option(MDL_ENABLE_CUDA_EXAMPLES "Enable examples that require CUDA." ON)
 option(MDL_ENABLE_OPENGL_EXAMPLES "Enable examples that require OpenGL." ON)
 option(MDL_ENABLE_QT_EXAMPLES "Enable examples that require Qt." ON)
 option(MDL_ENABLE_D3D12_EXAMPLES "Enable examples that require Direct3D and DirectX 12." ${WINDOWS})
+option(MDL_ENABLE_OPTIX7_EXAMPLES "Enable examples that require OptiX 7." OFF)
+option(MDL_ENABLE_MATERIALX "Enable MaterialX in examples that support it." OFF)
 
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/tests/CMakeLists.txt)
     option(MDL_ENABLE_TESTS "Generates unit and example tests." ON)
@@ -176,6 +194,12 @@ find_qt_ext()
 include(${MDL_BASE_FOLDER}/cmake/find/find_d3d12_ext.cmake)
 find_d3d12_ext()
 
+include(${MDL_BASE_FOLDER}/cmake/find/find_optix7_ext.cmake)
+find_optix7_ext()
+
+include(${MDL_BASE_FOLDER}/cmake/find/find_arnoldsdk_ext.cmake)
+find_arnoldsdk_ext()
+
 # examples could potentially use FreeImage directly
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
     include(${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
@@ -187,10 +211,16 @@ if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_boost_ext.cmake)
     find_boost_ext()
 endif()
 
+if(MDL_ENABLE_MATERIALX AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_materialx.cmake)
+include(${MDL_BASE_FOLDER}/cmake/find/find_materialx.cmake)
+    find_materialx()
+endif()
+
 if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_ENABLE_OPENGL_EXAMPLES:         " ${MDL_ENABLE_OPENGL_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_CUDA_EXAMPLES:           " ${MDL_ENABLE_CUDA_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_D3D12_EXAMPLES:          " ${MDL_ENABLE_D3D12_EXAMPLES})
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_OPTIX7_EXAMPLES:         " ${MDL_ENABLE_OPTIX7_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_QT_EXAMPLES:             " ${MDL_ENABLE_QT_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_TESTS:                   " ${MDL_ENABLE_TESTS})
 endif()

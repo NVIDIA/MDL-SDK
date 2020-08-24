@@ -61,14 +61,6 @@ Texture::Texture()
     m_compression = TEXTURE_NO_COMPRESSION;
 }
 
-Texture::Texture( const Texture& other)
-  : SCENE::Scene_element<Texture, ID_TEXTURE>( other)
-{
-    m_image       = other.m_image;
-    m_gamma       = other.m_gamma;
-    m_compression = other.m_compression;
-}
-
 void Texture::set_image( DB::Tag image)
 {
     m_image = image;
@@ -183,21 +175,28 @@ DB::Tag load_mdl_texture(
     bool shared_proxy,
     mi::Float32 gamma)
 {
-    if( image_set->get_length() == 0)
+    if( !image_set || image_set->get_length() == 0)
         return DB::Tag( 0);
 
-    std::string resolved_filename = image_set->is_mdl_container()
-        ? image_set->get_container_filename() + std::string( "_")
-          + image_set->get_container_membername( 0)
-        : image_set->get_resolved_filename( 0);
+    std::string identifier;
+    if( image_set->is_mdl_container()) {
+        identifier = image_set->get_container_filename() + std::string( "_")
+            + image_set->get_container_membername( 0);
+    } else {
+        identifier = image_set->get_resolved_filename( 0);
+        if( identifier.empty()) {
+            identifier = "without_name";
+            // Never share the proxy for memory-based resources.
+            shared_proxy = false;
+        }
+    }
 
     std::string db_texture_name = shared_proxy ? "MI_default_" : "";
-    db_texture_name += "texture_" + resolved_filename + "_" +
+    db_texture_name += "texture_" + identifier + "_" +
         std::string( STRING::lexicographic_cast_s<std::string>( gamma));
-
     if( !shared_proxy)
         db_texture_name
-        = MDL::DETAIL::generate_unique_db_name( transaction, db_texture_name.c_str());
+            = MDL::DETAIL::generate_unique_db_name( transaction, db_texture_name.c_str());
 
     DB::Tag texture_tag = transaction->name_to_tag( db_texture_name.c_str());
     if( texture_tag)
@@ -206,7 +205,7 @@ DB::Tag load_mdl_texture(
     DB::Privacy_level privacy_level = transaction->get_scope()->get_level();
 
     std::string db_image_name = shared_proxy ? "MI_default_" : "";
-    db_image_name += "image_" + resolved_filename;
+    db_image_name += "image_" + identifier;
     if( !shared_proxy)
         db_image_name = MDL::DETAIL::generate_unique_db_name( transaction, db_image_name.c_str());
 

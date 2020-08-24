@@ -61,20 +61,20 @@ mi::base::IInterface* Array_impl_proxy::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 3)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> istring( argv[0]->get_interface<mi::IString>());
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* element_type_name = istring->get_c_str();
     mi::base::Handle<const mi::ISize> ivalue( argv[1]->get_interface<mi::ISize>());
     if( !ivalue.is_valid_interface())
-        return 0;
+        return nullptr;
     mi::Size length = ivalue->get_value<mi::Size>();
     istring = argv[2]->get_interface<mi::IString>();
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* attribute_name = istring->get_c_str();
     return (new Array_impl_proxy(
         transaction, element_type_name, length, attribute_name))->cast_to_major();
@@ -115,7 +115,7 @@ const char* Array_impl_proxy::get_key( mi::Size index) const
 {
     std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     m_cached_key = key;
     return m_cached_key.c_str();
@@ -131,7 +131,7 @@ const mi::base::IInterface* Array_impl_proxy::get_value( const char* key) const
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_element( index);
 }
@@ -140,7 +140,7 @@ mi::base::IInterface* Array_impl_proxy::get_value( const char* key)
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_element( index);
 }
@@ -179,7 +179,7 @@ mi::Sint32 Array_impl_proxy::set_value( mi::Size index, mi::base::IInterface* va
 const mi::base::IInterface* Array_impl_proxy::get_element( mi::Size index) const
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
     s << m_attribute_name << "[" << index << "]";
@@ -192,7 +192,7 @@ const mi::base::IInterface* Array_impl_proxy::get_element( mi::Size index) const
 mi::base::IInterface* Array_impl_proxy::get_element( mi::Size index)
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
     s << m_attribute_name << "[" << index << "]";
@@ -262,7 +262,7 @@ bool Array_impl_proxy::key_to_index( const char* key, mi::Size& index) const
     STLEXT::Likely<mi::Size> index_likely = STRING::lexicographic_cast_s<mi::Size>( key);
     if( !index_likely.get_status())
         return false;
-    index = *index_likely.get_ptr();
+    index = *index_likely.get_ptr(); //-V522 PVS
     return index < m_length;
 }
 
@@ -297,16 +297,16 @@ mi::base::IInterface* Dynamic_array_impl_proxy::create_api_class(
     const mi::base::IInterface* argv[])
 {
     if( !transaction)
-        return 0;
+        return nullptr;
     if( argc != 2)
-        return 0;
+        return nullptr;
     mi::base::Handle<const mi::IString> istring( argv[0]->get_interface<mi::IString>());
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* element_type_name = istring->get_c_str();
     istring = argv[1]->get_interface<mi::IString>();
     if( !istring.is_valid_interface())
-        return 0;
+        return nullptr;
     const char* attribute_name = istring->get_c_str();
     return (new Dynamic_array_impl_proxy(
         transaction, element_type_name, attribute_name))->cast_to_major();
@@ -326,7 +326,7 @@ Dynamic_array_impl_proxy::Dynamic_array_impl_proxy(
     m_type_name  = element_type_name;
     m_type_name += "[]";
 
-    m_pointer = 0;
+    m_pointer = nullptr;
 }
 
 Dynamic_array_impl_proxy::~Dynamic_array_impl_proxy()
@@ -349,7 +349,7 @@ const char* Dynamic_array_impl_proxy::get_key( mi::Size index) const
 {
     std::string key;
     if( !index_to_key( index, key))
-        return 0;
+        return nullptr;
 
     m_cached_key = key;
     return m_cached_key.c_str();
@@ -365,7 +365,7 @@ const mi::base::IInterface* Dynamic_array_impl_proxy::get_value( const char* key
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_element( index);
 }
@@ -374,7 +374,7 @@ mi::base::IInterface* Dynamic_array_impl_proxy::get_value( const char* key)
 {
     mi::Size index;
     if( !key_to_index( key, index))
-        return 0;
+        return nullptr;
 
     return get_element( index);
 }
@@ -413,7 +413,7 @@ mi::Sint32 Dynamic_array_impl_proxy::set_value( mi::Size index, mi::base::IInter
 const mi::base::IInterface* Dynamic_array_impl_proxy::get_element( mi::Size index) const
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
     s << m_attribute_name << "[" << index << "]";
@@ -426,7 +426,7 @@ const mi::base::IInterface* Dynamic_array_impl_proxy::get_element( mi::Size inde
 mi::base::IInterface* Dynamic_array_impl_proxy::get_element( mi::Size index)
 {
     if( index >= m_length)
-        return 0;
+        return nullptr;
 
     std::ostringstream s;
     s << m_attribute_name << "[" << index << "]";
@@ -541,7 +541,7 @@ mi::Sint32 Dynamic_array_impl_proxy::pop_back()
 const mi::base::IInterface* Dynamic_array_impl_proxy::back() const
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     return get_element( m_length-1);
 }
@@ -549,7 +549,7 @@ const mi::base::IInterface* Dynamic_array_impl_proxy::back() const
 mi::base::IInterface* Dynamic_array_impl_proxy::back()
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     return get_element( m_length-1);
 }
@@ -557,7 +557,7 @@ mi::base::IInterface* Dynamic_array_impl_proxy::back()
 const mi::base::IInterface* Dynamic_array_impl_proxy::front() const
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     return get_element( 0);
 }
@@ -565,7 +565,7 @@ const mi::base::IInterface* Dynamic_array_impl_proxy::front() const
 mi::base::IInterface* Dynamic_array_impl_proxy::front()
 {
     if( empty())
-        return 0;
+        return nullptr;
 
     return get_element( 0);
 }
@@ -596,7 +596,7 @@ void Dynamic_array_impl_proxy::release_referenced_memory()
     }
 
     delete[] static_cast<ATTR::Dynamic_array*>( m_pointer)->m_value;
-    static_cast<ATTR::Dynamic_array*>( m_pointer)->m_value = 0;
+    static_cast<ATTR::Dynamic_array*>( m_pointer)->m_value = nullptr;
 }
 
 mi::neuraylib::ITransaction* Dynamic_array_impl_proxy::get_transaction() const
@@ -624,9 +624,9 @@ void Dynamic_array_impl_proxy::set_length_internal( mi::Size new_length)
     }
 
     // allocate memory for new data and clear it
-    char* new_data = new_length > 0 ? new char[new_length * m_size_of_element] : 0;
+    char* new_data = new_length > 0 ? new char[new_length * m_size_of_element] : nullptr;
     if( new_length > 0)
-        memset( new_data, 0, new_length * m_size_of_element);
+        memset( new_data, 0, new_length * m_size_of_element); //-V575 PVS
 
     // copy old data over (as much as possible)
     if( new_length > 0 && old_length > 0)
@@ -651,7 +651,7 @@ bool Dynamic_array_impl_proxy::key_to_index( const char* key, mi::Size& index) c
     STLEXT::Likely<mi::Size> index_likely = STRING::lexicographic_cast_s<mi::Size>( key);
     if( !index_likely.get_status())
         return false;
-    index = *index_likely.get_ptr();
+    index = *index_likely.get_ptr(); //-V522 PVS
     return index < m_length;
 }
 
@@ -662,7 +662,7 @@ bool Dynamic_array_impl_proxy::key_to_index_unbounded( const char* key, mi::Size
     STLEXT::Likely<mi::Size> index_likely = STRING::lexicographic_cast_s<mi::Size>( key);
     if( !index_likely.get_status())
         return false;
-    index = *index_likely.get_ptr();
+    index = *index_likely.get_ptr(); //-V522 PVS
     return true;
 }
 

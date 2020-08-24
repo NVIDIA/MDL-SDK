@@ -232,7 +232,7 @@ public:
     /// Called for a texture resource.
     ///
     /// \param v  the texture resource or an invalid ref
-    virtual void texture(mi::mdl::IValue  const *v)
+    virtual void texture(mi::mdl::IValue const *v, Texture_usage tex_usage)
     {
         if (m_register.get_texture_count() == 0) {
             // index 0 is always the only invalid texture index
@@ -243,7 +243,7 @@ public:
         }
 
         if (mi::mdl::IValue_texture const *tex = mi::mdl::as<mi::mdl::IValue_texture>(v)) {
-            bool valid = false, is_uvtile = false;
+            bool valid = false;
             int width = 0, height = 0, depth = 0;
 
             int tag_value = tex->get_tag_value();
@@ -268,7 +268,8 @@ public:
             }
 
             MI::MDL::get_texture_attributes(
-                m_db_transaction, DB::Tag(tag_value), valid, is_uvtile, width, height, depth);
+                m_db_transaction, DB::Tag(tag_value), /*uvtile_x*/ 0, /*uvtile_y*/ 0,
+                valid, width, height, depth);
 
             if (valid || m_keep_unresolved_resources) {
                if (!name)
@@ -800,16 +801,10 @@ public:
     Lambda_builder(
         mi::mdl::IMDL   *compiler,
         DB::Transaction *db_transaction,
-        mi::Float32     mdl_meters_per_scene_unit,
-        mi::Float32     mdl_wavelength_min,
-        mi::Float32     mdl_wavelength_max,
         bool            compile_consts,
         bool            calc_derivatives)
     : m_compiler(compiler, mi::base::DUP_INTERFACE)
     , m_db_transaction(db_transaction)
-    , m_mdl_meters_per_scene_unit(mdl_meters_per_scene_unit)
-    , m_mdl_wavelength_min(mdl_wavelength_min)
-    , m_mdl_wavelength_max(mdl_wavelength_max)
     , m_error(0)
     , m_compile_consts(compile_consts)
     , m_calc_derivatives(calc_derivatives)
@@ -888,8 +883,7 @@ public:
             m_compiler->create_lambda_function(mi::mdl::ILambda_function::LEC_ENVIRONMENT));
 
         MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
-            m_db_transaction, lambda.get(), m_mdl_meters_per_scene_unit, m_mdl_wavelength_min,
-            m_mdl_wavelength_max, /*compiled_material=*/NULL);
+            m_db_transaction, lambda.get(), /*compiled_material=*/NULL);
 
         mi::mdl::IType_factory *tf = lambda->get_type_factory();
         MDL::DETAIL::Type_binder type_binder(tf);
@@ -1039,9 +1033,7 @@ public:
 
         // ... and fill up ...
         MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
-            m_db_transaction, lambda.get(),
-            m_mdl_meters_per_scene_unit, m_mdl_wavelength_min,
-            m_mdl_wavelength_max, compiled_material);
+            m_db_transaction, lambda.get(), compiled_material);
 
         // add all material parameters to the lambda function
         for (size_t i = 0, n = compiled_material->get_parameter_count(); i < n; ++i) {
@@ -1138,15 +1130,14 @@ public:
 
         // ... and fill up ...
         MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
-            m_db_transaction, main_df.get(), m_mdl_meters_per_scene_unit,
-            m_mdl_wavelength_min, m_mdl_wavelength_max, compiled_material);
+            m_db_transaction, main_df.get(), compiled_material);
 
         // add all material parameters to the lambda function
         for (size_t i = 0, n = compiled_material->get_parameter_count(); i < n; ++i) {
-            MI::MDL::IValue const *value  = compiled_material->get_argument(i);
-            MI::MDL::IType const  *p_type = value->get_type();
+            mi::base::Handle<MI::MDL::IValue const> value(compiled_material->get_argument(i));
+            mi::base::Handle<MI::MDL::IType const>  p_type(value->get_type());
 
-            mi::mdl::IType const *tp = convert_type(main_df->get_type_factory(), p_type);
+            mi::mdl::IType const *tp = convert_type(main_df->get_type_factory(), p_type.get());
 
             size_t idx = main_df->add_parameter(tp, compiled_material->get_parameter_name(i));
 
@@ -1248,9 +1239,7 @@ public:
 
         // ... and fill up ...
         MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
-            m_db_transaction, lambda,
-            m_mdl_meters_per_scene_unit, m_mdl_wavelength_min,
-            m_mdl_wavelength_max, compiled_material);
+            m_db_transaction, lambda, compiled_material);
         mi::mdl::DAG_node const *expr = builder.int_expr_to_mdl_dag_node(field_type, field.get());
 
         mi::mdl::DAG_node const *body = lambda->get_body();
@@ -1297,7 +1286,7 @@ public:
                 m_db_transaction, value_factory, tp, arg_val.get());
             switch (kind) {
             case MI::MDL::IValue::VK_TEXTURE:
-                enumerator.texture(mdl_value);
+                enumerator.texture(mdl_value, 0);  // texture usage not used by function enumerator
                 break;
             case MI::MDL::IValue::VK_LIGHT_PROFILE:
                 enumerator.light_profile(mdl_value);
@@ -1353,15 +1342,6 @@ private:
     /// The used transaction.
     DB::Transaction *m_db_transaction;
 
-    /// The meters per unit scale factor.
-    mi::Float32 m_mdl_meters_per_scene_unit;
-
-    /// The smallest supported wavelength.
-    mi::Float32 m_mdl_wavelength_min;
-
-    /// The largest supported wavelength.
-    mi::Float32 m_mdl_wavelength_max;
-
     /// Reported error code, if any
     mi::Sint32 m_error;
 
@@ -1382,7 +1362,27 @@ private:
 /// A simple name register for target code.
 class Target_code_register : public IResource_register {
 public:
-    struct Texture_entry {
+    struct Res_entry {
+        Res_entry(
+            size_t                                   index,
+            std::string const                        &name,
+            std::string const                        &owner_module,
+            bool                                     is_resolved)
+        : m_index(index)
+        , m_name(name)
+        , m_owner_module(owner_module)
+        , m_is_resolved(is_resolved)
+        {
+        }
+
+        size_t       m_index;
+        std::string  m_name;
+        std::string  m_owner_module;
+        bool         m_is_resolved;
+    };
+
+
+    struct Texture_entry : public Res_entry {
         Texture_entry(
             size_t                                     index,
             std::string const                          &name,
@@ -1391,38 +1391,19 @@ public:
             float                                      gamma,
             mi::neuraylib::ITarget_code::Texture_shape type,
             mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind)
-        : m_index(index)
-        , m_name(name)
-        , m_owner_module(owner_module)
-        , m_is_resolved(is_resolved)
+        : Res_entry(index, name, owner_module, is_resolved)
         , m_gamma(gamma)
         , m_type(type)
         , m_df_data_kind(df_data_kind)
         {
         }
 
-        size_t                                     m_index;
-        std::string                                m_name;
-        std::string                                m_owner_module;
-        bool                                       m_is_resolved;
-        float                                      m_gamma;
-        mi::neuraylib::ITarget_code::Texture_shape m_type;
-        mi::mdl::IValue_texture::Bsdf_data_kind    m_df_data_kind;
+        float                                       m_gamma;
+        mi::neuraylib::ITarget_code::Texture_shape  m_type;
+        mi::mdl::IValue_texture::Bsdf_data_kind     m_df_data_kind;
     };
 
     typedef std::vector<Texture_entry> Texture_resource_table;
-
-    struct Res_entry {
-        Res_entry(
-            size_t                                     index,
-            std::string const                        &name)
-        : m_index(index), m_name(name)
-        {
-        }
-
-        size_t        m_index;
-        std::string m_name;
-    };
 
     typedef std::vector<Res_entry> Resource_table;
 
@@ -1500,7 +1481,7 @@ public:
         char const                                 *name,
         char const                                 *owner_module) override
     {
-        m_light_profile_table.push_back(Res_entry(index, name));
+        m_light_profile_table.push_back(Res_entry(index, name, owner_module, is_resolved));
 
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_light_profile_count != ~0ull)
@@ -1537,7 +1518,7 @@ public:
         char const                                 *name,
         char const                                 *owner_module) override
     {
-        m_bsdf_measurement_table.push_back(Res_entry(index, name));
+        m_bsdf_measurement_table.push_back(Res_entry(index, name, owner_module, is_resolved));
 
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_bsdf_measurement_count != ~0ull)
@@ -1643,14 +1624,20 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
 
     for (RT::const_iterator it(lp_table.begin()), end(lp_table.end()); it != end; ++it) {
         RTE const &entry = *it;
-        tc->add_light_profile_index(entry.m_index, entry.m_name);
+        tc->add_light_profile_index(
+            entry.m_index,
+            entry.m_is_resolved ? entry.m_name : "",
+            !entry.m_is_resolved ? entry.m_name : "");
     }
 
     RT const &bm_table = tc_reg.get_bsdf_measurement_table();
 
     for (RT::const_iterator it(bm_table.begin()), end(bm_table.end()); it != end; ++it) {
         RTE const &entry = *it;
-        tc->add_bsdf_measurement_index(entry.m_index, entry.m_name);
+        tc->add_bsdf_measurement_index(
+            entry.m_index,
+            entry.m_is_resolved ? entry.m_name : "",
+            !entry.m_is_resolved ? entry.m_name : "");
     }
 
     tc->set_body_resource_counts(
@@ -2008,52 +1995,16 @@ mi::Sint32 Target_value_layout::set_value(
 
 // ------------------------- LLVM based link unit -------------------------
 
-static mi::mdl::ILink_unit *create_link_unit(Mdl_llvm_backend &llvm_be)
-{
-    mi::base::Handle<mi::mdl::ICode_generator_jit> be = llvm_be.get_jit_be();
-    if (be.is_valid_interface()) {
-        mi::mdl::ICode_generator_jit::Compilation_mode comp_mode;
-
-        switch (llvm_be.get_kind()) {
-        case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_PTX;
-            break;
-
-        case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_LLVM_IR;
-            break;
-
-        case mi::neuraylib::IMdl_compiler::MB_NATIVE:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_NATIVE;
-            break;
-
-        case mi::neuraylib::IMdl_compiler::MB_HLSL:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_HLSL;
-            break;
-
-        default:
-            return NULL;
-        }
-
-        return be->create_link_unit(
-            comp_mode,
-            llvm_be.get_enable_simd(),
-            llvm_be.get_sm_version(),
-            llvm_be.get_num_texture_spaces(),
-            llvm_be.get_num_texture_results());
-    }
-    return NULL;
-}
-
 
 // Constructor from an LLVM backend.
 Link_unit::Link_unit(
-    Mdl_llvm_backend &llvm_be,
-    DB::Transaction  *transaction)
+    Mdl_llvm_backend       &llvm_be,
+    DB::Transaction        *transaction,
+    MDL::Execution_context *context)
 : m_compiler(llvm_be.get_compiler())
 , m_be_kind(llvm_be.get_kind())
-, m_unit(create_link_unit(llvm_be))
-, m_target_code(new Target_code(llvm_be.get_strings_mapped_to_ids()))
+, m_unit(llvm_be.create_link_unit(context))
+, m_target_code(new Target_code(llvm_be.get_strings_mapped_to_ids(), m_be_kind))
 , m_transaction(transaction)
 , m_tc_reg(new Target_code_register())
 , m_res_index_map()
@@ -2064,6 +2015,7 @@ Link_unit::Link_unit(
 , m_compile_consts(llvm_be.get_compile_consts())
 , m_strings_mapped_to_ids(llvm_be.get_strings_mapped_to_ids())
 , m_calc_derivatives(llvm_be.get_calc_derivatives())
+, m_internal_space(context->get_option<std::string>(MDL_CTX_OPTION_INTERNAL_SPACE))
 {
 }
 
@@ -2101,21 +2053,15 @@ mi::Sint32 Link_unit::add_environment(
         function_definition->get_module(m_transaction), m_transaction);
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
 
-    if (m_internal_space.empty())
-        m_internal_space = code_dag->get_internal_space();
-    else
-        if (m_internal_space != code_dag->get_internal_space()) {
-            MDL::add_context_error(context, "Functions and materials compiled with different "
-                "internal_space configurations cannot be mixed.", -1);
-            return -1;
-        }
+    if (m_internal_space != code_dag->get_internal_space()) {
+        MDL::add_context_error(context, "Functions and materials compiled with different "
+            "internal_space configurations cannot be mixed.", -1);
+        return -1;
+    }
 
     Lambda_builder builder(
         m_compiler.get(),
         m_transaction,
-        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_METERS_PER_SCENE_UNIT),
-        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MIN),
-        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MAX),
         m_compile_consts,
         m_calc_derivatives);
 
@@ -2242,9 +2188,7 @@ mi::Sint32 Link_unit::add_material(
         get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL);
 
     // check internal space configuration
-    if (m_internal_space.empty()) {
-        m_internal_space = compiled_material->get_internal_space();
-    } else if (m_internal_space != compiled_material->get_internal_space()) {
+    if (m_internal_space != compiled_material->get_internal_space()) {
         MDL::add_context_error(context, "Materials compiled with different internal_space "
             "configurations cannot be mixed.", -1);
         return -1;
@@ -2266,9 +2210,6 @@ mi::Sint32 Link_unit::add_material(
     Lambda_builder builder(
         m_compiler.get(),
         m_transaction,
-        compiled_material->get_mdl_meters_per_scene_unit(),
-        compiled_material->get_mdl_wavelength_min(),
-        compiled_material->get_mdl_wavelength_max(),
         m_compile_consts,
         m_calc_derivatives);
 
@@ -2364,7 +2305,7 @@ mi::Sint32 Link_unit::add_material(
                         function_descriptions[i].path,
                         function_name.c_str(),
                         include_geometry_normal,
-                        m_be_kind != mi::neuraylib::IMdl_compiler::MB_HLSL));
+                        m_be_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL));
 
                 if (!dist_func.is_valid_interface())
                 {
@@ -2616,11 +2557,11 @@ Target_code *Link_unit::get_target_code() const
 // ------------------------- LLVM based backend -------------------------
 
 /// Checks whether the given backend supports SIMD instructions.
-static bool supports_simd(mi::neuraylib::IMdl_compiler::Mdl_backend_kind kind)
+static bool supports_simd(mi::neuraylib::IMdl_backend_api::Mdl_backend_kind kind)
 {
-    if (kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX)
+    if (kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX)
         return false;
-    if (kind == mi::neuraylib::IMdl_compiler::MB_HLSL) {
+    if (kind == mi::neuraylib::IMdl_backend_api::MB_HLSL) {
         // FIXME: disabled so far
         return false;
     }
@@ -2628,7 +2569,7 @@ static bool supports_simd(mi::neuraylib::IMdl_compiler::Mdl_backend_kind kind)
 }
 
 Mdl_llvm_backend::Mdl_llvm_backend(
-    mi::neuraylib::IMdl_compiler::Mdl_backend_kind kind,
+    mi::neuraylib::IMdl_backend_api::Mdl_backend_kind kind,
     mi::mdl::IMDL                                  *compiler,
     mi::mdl::ICode_generator_jit                   *jit,
     mi::mdl::ICode_cache                           *code_cache,
@@ -2657,6 +2598,18 @@ Mdl_llvm_backend::Mdl_llvm_backend(
 
     // by default the internal space of the renderer is "world"
     options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, "coordinate_world");
+
+    // by default the folding meters_per_scene_unit is enabled
+    options.set_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT, "true");
+
+    // by default meters_per_scene_unit is 1
+    options.set_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT, "1");
+
+    // by default wavelength_min is 380
+    options.set_option(MDL_CG_OPTION_WAVELENGTH_MIN, "380");
+
+    // by default wavelength_max is 780
+    options.set_option(MDL_CG_OPTION_WAVELENGTH_MAX, "780");
 
     // by default we support exceptions
     options.set_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS, "false");
@@ -2703,7 +2656,10 @@ static struct Sm_versions { char const *name; unsigned code; } const known_sms[]
     { "60", 60 },
     { "61", 61 },
     { "62", 62 },
-    { "70", 70 }
+    { "70", 70 },
+    { "75", 75 },
+    { "80", 80 },
+    { "86", 86 },
 };
 
 mi::Sint32 Mdl_llvm_backend::set_option(
@@ -2758,13 +2714,24 @@ mi::Sint32 Mdl_llvm_backend::set_option(
 
     // llvm specific options
 
+    if (strcmp(name, "inline_aggressively") == 0) {
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+        } else if (strcmp(value, "on") == 0) {
+            value = "true";
+        } else {
+            return -2;
+        }
+        jit_options.set_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY, value);
+        return 0;
+    }
     if (strcmp(name, "df_handle_slot_mode") == 0) {
         if (strcmp(value, "none") == 0 ||
            (strcmp(value, "fixed_1") == 0) ||
            (strcmp(value, "fixed_2") == 0) ||
            (strcmp(value, "fixed_4") == 0) ||
            (strcmp(value, "fixed_8") == 0) || 
-           (strcmp(value, "pointer") == 0 && m_kind != mi::neuraylib::IMdl_compiler::MB_HLSL))
+           (strcmp(value, "pointer") == 0 && m_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL))
         {
             jit_options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, value);
             return 0;
@@ -2818,7 +2785,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
     }
 
     if (strcmp(name, "texture_runtime_with_derivs") == 0) {
-        if (m_kind == mi::neuraylib::IMdl_compiler::MB_GLSL)
+        if (m_kind == mi::neuraylib::IMdl_backend_api::MB_GLSL)
             return -1;
         if (strcmp(value, "off") == 0) {
             value = "false";
@@ -2838,9 +2805,14 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         return 0;
     }
 
+    if (strcmp(name, "visible_functions") == 0) {
+        jit_options.set_option(MDL_JIT_OPTION_VISIBLE_FUNCTIONS, value);
+        return 0;
+    }
+
 
     switch (m_kind) {
-    case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
         if (strcmp(name, "sm_version") == 0) {
             for (size_t i = 0, n = sizeof(known_sms) / sizeof(known_sms[0]); i < n; ++i) {
                 if (strcmp(value, known_sms[i].name) == 0) {
@@ -2891,7 +2863,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         }
         break;
 
-    case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
+    case mi::neuraylib::IMdl_backend_api::MB_LLVM_IR:
         if (strcmp(name, "enable_simd") == 0) {
             if (strcmp(value, "off") == 0) {
                 m_enable_simd = false;
@@ -2915,9 +2887,9 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         }
         break;
 
-    case mi::neuraylib::IMdl_compiler::MB_GLSL:
+    case mi::neuraylib::IMdl_backend_api::MB_GLSL:
         break;
-    case mi::neuraylib::IMdl_compiler::MB_NATIVE:
+    case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
         if (strcmp(name, "use_builtin_resource_handler") == 0) {
             if (strcmp(value, "on") == 0) {
                 m_use_builtin_resource_handler = true;
@@ -2935,7 +2907,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         }
         break;
 
-    case mi::neuraylib::IMdl_compiler::MB_HLSL:
+    case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         if (strcmp(name, "hlsl_use_resource_data") == 0) {
             if (strcmp(value, "on") == 0) {
                 m_use_builtin_resource_handler = true;
@@ -2951,7 +2923,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         }
         break;
 
-    case mi::neuraylib::IMdl_compiler::MB_FORCE_32_BIT:
+    case mi::neuraylib::IMdl_backend_api::MB_FORCE_32_BIT:
         break;
     }
     return -1;
@@ -2967,7 +2939,40 @@ mi::Sint32 Mdl_llvm_backend::set_option_binary(
             MDL_JIT_BINOPTION_LLVM_STATE_MODULE, data, size);
         return 0;
     }
+    if (strcmp(name, "llvm_renderer_module") == 0) {
+        m_jit->access_options().set_binary_option(
+            MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE, data, size);
+        return 0;
+    }
     return -1;
+}
+
+void Mdl_llvm_backend::update_jit_options(
+    const char             *internal_space,
+    MDL::Execution_context *context)
+{
+    if (internal_space == NULL) {
+        const std::string internal_space_obj =
+            context->get_option<std::string>(MDL_CTX_OPTION_INTERNAL_SPACE);
+        m_jit->access_options().set_option(
+            MDL_CG_OPTION_INTERNAL_SPACE, internal_space_obj.c_str());
+    } else {
+        m_jit->access_options().set_option(MDL_CG_OPTION_INTERNAL_SPACE, internal_space);
+    }
+    m_jit->access_options().set_option(
+        MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT,
+        get_context_option<bool>(context, MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT)
+        ? "true" : "false");
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%f",
+        get_context_option<float>(context, MDL_CTX_OPTION_METERS_PER_SCENE_UNIT));
+    m_jit->access_options().set_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT, buf);
+    snprintf(buf, sizeof(buf), "%f",
+        get_context_option<float>(context, MDL_CTX_OPTION_WAVELENGTH_MIN));
+    m_jit->access_options().set_option(MDL_CG_OPTION_WAVELENGTH_MIN, buf);
+    snprintf(buf, sizeof(buf), "%f",
+        get_context_option<float>(context, MDL_CTX_OPTION_WAVELENGTH_MAX));
+    m_jit->access_options().set_option(MDL_CG_OPTION_WAVELENGTH_MAX, buf);
 }
 
 mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
@@ -2990,19 +2995,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         MDL::add_context_error(context, "Function does not point to a valid definition.", -1);
         return NULL;
     }
-    DB::Access<MDL::Mdl_function_definition> function_definition(def_tag, transaction);
-    DB::Access<MDL::Mdl_module> module(
-        function_definition->get_module(transaction), transaction);
-    mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
-    m_jit->access_options().set_option(
-        MDL_CG_OPTION_INTERNAL_SPACE, code_dag->get_internal_space());
 
     Lambda_builder builder(
         m_compiler.get(),
         transaction,
-        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_METERS_PER_SCENE_UNIT),
-        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MIN),
-        get_context_option<mi::Float32>(context, MDL_CTX_OPTION_WAVELENGTH_MAX),
         m_compile_consts,
         m_calc_derivatives);
 
@@ -3026,11 +3022,15 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         lambda->set_has_resource_attributes(false);
 
     // now compile
-    mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
+    DB::Access<MDL::Mdl_function_definition> function_definition(def_tag, transaction);
+    DB::Access<MDL::Mdl_module> module(
+        function_definition->get_module(transaction), transaction);
+    mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
+    update_jit_options(code_dag->get_internal_space(), context);
 
-    // currently supported only for LLVM-IR
+    mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
-    case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
+    case mi::neuraylib::IMdl_backend_api::MB_LLVM_IR:
         code = mi::base::make_handle(
             m_jit->compile_into_llvm_ir(
                 lambda.get(),
@@ -3039,8 +3039,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
                 m_num_texture_results,
                 m_enable_simd));
         break;
-    case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
-    case mi::neuraylib::IMdl_compiler::MB_HLSL:
+    case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         code = mi::base::make_handle(
             m_jit->compile_into_source(
                 m_code_cache.get(),
@@ -3049,11 +3049,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
-                m_kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX ?
+                m_kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX ?
                     mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
                 !m_output_target_lang));
         break;
-    case mi::neuraylib::IMdl_compiler::MB_NATIVE:
+    case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
         code = mi::base::make_handle(
             m_jit->compile_into_environment(
                 lambda.get(),
@@ -3082,7 +3082,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         transaction,
         m_strings_mapped_to_ids,
         m_calc_derivatives,
-        m_use_builtin_resource_handler);
+        m_use_builtin_resource_handler,
+        m_kind);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
@@ -3121,9 +3122,6 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     Lambda_builder builder(
         m_compiler.get(),
         transaction,
-        compiled_material->get_mdl_meters_per_scene_unit(),
-        compiled_material->get_mdl_wavelength_min(),
-        compiled_material->get_mdl_wavelength_max(),
         m_compile_consts,
         m_calc_derivatives);
 
@@ -3134,9 +3132,6 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
             builder.get_error_string(), builder.get_error_code());
         return NULL;
     }
-
-    mi::mdl::Options& jit_options = m_jit->access_options();
-    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
 
     MDL::Mdl_call_resolver resolver(transaction);
     if (m_calc_derivatives)
@@ -3158,9 +3153,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     }
 
     // ... and compile
+    update_jit_options(compiled_material->get_internal_space(), context);
+
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
-    case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
+    case mi::neuraylib::IMdl_backend_api::MB_LLVM_IR:
         code = mi::base::make_handle(
             m_jit->compile_into_llvm_ir(
                 lambda.get(),
@@ -3169,8 +3166,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 m_num_texture_results,
                 m_enable_simd));
         break;
-    case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
-    case mi::neuraylib::IMdl_compiler::MB_HLSL:
+    case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         code = mi::base::make_handle(
             m_jit->compile_into_source(
                 m_code_cache.get(),
@@ -3179,11 +3176,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
-                m_kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX ?
+                m_kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX ?
                     mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
                 !m_output_target_lang));
         break;
-    case mi::neuraylib::IMdl_compiler::MB_NATIVE:
+    case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
         code = mi::base::make_handle(
             m_jit->compile_into_generic_function(
                 lambda.get(),
@@ -3215,7 +3212,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         transaction,
         m_strings_mapped_to_ids,
         m_calc_derivatives,
-        m_use_builtin_resource_handler);
+        m_use_builtin_resource_handler,
+        m_kind);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
@@ -3236,341 +3234,6 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         tc->add_string_constant_index(i, code->get_string_constant(i));
     }
 
-    return tc;
-}
-
-mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressions(
-    DB::Transaction                  *transaction,
-    MDL::Mdl_compiled_material const *compiled_material,
-    char const * const               paths[],
-    mi::Uint32                       path_cnt,
-    char const                       *fname,
-    mi::Sint32                       *errors)
-{
-    mi::Sint32 dummy_errors;
-    if (!errors)
-        errors = &dummy_errors;
-
-    if (!transaction || !compiled_material || !paths || path_cnt < 1) {
-        *errors = -1;
-        return NULL;
-    }
-    if (!compiled_material->is_valid(transaction, /*context=*/nullptr)) {
-        *errors = -1;
-        return NULL;
-    }
-    if (compiled_material->get_parameter_count() > 0) {
-        *errors = -6;
-        return NULL;
-    }
-
-    mi::mdl::Options& jit_options = m_jit->access_options();
-    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
-
-    Lambda_builder builder(
-        m_compiler.get(),
-        transaction,
-        compiled_material->get_mdl_meters_per_scene_unit(),
-        compiled_material->get_mdl_wavelength_min(),
-        compiled_material->get_mdl_wavelength_max(),
-        m_compile_consts,
-        m_calc_derivatives);
-
-    // create the first expression
-    mi::base::Handle<mi::mdl::ILambda_function> lambda(
-        builder.from_sub_expr(compiled_material, paths[0], fname));
-    if (!lambda.is_valid_interface()) {
-        *errors = builder.get_error_code();
-        return NULL;
-    }
-
-    mi::mdl::DAG_node const *body = lambda->get_body();
-    if (body != NULL) {
-        // transform to switch lambda
-        lambda->store_root_expr(body);
-        lambda->set_body(NULL);
-    }
-
-    // add all others
-    for (mi::Uint32 i = 1; i < path_cnt; ++i) {
-        if (builder.add_sub_expr(lambda.get(), compiled_material, paths[i]) == 0) {
-            *errors = builder.get_error_code();
-            return NULL;
-        }
-    }
-
-    MDL::Mdl_call_resolver resolver(transaction);
-    if (m_calc_derivatives)
-        lambda->initialize_derivative_infos(&resolver);
-
-    // ... enumerate resources: must be done before we compile ...
-    Target_code_register tc_reg;
-    Function_enumerator enumerator(tc_reg, lambda.get(), transaction,
-        /*keep_unresolved_resources=*/false,
-        /*store_df_data=*/false);
-
-    for (mi::Uint32 i = 0; i < path_cnt; ++i) {
-        lambda->enumerate_resources(resolver, enumerator, lambda->get_root_expr(i));
-    }
-
-    // ... also enumerate resources from arguments ...
-    if (compiled_material->get_parameter_count() != 0) {
-        tc_reg.set_in_argument_mode(true);
-        builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
-    }
-
-    // ... and compile
-    mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
-    switch (m_kind) {
-    case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
-        code = mi::base::make_handle(
-            m_jit->compile_into_llvm_ir(
-                lambda.get(),
-                &resolver,
-                m_num_texture_spaces,
-                m_num_texture_results,
-                m_enable_simd));
-        break;
-    case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
-    case mi::neuraylib::IMdl_compiler::MB_HLSL:
-        code = mi::base::make_handle(
-            m_jit->compile_into_source(
-                m_code_cache.get(),
-                lambda.get(),
-                &resolver,
-                m_num_texture_spaces,
-                m_num_texture_results,
-                m_sm_version,
-                m_kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX ?
-                    mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
-                !m_output_target_lang));
-        break;
-    case mi::neuraylib::IMdl_compiler::MB_NATIVE:
-        code = mi::base::make_handle(
-            m_jit->compile_into_switch_function(
-                lambda.get(),
-                &resolver,
-                m_num_texture_spaces,
-                m_num_texture_results));
-        break;
-    default:
-        break;
-    }
-
-    if (!code.is_valid_interface()) {
-        *errors = -3;
-        return NULL;
-    }
-
-    MDL::report_messages(code->access_messages(), /*out_messages=*/0);
-
-    if (!code->is_valid()) {
-        *errors = -3;
-        return NULL;
-    }
-
-    Target_code *tc = new Target_code(
-        code.get(),
-        transaction,
-        m_strings_mapped_to_ids,
-        m_calc_derivatives, m_use_builtin_resource_handler);
-
-    // Enter the resource-table here
-    fill_resource_tables(tc_reg, tc);
-
-    if (compiled_material->get_parameter_count() != 0) {
-        mi::base::Handle<const MI::MDL::IValue_list> args(compiled_material->get_arguments());
-        tc->init_argument_block(0, transaction, args.get());
-    }
-
-    size_t ro_size = 0;
-    char const *data = code->get_ro_data_segment(ro_size);
-    if (data != NULL) {
-        tc->add_ro_segment("RO", reinterpret_cast<const unsigned char*>(data), ro_size);
-    }
-
-    // copy the string constant table
-    for (size_t i = 0, n = code->get_string_constant_count(); i < n; ++i) {
-        tc->add_string_constant_index(i, code->get_string_constant(i));
-    }
-
-    *errors = 0;
-    return tc;
-}
-
-static mi::mdl::Matrix4x4_struct const &convert_matrix(
-    mi::Float32_4_4_struct const &world_to_obj)
-{
-    // we assume the structs have the same layout here
-    return reinterpret_cast<mi::mdl::Matrix4x4_struct const &>(world_to_obj.xx);
-}
-
-static mi::mdl::Float4_struct const &get_row(
-    mi::mdl::Matrix4x4_struct const &matrix,
-    size_t                          index)
-{
-    return reinterpret_cast<mi::mdl::Float4_struct const &>(matrix.elements[4 * index]);
-}
-
-mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expression_uniform_state(
-    DB::Transaction                  *transaction,
-    MDL::Mdl_compiled_material const *compiled_material,
-    char const                       *path,
-    char const                       *fname,
-    mi::Float32_4_4_struct const     &world_to_obj,
-    mi::Float32_4_4_struct const     &obj_to_world,
-    mi::Sint32                       object_id,
-    mi::Sint32                       *errors)
-{
-    mi::Sint32 dummy_errors;
-    if (errors == NULL)
-        errors = &dummy_errors;
-
-    if (!transaction || !compiled_material || !path) {
-        *errors = -1;
-        return NULL;
-    }
-    if (!compiled_material->is_valid(transaction, /*context=*/nullptr)) {
-        *errors = -1;
-        return NULL;
-    }
-
-    if (compiled_material->get_parameter_count() > 0) {
-        *errors = -6;
-        return NULL;
-    }
-
-    mi::mdl::Options& jit_options = m_jit->access_options();
-    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
-
-    Lambda_builder builder(
-        m_compiler.get(),
-        transaction,
-        compiled_material->get_mdl_meters_per_scene_unit(),
-        compiled_material->get_mdl_wavelength_min(),
-        compiled_material->get_mdl_wavelength_max(),
-        m_compile_consts,
-        m_calc_derivatives);
-
-    mi::base::Handle<mi::mdl::ILambda_function> lambda(
-        builder.from_sub_expr(compiled_material, path, fname));
-    if (!lambda.is_valid_interface()) {
-        *errors = builder.get_error_code();
-        return NULL;
-    }
-
-    MDL::Mdl_call_resolver resolver(transaction);
-    if (m_calc_derivatives)
-        lambda->initialize_derivative_infos(&resolver);
-
-    mi::mdl::DAG_node const *body = lambda->get_body();
-
-    mi::mdl::Matrix4x4_struct const &w2o(convert_matrix(world_to_obj));
-    mi::mdl::Float4_struct w2o_vec[4];
-    w2o_vec[0] = get_row(w2o, 0);
-    w2o_vec[1] = get_row(w2o, 1);
-    w2o_vec[2] = get_row(w2o, 2);
-    w2o_vec[3] = get_row(w2o, 3);
-
-    mi::mdl::Matrix4x4_struct const &o2w(convert_matrix(obj_to_world));
-    mi::mdl::Float4_struct o2w_vec[4];
-    o2w_vec[0] = get_row(o2w, 0);
-    o2w_vec[1] = get_row(o2w, 1);
-    o2w_vec[2] = get_row(o2w, 2);
-    o2w_vec[3] = get_row(o2w, 3);
-
-    body = lambda->set_uniform_context(&resolver, body, w2o_vec, o2w_vec, object_id);
-    lambda->set_body(body);
-
-    // ... enumerate resources: must be done before we compile ...
-    Target_code_register tc_reg;
-    Function_enumerator enumerator(tc_reg, lambda.get(), transaction,
-        /*keep_unresolved_resources=*/false, /*store_df_data=*/false);
-    lambda->enumerate_resources(resolver, enumerator, body);
-
-    // ... also enumerate resources from arguments ...
-    if (compiled_material->get_parameter_count() != 0) {
-        tc_reg.set_in_argument_mode(true);
-        builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
-    }
-
-    // ... and compile
-    mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
-    switch (m_kind) {
-    case mi::neuraylib::IMdl_compiler::MB_LLVM_IR:
-        code = mi::base::make_handle(
-            m_jit->compile_into_llvm_ir(
-                lambda.get(),
-                &resolver,
-                m_num_texture_spaces,
-                m_num_texture_results,
-                m_enable_simd));
-        break;
-    case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
-    case mi::neuraylib::IMdl_compiler::MB_HLSL:
-        code = mi::base::make_handle(
-            m_jit->compile_into_source(
-                m_code_cache.get(),
-                lambda.get(),
-                &resolver,
-                m_num_texture_spaces,
-                m_num_texture_results,
-                m_sm_version,
-                m_kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX ?
-                    mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
-                !m_output_target_lang));
-        break;
-    case mi::neuraylib::IMdl_compiler::MB_NATIVE:
-        code = mi::base::make_handle(
-            m_jit->compile_into_generic_function(
-                lambda.get(),
-                &resolver,
-                m_num_texture_spaces,
-                m_num_texture_results,
-                /*transformer=*/NULL));
-        break;
-    default:
-        break;
-    }
-
-    if (!code.is_valid_interface()) {
-        *errors = -3;
-        return NULL;
-    }
-
-    MDL::report_messages(code->access_messages(), /*out_messages=*/0);
-
-    if (!code->is_valid()) {
-        *errors = -3;
-        return NULL;
-    }
-
-    Target_code *tc = new Target_code(
-        code.get(),
-        transaction,
-        m_strings_mapped_to_ids,
-        m_calc_derivatives, m_use_builtin_resource_handler);
-
-    // Enter the resource-table here
-    fill_resource_tables(tc_reg, tc);
-
-    if (compiled_material->get_parameter_count() != 0) {
-        mi::base::Handle<const MI::MDL::IValue_list> args(compiled_material->get_arguments());
-        tc->init_argument_block(0, transaction, args.get());
-    }
-
-    size_t ro_size = 0;
-    char const *data = code->get_ro_data_segment(ro_size);
-    if (data != NULL) {
-        tc->add_ro_segment("RO", reinterpret_cast<const unsigned char*>(data), ro_size);
-    }
-
-    // copy the string constant table
-    for (size_t i = 0, n = code->get_string_constant_count(); i < n; ++i) {
-        tc->add_string_constant_index(i, code->get_string_constant(i));
-    }
-
-    *errors = 0;
     return tc;
 }
 
@@ -3589,14 +3252,8 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     Lambda_builder lambda_builder(
         m_compiler.get(),
         transaction,
-        compiled_material->get_mdl_meters_per_scene_unit(),
-        compiled_material->get_mdl_wavelength_min(),
-        compiled_material->get_mdl_wavelength_max(),
         m_compile_consts,
         m_calc_derivatives);
-
-    mi::mdl::Options& jit_options = m_jit->access_options();
-    jit_options.set_option(MDL_CG_OPTION_INTERNAL_SPACE, compiled_material->get_internal_space());
 
     // convert from an IExpression-based compiled material sub-expression
     // to a DAG_node-based distribution function consisting of
@@ -3610,7 +3267,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
             path,
             base_fname,
             get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL),
-            get_kind() != mi::neuraylib::IMdl_compiler::MB_HLSL));
+            get_kind() != mi::neuraylib::IMdl_backend_api::MB_HLSL));
     if (!dist_func.is_valid_interface()) {
        MDL::add_context_error(
            context, lambda_builder.get_error_string(), lambda_builder.get_error_code());
@@ -3649,11 +3306,12 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     }
 
     // ... and compile
-    mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
+    update_jit_options(compiled_material->get_internal_space(), context);
 
+    mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
-    case mi::neuraylib::IMdl_compiler::MB_CUDA_PTX:
-    case mi::neuraylib::IMdl_compiler::MB_HLSL:
+    case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         code = mi::base::make_handle(
             m_jit->compile_distribution_function_gpu(
                 dist_func.get(),
@@ -3661,11 +3319,11 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
-                m_kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX ?
+                m_kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX ?
                     mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
                 !m_output_target_lang));
         break;
-    case mi::neuraylib::IMdl_compiler::MB_NATIVE:
+    case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
         code = mi::base::make_handle(
             m_jit->compile_distribution_function_cpu(
                 dist_func.get(),
@@ -3696,7 +3354,8 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         transaction,
         m_strings_mapped_to_ids,
         m_calc_derivatives,
-        m_use_builtin_resource_handler);
+        m_use_builtin_resource_handler,
+        m_kind);
 
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
@@ -3723,7 +3382,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
 mi::Uint8 const *Mdl_llvm_backend::get_device_library(
     mi::Size &size) const
 {
-    if (m_kind == mi::neuraylib::IMdl_compiler::MB_CUDA_PTX) {
+    if (m_kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX) {
         size_t              s  = 0;
         unsigned char const *r = m_jit->get_libdevice_for_gpu(s);
 
@@ -3734,12 +3393,50 @@ mi::Uint8 const *Mdl_llvm_backend::get_device_library(
     return NULL;
 }
 
+mi::mdl::ILink_unit *Mdl_llvm_backend::create_link_unit(
+    MDL::Execution_context* context)
+{
+    update_jit_options(NULL, context);
+
+    if (m_jit.is_valid_interface()) {
+        mi::mdl::ICode_generator_jit::Compilation_mode comp_mode;
+
+        switch (get_kind()) {
+        case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+            comp_mode = mi::mdl::ICode_generator_jit::CM_PTX;
+            break;
+
+        case mi::neuraylib::IMdl_backend_api::MB_LLVM_IR:
+            comp_mode = mi::mdl::ICode_generator_jit::CM_LLVM_IR;
+            break;
+
+        case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
+            comp_mode = mi::mdl::ICode_generator_jit::CM_NATIVE;
+            break;
+
+        case mi::neuraylib::IMdl_backend_api::MB_HLSL:
+            comp_mode = mi::mdl::ICode_generator_jit::CM_HLSL;
+            break;
+
+        default:
+            return NULL;
+        }
+
+        return m_jit->create_link_unit(
+            comp_mode,
+            get_enable_simd(),
+            get_sm_version(),
+            get_num_texture_spaces(),
+            get_num_texture_results());
+    }
+    return NULL;
+}
+
 mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
     Link_unit const *lu,
     MDL::Execution_context* context)
 {
-    m_jit->access_options().set_option(MDL_CG_OPTION_INTERNAL_SPACE,
-        lu->get_internal_space());
+    update_jit_options(lu->get_internal_space(), context);
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code(
         m_jit->compile_unit(mi::base::make_handle(lu->get_compilation_unit()).get()));

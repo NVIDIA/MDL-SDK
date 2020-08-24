@@ -659,6 +659,7 @@ bool Util::is_valid_mdl_identifier(const std::string & identifier)
 //-----------------------------------------------------------------------------
 // Following code comes from:
 // src/io/scene/mdl_elements/mdl_elements_utilities.cpp
+
 bool is_valid_simple_package_or_module_name(const std::string& name)
 {
     size_t n = name.size();
@@ -670,9 +671,6 @@ bool is_valid_simple_package_or_module_name(const std::string& name)
         unsigned char c = name[i];
         // These characters are not permitted per MDL spec.
         if (c == '/' || c == '\\' || c < 32 || c == 127 || c == ':')
-            return false;
-        // These characters are currently not supported due to technical limitations.
-        if (c == ',' || c == '(' || c == ')' || c == '[' || c == ']')
             return false;
     }
 
@@ -699,6 +697,8 @@ bool is_valid_module_name(const std::string& name)
 
     return true;
 }
+
+//-----------------------------------------------------------------------------
 
 bool Util::is_valid_module_name(const std::string & identifier)
 {
