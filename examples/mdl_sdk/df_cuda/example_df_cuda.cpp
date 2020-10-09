@@ -1878,30 +1878,34 @@ Df_cuda_material create_cuda_material(
     //       material, if any function uses it
     mat.argument_block_index = static_cast<unsigned int>(descs[0].argument_block_index);
 
+    mat.init.x = static_cast<unsigned int>(target_code_index);
+    mat.init.y = static_cast<unsigned int>(descs[0].function_index);
+
     if (!use_hair_bsdf)
     {
         // identify the BSDF function by target_code_index (i'th link unit)
         // and the function_index inside this target_code.
         // same for the EDF and the intensity expression.
+
         mat.bsdf.x = static_cast<unsigned int>(target_code_index);
-        mat.bsdf.y = static_cast<unsigned int>(descs[0].function_index);
+        mat.bsdf.y = static_cast<unsigned int>(descs[1].function_index);
 
         mat.edf.x = static_cast<unsigned int>(target_code_index);
-        mat.edf.y = static_cast<unsigned int>(descs[1].function_index);
+        mat.edf.y = static_cast<unsigned int>(descs[2].function_index);
 
         mat.emission_intensity.x = static_cast<unsigned int>(target_code_index);
-        mat.emission_intensity.y = static_cast<unsigned int>(descs[2].function_index);
+        mat.emission_intensity.y = static_cast<unsigned int>(descs[3].function_index);
 
         mat.volume_absorption.x = static_cast<unsigned int>(target_code_index);
-        mat.volume_absorption.y = static_cast<unsigned int>(descs[3].function_index);
+        mat.volume_absorption.y = static_cast<unsigned int>(descs[4].function_index);
 
         mat.thin_walled.x = static_cast<unsigned int>(target_code_index);
-        mat.thin_walled.y = static_cast<unsigned int>(descs[4].function_index);
+        mat.thin_walled.y = static_cast<unsigned int>(descs[5].function_index);
     }
     else
     {
         mat.bsdf.x = static_cast<unsigned int>(target_code_index);
-        mat.bsdf.y = static_cast<unsigned int>(descs[5].function_index);
+        mat.bsdf.y = static_cast<unsigned int>(descs[6].function_index);
         mat.contains_hair_bsdf = 1;
     }
 
@@ -2202,6 +2206,8 @@ int MAIN_UTF8(int argc, char* argv[])
 
             // Select the functions to translate
             std::vector<mi::neuraylib::Target_function_description> descs;
+            descs.push_back(
+                mi::neuraylib::Target_function_description("init"));
             descs.push_back(
                 mi::neuraylib::Target_function_description("surface.scattering"));
             descs.push_back(

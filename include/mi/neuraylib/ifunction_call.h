@@ -185,8 +185,9 @@ public:
     /// Returns \c true if this function call and all its arguments point to valid
     /// material and function definitions, \c false otherwise.
     ///
-    /// \note Material and function definitions can become invalid due to a module reload
-    /// See #mi::neuraylib::IModule::reload. See also #mi::neuraylib::IMaterial_instance::repair().
+    /// Material and function definitions can become invalid due to a module reload.
+    ///
+    /// \see #mi::neuraylib::IModule::reload(), #mi::neuraylib::IMaterial_instance::repair()
     ///
     /// \param context  Execution context that can be queried for error messages
     ///                 after the operation has finished. Can be \c NULL.

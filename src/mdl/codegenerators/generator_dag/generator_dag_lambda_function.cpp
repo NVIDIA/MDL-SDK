@@ -37,7 +37,6 @@
 #include "mdl/compiler/compilercore/compilercore_visitor.h"
 #include "mdl/compiler/compilercore/compilercore_streams.h"
 #include "mdl/compiler/compilercore/compilercore_array_ref.h"
-#include "mdl/compiler/compilercore/compilercore_file_resolution.h"
 #include "mdl/compiler/compilercore/compilercore_hash.h"
 #include "mdl/compiler/compilercore/compilercore_tools.h"
 #include "mdl/compiler/compilercore/compilercore_visitor.h"
@@ -1261,18 +1260,16 @@ public:
     /// \param mdl            The MDL compiler.
     /// \param node_factory   The node factory to use for creating optimized nodes.
     /// \param name_resolver  The name resolver to use for inlining calls.
-    /// \param file_resolver  The file resolver for rewriting resource URLs
     Optimize_helper(
         IAllocator                *alloc,
         IMDL                      &mdl,
         DAG_node_factory_impl     &node_factory,
-        ICall_name_resolver const &name_resolver,
-        File_resolver             &file_resolver)
+        ICall_name_resolver const &name_resolver)
         : m_alloc(alloc)
         , m_node_factory(node_factory)
         , m_name_resolver(name_resolver)
         , m_dag_mangler(alloc, &mdl)
-        , m_dag_builder(alloc, node_factory, m_dag_mangler, file_resolver)
+        , m_dag_builder(alloc, node_factory, m_dag_mangler)
         , m_optimized_nodes(0, Node_map::hasher(), Node_map::key_equal(), alloc)
     {}
 
@@ -1386,24 +1383,11 @@ void Lambda_function::optimize(
     ICall_evaluator *old_call_evaluator = m_node_factory.get_call_evaluator();
     m_node_factory.set_call_evaluator(call_evaluator);
 
-    // Note: The file resolver might produce error messages when non-existing resources are
-    // processed. Catch them but throw them away
-    Messages_impl dummy_msgs(get_allocator(), "lambda");
-    File_resolver file_resolver(
-        *m_mdl.get(),
-        /*module_cache=*/NULL,
-        m_mdl->get_external_resolver(),
-        m_mdl->get_search_path(),
-        m_mdl->get_search_path_lock(),
-        dummy_msgs,
-        /*front_path=*/NULL);
-
     Optimize_helper optimizer(
         get_allocator(),
         *m_mdl.get(),
         m_node_factory,
-        *name_resolver,
-        file_resolver);
+        *name_resolver);
 
     if (!m_roots.empty()) {
         for (size_t i = 0, n = m_roots.size(); i < n; ++i) {
@@ -2807,67 +2791,43 @@ public:
 
     /// Builds a distribution function.
     static IDistribution_function::Error_code build(
-        IDistribution_function *idist_func,
-        IAllocator *alloc,
-        IMDL *compiler,
-        ICall_name_resolver const *resolver,
-        DAG_node const *mat_root_node,
-        char const *df_path,
-        bool include_geometry_normal,
-        bool calc_derivative_infos,
-        bool allow_double_expr_lambdas)
+        IDistribution_function                     *idist_func,
+        IAllocator                                 *alloc,
+        IMDL                                       *compiler,
+        ICall_name_resolver const                  *resolver,
+        DAG_node const                             *mat_root_node,
+        IDistribution_function::Requested_function *requested_functions,
+        size_t                                      num_functions,
+        bool                                        include_geometry_normal,
+        bool                                        calc_derivative_infos,
+        bool                                        allow_double_expr_lambdas)
     {
-        if (mat_root_node == NULL || df_path == NULL)
+        if (mat_root_node == NULL || num_functions == 0 || requested_functions == NULL)
             return IDistribution_function::EC_INVALID_PARAMETERS;
 
-        mi::base::Handle<Lambda_function> main_df(
-            impl_cast<Lambda_function>(idist_func->get_main_df()));
+        mi::base::Handle<Lambda_function> root_lambda(
+            impl_cast<Lambda_function>(idist_func->get_root_lambda()));
 
         Distribution_function *dist_func = impl_cast<Distribution_function>(idist_func);
 
-        // use main_df to optimize the material, forcing inlining of code when possible.
+        // use root_lambda to optimize the material, forcing inlining of code when possible.
         // We need to do this before calculating the derivative information, because the
         // inlining won't update the derivative information
-        main_df->set_body(mat_root_node);
-        main_df->optimize(resolver, NULL);
-        mat_root_node = main_df->get_body();
-        main_df->set_body(NULL);
+        root_lambda->set_body(mat_root_node);
+        root_lambda->optimize(resolver, NULL);
+        mat_root_node = root_lambda->get_body();
+        root_lambda->set_body(NULL);
 
         if (calc_derivative_infos) {
             // calculate derivative information and rebuild DAG with derivative types
             Derivative_infos *deriv_infos = dist_func->get_writable_derivative_infos();
             deriv_infos->set_call_name_resolver(resolver);
 
-            Deriv_DAG_builder deriv_builder(alloc, *main_df.get(), *deriv_infos);
+            Deriv_DAG_builder deriv_builder(alloc, *root_lambda.get(), *deriv_infos);
             mat_root_node = deriv_builder.rebuild(mat_root_node, /*want_derivatives=*/ false);
 
             deriv_infos->set_call_name_resolver(NULL);
         }
-
-        // split path at '.'
-        string path_copy(df_path, alloc);
-        vector<char const *>::Type path_parts(alloc);
-        size_t last_start = 0;
-        for (size_t i = 0, n = path_copy.length(); i < n; ++i) {
-            if (path_copy[i] == '.') {
-                path_copy[i] = 0;
-                path_parts.push_back(path_copy.c_str() + last_start);
-                last_start = i + 1;
-            }
-        }
-        if (last_start < path_copy.length())
-            path_parts.push_back(path_copy.c_str() + last_start);
-
-        DAG_node const *df_node = get_dag_arg(mat_root_node, path_parts, main_df.get());
-        if (df_node == NULL)
-            return IDistribution_function::EC_INVALID_PATH;
-
-        // check whether node really is a DF (currently only BSDFs and EDFs are supported)
-        if (!is<IType_bsdf>(df_node->get_type()->skip_type_alias()) &&
-                !is<IType_hair_bsdf>(df_node->get_type()->skip_type_alias()) &&
-                !is<IType_edf>(df_node->get_type()->skip_type_alias()))
-            return IDistribution_function::EC_UNSUPPORTED_BSDF;
-
 
         // translate all non-df nodes to call_lambda nodes
         Distribution_function_builder mat_builder(
@@ -2879,13 +2839,121 @@ public:
             calc_derivative_infos,
             allow_double_expr_lambdas);
         unsigned walk_id = 0;
-        mat_builder.collect_flags_and_used_nodes(
-            df_node, Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL, ++walk_id);
+
+        struct Request {
+            Request(
+                size_t reqfunc_index,
+                DAG_node const *node,
+                Distribution_function_builder::Eval_state eval_state)
+            : reqfunc_index(reqfunc_index)
+            , node(node)
+            , eval_state(eval_state)
+            {}
+
+            size_t reqfunc_index;
+            DAG_node const *node;
+            Distribution_function_builder::Eval_state eval_state;
+        };
+
+        vector<Request>::Type requests(alloc);
+
+        IDistribution_function::Error_code last_error = IDistribution_function::EC_NONE;
+
+        for (size_t path_idx = 0; path_idx < num_functions; ++path_idx) {
+            if (requested_functions[path_idx].path == NULL) {
+                last_error = requested_functions[path_idx].error_code =
+                    IDistribution_function::EC_INVALID_PATH;
+                continue;
+            }
+            string path_copy(requested_functions[path_idx].path, alloc);
+
+            // split path at '.'
+            vector<char const *>::Type path_parts(alloc);
+            size_t last_start = 0;
+            for (size_t i = 0, n = path_copy.length(); i < n; ++i) {
+                if (path_copy[i] == '.') {
+                    path_copy[i] = 0;
+                    path_parts.push_back(path_copy.c_str() + last_start);
+                    last_start = i + 1;
+                }
+            }
+            if (last_start < path_copy.length())
+                path_parts.push_back(path_copy.c_str() + last_start);
+
+            DAG_node const *node = get_dag_arg(mat_root_node, path_parts, root_lambda.get());
+            if (node == NULL) {
+                last_error = requested_functions[path_idx].error_code =
+                    IDistribution_function::EC_INVALID_PATH;
+                continue;
+            }
+
+            IType const *node_type = node->get_type()->skip_type_alias();
+            switch (node_type->get_kind()) {
+            case IType::TK_BSDF:
+            case IType::TK_HAIR_BSDF:
+            case IType::TK_EDF:
+            case IType::TK_BOOL:
+            case IType::TK_INT:
+            case IType::TK_ENUM:
+            case IType::TK_FLOAT:
+            case IType::TK_DOUBLE:
+            case IType::TK_STRING:
+            case IType::TK_VECTOR:
+            case IType::TK_MATRIX:
+            case IType::TK_ARRAY:   // TODO: hmmm, does this work?
+            case IType::TK_COLOR:
+                break;
+
+            case IType::TK_STRUCT:
+                if (contains_df_type(node_type)) {
+                    last_error = requested_functions[path_idx].error_code =
+                        IDistribution_function::EC_UNSUPPORTED_EXPRESSION_TYPE;
+                    continue;
+                }
+                break;
+
+            case IType::TK_VDF:
+                last_error = requested_functions[path_idx].error_code =
+                    IDistribution_function::EC_UNSUPPORTED_DISTRIBUTION_TYPE;
+                continue;
+
+            case IType::TK_LIGHT_PROFILE:
+            case IType::TK_TEXTURE:
+            case IType::TK_BSDF_MEASUREMENT:
+                last_error = requested_functions[path_idx].error_code =
+                    IDistribution_function::EC_UNSUPPORTED_EXPRESSION_TYPE;
+                continue;
+
+            case IType::TK_ALIAS:
+            case IType::TK_FUNCTION:
+            case IType::TK_INCOMPLETE:
+            case IType::TK_ERROR:
+                MDL_ASSERT(!"unexpected expression type");
+                last_error = requested_functions[path_idx].error_code =
+                    IDistribution_function::EC_UNSUPPORTED_EXPRESSION_TYPE;
+                continue;
+            }
+
+            // According to MDL Spec 1.6 13.3, the geometry fields are evaluated before all surface
+            // fields and the normal evaluation happens last within the geometry fields.
+            Distribution_function_builder::Eval_state eval_state;
+            if (path_parts.size() > 0 && strcmp(path_parts[0], "geometry") == 0)
+                eval_state = Distribution_function_builder::ES_BEGIN_STATE;
+            else
+                eval_state = Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL;
+
+            mat_builder.collect_flags_and_used_nodes(node, eval_state, ++walk_id);
+
+            requests.push_back(Request(path_idx, node, eval_state));
+        }
+
+        if (last_error != IDistribution_function::EC_NONE)
+            return last_error;
 
         // handle "geometry.normal" if requested
         if (include_geometry_normal) {
             char const *normal_path[] = {"geometry", "normal"};
-            DAG_node const *normal = get_dag_arg(mat_root_node, normal_path, main_df.get());
+            DAG_node const *normal = get_dag_arg(mat_root_node, normal_path, root_lambda.get());
 
             bool handle_normal = false;
 
@@ -2929,12 +2997,35 @@ public:
 
         // create expression lambdas for multiply used expressions, after geometry.normal
         // has been calculated
-        mat_builder.prepare_expr_lambda_calls(
-            df_node, Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL);
+        for (Request request : requests) {
+            if (request.eval_state == Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL)
+            {
+                mat_builder.prepare_expr_lambda_calls(
+                    request.node, request.eval_state);
+            }
+        }
 
-        // construct the new DAG only consisting of DF nodes and calls to expression lambdas
-        const DAG_node *new_body = mat_builder.transform_material_graph(df_node);
-        main_df->set_body(new_body);
+        // construct the new DAG containing calls to expression lambdas
+        for (Request request : requests) {
+            const DAG_node *new_expr =
+                mat_builder.transform_material_graph(request.node);
+            mi::base::Handle<ILambda_function> expr_lambda(
+                mat_builder.create_expr_lambda(
+                    new_expr, request.eval_state));
+            if (requested_functions[request.reqfunc_index].base_fname != NULL)
+                expr_lambda->set_name(requested_functions[request.reqfunc_index].base_fname);
+
+            size_t main_func_index = dist_func->add_main_function(expr_lambda.get());
+
+            // collect DF handles used by this main function
+            ++walk_id;
+            mat_builder.m_handle_name_map.clear();
+            mat_builder.collect_main_df_handles(new_expr, main_func_index, walk_id);
+        }
+
+#if 0
+        mat_builder.dump_everything();
+#endif
 
         return IDistribution_function::EC_NONE;
     }
@@ -2953,7 +3044,7 @@ public:
     , m_dist_func(dist_func)
     , m_deriv_infos(calc_derivative_infos ? dist_func.get_writable_derivative_infos() : NULL)
     , m_mat_root_node(mat_root_node)
-    , m_root_lambda(impl_cast<Lambda_function>(dist_func.get_main_df()))
+    , m_root_lambda(impl_cast<Lambda_function>(dist_func.get_root_lambda()))
     , m_type_factory(*m_root_lambda->get_type_factory())
     , m_resolver(resolver)
     , m_node_info_map(0, Node_info_map::hasher(), Node_info_map::key_equal(), alloc)
@@ -2961,6 +3052,74 @@ public:
     , m_allow_double_expr_lambdas(allow_double_expr_lambdas)
     , m_handle_name_map(0, Handle_name_map::hasher(), Handle_name_map::key_equal(), alloc)
     {
+    }
+
+    /// Returns the handle of an elemental DF or NULL if the call is not an elemental DF.
+    char const *get_elemental_handle(DAG_call const *call)
+    {
+        if (!is_elemental_df_semantics(call->get_semantic()))
+            return NULL;
+
+        DAG_node const *handle_node = call->get_argument("handle");
+        MDL_ASSERT(handle_node && is<DAG_constant>(handle_node) &&
+            "Elemental DF must have a constant handle argument");
+        if (handle_node == NULL || !is<DAG_constant>(handle_node))
+            return NULL;
+
+        DAG_constant const *handle_const = cast<DAG_constant>(handle_node);
+        IValue const *handle_val = handle_const->get_value();
+        IValue_string const *handle_str = as<IValue_string>(handle_val);
+        MDL_ASSERT(handle_str != NULL && "DF handle must be string");
+        if (handle_str == NULL)
+            return NULL;
+
+        return handle_str->get_value();
+    }
+
+    /// Collect the DF handles for a main function.
+    void collect_main_df_handles(DAG_node const *expr, size_t main_func_index, unsigned walk_id)
+    {
+        Node_info &info = m_node_info_map[expr];
+        if (info.already_visited(walk_id))
+            return;
+        info.mark_visited(walk_id);
+
+        switch (expr->get_kind()) {
+        case DAG_node::EK_TEMPORARY:
+            {
+                // should not happen, but we can handle it
+                DAG_temporary const *t = cast<DAG_temporary>(expr);
+                expr = t->get_expr();
+                collect_main_df_handles(expr, main_func_index, walk_id);
+                break;
+            }
+        case DAG_node::EK_CONSTANT:
+        case DAG_node::EK_PARAMETER:
+            break;
+        case DAG_node::EK_CALL:
+            {
+                DAG_call const *call = cast<DAG_call>(expr);
+                // stop at non-DFs
+                if (!contains_df_type(call->get_type()))
+                    break;
+
+                if (char const *handle_name = get_elemental_handle(call)) {
+                    Handle_name_map::const_iterator it = m_handle_name_map.find(handle_name);
+                    if (it == m_handle_name_map.end()) {
+                        // the handle is not known, yet -> register it for the main function
+                        m_handle_name_map[handle_name] =
+                            m_dist_func.add_main_func_df_handle(main_func_index, handle_name);
+                    }
+                }
+
+                int n_args = call->get_argument_count();
+                for (int i = 0; i < n_args; ++i) {
+                    DAG_node const *arg = call->get_argument(i);
+                    collect_main_df_handles(arg, main_func_index, walk_id);
+                }
+                break;
+            }
+        }
     }
 
     /// Walk the material DAG to collect the flags and the used nodes (as in collect_used_nodes)
@@ -3005,25 +3164,11 @@ public:
                     if (needs_ior(sema))
                         m_flags |= FL_NEEDS_MATERIAL_IOR;
 
-                    if (is_elemental_df_semantics(sema)) {
-                        DAG_node const *handle_node = call->get_argument("handle");
-                        MDL_ASSERT(handle_node && is<DAG_constant>(handle_node) &&
-                            "Elemental DF must have a constant handle argument");
-                        if (handle_node != NULL && is<DAG_constant>(handle_node)) {
-                            DAG_constant const *handle_const = cast<DAG_constant>(handle_node);
-                            IValue const *handle_val = handle_const->get_value();
-                            IValue_string const *handle_str = as<IValue_string>(handle_val);
-                            MDL_ASSERT(handle_str != NULL && "DF handle must be string");
-                            if (handle_str != NULL) {
-                                char const *handle_name = handle_str->get_value();
-                                Handle_name_map::const_iterator it =
-                                    m_handle_name_map.find(handle_name);
-                                if (it == m_handle_name_map.end()) {
-                                    // the handle is not known, yet -> register it
-                                    m_handle_name_map[handle_name] =
-                                        m_dist_func.add_df_handle(handle_name);
-                                }
-                            }
+                    if (char const *handle_name = get_elemental_handle(call)) {
+                        Handle_name_map::const_iterator it = m_handle_name_map.find(handle_name);
+                        if (it == m_handle_name_map.end()) {
+                            // the handle is not known, yet -> register it
+                            m_handle_name_map[handle_name] = m_dist_func.add_df_handle(handle_name);
                         }
                     }
                 }
@@ -3309,20 +3454,23 @@ public:
     /// Dumps the whole DAG including the special lambdas to disk for debugging.
     void dump_everything()
     {
-        int n_args = 1 + m_special_lambdas.size();
+        size_t n_main_funcs = m_dist_func.get_main_function_count();
+        size_t n_args = n_main_funcs + m_special_lambdas.size();
         Small_VLA<DAG_call::Call_argument, 8> args(m_alloc, n_args);
-        args[0].arg = m_root_lambda->get_body();
-        args[0].param_name = "main_df";
+        for (size_t i = 0, n = m_dist_func.get_main_function_count(); i < n; ++i) {
+            mi::base::Handle<ILambda_function> main_func(m_dist_func.get_main_function(i));
+            args[i].param_name = "main_func";
+            args[i].arg = main_func->get_body();
+        }
         for (int i = 0, n = m_special_lambdas.size(); i < n; ++i) {
-            args[i + 1].param_name = "special_lambda";
-            args[i + 1].arg = m_special_lambdas[i].node;
+            args[i + n_main_funcs].param_name = "special_lambda";
+            args[i + n_main_funcs].arg = m_special_lambdas[i].node;
         }
         DAG_node const *dump_root = m_root_lambda->create_call(
             "root", IDefinition::DS_HIDDEN_ANNOTATION, args.data(), n_args,
             m_root_lambda->get_body()->get_type());
 
-        Lambda_function *lambda = impl_cast<Lambda_function>(m_root_lambda.get());
-        lambda->dump(dump_root, "mat-all-dumps");
+        m_root_lambda->dump(dump_root, "mat-all-dumps");
     }
 
 private:
@@ -3380,6 +3528,8 @@ private:
     mi::base::Handle<ILambda_function> create_expr_lambda(
         DAG_node const *node, Eval_state eval_state)
     {
+        // TODO: What if there already exists a lambda function for this node in this state?
+
         mi::base::Handle<ILambda_function> lambda(
             m_compiler->create_lambda_function(
                 ILambda_function::LEC_CORE));
@@ -3398,9 +3548,9 @@ private:
         lambda->set_body(import_mat_expr(lambda.get(), node, eval_state));
 
         // for now, copy the resource table to every lambda
-        mi::base::Handle<ILambda_function> main_df(m_dist_func.get_main_df());
-        for (size_t i = 0, n = main_df->get_resource_entries_count(); i < n; ++i) {
-            Resource_tag_tuple const *e = main_df->get_resource_entry(i);
+        mi::base::Handle<ILambda_function> root_lambda(m_dist_func.get_root_lambda());
+        for (size_t i = 0, n = root_lambda->get_resource_entries_count(); i < n; ++i) {
+            Resource_tag_tuple const *e = root_lambda->get_resource_entry(i);
 
             lambda->set_resource_tag(e->m_kind, e->m_url, e->m_tag);
         }
@@ -3588,6 +3738,11 @@ private:
         /// Return true, if this node has already been visited during the given walk.
         bool already_visited(unsigned walk_id) {
             return last_walk_id == walk_id;
+        }
+
+        /// Mark the node as visited in this walk.
+        void mark_visited(unsigned walk_id) {
+            last_walk_id = walk_id;
         }
 
         /// Increment the counter for the according evaluation state, if the node has not been
@@ -3800,16 +3955,23 @@ void Distribution_function_dumper::dump()
 {
     m_printer->print("digraph \"distribution_function\" {\n");
 
-    mi::base::Handle<ILambda_function> root_lambda_handle(m_dist_func->get_main_df());
-    Lambda_function const *root_lambda = impl_cast<Lambda_function>(root_lambda_handle.get());
+    for (size_t i = 0, n = m_dist_func->get_main_function_count(); i < n; ++i) {
+        char main_name[30];
+        snprintf(main_name, sizeof(main_name), "main_lambda_%u", (unsigned) i);
 
-    m_printer->print("  subgraph cluster_root {\n"
-        "    bgcolor = goldenrod1;\n"
-        "    color = goldenrod;\n"
-        "    node [style=filled];\n"
-        "    label = \"DF\";\n");
-    m_walker.walk_node(const_cast<DAG_node *>(root_lambda->get_body()), this);
-    m_printer->print("  }\n");
+        mi::base::Handle<ILambda_function> main_lambda_handle(m_dist_func->get_main_function(i));
+        Lambda_function const *main_lambda = impl_cast<Lambda_function>(main_lambda_handle.get());
+
+        m_printer->print("  subgraph cluster_");
+        m_printer->print(main_name);
+        m_printer->print(" {\n"
+            "    bgcolor = goldenrod1;\n"
+            "    color = goldenrod;\n"
+            "    node [style=filled];\n"
+            "    label = \"DF\";\n");
+        m_walker.walk_node(const_cast<DAG_node *>(main_lambda->get_body()), this);
+        m_printer->print("  }\n");
+    }
 
     for (size_t i = 0, n = m_dist_func->get_expr_lambda_count(); i < n; ++i) {
         mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(
@@ -3842,8 +4004,8 @@ void Distribution_function_dumper::dump()
 // Get the parameter name for the given index if any.
 const char *Distribution_function_dumper::get_parameter_name(int index)
 {
-    mi::base::Handle<mi::mdl::ILambda_function> lambda(m_dist_func->get_main_df());
-    return impl_cast<Lambda_function>(lambda.get())->get_parameter_name(index);
+    mi::base::Handle<mi::mdl::ILambda_function> root_lambda(m_dist_func->get_root_lambda());
+    return impl_cast<Lambda_function>(root_lambda.get())->get_parameter_name(index);
 }
 
 }  // anonymous
@@ -3854,18 +4016,20 @@ Distribution_function::Distribution_function(
     MDL                                *compiler)
 : Base(alloc)
 , m_mdl(mi::base::make_handle_dup(compiler))
-, m_main_df(compiler->create_lambda_function(Lambda_function::LEC_CORE))
+, m_root_lambda(compiler->create_lambda_function(Lambda_function::LEC_CORE))
+, m_main_functions(alloc)
 , m_expr_lambdas(alloc)
 , m_deriv_infos_calculated(false)
 , m_deriv_infos(alloc)
 , m_df_handles(alloc)
+, m_main_func_df_handles(alloc)
 , m_arena(alloc)
 , m_resource_tag_map(alloc)
 {
-    Lambda_function *lambda = impl_cast<Lambda_function>(m_main_df.get());
+    Lambda_function *root_lambda = impl_cast<Lambda_function>(m_root_lambda.get());
 
     // force always using render state
-    lambda->set_uses_render_state(true);
+    root_lambda->set_uses_render_state(true);
 
     for (size_t i = 0, n = dimension_of(m_special_lambdas); i < n; ++i)
         m_special_lambdas[i] = ~0;
@@ -3876,7 +4040,8 @@ Distribution_function::Distribution_function(
 /// expressions from the material will also be handled.
 IDistribution_function::Error_code Distribution_function::initialize(
     DAG_node const            *material_constructor,
-    char const                *df_path,
+    Requested_function        *requested_functions,
+    size_t                     num_functions,
     bool                       include_geometry_normal,
     bool                       calc_derivative_infos,
     bool                       allow_double_expr_lambdas,
@@ -3889,17 +4054,42 @@ IDistribution_function::Error_code Distribution_function::initialize(
         m_mdl.get(),
         name_resolver,
         material_constructor,
-        df_path,
+        requested_functions,
+        num_functions,
         include_geometry_normal,
         calc_derivative_infos,
         allow_double_expr_lambdas);
 }
 
-// Get the main DF function representing a DF DAG call.
-ILambda_function *Distribution_function::get_main_df() const
+// Get the root lambda function used to build nodes and manage parameters and resources.
+ILambda_function *Distribution_function::get_root_lambda() const
 {
-    m_main_df.get()->retain();
-    return m_main_df.get();
+    m_root_lambda.get()->retain();
+    return m_root_lambda.get();
+}
+
+size_t Distribution_function::add_main_function(ILambda_function *lambda)
+{
+    m_main_functions.push_back(mi::base::make_handle_dup(lambda));
+    m_main_func_df_handles.emplace_back(get_allocator());
+    return m_main_functions.size() - 1;
+}
+
+ILambda_function *Distribution_function::get_main_function(size_t index) const
+{
+    if (index >= m_main_functions.size())
+        return NULL;
+
+    ILambda_function *lambda = m_main_functions[index].get();
+    if (!lambda)
+        return NULL;
+    lambda->retain();
+    return lambda;
+}
+
+size_t Distribution_function::get_main_function_count() const
+{
+    return m_main_functions.size();
 }
 
 // Add the given expression lambda function to the distribution function.
@@ -3947,6 +4137,11 @@ size_t Distribution_function::get_special_lambda_function_index(Special_kind kin
     return m_special_lambdas[kind];
 }
 
+/// Get the resource attribute map of this distribution function.
+Resource_attr_map const &Distribution_function::get_resource_attribute_map() const {
+    return impl_cast<Lambda_function>(m_root_lambda.get())->get_resource_attribute_map();
+}
+
 // Set a tag, version pair for a resource value that might be reachable from this function.
 void Distribution_function::set_resource_tag(
     Resource_tag_tuple::Kind const res_kind,
@@ -3972,7 +4167,7 @@ int Distribution_function::find_resource_tag(
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
         // beware of NULL pointer
-        if (e.m_kind== res_kind && (e.m_url == res_url || strcmp(e.m_url, res_url) == 0))
+        if (e.m_kind == res_kind && (e.m_url == res_url || strcmp(e.m_url, res_url) == 0))
             return e.m_tag;
     }
     return 0;
@@ -4000,6 +4195,26 @@ char const *Distribution_function::get_df_handle(size_t index) const
     if (index >= m_df_handles.size())
         return NULL;
     return m_df_handles[index];
+}
+
+// Returns the number of distribution function handles referenced by this distribution function.
+size_t Distribution_function::get_main_func_df_handle_count(size_t main_func_index) const
+{
+    if (main_func_index >= m_main_func_df_handles.size())
+        return ~size_t(0);
+    return m_main_func_df_handles[main_func_index].size();
+}
+
+// Returns a distribution function handle referenced by a given main function.
+char const *Distribution_function::get_main_func_df_handle(
+    size_t main_func_index, size_t index) const
+{
+    if (main_func_index >= m_main_func_df_handles.size() ||
+        index >= m_main_func_df_handles[main_func_index].size())
+    {
+        return NULL;
+    }
+    return m_main_func_df_handles[main_func_index][index];
 }
 
 // Get the derivative information if they were requested during initialization.

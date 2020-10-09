@@ -491,6 +491,22 @@ mi::neuraylib::IExpression_constant* Expression_factory::create_constant(
     return new Expression_constant( this, result_int.get(), /*owner*/ nullptr);
 }
 
+const mi::neuraylib::IExpression_constant* Expression_factory::create_constant(
+    const mi::neuraylib::IValue* value) const
+{
+    if( !value)
+        return nullptr;
+
+    mi::base::Handle<const MDL::IValue> value_int( get_internal_value( value));
+    mi::base::Handle<const MDL::IExpression_constant> result_int(
+        m_ef->create_constant( value_int.get()));
+
+    // The const_cast is safe here since we return a constant expression which does not give
+    // access to a mutable value.
+    return new Expression_constant(
+        this, const_cast<MDL::IExpression_constant*>( result_int.get()), /*owner*/ nullptr);
+}
+
 mi::neuraylib::IExpression_call* Expression_factory::create_call( const char* name) const
 {
     if( !name)

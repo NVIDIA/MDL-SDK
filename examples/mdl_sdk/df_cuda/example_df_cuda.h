@@ -74,6 +74,7 @@ struct Df_cuda_material
     Df_cuda_material()
         : compiled_material_index(0)
         , argument_block_index(~0)
+        , init(make_invalid())
         , bsdf(make_invalid())
         , edf(make_invalid())
         , emission_intensity(make_invalid())
@@ -88,6 +89,9 @@ struct Df_cuda_material
 
     // the argument block index of this material (~0 if not used)
     unsigned int argument_block_index;
+
+    // pair of target_code_index and function_index to identify the init function
+    uint2 init;
 
     // pair of target_code_index and function_index to identify the bsdf
     uint2 bsdf;

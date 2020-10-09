@@ -204,6 +204,8 @@ public: // From Traversal_context
 
     const char* top_qualified_name() const override
     {
+        if (m_qualified_name_stack.empty())
+            return NULL;
         return m_qualified_name_stack.top().c_str();
     }
 

@@ -656,17 +656,22 @@ public:
 /// With an #mi::mdl::IGenerated_code_dag::IMaterial_instance at hand, compiling a distribution
 /// function usually consists of these steps:
 ///  - Create the object with #mi::mdl::ICode_generator_dag::create_distribution_function().
-///  - Get the main lambda function with #mi::mdl::IDistribution_function::get_main_df().
-///  - Set the base function name in the main lambda via #mi::mdl::ILambda_function::set_name().
+///  - Get the root lambda function with #mi::mdl::IDistribution_function::get_root_lambda().
+///  - Set the name of the init function in the root lambda via
+///    #mi::mdl::ILambda_function::set_name().
 ///  - If class compilation was used, add and map all material parameters of the material
-///    instance to the main lambda via #mi::mdl::ILambda_function::add_parameter() and
+///    instance to the root lambda via #mi::mdl::ILambda_function::add_parameter() and
 ///    #mi::mdl::ILambda_function::set_parameter_mapping().
-///  - Import the material constructor of the material instance into the main lambda
+///  - Import the material constructor of the material instance into the root lambda
 ///    via #mi::mdl::ILambda_function::import_expr().
-///  - Walk the resulting material constructor DAG node to find the distribution function.
+///  - Create a list of #mi::mdl::IDistribution_function::Requested_function elements refering
+///    to the expressions, which shall be generated, and specifying the names / base-names of the
+///    functions. These will be registered as main functions.
 ///  - Call #mi::mdl::IDistribution_function::initialize().
-///  - Enumerate the resources used by the main lambda function and all expression lambda functions
-///    of the distribution function object and map them in the main lambda function.
+///  - Enumerate the resources used by all main functions and all expression lambda functions
+///    of the distribution function object and map them in the root lambda function.
+///  - Then, after all body resources are processed, enumerate the resources from the material
+///    arguments and also map them in the root lambda function.
 ///  - Compile the distribution function object or add it to a link unit.
 ///  - If class compilation was used, use the argument block layout of the result to construct an
 ///    argument block from the parameter default values of the used material instance.
@@ -693,19 +698,37 @@ public:
         EC_INVALID_PARAMETERS,              ///< Invalid parameters were provided.
         EC_INVALID_PATH,                    ///< The path could not be resolved with the given
                                             ///< material constructor.
-        EC_UNSUPPORTED_DISTRIBUTION_TYPE,   ///< Currently only BSDFs and EDFs are supported.
+        EC_UNSUPPORTED_EXPRESSION_TYPE,     ///< The type of a given expression is not supported.
+        EC_UNSUPPORTED_DISTRIBUTION_TYPE,   ///< Currently only BSDFs, hair BSDFs and EDFs are
+                                            ///< supported.
         EC_UNSUPPORTED_BSDF,                ///< An unsupported BSDF was provided.
         EC_UNSUPPORTED_EDF,                 ///< An unsupported EDF was provided.
     };
 
+    /// The description of a function for which code generation is requested.
+    struct Requested_function {
+        Requested_function(
+            char const *path,
+            char const *base_fname)
+        : path(path)
+        , base_fname(base_fname)
+        , error_code(EC_NONE)
+        {}
+
+        char const *path;          ///< The MDL expression path
+        char const *base_fname;    ///< The name or base-name for the function
+        Error_code  error_code;    ///< An error code in case of an error
+    };
+
     /// Initialize this distribution function object for the given material
-    /// with the given distribution function node. Any additionally required
-    /// expressions from the material will also be handled.
-    /// Any material parameters must already be registered in the main DF lambda at this point.
-    /// The DAG nodes must already be owned by the main DF lambda.
+    /// with the given requested functions.
+    /// Any additionally required expressions from the material will also be handled.
+    /// Any material parameters must already be registered in the root lambda at this point.
+    /// The DAG nodes must already be owned by the root lambda.
     ///
     /// \param material_constructor       the DAG node of the material constructor
-    /// \param path                       the path of the distribution function
+    /// \param requested_functions        the expressions for which functions will be generated
+    /// \param num_functions              the number of requested functions
     /// \param include_geometry_normal    if true, the geometry normal will be handled
     /// \param calc_derivative_infos      if true, derivative information will be calculated
     /// \param allow_double_expr_lambdas  if true, expression lambdas may be created for double
@@ -715,14 +738,25 @@ public:
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     virtual Error_code initialize(
         DAG_node const            *material_constructor,
-        char const                *path,
+        Requested_function        *requested_functions,
+        size_t                     num_functions,
         bool                       include_geometry_normal,
         bool                       calc_derivative_infos,
         bool                       allow_double_expr_lambdas,
         ICall_name_resolver const *name_resolver) = 0;
 
-    /// Get the main DF function representing a DF DAG call.
-    virtual ILambda_function *get_main_df() const = 0;
+    /// Get the root lambda function used to build nodes and manage parameters and resources.
+    virtual ILambda_function *get_root_lambda() const = 0;
+
+    /// Get the main lambda function for the given index, representing a requested function.
+    ///
+    /// \param index  the index of the main lambda function
+    ///
+    /// \returns  the requested main lambda function or NULL, if the index is invalid
+    virtual ILambda_function *get_main_function(size_t index) const = 0;
+
+    /// Get the number of main lambda functions.
+    virtual size_t get_main_function_count() const = 0;
 
     /// Add the given expression lambda function to the distribution function.
     /// The index as a decimal string can be used as name in DAG call nodes with the semantics
@@ -769,6 +803,21 @@ public:
     ///
     /// \return the name of the handle, or \c NULL, if the \p index was out of range.
     virtual const char* get_df_handle(size_t index) const = 0;
+
+    /// Returns the number of distribution function handles referenced by a given main function.
+    ///
+    /// \param main_func_index  the index of the main function
+    ///
+    /// \returns  the requested count or ~0, if the index is invalid
+    virtual size_t get_main_func_df_handle_count(size_t main_func_index) const = 0;
+
+    /// Returns a distribution function handle referenced by a given main function.
+    ///
+    /// \param main_func_index  the index of the main function
+    /// \param index            the index of the handle to return
+    ///
+    /// \return the name of the handle, or \c NULL, if the \p index was out of range.
+    virtual const char* get_main_func_df_handle(size_t main_func_index, size_t index) const = 0;
 
     /// Set a tag, version pair for a resource value that might be reachable from this
     /// function.
@@ -821,19 +870,21 @@ public:
     /// the map_*_resource functions of #mi::mdl::ILambda_function. It is also recommended
     /// to already map the resources of the default arguments of the used material instance.
     ///
-    /// \param dist_func            the distribution function to compile
-    /// \param name_resolver        the call name resolver
-    /// \param arg_block_index      this variable will receive the index of the target argument
-    ///                             block used for this distribution function or ~0 if none is used
-    /// \param function_index       the index of the callable function in the created target code.
-    ///                             This parameter is optional, provide NULL if not required.
+    /// \param dist_func                  the distribution function to compile
+    /// \param name_resolver              the call name resolver
+    /// \param arg_block_index            variable receiving the index of the target argument block
+    ///                                   used for this distribution function or ~0 if none is used
+    /// \param main_function_indices      array receiving the (first) indices of the main functions.
+    ///                                   This parameter is optional, provide NULL if not required.
+    /// \param num_main_function_indices  the size of \p main_function_indices in number of entries
     ///
     /// \return true on success
     virtual bool add(
         IDistribution_function const  *dist_func,
         ICall_name_resolver const     *name_resolver,
         size_t                        *arg_block_index,
-        size_t                        *function_index) = 0;
+        size_t                        *main_function_indices,
+        size_t                         num_main_function_indices) = 0;
 
     /// Get the number of functions in this link unit.
     virtual size_t get_function_count() const = 0;
@@ -988,6 +1039,9 @@ class ICode_generator_jit : public
 
     /// The name of the option to inline functions aggressively.
     #define MDL_JIT_OPTION_INLINE_AGGRESSIVELY "jit_inline_aggressively"
+
+    /// The name of the option to evaluate the ternary operator on the DAG strictly.
+    #define MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY "jit_eval_dag_ternary_strictly"
 
     /// The name of the option that steers the call mode for the GPU texture lookup.
     #define MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE "jit_tex_lookup_call_mode"
@@ -1330,19 +1384,20 @@ These options are specific to the MDL DAG code generator:
 
 These options are specific to the MDL JIT code generator:
 
-- \ref mdl_option_jit_disable_exceptions      "jit_disable_exceptions"
-- \ref mdl_option_jit_enable_ro_segment       "jit_enable_ro_segment"
-- \ref mdl_option_jit_fast_math               "jit_fast_math"
-- \ref mdl_option_jit_include_uniform_state   "jit_include_uniform_state"
-- \ref mdl_option_jit_inline_aggressively     "jit_inline_aggressively"
-- \ref mdl_option_jit_link_libdevice          "jit_link_libdevice"
-- \ref mdl_option_jit_llvm_state_module       "jit_llvm_state_module"
-- \ref mdl_option_jit_llvm_renderer_module    "jit_llvm_renderer_module"
-- \ref mdl_option_jit_map_strings_to_ids      "jit_map_strings_to_ids"
-- \ref mdl_option_jit_opt_level               "jit_opt_level"
-- \ref mdl_option_jit_tex_lookup_call_mode    "jit_tex_lookup_call_mode"
-- \ref mdl_option_jit_tex_runtime_with_derivs "jit_tex_runtime_with_derivs"
-- \ref mdl_option_jit_use_bitangent           "jit_use_bitangent"*/
+- \ref mdl_option_jit_disable_exceptions         "jit_disable_exceptions"
+- \ref mdl_option_jit_enable_ro_segment          "jit_enable_ro_segment"
+- \ref mdl_option_jit_fast_math                  "jit_fast_math"
+- \ref mdl_option_jit_include_uniform_state      "jit_include_uniform_state"
+- \ref mdl_option_jit_inline_aggressively        "jit_inline_aggressively"
+- \ref mdl_option_jit_eval_dag_ternary_strictly  "jit_eval_dag_ternary_strictly"
+- \ref mdl_option_jit_link_libdevice             "jit_link_libdevice"
+- \ref mdl_option_jit_llvm_state_module          "jit_llvm_state_module"
+- \ref mdl_option_jit_llvm_renderer_module       "jit_llvm_renderer_module"
+- \ref mdl_option_jit_map_strings_to_ids         "jit_map_strings_to_ids"
+- \ref mdl_option_jit_opt_level                  "jit_opt_level"
+- \ref mdl_option_jit_tex_lookup_call_mode       "jit_tex_lookup_call_mode"
+- \ref mdl_option_jit_tex_runtime_with_derivs    "jit_tex_runtime_with_derivs"
+- \ref mdl_option_jit_use_bitangent              "jit_use_bitangent"*/
 /*!
 - \ref mdl_option_jit_use_builtin_res_h       "jit_use_builtin_resource_handler_cpu"
 - \ref mdl_option_jit_visible_functions       "jit_visible_functions"
@@ -1407,6 +1462,11 @@ These options are specific to the MDL JIT code generator:
 - <b>jit_inline_aggressively</b>: If set to \c "true", the JIT code generator will add the LLVM
   AlwaysInline attribute to most generated functions to force aggressive inlining.
   Default: \c "false"
+
+\anchor mdl_option_jit_eval_dag_ternary_strictly
+- <b>jit_eval_dag_ternary_strictly</b>: If set to \c "true", the JIT code generator will evaluate
+  ternary operators strictly instead of lazily.
+  Default: \c "true"
 
 \anchor mdl_option_jit_include_uniform_state
 - <b>jit_include_uniform_state</b>: If set to \c "true", the uniform state (the world-to-object and

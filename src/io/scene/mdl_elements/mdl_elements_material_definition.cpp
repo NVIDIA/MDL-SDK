@@ -214,15 +214,8 @@ Mdl_material_definition::Mdl_material_definition(
             m_parameter_annotations->add_annotation_block( parameter_name, block.get());
     }
 
-    // thumbnails
-    if( m_is_exported && module_filename && module_filename[0]) {
-        SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
-        mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
-        mi::base::Handle<mi::mdl::IArchive_tool> archive_tool( mdl->create_archive_tool());
-        m_thumbnail = DETAIL::lookup_thumbnail(
-            module_filename, m_module_mdl_name, m_simple_name, m_annotations.get(),
-            archive_tool.get());
-    }
+    // thumbnails: store information for on demand resolving
+    m_thumbnail = (m_is_exported && module_filename && module_filename[0]) ? module_filename : "";
 
     const mi::mdl::Module* impl = mi::mdl::impl_cast<mi::mdl::Module>( module);
     m_since_version   = impl->get_mdl_version();
@@ -442,7 +435,37 @@ const char* Mdl_material_definition::get_temporary_name(
 
 const char* Mdl_material_definition::get_thumbnail() const
 {
-    return m_thumbnail.empty() ? nullptr : m_thumbnail.c_str();
+    if (!m_is_exported || m_thumbnail.empty() || m_thumbnail.size() < 5)
+        return nullptr;
+
+    // TODO remove .mdl/r/e encoding and the const_cast with next API and serialization change
+    // to not change serialization the original module file path is stored in m_thumbnail
+    // within the constructor
+    size_t size = m_thumbnail.size();
+    if ((m_thumbnail[size - 4] == '.' &&
+         m_thumbnail[size - 3] == 'm' &&
+         m_thumbnail[size - 2] == 'd' &&
+         (m_thumbnail[size - 1] == 'l' || m_thumbnail[size - 1] == 'r'))
+        ||
+        (m_thumbnail[size - 5] == '.' &&
+         m_thumbnail[size - 4] == 'm' &&
+         m_thumbnail[size - 3] == 'd' &&
+         m_thumbnail[size - 2] == 'l' &&
+         m_thumbnail[size - 1] == 'e'))
+    {
+        const std::string module_filename = m_thumbnail;
+
+        SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+        mi::base::Handle<mi::mdl::IMDL> mdl(mdlc_module->get_mdl());
+        mi::base::Handle<mi::mdl::IArchive_tool> archive_tool(mdl->create_archive_tool());
+        m_thumbnail = DETAIL::lookup_thumbnail(
+            module_filename, m_module_mdl_name, m_simple_name, m_annotations.get(),
+            archive_tool.get());
+    }
+
+    if (m_thumbnail.empty())
+        return nullptr;
+    return m_thumbnail.c_str();
 }
 
 Mdl_material_instance* Mdl_material_definition::create_material_instance(

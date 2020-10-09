@@ -74,6 +74,9 @@ Section for a description of how the example programs can be compiled.
 - \subpage mi_neuray_example_distilling <br>
   Distilling of compiled materials and baking of material sub-expressions.
   
+- \subpage mi_neuray_example_distilling_unity <br>
+  Distilling of compiled materials and baking of material sub-expressions for Unity
+
 - \subpage mi_neuray_example_distilling_glsl <br>
   Mapping distilled materials to a GLSL shader.
 \endif

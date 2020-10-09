@@ -510,7 +510,7 @@ select particular logging information:
     [ON/OFF] enable/disable the logging of files that are copied to the output folder.
 
 -   **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES**  
-    [ON/OFF] links the MSCV dynamic runtime (\\MD) instead of static (\\MT) when
+    [ON/OFF] links the MSCV dynamic runtime (/MD) instead of static (/MT) when
     creating the example executables.
 
 By default, all options are set to ON. For any help request, please attach 

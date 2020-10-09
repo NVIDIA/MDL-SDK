@@ -64,7 +64,6 @@ public:
 
     mi::neuraylib::ITransaction& get_transaction() const { return *m_transaction.get(); }
     mi::neuraylib::IMdl_configuration& get_config() const { return *m_mdl_config.get(); }
-    mi::neuraylib::IMdl_backend& get_native_backend() { return *m_native_backend.get(); }
     mi::neuraylib::IMdl_impexp_api& get_impexp_api() { return *m_mdl_impexp_api.get(); }
 
 
@@ -73,6 +72,7 @@ public:
     mi::neuraylib::IValue_factory& get_value_factory() { return *m_vf.get(); }
     mi::neuraylib::IExpression_factory& get_expr_factory() { return *m_ef.get(); }
 
+    mi::neuraylib::IMdl_backend* create_native_backend();
     mi::neuraylib::IMdl_execution_context* create_context();
 
     bool log_messages(const mi::neuraylib::IMdl_execution_context* context);

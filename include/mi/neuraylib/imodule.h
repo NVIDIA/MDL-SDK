@@ -171,6 +171,9 @@ The following requirements apply when creating function calls of the array const
 - the positional order of the arguments in the expression list is used, their names are irrelevant
   (although the expression list itself requires that they are distinct).
 
+Function calls of the array constructor use \c "0", "1", etc. as parameter names (which are \c not
+valid MDL identifiers), no matter which names were used in the argument list during call creation.
+
 
 \subsection mi_neuray_mdl_array_length_operator Array length operator
 

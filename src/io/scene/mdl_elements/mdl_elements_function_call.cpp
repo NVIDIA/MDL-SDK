@@ -595,16 +595,20 @@ Mdl_function_call::create_jitted_function(
         *errors = -5;
         return nullptr;
     }
+
     // convert m_arguments to DAG nodes
+    Mdl_dag_builder<mi::mdl::IDag_builder> builder(
+        transaction, lambda_func.get(), /*compiled_material*/ nullptr);
     mi::Size n_params = code_dag->get_function_parameter_count(function_index);
     std::vector<mi::mdl::DAG_call::Call_argument> mdl_arguments( n_params);
+
     for( mi::Size i = 0; i < n_params; ++i) {
         const char* parameter_name = code_dag->get_function_parameter_name(function_index, i);
         const mi::mdl::IType* parameter_type
             = code_dag->get_function_parameter_type(function_index, i);
         mi::base::Handle<const IExpression> argument( m_arguments->get_expression( parameter_name));
-        const mi::mdl::DAG_node* arg = int_expr_to_mdl_dag_node(
-            transaction, lambda_func.get(), parameter_type, argument.get());
+        const mi::mdl::DAG_node* arg
+            = builder.int_expr_to_mdl_dag_node( parameter_type, argument.get());
         if( !arg) {
             LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                 "Type mismatch, call of an unsuitable DB element, or cycle in a graph rooted "

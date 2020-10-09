@@ -14727,8 +14727,16 @@ void NT_analysis::check_exported_for_existance()
 }
 
 // Check restriction on the given file path.
-void NT_analysis::check_file_path(char const *path, Position const &pos)
+bool NT_analysis::check_file_path(char const *path, Position const &pos)
 {
+    bool res = true;
+
+    // work-around for MDLe's misuse of the MDL path name
+    char const *p = strstr(path, "mdle:");
+    if (p != NULL) {
+        path = p + 5;
+    }
+
     if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_3) {
         // . and .. are not allowed before MDL 1.3
 
@@ -14736,16 +14744,16 @@ void NT_analysis::check_file_path(char const *path, Position const &pos)
         m_module.get_version(major, minor);
 
         bool start = true;
-        for (; path[0] != '\0'; ++path) {
+        for (char const *p = path; p[0] != '\0'; ++p) {
             if (start) {
-                if (path[0] == '.') {
-                    if (path[1] == '/' || path[1] == '\0') {
+                if (p[0] == '.') {
+                    if (p[1] == '/' || p[1] == '\0') {
                         // found '.'
                         warning(
                             CURR_DIR_FORBIDDEN_IN_RESOURCE,
                             pos,
                             Error_params(*this).add(major).add(minor));
-                    } else if (path[1] == '.' && (path[2] == '/' || path[2] == '\0')) {
+                    } else if (p[1] == '.' && (p[2] == '/' || p[2] == '\0')) {
                         // found '..'
                         warning(
                             PARENT_DIR_FORBIDDEN_IN_RESOURCE,
@@ -14755,10 +14763,39 @@ void NT_analysis::check_file_path(char const *path, Position const &pos)
                 }
                 start = false;
             }
-            if (path[0] == '/')
+            if (p[0] == '/')
                 start = true;
         }
     }
+
+    // check restrictions
+    u32string u32(get_allocator());
+    utf8_to_utf32(u32, path);
+
+    for (size_t i = 0, l = u32.size(); i < l; ++i) {
+        unsigned c32 = u32[i];
+
+        if (c32 < 32 || c32 == 127 || c32 == ':' || c32 == '\\') {
+            char buffer[8];
+
+            if (c32 == ':') {
+                buffer[0] = ':';
+                buffer[1] = '\0';
+            } else if (c32 == '\\') {
+                buffer[0] = '\\';
+                buffer[1] = '\0';
+            } else {
+                snprintf(buffer, 8, "\\u%04u", c32);
+            }
+
+            error(
+                INVALID_CHARACTER_IN_RESOURCE,
+                pos,
+                Error_params(*this).add(buffer));
+            res = false;
+        }
+    }
+    return res;
 }
 
 // Handle resource constructors.
@@ -15588,7 +15625,9 @@ void NT_analysis::handle_resource_url(
 
     char const *url = sval != NULL ? sval->get_value() : rval->get_string_value();
 
-    check_file_path(url, lit->access_position());
+    if (!check_file_path(url, lit->access_position())) {
+        return;
+    }
 
     string abs_url(get_allocator());
     string abs_file_name(get_allocator());

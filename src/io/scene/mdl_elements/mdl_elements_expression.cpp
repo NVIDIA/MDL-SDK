@@ -502,6 +502,13 @@ IExpression_constant* Expression_factory::create_constant( IValue* value) const
     return value ? new Expression_constant( value) : nullptr;
 }
 
+const IExpression_constant* Expression_factory::create_constant( const IValue* value) const
+{
+    // The const_cast is safe here since we return a constant expression which does not give
+    // access to a mutable value.
+    return value ? new Expression_constant( const_cast<IValue*>( value)) : nullptr;
+}
+
 IExpression_call* Expression_factory::create_call( const IType* type, DB::Tag tag) const
 {
     return type && tag ? new Expression_call( type, tag) : nullptr;

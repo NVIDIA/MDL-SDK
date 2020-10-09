@@ -141,7 +141,7 @@ std::string resolve_resource_filename(
         return "";
 
     const char* resolved_filename = name_set->get_filename( 0);
-    return std::string( resolved_filename);
+    return std::string( resolved_filename ? resolved_filename : "");
 }
 
 /// Decomposes a resolved filename of a resource into the various pieces:

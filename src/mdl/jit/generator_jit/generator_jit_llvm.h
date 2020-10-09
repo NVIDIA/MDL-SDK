@@ -1201,12 +1201,14 @@ public:
 
     /// Compile a distribution function into an LLVM Module and return the LLVM module.
     ///
-    /// \param incremental           if true, the module will not be finished
-    /// \param dist_func             the distribution function
-    /// \param resolver              the call resolver interface to be used
-    /// \param llvm_funcs            the generated LLVM functions
-    /// \param next_arg_block_index  the next argument block index to use, if an argument block
-    ///                              is used by the function
+    /// \param incremental            if true, the module will not be finished
+    /// \param dist_func              the distribution function
+    /// \param resolver               the call resolver interface to be used
+    /// \param llvm_funcs             the generated LLVM functions
+    /// \param next_arg_block_index   the next argument block index to use, if an argument block
+    ///                               is used by the function
+    /// \param main_function_indices  array which will receive the index of the first exported
+    ///                               function per main function or NULL if not requested.
     ///
     /// \returns The LLVM module containing the generated functions for this material
     ///          or NULL on compilation errors.
@@ -1215,7 +1217,8 @@ public:
         Distribution_function const &dist_func,
         ICall_name_resolver const   *resolver,
         Function_vector             &llvm_funcs,
-        size_t                      next_arg_block_index);
+        size_t                      next_arg_block_index,
+        size_t                      *main_function_indices);
 
     /// Compile an constant lambda function into an LLVM Module and return the LLVM function.
     ///
@@ -2524,14 +2527,16 @@ private:
         DAG_call const *dag_call);
 
 
-    /// Translate the current distribution function to LLVM IR.
+    /// Translate the distribution function DAG node to LLVM IR.
     ///
     /// \param ctx                  the function context
+    /// \param df_node              the distribution function DAG node to translate
     /// \param lambda_result_exprs  the list of expression lambda indices for the lambda results
     /// \param mat_data_global      if non-null, the global variable containing the material data
     ///                             for the interpreter for the current distribution function
     Expression_result translate_distribution_function(
         Function_context                     &ctx,
+        DAG_node const                       *df_node,
         llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
         llvm::GlobalVariable                 *mat_data_global);
 
@@ -3315,6 +3320,9 @@ private:
     /// If true, generated functions should get an AlwaysInline attribute.
     bool m_always_inline;
 
+    /// If true, ternary operators on the DAG are to be evaluated strictly
+    bool m_eval_dag_ternary_strictly;
+
     /// If true, pass a user defined resource data struct to all resource callbacks.
     bool m_hlsl_use_resource_data;
 
@@ -3663,6 +3671,9 @@ private:
 
     /// Current state of generating a distribution function.
     Distribution_function_state m_dist_func_state;
+
+    /// Current main function index.
+    size_t m_cur_main_func_index;
 
     typedef mi::mdl::ptr_hash_map<DAG_node const, llvm::Function *>::Type Instantiated_dfs;
 

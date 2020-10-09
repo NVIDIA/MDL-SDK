@@ -385,6 +385,8 @@ public:
 
     IExpression_constant* create_constant( IValue* value) const;
 
+    const IExpression_constant* create_constant( const IValue* value) const;
+
     IExpression_call* create_call( const IType* type, DB::Tag tag) const;
 
     IExpression_parameter* create_parameter( const IType* type, mi::Size index) const;

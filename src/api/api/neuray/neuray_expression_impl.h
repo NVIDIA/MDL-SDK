@@ -480,6 +480,9 @@ public:
 
     mi::neuraylib::IExpression_constant* create_constant( mi::neuraylib::IValue* value) const;
 
+    const mi::neuraylib::IExpression_constant* create_constant(
+        const mi::neuraylib::IValue* value) const;
+
     mi::neuraylib::IExpression_call* create_call( const char* name) const;
 
     mi::neuraylib::IExpression_parameter* create_parameter(

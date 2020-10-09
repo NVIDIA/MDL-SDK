@@ -431,13 +431,16 @@ public:
     /// Collect and map all resources used by the given distribution function.
     void collect(mi::mdl::IDistribution_function *dist_func)
     {
-        mi::base::Handle<mi::mdl::ILambda_function> main_df(dist_func->get_main_df());
+        mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
         mi::base::Handle<mi::mdl::ILambda_function> old_lambda = m_cur_lambda;
 
         // all resources will be registered in the main lambda
-        m_cur_lambda = mi::base::make_handle_dup(main_df.get());
+        m_cur_lambda = mi::base::make_handle_dup(root_lambda.get());
 
-        main_df->enumerate_resources(m_call_resolver, *this, main_df->get_body());
+        for (size_t i = 0, n = dist_func->get_main_function_count(); i < n; ++i) {
+            mi::base::Handle<mi::mdl::ILambda_function> main_func(dist_func->get_main_function(i));
+            root_lambda->enumerate_resources(m_call_resolver, *this, main_func->get_body());
+        }
 
         for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i) {
             mi::base::Handle<mi::mdl::ILambda_function> expr_lambda(dist_func->get_expr_lambda(i));
@@ -1850,11 +1853,6 @@ bool Material_ptx_compiler::add_material(
                         return false;
                 }
 
-                // Create new distribution function object and access the main lambda
-                mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
-                    m_dag_be->create_distribution_function());
-                mi::base::Handle<mi::mdl::ILambda_function> main_df(dist_func->get_main_df());
-
                 // check if the distribution function is the default one, e.g. 'bsdf()'
                 // if that's the case we don't need to translate as the evaluation of the function
                 // will result in zero
@@ -1866,30 +1864,41 @@ bool Material_ptx_compiler::add_material(
                     break;
                 }
 
-                // Set the base function name for the generated functions in the main lambda
-                main_df->set_name(function_name.c_str());
+                // Create new distribution function object and access the main lambda
+                mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
+                    m_dag_be->create_distribution_function());
+                mi::base::Handle<mi::mdl::ILambda_function> root_lambda(
+                    dist_func->get_root_lambda());
+
+                // set the name of the init function
+                std::string init_name = function_name + "_init";
+                root_lambda->set_name(init_name.c_str());
 
                 // Add all material parameters to the lambda function
                 for (size_t i = 0, n = mat_instance->get_parameter_count(); i < n; ++i)
                 {
                     mi::mdl::IValue const *value = mat_instance->get_parameter_default(i);
 
-                    size_t idx = main_df->add_parameter(
+                    size_t idx = root_lambda->add_parameter(
                         value->get_type(),
                         mat_instance->get_parameter_name(i));
 
                     // Map the i'th material parameter to this new parameter
-                    main_df->set_parameter_mapping(i, idx);
+                    root_lambda->set_parameter_mapping(i, idx);
                 }
 
                 // Import full material into the main lambda
                 mi::mdl::DAG_node const *material_constructor =
-                    main_df->import_expr(mat_instance->get_constructor());
+                    root_lambda->import_expr(mat_instance->get_constructor());
+
+                mi::mdl::IDistribution_function::Requested_function req_func(
+                    function_descriptions[i].path, function_name.c_str());
 
                 // Initialize the distribution function
                 if (dist_func->initialize(
                         material_constructor,
-                        function_descriptions[i].path,
+                        &req_func,
+                        1,
                         /*include_geometry_normal=*/ true,
                         /*calc_derivatives=*/ m_enable_derivatives,
                         /*allow_double_expr_lambdas=*/ false,
@@ -1898,19 +1907,24 @@ bool Material_ptx_compiler::add_material(
 
                 // Collect the resources of the distribution function and the material arguments
                 m_res_col.collect(dist_func.get());
-                collect_material_argument_resources(mat_instance.get(), main_df.get());
+                collect_material_argument_resources(mat_instance.get(), root_lambda.get());
 
                 // Add the lambda function to the link unit
+                size_t main_func_index;
                 if (!m_link_unit->add(
                     dist_func.get(),
                     &m_module_manager,
                     &arg_block_index,
-                    &function_descriptions[i].function_index))
+                    &main_func_index,
+                    1))
                 {
                     function_descriptions[i].return_code = -1;
                     continue;
                 }
 
+                // for distribution functions, let function_index point to the init function,
+                // which does not count as main function
+                function_descriptions[i].function_index = main_func_index - 1;
                 break;
             }
 

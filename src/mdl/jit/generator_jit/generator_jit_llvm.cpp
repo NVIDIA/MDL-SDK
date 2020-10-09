@@ -1088,6 +1088,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_finite_math(false)
 , m_reciprocal_math(false)
 , m_always_inline(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY))
+, m_eval_dag_ternary_strictly(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY))
 , m_hlsl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA))
 , m_in_intrinsic_generator(false)
 , m_runtime(create_mdl_runtime(
@@ -1198,6 +1199,7 @@ LLVM_code_generator::LLVM_code_generator(
     options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE)))
 , m_dist_func(NULL)
 , m_dist_func_state(DFSTATE_NONE)
+, m_cur_main_func_index(0)
 , m_instantiated_dfs(
     Distribution_function_state::DFSTATE_END_STATE,
     Instantiated_dfs(get_allocator()),
@@ -2177,9 +2179,10 @@ llvm::Function *LLVM_code_generator::declare_hlsl_read_func(
         llvm::GlobalValue::ExternalLinkage,
         name,
         m_module);
+
+    // let LLVM treat the function as a scalar to avoid duplicate calls
     func->setDoesNotThrow();
-    func->setOnlyReadsMemory();
-    func->setOnlyAccessesInaccessibleMemory();
+    func->setDoesNotAccessMemory();
 
     return func;
 }
@@ -2880,14 +2883,19 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
     LLVM_context_data::Flags flags = LLVM_context_data::FL_NONE;
 
     // create function prototype
-    llvm::Type *ret_tp = lookup_type(lambda->get_return_type());
+    llvm::Type *ret_tp;
+    if (m_dist_func_state == DFSTATE_INIT)
+        ret_tp = m_type_mapper.get_void_type();
+    else
+        ret_tp = lookup_type(lambda->get_return_type());
     MDL_ASSERT(ret_tp != NULL);
 
     llvm::Type *real_ret_tp = ret_tp;
 
     mi::mdl::vector<llvm::Type *>::Type arg_types(get_allocator());
 
-    bool is_sret_func = m_lambda_force_sret || need_reference_return(lambda->get_return_type());
+    bool is_sret_func = m_dist_func_state != DFSTATE_INIT &&
+        (m_lambda_force_sret || need_reference_return(lambda->get_return_type()));
     if (is_sret_func) {
         // add a hidden parameter for the struct return
         arg_types.push_back(Type_mapper::get_ptr(ret_tp));
@@ -6741,7 +6749,27 @@ Expression_result LLVM_code_generator::translate_call(
             }
             return Expression_result::value(res);
         } else if (op == IExpression::OK_TERNARY) {
+            if (m_eval_dag_ternary_strictly && call_expr->as_dag_call() != NULL) {
+                // ternary operator on the DAG with strict evaluation
+                llvm::Value *cond_res =
+                    call_expr->translate_argument_value(*this, ctx, 0, /*return_derivs=*/ false);
+
+                if (cond_res->getType() != m_type_mapper.get_predicate_type()) {
+                    // map to predicate type
+                    cond_res = ctx->CreateICmpNE(cond_res, ctx.get_constant(false));
+                }
+
+                llvm::Value *true_res =
+                    call_expr->translate_argument_value(*this, ctx, 1, /*return_derivs=*/ false);
+
+                llvm::Value *false_res =
+                    call_expr->translate_argument_value(*this, ctx, 2, /*return_derivs=*/ false);
+
+                return Expression_result::value(ctx->CreateSelect(cond_res, true_res, false_res));
+            }
+
             // C-like ternary operator with lazy evaluation
+
             llvm::BasicBlock *on_true_bb  = ctx.create_bb("?:_true");
             llvm::BasicBlock *on_false_bb = ctx.create_bb("?:_false");
             llvm::BasicBlock *end_bb      = ctx.create_bb("?:_end");

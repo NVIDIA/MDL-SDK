@@ -38,7 +38,6 @@ namespace mdl {
 
 class DAG_mangler;
 class DAG_node_factory_impl;
-class File_resolver;
 class Name_printer;
 class IAnnotation;
 class IDeclaration_constant;
@@ -123,12 +122,10 @@ public:
     /// \param alloc               the allocator
     /// \param node_factory        the IR node factory used to create DAG nodes
     /// \param mangler             the DAG name mangler
-    /// \param resolver            a file resolver to process resource URLs
     DAG_builder(
         IAllocator            *alloc,
         DAG_node_factory_impl &node_factory,
-        DAG_mangler           &mangler,
-        File_resolver         &resolver);
+        DAG_mangler           &mangler);
 
     /// Retrieve the allocator.
     IAllocator *get_allocator() {return m_alloc; }
@@ -471,14 +468,6 @@ private:
     /// \param type  the type
     IValue const *default_initializer_value(IType const *type);
 
-    /// Process a resource and update a relative resource URL if necessary.
-    ///
-    /// \param res  the resource to be processed
-    /// \param pos  the source code position of the resource to be processed
-    IValue_resource const *process_resource_urls(
-        IValue_resource const *res,
-        Position const        &pos);
-
     // no copy constructor
     DAG_builder(DAG_builder const &) MDL_DELETED_FUNCTION;
 
@@ -509,9 +498,6 @@ private:
 
     /// The printer for names.
     Name_printer &m_printer;
-
-    /// The file resolver for processing resource URLs.
-    File_resolver &m_resolver;
 
     /// The used Resource modifier.
     IResource_modifier *m_resource_modifier;

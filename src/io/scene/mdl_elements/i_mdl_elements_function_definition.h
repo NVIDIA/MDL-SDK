@@ -337,7 +337,7 @@ private:
     std::string m_simple_name;                    ///< The simple MDL name of this function definition.
     std::string m_db_name;                        ///< The DB name of this function definition.
     std::string m_original_name;                  ///< The original MDL function name (or empty).
-    std::string m_thumbnail;                      ///< The thumbnail image for this definition.
+    mutable std::string m_thumbnail;              ///< The thumbnail image for this definition.
     DB::Tag m_prototype_tag;                      ///< The prototype of this fct. def. (or inv. tag).
     bool m_is_exported;                           ///< The export flag.
     bool m_is_uniform;                            ///< The uniform flag.

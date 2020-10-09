@@ -155,7 +155,7 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS_RELWITHDEBINFO:     " ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
 endif()
 
-option(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES "Links the MSCV dynamic runtime (\\MD) instead of static (\\MT)." OFF)
+option(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES "Links the MSCV dynamic runtime (\\MD) instead of static (\\MT)." ON)
 
 # check for dependencies
 # pre-declare all options that are used

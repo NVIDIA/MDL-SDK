@@ -48,12 +48,15 @@ namespace mdl {
 
 typedef Store<mi::base::Handle<Module const> > Module_scope;
 
-/// Checks, if the given type is user-defined.
-static bool is_user_type(IType const *t)
+/// Checks, if the given type must be imported if used.
+static bool need_type_import(IType const *t)
 {
     if (IType_enum const *te = as<IType_enum>(t)) {
-        return te->get_predefined_id() == IType_enum::EID_USER;
+        // i,port all user defined enums AND tex:gamma_mode
+        IType_enum::Predefined_id id = te->get_predefined_id();
+        return id == IType_enum::EID_USER || id == IType_enum::EID_TEX_GAMMA_MODE;
     } else if (IType_struct const *ts = as<IType_struct>(t)) {
+        // import all user defined structs
         return ts->get_predefined_id() == IType_struct::SID_USER;
     }
     return false;
@@ -384,10 +387,21 @@ IExpression *Module_inliner::post_visit(IExpression_reference *expr)
     return expr;
 }
 
-IExpression *Module_inliner::post_visit(IExpression_literal *lit)
+// End of a literal expression.
+IExpression *Module_inliner::post_visit(IExpression_literal *expr)
 {
-    do_type(lit->get_type());
-    return lit;
+    do_type(expr->get_type());
+    return expr;
+}
+
+// End of a binary expression.
+IExpression *Module_inliner::post_visit(IExpression_binary *expr)
+{
+    if (expr->get_operator() == IExpression_binary::OK_SELECT) {
+        // we select something from the left subexpression. Its type must be known thats why.
+        do_type(expr->get_left_argument()->get_type());
+    }
+    return expr;
 }
 
 void Module_inliner::post_visit(IType_name *tn)
@@ -399,31 +413,36 @@ void Module_inliner::post_visit(IAnnotation *anno)
 {
     Definition const *def = impl_cast<Definition>(anno->get_name()->get_definition());
     if (!m_is_root || def->get_original_import_idx() != 0) {
-        mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
-        if (mod_ori->is_builtins()) {
+        mi::base::Handle<Module const> orig_module(m_module->get_owner_module(def));
+        if (orig_module->is_builtins()) {
             return;
         }
 
-        Definition const *def_ori = m_module->get_original_definition(def);
-        if (!needs_inline(mod_ori.get())) {
-            unsigned flags = def_ori->get_version_flags();
+        Definition const *orig_def = m_module->get_original_definition(def);
+        if (!needs_inline(orig_module.get())) {
+            unsigned flags = orig_def->get_version_flags();
             unsigned rem   = mdl_removed_version(flags);
             if (rem > unsigned(m_target_module->get_version())) {
-                register_import(mod_ori->get_name(), def_ori->get_symbol()->get_name());
+                register_import(orig_module->get_name(), orig_def->get_symbol()->get_name());
+
+                {
+                    Module_scope scope(m_module, orig_module);
+                    register_child_types(orig_def->get_type());
+                }
             }
             return;
         }
-        if (m_references.find(def_ori) != m_references.end()) {
+        if (m_references.find(orig_def) != m_references.end()) {
             return;
         }
 
-        IDeclaration const *decl = def_ori->get_declaration();
+        IDeclaration const *decl = orig_def->get_declaration();
         MDL_ASSERT(decl);
 
         // Traverse original declaration
         Module_inliner inliner(
             m_alloc,
-            mod_ori.get(),
+            orig_module.get(),
             m_target_module.get(),
             m_inline_imports,
             m_omit_anno_origin,
@@ -582,7 +601,7 @@ IExpression *Module_inliner::clone_expr_reference(IExpression_reference const *r
         } else if (kind == IDefinition::DK_CONSTRUCTOR) {
             IType_function const *tf = cast<IType_function>(def->get_type());
             IType const          *t  = tf->get_return_type();
-            if (is_user_type(t)) {
+            if (need_type_import(t)) {
                 Definition const *type_def      = get_type_definition(m_module.get(), t);
                 Definition const *orig_type_def = type_def;
 
@@ -659,7 +678,7 @@ IExpression *Module_inliner::clone_literal(IExpression_literal const *lit)
     if (IType_array const *ta = as<IType_array>(lit_type)) {
         lit_type = ta->get_element_type();
     }
-    if (is_user_type(lit_type)) {
+    if (need_type_import(lit_type)) {
         // we must handle two cases here:
         // 1) a literal of the original module is cloned
         // 2) an expression of the original module was cloned, resulting in a literal
@@ -790,7 +809,7 @@ IExpression_call *Module_inliner::make_constructor(
         if (IType_array const *ta = as<IType_array>(type)) {
             type = ta->get_element_type();
         }
-        if (is_user_type(type)) {
+        if (need_type_import(type)) {
             Definition const *type_def = get_type_definition(m_module.get(), type);
             if (type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
                 type_def = m_module->get_original_definition(type_def);
@@ -1422,13 +1441,9 @@ void Module_inliner::do_type(IType const *t)
         Definition const *type_def = get_type_definition(m_module.get(), t);
         if (!m_is_root || type_def->has_flag(Definition::DEF_IS_IMPORTED)) {
             mi::base::Handle<Module const> orig_module(m_module->get_owner_module(type_def));
-            if (orig_module->is_builtins()) {
-                return;
-            }
-
             Definition const *orig_type_def = m_module->get_original_definition(type_def);
             if (!needs_inline(orig_module.get())) {
-                if (is_user_type(t)) {
+                if (need_type_import(t)) {
                     register_import(orig_module->get_name(), type_def->get_symbol()->get_name());
                 }
 
@@ -1439,7 +1454,7 @@ void Module_inliner::do_type(IType const *t)
                 return;
             }
 
-            if (!is_user_type(t)) {
+            if (!need_type_import(t)) {
                 return;
             }
 
@@ -1633,7 +1648,6 @@ IExpression *Exports_collector::post_visit(IExpression_literal *lit)
     return lit;
 }
 
-
 void Exports_collector::post_visit(IType_name *tn)
 {
     if (IType const *t = tn->get_type()) {
@@ -1662,7 +1676,7 @@ void Exports_collector::handle_type(IType const *t) {
     if (IType_array const *ta = as<IType_array>(t)) {
         t = ta->get_element_type();
     }
-    if (is_user_type(t)) {
+    if (need_type_import(t)) {
         Definition const *type_def = get_type_definition(m_module.get(), t);
         mi::base::Handle<Module const> mod_ori(mi::base::make_handle_dup(m_module.get()));
 

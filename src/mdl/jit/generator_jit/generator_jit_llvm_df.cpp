@@ -325,12 +325,16 @@ public:
             // all required lambdas are already available
             cur.calc_dependencies(lambda.get_body(), m_lambda_infos);
 
+            // not worth storing the result?
+            if (cost < Cost_calculator::MIN_STORE_RESULT_COST)
+                continue;
+
             // constants are neither materialized as functions nor stored in the lambda results
             if (is<DAG_constant>(lambda.get_body()))
                 continue;
 
-            // not worth storing the result?
-            if (cost < Cost_calculator::MIN_STORE_RESULT_COST)
+            // don't store matrices in lambda results, they are far too expensive
+            if (is<IType_matrix>(m_type_mapper.skip_deriv_type(mdl_type)))
                 continue;
 
             // we want to materialize the result, so register a slot
@@ -426,11 +430,14 @@ public:
 
         // determine which lambda results are required by the other bsdf functions
         // after the init function (so especially without geometry.normal)
+        // TODO: not only use lambda_result for init and all others, but also per main function
         Lambda_info df_info(m_alloc);
-        mi::base::Handle<ILambda_function> main_df(m_dist_func.get_main_df());
-        df_info.calc_dependencies(main_df->get_body(), m_lambda_infos);
+        for (size_t i = 0, n = m_dist_func.get_main_function_count(); i < n; ++i) {
+            mi::base::Handle<ILambda_function> main_func(m_dist_func.get_main_function(i));
+            df_info.calc_dependencies(main_func->get_body(), m_lambda_infos);
 
-        add_lambda_result_dep_entries(df_info, /*for_init_func=*/ false);
+            add_lambda_result_dep_entries(df_info, /*for_init_func=*/ false);
+        }
     }
 
     /// Create the texture results type.
@@ -1000,7 +1007,8 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     Distribution_function const &dist_func,
     ICall_name_resolver const   *resolver,
     Function_vector             &llvm_funcs,
-    size_t                      next_arg_block_index)
+    size_t                      next_arg_block_index,
+    size_t                      *main_function_indices)
 {
     m_dist_func = &dist_func;
 
@@ -1014,7 +1022,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
     IAllocator *alloc = m_arena.get_allocator();
 
-    mi::base::Handle<ILambda_function> root_lambda_handle(m_dist_func->get_main_df());
+    mi::base::Handle<ILambda_function> root_lambda_handle(m_dist_func->get_root_lambda());
     Lambda_function const *root_lambda = impl_cast<Lambda_function>(root_lambda_handle.get());
 
     create_captured_argument_struct(m_llvm_context, *root_lambda);
@@ -1140,26 +1148,12 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     // the BSDF API functions create the lambda results they use, so no lambda results parameter
     m_lambda_force_no_lambda_results = true;
 
-    llvm::Twine base_name(root_lambda->get_name());
-    Function_instance inst(get_allocator(), root_lambda);
+    // create init function
 
-    IGenerated_code_executable::Distribution_kind dist_kind =
-        IGenerated_code_executable::DK_INVALID;
-    switch (root_lambda->get_body()->get_type()->get_kind()) {
-    case IType::TK_BSDF: dist_kind = IGenerated_code_executable::DK_BSDF; break;
-    case IType::TK_HAIR_BSDF: dist_kind = IGenerated_code_executable::DK_HAIR_BSDF; break;
-    case IType::TK_EDF:  dist_kind = IGenerated_code_executable::DK_EDF; break;
-    default:
-        MDL_ASSERT(!"Unexpected root lambda type kind");
-        break;
-    }
-
-    llvm::GlobalVariable *mat_data_global = NULL;
-
-    // create one LLVM function for each distribution function state
-    for (int i = DFSTATE_INIT; i < DFSTATE_END_STATE; ++i)
     {
-        m_dist_func_state = Distribution_function_state(i);
+        Function_instance inst(get_allocator(), root_lambda);
+
+        m_dist_func_state = Distribution_function_state(DFSTATE_INIT);
 
         // we cannot use get_or_create_context_data here, because we need to force the creation of
         // a new function here, as the (const) root_lambda cannot be changed to reflect the
@@ -1171,29 +1165,33 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         llvm_funcs.push_back(func);
         unsigned flags = ctx_data->get_function_flags();
 
-        // set proper function name according to distribution function state
-        func->setName(base_name + get_dist_func_state_suffix());
+        // set function name as requested by user
+        func->setName(root_lambda->get_name());
 
         if (is_always_inline_enabled())
             func->addFnAttr(llvm::Attribute::AlwaysInline);
 
         // remember function as an exported function
         IGenerated_code_executable::Function_kind func_kind =
-            IGenerated_code_executable::FK_INVALID;
-        switch (i) {
-        case DFSTATE_INIT:      func_kind = IGenerated_code_executable::FK_DF_INIT;        break;
-        case DFSTATE_SAMPLE:    func_kind = IGenerated_code_executable::FK_DF_SAMPLE;      break;
-        case DFSTATE_EVALUATE:  func_kind = IGenerated_code_executable::FK_DF_EVALUATE;    break;
-        case DFSTATE_PDF:       func_kind = IGenerated_code_executable::FK_DF_PDF;         break;
-        case DFSTATE_AUXILIARY: func_kind = IGenerated_code_executable::FK_DF_AUXILIARY;   break;
-        default:
-            MDL_ASSERT(!"Unexpected DF state");
-            break;
-        }
+            IGenerated_code_executable::FK_DF_INIT;
 
-        // skip the auxiliary functions if deactivated
-        if (!m_enable_auxiliary && i == DFSTATE_AUXILIARY)
-            continue;
+        IGenerated_code_executable::Distribution_kind dist_kind =
+            IGenerated_code_executable::DK_NONE;
+
+        // if there is only one main function, mark the init function with the corresponding
+        // distribution kind for backward compatibility
+        if (dist_func.get_main_function_count() == 1) {
+            mi::base::Handle<mi::mdl::ILambda_function> main_func(m_dist_func->get_main_function(0));
+            Lambda_function &lambda = *impl_cast<Lambda_function>(main_func.get());
+
+            switch (lambda.get_body()->get_type()->get_kind()) {
+            case IType::TK_BSDF:      dist_kind = IGenerated_code_executable::DK_BSDF;      break;
+            case IType::TK_HAIR_BSDF: dist_kind = IGenerated_code_executable::DK_HAIR_BSDF; break;
+            case IType::TK_EDF:       dist_kind = IGenerated_code_executable::DK_EDF;       break;
+            default:
+                break;
+            }
+        }
 
         m_exported_func_list.push_back(
             Exported_function(
@@ -1203,6 +1201,8 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
                 func_kind,
                 m_captured_args_type != NULL ? next_arg_block_index : ~0));
 
+        // Add all referenced DF-handles to init function for backward compatibility
+        // (should only be associated with distribution functions)
         Exported_function &exp_func = m_exported_func_list.back();
         for (size_t i = 0, n = dist_func.get_df_handle_count(); i < n; ++i) {
             exp_func.add_df_handle(dist_func.get_df_handle(i));
@@ -1210,15 +1210,131 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
         Function_context context(alloc, *this, inst, func, flags);
 
-        if (i == DFSTATE_INIT) {
-            // translate the init function
-            translate_distribution_function_init(
-                context, texture_result_exprs, lambda_result_exprs_init);
-        } else {
-            // translate the distribution function
-            translate_distribution_function(context, lambda_result_exprs_others, mat_data_global);
-        }
+        // translate the init function
+        translate_distribution_function_init(
+            context, texture_result_exprs, lambda_result_exprs_init);
+
         context.create_void_return();
+    }
+
+    // generic functions return the result by reference if supported
+    m_lambda_force_sret = target_supports_sret_for_lambda();
+
+    for (size_t i = 0, n = dist_func.get_main_function_count(); i < n; ++i) {
+        m_cur_main_func_index = i;
+
+        mi::base::Handle<mi::mdl::ILambda_function> main_func(m_dist_func->get_main_function(i));
+        Lambda_function &lambda = *impl_cast<Lambda_function>(main_func.get());
+
+        IGenerated_code_executable::Distribution_kind dist_kind =
+            IGenerated_code_executable::DK_NONE;
+        switch (lambda.get_body()->get_type()->get_kind()) {
+        case IType::TK_BSDF:      dist_kind = IGenerated_code_executable::DK_BSDF;      break;
+        case IType::TK_HAIR_BSDF: dist_kind = IGenerated_code_executable::DK_HAIR_BSDF; break;
+        case IType::TK_EDF:       dist_kind = IGenerated_code_executable::DK_EDF;       break;
+        default:
+            break;
+        }
+
+        if (main_function_indices)
+            main_function_indices[i] = m_exported_func_list.size();
+
+        llvm::Twine base_name(lambda.get_name());
+        Function_instance inst(get_allocator(), &lambda);
+
+        // non-distribution function?
+        if (dist_kind == IGenerated_code_executable::DK_NONE) {
+            m_dist_func_state = Distribution_function_state(DFSTATE_NONE);
+
+            LLVM_context_data *ctx_data = get_or_create_context_data(&lambda);
+            llvm::Function    *func     = ctx_data->get_function();
+            unsigned          flags     = ctx_data->get_function_flags();
+
+            if (is_always_inline_enabled())
+                func->addFnAttr(llvm::Attribute::AlwaysInline);
+
+            m_exported_func_list.push_back(
+                Exported_function(
+                    get_allocator(),
+                    func,
+                    IGenerated_code_executable::DK_NONE,
+                    lambda.get_execution_context() == ILambda_function::LEC_ENVIRONMENT
+                        ? IGenerated_code_executable::FK_ENVIRONMENT
+                        : IGenerated_code_executable::FK_LAMBDA,
+                    m_captured_args_type != NULL ? next_arg_block_index : ~0));
+
+            Function_context context(alloc, *this, inst, func, flags);
+
+            // translate function body
+            Expression_result res = translate_node(context, lambda.get_body(), resolver);
+            context.create_return(res.as_value(context));
+
+            continue;
+        }
+
+        // a distribution function
+
+        llvm::GlobalVariable *mat_data_global = NULL;
+
+        // create one LLVM function for each distribution function state
+        for (int i = DFSTATE_SAMPLE; i < DFSTATE_END_STATE; ++i)
+        {
+            m_dist_func_state = Distribution_function_state(i);
+
+            // we cannot use get_or_create_context_data here, because we need to force the creation
+            // of a new function here, as the (const) root_lambda cannot be changed to reflect the
+            // different states
+            LLVM_context_data *ctx_data = declare_lambda(&lambda);
+            m_context_data[inst] = ctx_data;
+
+            llvm::Function *func = ctx_data->get_function();
+            llvm_funcs.push_back(func);
+            unsigned flags = ctx_data->get_function_flags();
+
+            // set proper function name according to distribution function state
+            func->setName(base_name + get_dist_func_state_suffix());
+
+            if (is_always_inline_enabled())
+                func->addFnAttr(llvm::Attribute::AlwaysInline);
+
+            // remember function as an exported function
+            IGenerated_code_executable::Function_kind func_kind =
+                IGenerated_code_executable::FK_INVALID;
+            switch (i) {
+            case DFSTATE_SAMPLE:    func_kind = IGenerated_code_executable::FK_DF_SAMPLE;    break;
+            case DFSTATE_EVALUATE:  func_kind = IGenerated_code_executable::FK_DF_EVALUATE;  break;
+            case DFSTATE_PDF:       func_kind = IGenerated_code_executable::FK_DF_PDF;       break;
+            case DFSTATE_AUXILIARY: func_kind = IGenerated_code_executable::FK_DF_AUXILIARY; break;
+            default:
+                MDL_ASSERT(!"Unexpected DF state");
+                break;
+            }
+
+            // skip the auxiliary functions if deactivated
+            if (!m_enable_auxiliary && i == DFSTATE_AUXILIARY)
+                continue;
+
+            m_exported_func_list.push_back(
+                Exported_function(
+                    get_allocator(),
+                    func,
+                    dist_kind,
+                    func_kind,
+                    m_captured_args_type != NULL ? next_arg_block_index : ~0));
+
+            Exported_function &exp_func = m_exported_func_list.back();
+            for (size_t i = 0, n = dist_func.get_main_func_df_handle_count(m_cur_main_func_index);
+                    i < n; ++i) {
+                exp_func.add_df_handle(dist_func.get_main_func_df_handle(m_cur_main_func_index, i));
+            }
+
+            Function_context context(alloc, *this, inst, func, flags);
+
+            // translate the distribution function
+            translate_distribution_function(
+                context, lambda.get_body(), lambda_result_exprs_others, mat_data_global);
+            context.create_void_return();
+        }
     }
 
     // if we are compiling with derivatives, all waiting functions need to be compiled now,
@@ -1229,6 +1345,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     // reset some fields
     m_deriv_infos = NULL;
     m_dist_func = NULL;
+    m_cur_main_func_index = 0;
     for (size_t i = 0, n = m_instantiated_dfs.size(); i < n; ++i) {
         m_instantiated_dfs[i].clear();
     }
@@ -3491,8 +3608,10 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                             char const *handle_name = handle_str->get_value();
 
                             int handle_id = -1;
-                            for (size_t i = 0, n = m_dist_func->get_df_handle_count(); i < n; ++i) {
-                                if (strcmp(handle_name, m_dist_func->get_df_handle(i)) == 0) {
+                            for (size_t i = 0, n = m_dist_func->get_main_func_df_handle_count(
+                                    m_cur_main_func_index); i < n; ++i) {
+                                if (strcmp(handle_name, m_dist_func->get_main_func_df_handle(
+                                        m_cur_main_func_index, i)) == 0) {
                                     handle_id = i;
                                     break;
                                 }
@@ -3545,7 +3664,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                         llvm_args.push_back(ctx.has_exec_ctx_parameter()
                             ? ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
                         llvm_args.push_back(call->getArgOperand(2));  // inherited_normal
-                        if (m_dist_func_state == DFSTATE_EVALUATE || 
+                        if (m_dist_func_state == DFSTATE_EVALUATE ||
                             m_dist_func_state == DFSTATE_AUXILIARY)
                                 llvm_args.push_back(call->getArgOperand(3));  // inherited_weight
                         llvm::CallInst::Create(param_bsdf_func, llvm_args, "", call);
@@ -3614,26 +3733,25 @@ llvm::Function *LLVM_code_generator::instantiate_df(
 
 // Translate a DAG node pointing to a DF to LLVM IR.
 Expression_result LLVM_code_generator::translate_distribution_function(
-    Function_context &ctx,
+    Function_context                     &ctx,
+    DAG_node const                       *df_node,
     llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
     llvm::GlobalVariable                 *mat_data_global)
 {
-    mi::base::Handle<ILambda_function> root_lambda(m_dist_func->get_main_df());
-    DAG_node const *body = root_lambda->get_body();
     MDL_ASSERT(
-        is<IType_df>(body->get_type()->skip_type_alias())
+        is<IType_df>(df_node->get_type()->skip_type_alias())
         && (
         (
-            is<DAG_call>(body) &&
+            is<DAG_call>(df_node) &&
             (
-                is_df_semantics(cast<DAG_call>(body)->get_semantic())
+                is_df_semantics(cast<DAG_call>(df_node)->get_semantic())
                 ||
-                cast<DAG_call>(body)->get_semantic() == operator_to_semantic(
+                cast<DAG_call>(df_node)->get_semantic() == operator_to_semantic(
                     IExpression::OK_TERNARY)
                 )
             ) || (
-                body->get_kind() == DAG_node::EK_CONSTANT &&
-                cast<DAG_constant>(body)->get_value()->get_kind() == IValue::VK_INVALID_REF
+                df_node->get_kind() == DAG_node::EK_CONSTANT &&
+                cast<DAG_constant>(df_node)->get_value()->get_kind() == IValue::VK_INVALID_REF
                 )
             )
     );
@@ -3664,7 +3782,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     ctx.convert_and_store(normal, normal_buf);
 
     // initialize evaluate and auxiliary data
-    mi::mdl::IType::Kind df_kind = body->get_type()->get_kind();
+    mi::mdl::IType::Kind df_kind = df_node->get_type()->get_kind();
     llvm::Constant *zero = ctx.get_constant(0.0f);
     if (m_dist_func_state == DFSTATE_EVALUATE || m_dist_func_state == DFSTATE_AUXILIARY) {
 
@@ -3852,10 +3970,10 @@ Expression_result LLVM_code_generator::translate_distribution_function(
             ctx.create_simple_gep_in_bounds(exec_ctx, 4u));
     }
     // recursively instantiate the DF
-    llvm::Function *df_func = instantiate_df(body);
+    llvm::Function *df_func = instantiate_df(df_node);
     if (df_func == NULL) {
         MDL_ASSERT(!"BSDF instantiation failed");
-        return Expression_result::undef(lookup_type(body->get_type()));
+        return Expression_result::undef(lookup_type(df_node->get_type()));
     }
 
     // call the instantiated distribution function

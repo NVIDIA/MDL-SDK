@@ -157,7 +157,8 @@ public:
     /// Inline imported modules.
     ///
     /// Only modules that match the include filter, but not the exclude filter, are inlined.
-    /// Builtin modules are never inlined.
+    /// Builtin modules are never inlined. Inlining of modules with relative resource file paths
+    /// does not work.
     ///
     /// \param include_filter    An extended regular expression [\ref OGBS7] of absolute MDL module
     ///                          names to include, or \c NULL which matches any module.

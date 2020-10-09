@@ -583,66 +583,33 @@ bool is_valid_function_definition(
 /// \return            The MDL type of the requested field or \c NULL if the field does not exist.
 const mi::mdl::IType* get_field_type( const mi::mdl::IType_struct* type, const char* field_name);
 
-/// Looks up a sub-value according to a given path.
+/// Looks up a sub value according to path.
 ///
-/// \param type            The MDL type corresponding to \p value.
 /// \param value           The value.
 /// \param path            The path to follow in \p value. The path may contain dots or bracket
 ///                        pairs as separators. The path component up to the next separator is used
 ///                        to select struct fields by name or other compound elements by index.
-/// \param[out] sub_type   The MDL type corresponding to the return value, or \c NULL in case of
-///                        errors.
 /// \return                A sub-value for \p value according to \p path, or \c NULL in case of
 ///                        errors.
-const IValue* lookup_sub_value(
-    const mi::mdl::IType* type,
-    const IValue* value,
-    const char* path,
-    const mi::mdl::IType** sub_type);
-
-/// Looks up a sub value according to path.
-///
-/// As above, but without the type computation.
-inline const IValue* lookup_sub_value( const IValue* value, const char* path)
-{ return lookup_sub_value( nullptr, value, path, nullptr); }
+const IValue* lookup_sub_value( const IValue* value, const char* path);
 
 /// Looks up a sub-expression according to path.
 ///
-/// \param transaction     The DB transaction used to access the parameter types of direct calls.
 /// \param ef              The expression factory used to wrap values as expressions.
 /// \param temporaries     Used to resolve temporary expressions.
-/// \param type            The MDL type corresponding to \p expr, or \c NULL. This type will be
-///                        traversed in parallel with \p expr and the corresponding sub-type is
-///                        returned in \p sub-type.
 /// \param expr            The expression. Calls and parameter references are not supported.
 ///                        Temporaries are only supported if \p temporaries is not \c NULL.
 /// \param path            The path to follow in \p expr. The path may contain dots or bracket pairs
 ///                        as separators. The path component up to the next separator is used to
 ///                        select struct fields or direct call arguments by name or other compound
 ///                        elements by index.
-/// \param[out] sub_type   The MDL type corresponding to the return value, or \c NULL in case of
-///                        errors.
 /// \return                A sub-expression for \p expr according to \p path, or \c NULL in case of
 ///                        errors.
 const IExpression* lookup_sub_expression(
-    DB::Transaction* transaction,
-    const IExpression_factory* ef,
-    const IExpression_list* temporaries,
-    const mi::mdl::IType* type,
-    const IExpression* expr,
-    const char* path,
-    const mi::mdl::IType** sub_type);
-
-/// Looks up a sub-expression according to path.
-///
-/// As above, but without the type computation.
-inline const IExpression* lookup_sub_expression(
     const IExpression_factory* ef,
     const IExpression_list* temporaries,
     const IExpression* expr,
-    const char* path)
-{ return lookup_sub_expression( nullptr, ef, temporaries, nullptr, expr, path, nullptr); }
-
+    const char* path);
 
 // ********** Misc utility functions around mi::mdl ************************************************
 

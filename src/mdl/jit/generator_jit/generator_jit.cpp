@@ -87,6 +87,10 @@ Code_generator_jit::Code_generator_jit(
         "false",
         "Instructs the JIT code generator to aggressively inline functions");
     m_options.add_option(
+        MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY,
+        "true",
+        "Enable strict evaluation of the ternary operator on the DAG");
+    m_options.add_option(
         MDL_JIT_OPTION_DISABLE_EXCEPTIONS,
         "false",
         "Disable exception handling in the generated code");
@@ -590,6 +594,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
@@ -885,9 +890,6 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
 
-    mi::base::Handle<ILambda_function> root_lambda_handle(dist_func->get_main_df());
-    Lambda_function const *root_lambda = impl_cast<Lambda_function>(root_lambda_handle.get());
-
     // always expect the uniform state to be part of the MDL SDK state structure
     m_options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
 
@@ -900,7 +902,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
     Generated_code_lambda_function::Lambda_res_manag res_manag(*code, /*resource_map=*/NULL);
 
     // make sure, all registered resources are also known to the Lambda_res_manag
-    res_manag.import_from_resource_attribute_map(&root_lambda->get_resource_attribute_map());
+    res_manag.import_from_resource_attribute_map(&dist_func->get_resource_attribute_map());
 
     mi::base::Handle<MDL> compiler(dist_func->get_compiler());
 
@@ -920,7 +922,12 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
 
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
     llvm::Module *module = code_gen.compile_distribution_function(
-        /*incremental=*/false, *dist_func, resolver, llvm_funcs, /*next_arg_block_index=*/0);
+        /*incremental=*/false,
+        *dist_func,
+        resolver,
+        llvm_funcs,
+        /*next_arg_block_index=*/0,
+        /*main_function_indices=*/NULL);
 
     if (module != NULL) {
         MDL_JIT_module_key module_key = code_gen.jit_compile(module);
@@ -962,9 +969,6 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
 
-    mi::base::Handle<ILambda_function> root_lambda_handle(dist_func->get_main_df());
-    Lambda_function const *root_lambda = impl_cast<Lambda_function>(root_lambda_handle.get());
-
     // always expect the uniform state to be part of the MDL SDK state structure
     m_options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
 
@@ -986,7 +990,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     Generated_code_source *code = builder.create<Generated_code_source>(alloc, code_kind);
 
     Generated_code_source::Source_res_manag res_manag(
-        alloc, &root_lambda->get_resource_attribute_map());
+        alloc, &dist_func->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
     HLSLOptPassGate opt_pass_gate;
@@ -1020,7 +1024,12 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
     llvm::Module *module = code_gen.compile_distribution_function(
-        /*incremental=*/false, *dist_func, resolver, llvm_funcs, /*next_arg_block_index=*/0);
+        /*incremental=*/false,
+        *dist_func,
+        resolver,
+        llvm_funcs,
+        /*next_arg_block_index=*/0,
+        /*main_function_indices=*/NULL);
 
     if (module != NULL) {
         if (llvm_ir_output) {
@@ -1252,6 +1261,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
+        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
         hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
@@ -1917,13 +1927,19 @@ bool Link_unit_jit::add(
     IDistribution_function const *idist_func,
     ICall_name_resolver const    *resolver,
     size_t                       *arg_block_index,
-    size_t                       *function_index)
+    size_t                       *main_function_indices,
+    size_t                        num_main_function_indices)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
     if (dist_func == NULL)
         return false;
 
-    mi::base::Handle<ILambda_function> root_lambda_handle(dist_func->get_main_df());
+    // wrong size of main_function_indices array?
+    if (main_function_indices != NULL &&
+            num_main_function_indices != dist_func->get_main_function_count())
+        return false;
+
+    mi::base::Handle<ILambda_function> root_lambda_handle(dist_func->get_root_lambda());
     Lambda_function const *root_lambda = impl_cast<Lambda_function>(root_lambda_handle.get());
 
     // we compile a new lambda, do an update of the resource attribute map
@@ -1932,32 +1948,31 @@ bool Link_unit_jit::add(
     // Add to distribution function list, as m_code_gen will see it
     m_dist_funcs.push_back(mi::base::make_handle_dup(idist_func));
 
-    size_t init_func_index = m_code_gen.get_current_exported_function_count();
-
     size_t next_arg_block_index =
         *arg_block_index != ~0 ? *arg_block_index : m_arg_block_layouts.size();
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
     llvm::Module *module = m_code_gen.compile_distribution_function(
-        /*incremental=*/true, *dist_func, resolver, llvm_funcs, next_arg_block_index);
+        /*incremental=*/ true,
+        *dist_func,
+        resolver,
+        llvm_funcs,
+        next_arg_block_index,
+        main_function_indices);
 
-    if (module != NULL) {
-        if (m_code_gen.get_captured_arguments_llvm_type() != NULL && *arg_block_index == ~0) {
-            IAllocator        *alloc = get_allocator();
-            Allocator_builder builder(alloc);
-            m_arg_block_layouts.push_back(
-                mi::base::make_handle(
-                    builder.create<Generated_code_value_layout>(alloc, &m_code_gen)));
-            MDL_ASSERT(next_arg_block_index == m_arg_block_layouts.size() - 1);
-            *arg_block_index = next_arg_block_index;
-        }
+    if (module == NULL)
+        return false;
 
-        // pass out the function index of the init function
-        if (function_index != NULL)
-            *function_index = init_func_index;
-
-        return true;
+    if (m_code_gen.get_captured_arguments_llvm_type() != NULL && *arg_block_index == ~0) {
+        IAllocator        *alloc = get_allocator();
+        Allocator_builder builder(alloc);
+        m_arg_block_layouts.push_back(
+            mi::base::make_handle(
+                builder.create<Generated_code_value_layout>(alloc, &m_code_gen)));
+        MDL_ASSERT(next_arg_block_index == m_arg_block_layouts.size() - 1);
+        *arg_block_index = next_arg_block_index;
     }
-    return false;
+
+    return true;
 }
 
 // Get the number of functions in this link unit.

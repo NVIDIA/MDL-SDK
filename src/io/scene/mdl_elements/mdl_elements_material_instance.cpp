@@ -382,18 +382,18 @@ Mdl_material_instance::create_dag_material_instance(
     }
 
     // convert m_arguments to DAG nodes
-    mi::Size n = code_dag->get_material_parameter_count(material_index);
+    Mdl_dag_builder<mi::mdl::IDag_builder> builder(
+        transaction, instance.get(), /*compiled_material*/ nullptr);
+    mi::Size n = code_dag->get_material_parameter_count( material_index);
     std::vector<const mi::mdl::DAG_node*> mdl_arguments( n);
+
     for( mi::Size i = 0; i < n; ++i) {
-
         const mi::mdl::IType* parameter_type
-            = code_dag->get_material_parameter_type(material_index, i);
+            = code_dag->get_material_parameter_type( material_index, i);
         mi::base::Handle<const IExpression> argument( m_arguments->get_expression( i));
-        mdl_arguments[i] = int_expr_to_mdl_dag_node(
-            transaction, instance.get(), parameter_type, argument.get());
+        mdl_arguments[i] = builder.int_expr_to_mdl_dag_node( parameter_type, argument.get());
         if( !mdl_arguments[i]) {
-
-            add_and_log_message(context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
+            add_and_log_message( context, Message( mi::base::MESSAGE_SEVERITY_ERROR,
                 "Type mismatch, call of an unsuitable DB element, or call cycle in a graph rooted "
                 "at the material definition \"" +
                 m_definition_db_name + "\"."), -1);

@@ -782,7 +782,6 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
         llvm::Value *res = ctx->CreateCall(runtime_func, args);
         res = ctx.get_dual(res);
         ctx.create_return(res);
-        return func;
     } else {
         // return the external texture runtime function of the renderer
         LLVM_context_data *ctx_data = get_or_create_context_data(
@@ -962,6 +961,10 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
                     llvm::GlobalValue::ExternalLinkage,
                     runtime_func_name,
                     m_module);
+
+                // let LLVM treat the function as a scalar to avoid duplicate calls
+                (*runtime_func)->setDoesNotThrow();
+                (*runtime_func)->setDoesNotAccessMemory();
             }
 
             // call runtime function with additional uniform parameter depending on semantics
@@ -977,12 +980,16 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
 
             llvm::Value *res = ctx->CreateCall(*runtime_func, args);
             ctx.create_return(res);
-            return func;
         } else {
             func->setName(llvm::Twine(module_name) + "_" + func_name);
         }
-        return func;
     }
+
+    // let LLVM treat the function as a scalar to avoid duplicate calls
+    func->setDoesNotThrow();
+    func->setDoesNotAccessMemory();
+
+    return func;
 }
 
 }  // mdl

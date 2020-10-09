@@ -33,9 +33,12 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <memory>
 #include <string>
 
 #include "example_shared.h"
+
+using TD = mi::neuraylib::Target_function_description;  // only for readability
 
 /// The options parsed from the command-line.
 class Options
@@ -65,10 +68,14 @@ public:
 
     /// MDL qualified material name to generate code for.
     std::string m_qualified_material_name = "::nvidia::sdk_examples::tutorials::example_material";
+
+    /// The expressions to generate code for.
+    std::vector<TD> m_descs;
+    std::vector<std::unique_ptr<std::string> > m_desc_strs;  // collection for storing the strings
 };
 
 /// The main content of the example
-void code_gen(mi::neuraylib::INeuray* neuray, const Options& options)
+void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
 {
     // Access the database and create a transaction.
     // This is required for loading MDL modules and their dependencies.
@@ -207,30 +214,31 @@ void code_gen(mi::neuraylib::INeuray* neuray, const Options& options)
             exit_failure("Failed to create a link unit for the %s back-end",
                 options.m_backend.c_str());
 
-        // select expressions to generate code for
-        using TD = mi::neuraylib::Target_function_description; // only for readability
-        std::vector<TD> descs;
+        if (options.m_descs.empty()) {
+            // select some default expressions to generate code for.
+            // The functions to select depends on the renderer.
+            // To get started, generating 'surface.scattering' would be enough
+            // (see the other examples, like DXR, for how to consume the generated code in a shader).
+            auto &descs = options.m_descs;
+            descs.push_back(TD("ior", "ior"));
+            descs.push_back(TD("thin_walled", "thin_walled"));
+            descs.push_back(TD("surface.scattering", "surface_scattering"));
+            descs.push_back(TD("surface.emission.emission", "surface_emission_emission"));
+            descs.push_back(TD("surface.emission.intensity", "surface_emission_intensity"));
+            descs.push_back(TD("surface.emission.mode", "surface_emission_mode"));
+            descs.push_back(TD("backface.scattering", "backface_scattering"));
+            descs.push_back(TD("backface.emission.emission", "backface_emission_emission"));
+            descs.push_back(TD("backface.emission.intensity", "backface_emission_intensity"));
+            descs.push_back(TD("backface.emission.mode", "backface_emission_mode"));
+            descs.push_back(TD("volume.absorption_coefficient", "volume_absorption_coefficient"));
+            descs.push_back(TD("volume.scattering_coefficient", "volume_scattering_coefficient"));
+            descs.push_back(TD("geometry.normal", "geometry_normal"));
+            descs.push_back(TD("geometry.cutout_opacity", "geometry_cutout_opacity"));
+            descs.push_back(TD("geometry.displacement", "geometry_displacement"));
+        }
 
-        // The functions to select depends on the renderer.
-        // To get started, generating 'surface.scattering' would be enough
-        // (see the other examples, like DXR, for how to consume the generated code in a shader).
-        descs.push_back(TD("ior", "ior"));
-        descs.push_back(TD("thin_walled", "thin_walled"));
-        descs.push_back(TD("surface.scattering", "surface_scattering"));
-        descs.push_back(TD("surface.emission.emission", "surface_emission_emission"));
-        descs.push_back(TD("surface.emission.intensity", "surface_emission_intensity"));
-        descs.push_back(TD("surface.emission.mode", "surface_emission_mode"));
-        descs.push_back(TD("backface.scattering", "backface_scattering"));
-        descs.push_back(TD("backface.emission.emission", "backface_emission_emission"));
-        descs.push_back(TD("backface.emission.intensity", "backface_emission_intensity"));
-        descs.push_back(TD("backface.emission.mode", "backface_emission_mode"));
-        descs.push_back(TD("volume.absorption_coefficient", "volume_absorption_coefficient"));
-        descs.push_back(TD("volume.scattering_coefficient", "volume_scattering_coefficient"));
-        descs.push_back(TD("geometry.normal", "geometry_normal"));
-        descs.push_back(TD("geometry.cutout_opacity", "geometry_cutout_opacity"));
-        descs.push_back(TD("geometry.displacement", "geometry_displacement"));
-
-        link_unit->add_material(compiled_material.get(), descs.data(), descs.size(), context.get());
+        link_unit->add_material(
+            compiled_material.get(), options.m_descs.data(), options.m_descs.size(), context.get());
         if (!print_messages(context.get()))
             exit_failure("Failed to select functions for code generation.");
 
@@ -369,11 +377,14 @@ code_gen [options] <qualified_material_name>
 options:
 
   -h|--help                     Prints this usage message and exits.
-  -p|--mdl-path <path>          Adds the given path to the MDL search path.
+  -p|--mdl_path <path>          Adds the given path to the MDL search path.
   -n|--nostdpath                Prevents adding the MDL system and user search
                                 path(s) to the MDL search path.
-  -o|--output-file <file>       Exports the module to this file. Default: stdout
+  -o|--output <file>            Exports the module to this file. Default: stdout
   -b|--backend <backend>        Select the back-end to generate code for. {HLSL, PTX, GLSL}
+                                Default: HLSL
+  -e|--expr_path <path>         Add an MDL expression path to generate, like \"surface.scattering\".
+                                Defaults to a set of expression paths
   -d|--derivatives              Generate code with derivative support.
   -i|--instance_compilation     If set, instance compilation is used instead of class compilation.
   --ft                          Fold ternary operators when used on distribution functions.
@@ -404,20 +415,20 @@ bool Options::parse(int argc, char* argv[])
             m_fold_all_bool_parameters = true;
         else if (arg == "--ft")
             m_fold_all_enum_parameters = true;
-        else if (arg == "-p" || arg == "--mdl-path")
+        else if (arg == "-p" || arg == "--mdl_path")
         {
             if (i == argc - 1)
             {
-                std::cerr << "error: Argument for -p|--mdl-path missing." << std::endl;
+                std::cerr << "error: Argument for -p|--mdl_path missing." << std::endl;
                 return false;
             }
             m_mdl_paths.push_back(argv[++i]);
         }
-        else if (arg == "-o" || arg == "--output-file")
+        else if (arg == "-o" || arg == "--output")
         {
             if (i == argc - 1)
             {
-                std::cerr << "error: Argument for -o|--output-file missing." << std::endl;
+                std::cerr << "error: Argument for -o|--output missing." << std::endl;
                 return false;
             }
             m_output_file = argv[++i];
@@ -432,6 +443,23 @@ bool Options::parse(int argc, char* argv[])
             m_backend = argv[++i];
             std::transform(m_backend.begin(), m_backend.end(), m_backend.begin(),
                 [](unsigned char c) { return std::tolower(c); });
+        }
+        else if (arg == "-e" || arg == "--expr_path")
+        {
+            if (i == argc - 1)
+            {
+                std::cerr << "error: Argument for -e|--expr_path missing." << std::endl;
+                return false;
+            }
+            std::string expr = argv[++i];
+            std::string func_name = expr;
+            std::transform(func_name.begin(), func_name.end(), func_name.begin(),
+                [](unsigned char c) { return char(c) == '.' ? '_' : c; });
+            m_desc_strs.push_back(std::unique_ptr<std::string>(new std::string(expr)));
+            m_desc_strs.push_back(std::unique_ptr<std::string>(new std::string(func_name)));
+            m_descs.push_back(TD(
+                m_desc_strs[m_desc_strs.size() - 2].get()->c_str(),
+                m_desc_strs.back().get()->c_str()));
         }
         else
         {

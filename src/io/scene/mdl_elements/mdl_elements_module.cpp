@@ -43,7 +43,10 @@
 #include "mdl_elements_expression.h"
 #include "mdl_elements_utilities.h"
 
+#include <condition_variable>
+#include <mutex>
 #include <sstream>
+#include <thread>
 
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_generated_dag.h>
@@ -232,6 +235,35 @@ void add_info_message(
     }
 }
 
+struct Non_permanent_mutex
+{
+    Non_permanent_mutex()
+    {
+        free = true;
+    }
+
+    void lock()
+    {
+        std::unique_lock<std::mutex> lock(m);
+        cv.wait(lock, [this] { return free; });
+        free = false;
+    }
+
+    void unlock()
+    {
+        {
+            std::unique_lock<std::mutex> lock(m);
+            free = true;
+        }
+        cv.notify_one();
+    }
+
+private:
+    std::mutex m;
+    std::condition_variable cv;
+    bool free;
+};
+
 class Module_loaded_callback : public mi::mdl::IModule_loaded_callback
 {
 public:
@@ -248,8 +280,7 @@ public:
         mi::mdl::IMDL* mdl,
         MI::MDL::Module_cache* cache,
         MI::MDL::Execution_context* c)
-        : m_mutex()
-        , m_register_internal(func)
+        : m_register_internal(func)
         , m_transaction(t)
         , m_mdl(mdl)
         , m_cache(cache)
@@ -281,7 +312,10 @@ public:
             return true;
         }
 
-        std::unique_lock<std::mutex> lock(m_mutex);
+        // this is now a global lock. it would be sufficient to lock on a per transaction basis
+        // but since we usually load from a single transaction only, we don't loose much
+        // TODO, replace that by the planned synchronization interfaces
+        std::unique_lock<Non_permanent_mutex> lock(s_mutex);
 
         // processing thread?
         std::string db_name = get_db_name(name_cstr);
@@ -299,12 +333,10 @@ public:
 
         // add the module and its content to the database
         int res = int(m_register_internal(m_transaction, m_mdl, module, m_context, nullptr));
-        // printf( "registered module in DB: %s\n", name_cstr);
 
         // inform the waiting threads in case of success and case of failure
         m_cache->notify(name_cstr, res);
         return res >= 0;
-
     }
 
     void module_loading_failed(const mi::mdl::IModule_cache_lookup_handle& handle) override
@@ -319,7 +351,7 @@ public:
     /// Called while loading a module to check if the built-in modules are already registered.
     bool is_builtin_module_registered(char const *absname) const override
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
+        std::unique_lock<Non_permanent_mutex> lock(s_mutex);
 
         // fast check (no db access for recursive loads)
         if (m_registered_builtins.find(absname) != m_registered_builtins.end())
@@ -331,7 +363,7 @@ public:
     }
 
 private:
-    mutable std::mutex m_mutex;
+    static Non_permanent_mutex s_mutex;
     register_internal_func m_register_internal;
     DB::Transaction* m_transaction;
     mi::mdl::IMDL* m_mdl;
@@ -339,6 +371,7 @@ private:
     MI::MDL::Execution_context* m_context;
     std::set<std::string> m_registered_builtins;
 };
+Non_permanent_mutex Module_loaded_callback::s_mutex;
 
 
 }  // anonymous

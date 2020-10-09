@@ -180,7 +180,7 @@ void DAG_code_printer::print_exp(
             if (*name) {
                 m_printer->print(name);
             } else {
-                m_printer->printf("t_" FMT_SIZE_T, index);
+                m_printer->printf("t_%" FMT_SIZE_T, index);
             }
             pop_color();
         }

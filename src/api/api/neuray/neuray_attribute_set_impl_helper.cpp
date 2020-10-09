@@ -198,8 +198,8 @@ bool Attribute_set_impl_helper::destroy_attribute(
     if( !attribute)
         return false;
 
-    attribute_set->detach( attribute_id);
     db_element->add_journal_flag( compute_journal_flags( attribute, attribute_id));
+    attribute_set->detach( attribute_id); // invalidates attribute
     return true;
 }
 
@@ -1054,6 +1054,7 @@ DB::Journal_type Attribute_set_impl_helper::compute_journal_flags(
         result.add_journal( attribute_spec->get_journal_flags());
          return result;
     }
+
     // also consider userdata attribute types
     const ATTR::Type& attr_type = attr->get_type();
     const ATTR::Type_code tc = attr_type.get_typecode();

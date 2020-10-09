@@ -364,26 +364,11 @@ void Mdl_compiled_material::swap( Mdl_compiled_material& other)
     std::swap( m_module_idents, other.m_module_idents);
 }
 
-const IExpression* Mdl_compiled_material::lookup_sub_expression(
-    DB::Transaction* transaction,
-    const char* path,
-    mi::mdl::IType_factory* tf,
-    const mi::mdl::IType** sub_type) const
-{
-    ASSERT( M_SCENE, path);
-    ASSERT( M_SCENE, (!transaction && !tf && !sub_type) || (transaction && tf && sub_type));
-
-    const mi::mdl::IType_struct* material_type
-        = tf ? tf->get_predefined_struct( mi::mdl::IType_struct::SID_MATERIAL) : nullptr;
-
-    return MDL::lookup_sub_expression(
-        transaction, m_ef.get(), m_temporaries.get(), material_type, m_body.get(),
-        path, sub_type);
-}
-
 const IExpression* Mdl_compiled_material::lookup_sub_expression( const char* path) const
 {
-    return lookup_sub_expression( nullptr, path, nullptr, nullptr);
+    ASSERT( M_SCENE, path);
+
+    return MDL::lookup_sub_expression( m_ef.get(), m_temporaries.get(), m_body.get(), path);
 }
 
 namespace {

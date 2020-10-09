@@ -1607,7 +1607,9 @@ private:
     ///
     /// \param path  a file path
     /// \param pos   the position of the value inside the current module
-    void check_file_path(char const *path, Position const &pos);
+    ///
+    /// \return false if this is an invalid path
+    bool check_file_path(char const *path, Position const &pos);
 
     /// Handle resource constructors.
     ///

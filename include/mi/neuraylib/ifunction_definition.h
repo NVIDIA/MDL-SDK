@@ -591,7 +591,11 @@ public:
     /// \note Functions bodies with control flow can not be represented by an expression. For such
     ///       functions, this method always returns \c NULL. For all other functions, i.e., for
     ///       functions, whose body is an expression or a plain return statement, the method never
-    ///       returns \c NULL.
+    ///       returns \c NULL (unless there is no body at all, see below).
+    ///
+    /// \note Functions with a known semantic, i.e., different from
+    ///       #mi::neuraylib::IFunction_definition::DS_UNKNOWN, do not have a body as such, and the
+    ///       method returns \c NULL for such functions.
     virtual const IExpression* get_body() const = 0;
 
     /// Returns the number of temporaries used by this function.

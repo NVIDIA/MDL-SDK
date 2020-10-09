@@ -989,19 +989,9 @@ public:
         char const                       *path,
         char const                       *fname)
     {
-        mi::mdl::ILambda_function::Lambda_execution_context lec
-            = mi::mdl::ILambda_function::LEC_CORE;
-
-        if (strcmp(path, "geometry.displacement") == 0) {
-            // only this is the displacement function
-            lec = mi::mdl::ILambda_function::LEC_DISPLACEMENT;
-        }
-
         // get the field corresponding to path
-        mi::mdl::IType_factory *tf         = m_compiler->get_type_factory();
-        mi::mdl::IType const   *field_type = NULL;
         mi::base::Handle<MDL::IExpression const > field(
-            compiled_material->lookup_sub_expression(m_db_transaction, path, tf, &field_type));
+            compiled_material->lookup_sub_expression(path));
 
         if (!field.is_valid_interface()) {
             m_error = -2;
@@ -1016,17 +1006,26 @@ public:
             return NULL;
         }
 
+        // create a lambda function
+        mi::mdl::ILambda_function::Lambda_execution_context lec
+            = mi::mdl::ILambda_function::LEC_CORE;
+        if (strcmp(path, "geometry.displacement") == 0) {
+            // only this is the displacement function
+            lec = mi::mdl::ILambda_function::LEC_DISPLACEMENT;
+        }
+        mi::base::Handle<mi::mdl::ILambda_function> lambda(
+            m_compiler->create_lambda_function(lec));
+
         // reject DFs or resources
+        mi::base::Handle<const MDL::IType> field_int_type(field->get_type());
+        mi::mdl::IType_factory *tf         = lambda->get_type_factory();
+        mi::mdl::IType const   *field_type = MDL::int_type_to_mdl_type(field_int_type.get(), *tf);
         field_type = field_type->skip_type_alias();
         if (contains_df_type(field_type) || mi::mdl::is<mi::mdl::IType_resource>(field_type)) {
             m_error = -5;
             m_error_string = "Neither DFs nor resource type expressions can be handled.";
             return NULL;
         }
-
-        // ok, we found the attribute to compile, create a lambda function ...
-        mi::base::Handle<mi::mdl::ILambda_function> lambda(
-            m_compiler->create_lambda_function(lec));
 
         // copy the resource map to the lambda
         copy_resource_map(compiled_material, lambda);
@@ -1066,13 +1065,9 @@ public:
         bool include_geometry_normal,
         bool allow_double_expr_lambdas)
     {
-        mi::base::Handle<MDL::IExpression_factory> ef(MDL::get_expression_factory());
-
         // get the field corresponding to path
-        mi::mdl::IType_factory* tf = m_compiler->get_type_factory();
-        const mi::mdl::IType* field_type = NULL;
         mi::base::Handle<const MDL::IExpression> field(
-            compiled_material->lookup_sub_expression(m_db_transaction, path, tf, &field_type));
+            compiled_material->lookup_sub_expression(path));
 
         if (!field) {
             m_error = -2;
@@ -1087,7 +1082,28 @@ public:
             return NULL;
         }
 
+        // ok, we found the attribute to compile, create a lambda function ...
+        mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
+            m_compiler->create_distribution_function());
+
+        // but first copy the resource map
+        copy_resource_map(compiled_material, dist_func);
+
+        mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
+        if (fname) {
+            // set the name of the init function
+            std::string init_name(fname);
+            init_name += "_init";
+            root_lambda->set_name(init_name.c_str());
+        }
+
+        // copy the resource map to the lambda
+        copy_resource_map(compiled_material, root_lambda);
+
         // reject non-DFs
+        mi::base::Handle<const MDL::IType> field_int_type(field->get_type());
+        mi::mdl::IType_factory *tf         = root_lambda->get_type_factory();
+        mi::mdl::IType const   *field_type = MDL::int_type_to_mdl_type(field_int_type.get(), *tf);
         field_type = field_type->skip_type_alias();
         if (!mi::mdl::is<mi::mdl::IType_df>(field_type)) {
             m_error = -5;
@@ -1114,35 +1130,21 @@ public:
                 return NULL;
         }
 
-        // ok, we found the attribute to compile, create a lambda function ...
-        mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
-            m_compiler->create_distribution_function());
-
-        // but first copy the resource map
-        copy_resource_map(compiled_material, dist_func);
-
-        mi::base::Handle<mi::mdl::ILambda_function> main_df(dist_func->get_main_df());
-        if (fname)
-            main_df->set_name(fname);
-
-        // copy the resource map to the lambda
-        copy_resource_map(compiled_material, main_df);
-
         // ... and fill up ...
         MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
-            m_db_transaction, main_df.get(), compiled_material);
+            m_db_transaction, root_lambda.get(), compiled_material);
 
         // add all material parameters to the lambda function
         for (size_t i = 0, n = compiled_material->get_parameter_count(); i < n; ++i) {
             mi::base::Handle<MI::MDL::IValue const> value(compiled_material->get_argument(i));
             mi::base::Handle<MI::MDL::IType const>  p_type(value->get_type());
 
-            mi::mdl::IType const *tp = convert_type(main_df->get_type_factory(), p_type.get());
+            mi::mdl::IType const *tp = convert_type(root_lambda->get_type_factory(), p_type.get());
 
-            size_t idx = main_df->add_parameter(tp, compiled_material->get_parameter_name(i));
+            size_t idx = root_lambda->add_parameter(tp, compiled_material->get_parameter_name(i));
 
             /// map the i'th material parameter to this new parameter
-            main_df->set_parameter_mapping(i, idx);
+            root_lambda->set_parameter_mapping(i, idx);
         }
 
         mi::base::Handle<const MI::MDL::IExpression_direct_call> mat_body(
@@ -1160,10 +1162,13 @@ public:
         const mi::mdl::DAG_node *material_constructor =
             builder.int_expr_to_mdl_dag_node(mat_type, mat_body.get());
 
+        mi::mdl::IDistribution_function::Requested_function req_func(path, fname);
+
         MDL::Mdl_call_resolver resolver(m_db_transaction);
         mi::mdl::IDistribution_function::Error_code ec = dist_func->initialize(
             material_constructor,
-            path,
+            &req_func,
+            1,
             include_geometry_normal,
             m_calc_derivatives,
             allow_double_expr_lambdas,
@@ -1180,11 +1185,17 @@ public:
             m_error_string = "VDFs are not supported.";
             return NULL;
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_DISTRIBUTION_TYPE:
+        case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EXPRESSION_TYPE:
         case mi::mdl::IDistribution_function::EC_INVALID_PARAMETERS:
             MDL_ASSERT(!"Unexpected error.");
             m_error = -10;
             m_error_string = "The requested BSDF is not supported, yet.";
             return NULL;
+        }
+
+        if (fname && dist_func->get_main_function_count() > 0) {
+            mi::base::Handle<mi::mdl::ILambda_function> main_func(dist_func->get_main_function(0));
+            main_func->set_name(fname);
         }
 
         m_error = 0;
@@ -1214,10 +1225,8 @@ public:
         }
 
         // get the field corresponding to path
-        mi::mdl::IType_factory *tf         = m_compiler->get_type_factory();
-        mi::mdl::IType const   *field_type = NULL;
         mi::base::Handle<MDL::IExpression const> field(
-            compiled_material->lookup_sub_expression(m_db_transaction, path, tf, &field_type));
+            compiled_material->lookup_sub_expression(path));
 
         if (!field.is_valid_interface()) {
             m_error = -2;
@@ -1231,6 +1240,9 @@ public:
         }
 
         // reject DFs or resources
+        mi::base::Handle<const MDL::IType> field_int_type(field->get_type());
+        mi::mdl::IType_factory *tf         = lambda->get_type_factory();
+        mi::mdl::IType const   *field_type = MDL::int_type_to_mdl_type(field_int_type.get(), *tf);
         field_type = field_type->skip_type_alias();
         if (contains_df_type(field_type) || mi::mdl::is<mi::mdl::IType_resource>(field_type)) {
             m_error = -5;
@@ -1301,6 +1313,21 @@ public:
         }
     }
 
+    /// Copy the resource map from the compiled material to a lambda like object.
+    ///
+    /// \param compiled_material  the compiled material
+    /// \param lambda             the destination lambda
+    template<typename T>
+    static void copy_resource_map(
+        MDL::Mdl_compiled_material const *compiled_material,
+        T                                 lambda)
+    {
+        for (size_t i = 0, n = compiled_material->get_resource_entries_count(); i < n; ++i) {
+            MI::MDL::Resource_tag_tuple const *e = compiled_material->get_resource_entry(i);
+            lambda->set_resource_tag(e->m_kind, e->m_url.c_str(), e->m_tag);
+        }
+    }
+
 private:
     /// Check if the given type contains a *df type.
     ///
@@ -1319,21 +1346,6 @@ private:
             }
         }
         return false;
-    }
-
-    /// Copy the resource map from the compiled material to a lambda like object.
-    ///
-    /// \param compiled_material  the compiled material
-    /// \param lambda             the destination lambda
-    template<typename T>
-    void copy_resource_map(
-        MDL::Mdl_compiled_material const *compiled_material,
-        T                               lambda)
-    {
-        for (size_t i = 0, n = compiled_material->get_resource_entries_count(); i < n; ++i) {
-            MI::MDL::Resource_tag_tuple const *e = compiled_material->get_resource_entry(i);
-            lambda->set_resource_tag(e->m_kind, e->m_url.c_str(), e->m_tag);
-        }
     }
 
     /// The MDL compiler.
@@ -2157,12 +2169,330 @@ mi::Sint32 Link_unit::add_material_df(
     return result;
 }
 
+mi::Sint32 Link_unit::add_material_single_init(
+    MDL::Mdl_compiled_material const             *compiled_material,
+    mi::neuraylib::Target_function_description   *function_descriptions,
+    mi::Size                                      description_count,
+    MDL::Execution_context                       *context)
+{
+    MDL_ASSERT(
+        description_count > 0 &&
+        function_descriptions[0].path != NULL &&
+        strcmp(function_descriptions[0].path, "init") == 0);
+
+    if (compiled_material == NULL) {
+        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
+        return -1;
+    }
+    if (!compiled_material->is_valid(m_transaction, context)) {
+        if (context)
+            MDL::add_context_error(context,
+                "The compiled material is invalid.", -1);
+        return -1;
+    }
+
+    mi::base::Handle<MDL::IExpression_factory> ef(MDL::get_expression_factory());
+    MDL::Mdl_call_resolver resolver(m_transaction);
+
+    bool resolve_resources =
+        get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
+    bool include_geometry_normal =
+        get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL);
+
+    // check internal space configuration
+    if (m_internal_space != compiled_material->get_internal_space()) {
+        MDL::add_context_error(context, "Materials compiled with different internal_space "
+            "configurations cannot be mixed.", -1);
+        return -1;
+    }
+
+    // increment once for each add_material invocation
+    m_gen_base_name_suffix_counter++;
+
+    // TODO: m_compile_consts?
+
+    // first generate / normalize all function names to be able to take pointers afterwards
+    std::vector<std::string> base_fname_list;
+    for (mi::Size i = 0; i < description_count; ++i) {
+        if (function_descriptions[i].path == NULL) {
+            function_descriptions[i].return_code = MDL::add_context_error(
+                context,
+                "Invalid parameters (NULL pointer) for function at index " + std::to_string(i),
+                -1);
+            return -1;
+        }
+
+        std::string base_fname;
+
+        if (function_descriptions[i].base_fname && function_descriptions[i].base_fname[0]) {
+            base_fname = function_descriptions[i].base_fname;
+        } else {
+            std::stringstream sstr;
+            sstr << "lambda_" << m_gen_base_name_suffix_counter
+                 << "__" << function_descriptions[i].path;
+            base_fname = sstr.str();
+        }
+
+        std::replace(base_fname.begin(), base_fname.end(), '.', '_');
+        base_fname_list.push_back(base_fname);
+    }
+
+    std::vector<mi::mdl::IDistribution_function::Requested_function> func_list;
+    for (mi::Size i = 1; i < description_count; ++i) {
+        func_list.push_back(
+            mi::mdl::IDistribution_function::Requested_function(
+                function_descriptions[i].path,
+                base_fname_list[i].c_str()));
+    }
+
+    mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
+        m_compiler->create_distribution_function());
+
+    // copy the resource map
+    Lambda_builder::copy_resource_map(compiled_material, dist_func);
+
+    // set init function name, if available
+    mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
+    if (function_descriptions[0].base_fname)
+        root_lambda->set_name(function_descriptions[0].base_fname);
+
+    // copy the resource map to the lambda
+    Lambda_builder::copy_resource_map(compiled_material, root_lambda);
+
+    // add all material parameters to the lambda function
+    for (size_t i = 0, n = compiled_material->get_parameter_count(); i < n; ++i) {
+        mi::base::Handle<MI::MDL::IValue const> value(compiled_material->get_argument(i));
+        mi::base::Handle<MI::MDL::IType const>  p_type(value->get_type());
+
+        mi::mdl::IType const *tp = convert_type(root_lambda->get_type_factory(), p_type.get());
+
+        size_t idx = root_lambda->add_parameter(tp, compiled_material->get_parameter_name(i));
+
+        // map the i'th material parameter to this new parameter
+        root_lambda->set_parameter_mapping(i, idx);
+    }
+
+    // get DAG node for material constructor
+    mi::base::Handle<const MI::MDL::IExpression_direct_call> mat_body(
+        compiled_material->get_body());
+    DB::Tag tag = mat_body->get_definition(m_transaction);
+    if (!tag.is_valid()) {
+        if (context)
+            MDL::add_context_error(context, "The material constructor is invalid.", -1);
+        return -1;
+    }
+
+    DB::Access<MI::MDL::Mdl_function_definition> definition(tag, m_transaction);
+    mi::mdl::IType const *mat_type = definition->get_mdl_return_type(m_transaction);
+
+    MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
+        m_transaction, root_lambda.get(), compiled_material);
+
+    mi::mdl::DAG_node const *material_constructor =
+        builder.int_expr_to_mdl_dag_node(mat_type, mat_body.get());
+
+    // initialize distribution function with the list of requested functions,
+    // selecting multiply used expressions for expression lambdas and
+    // rewriting the graphs to use them
+    // Note: We currently don't support storing expression lambdas of type double
+    //       in HLSL, so disable it.
+    mi::mdl::IDistribution_function::Error_code ec = dist_func->initialize(
+        material_constructor,
+        func_list.data(),
+        func_list.size(),
+        include_geometry_normal,
+        m_calc_derivatives,
+        /*allow_double_expr_lambdas=*/ m_be_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL,
+        &resolver);
+
+    if (ec != mi::mdl::IDistribution_function::EC_NONE) {
+        if (context)
+            MDL::add_context_error(context, "Error initializing material function group.", -1);
+        function_descriptions[0].return_code = -1;
+        for (size_t i = 1; i < description_count; ++i) {
+            switch (func_list[i - 1].error_code) {
+            case mi::mdl::IDistribution_function::EC_NONE:
+                function_descriptions[i].return_code = 0;
+                break;
+            case mi::mdl::IDistribution_function::EC_INVALID_PARAMETERS:
+                MDL::add_context_error(
+                    context,
+                    "Invalid parameters for function at index " + std::to_string(i) + ".",
+                    -1);
+                function_descriptions[i].return_code = -1;
+                break;
+            case mi::mdl::IDistribution_function::EC_INVALID_PATH:
+                MDL::add_context_error(
+                    context,
+                    "Invalid path (non-existing) for function at index " + std::to_string(i) + ".",
+                    -2);
+                function_descriptions[i].return_code = -2;
+                break;
+            case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EXPRESSION_TYPE:
+                MDL::add_context_error(
+                    context,
+                    "Unsupported expression type for function at index " + std::to_string(i) + ".",
+                    -1000);
+                function_descriptions[i].return_code = -1000;
+                break;
+            case mi::mdl::IDistribution_function::EC_UNSUPPORTED_DISTRIBUTION_TYPE:
+            case mi::mdl::IDistribution_function::EC_UNSUPPORTED_BSDF:
+            case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EDF:
+                MDL::add_context_error(
+                    context,
+                    "Unsupported distribution type for function at index " +
+                        std::to_string(i) + ".",
+                    -1000);
+                function_descriptions[i].return_code = -1000;
+                break;
+            }
+        }
+        return -1;
+    }
+
+    // ... enumerate resources: must be done before we compile ...
+    //     all resource information will be collected in root_lambda
+    m_tc_reg->set_in_argument_mode(false);
+    Function_enumerator enumerator(
+        *m_tc_reg, root_lambda.get(), m_transaction, m_tex_idx,
+        m_lp_idx, m_bm_idx, m_res_index_map,
+        !resolve_resources, resolve_resources);
+
+    for (size_t i = 0, n = dist_func->get_main_function_count(); i < n; ++i) {
+        mi::base::Handle<mi::mdl::ILambda_function> main_func(
+            dist_func->get_main_function(i));
+
+        root_lambda->enumerate_resources(resolver, enumerator, main_func->get_body());
+    }
+
+    if (!resolve_resources)
+        root_lambda->set_has_resource_attributes(false);
+
+    // ... enumerate resources of expression lambdas
+    for (size_t i = 0, n = dist_func->get_expr_lambda_count(); i < n; ++i) {
+        mi::base::Handle<mi::mdl::ILambda_function> lambda(
+            dist_func->get_expr_lambda(i));
+
+        // also register the resources in lambda itself,
+        // so we see whether it accesses resources
+        enumerator.set_additional_lambda(lambda.get());
+
+        lambda->enumerate_resources(resolver, enumerator, lambda->get_body());
+
+        // ... optimize expression lambda
+        // (for derivatives, optimization already happened while building derivative info,
+        // and doing it again may destroy the analysis result)
+        if (!m_calc_derivatives) {
+            MDL::Call_evaluator<mi::mdl::ILambda_function> call_evaluator(
+                lambda.get(),
+                m_transaction,
+                resolve_resources);
+
+            lambda->optimize(&resolver, &call_evaluator);
+        }
+    }
+
+    // ... also enumerate resources from arguments after all body resources are processed ...
+    if (compiled_material->get_parameter_count() != 0) {
+        Lambda_builder builder(
+            m_compiler.get(),
+            m_transaction,
+            m_compile_consts,
+            m_calc_derivatives);
+
+        m_tc_reg->set_in_argument_mode(true);
+        builder.enumerate_resource_arguments(root_lambda.get(), compiled_material, enumerator);
+    }
+
+    // ... and add to link unit
+    size_t arg_block_index = ~0;
+    std::vector<size_t> main_func_indices(func_list.size());
+    if (!m_unit->add(
+        dist_func.get(),
+        &resolver,
+        &arg_block_index,
+        main_func_indices.data(),
+        main_func_indices.size()))
+    {
+        MDL::report_messages(m_unit->access_messages(), context);
+        MDL::add_context_error(context,
+            "The JIT backend failed to compile the function group.", -300);
+        function_descriptions[0].return_code = -300;
+        return -1;
+    }
+
+    // The init function is always the first function
+    function_descriptions[0].function_index = 0;
+    function_descriptions[0].distribution_kind = mi::neuraylib::ITarget_code::DK_NONE;
+
+    // Fill output fields for the other main functions
+    for (mi::Size i = 1; i < description_count; ++i) {
+        function_descriptions[i].function_index = main_func_indices[i - 1];
+        mi::base::Handle<mi::mdl::ILambda_function> main_func(
+            dist_func->get_main_function(i - 1));
+        mi::mdl::DAG_node const *main_node = main_func->get_body();
+        mi::mdl::IType const *main_type = main_node->get_type()->skip_type_alias();
+        switch (main_type->get_kind()) {
+        case mi::mdl::IType::TK_BSDF:
+            function_descriptions[i].distribution_kind = mi::neuraylib::ITarget_code::DK_BSDF;
+            break;
+        case mi::mdl::IType::TK_HAIR_BSDF:
+            function_descriptions[i].distribution_kind = mi::neuraylib::ITarget_code::DK_HAIR_BSDF;
+            break;
+        case mi::mdl::IType::TK_EDF:
+            function_descriptions[i].distribution_kind = mi::neuraylib::ITarget_code::DK_EDF;
+            break;
+        case mi::mdl::IType::TK_VDF:
+            function_descriptions[i].distribution_kind = mi::neuraylib::ITarget_code::DK_INVALID;
+            break;
+        default:
+            function_descriptions[i].distribution_kind = mi::neuraylib::ITarget_code::DK_NONE;
+            break;
+        }
+    }
+
+    // Was a target argument block layout created for this entity?
+    if (arg_block_index != size_t(~0)) {
+        // Add it to the target code and remember the arguments of the compiled material
+        mi::base::Handle<mi::mdl::IGenerated_code_value_layout const> layout(
+            m_unit->get_arg_block_layout(arg_block_index));
+        mi::Size index = m_target_code->add_argument_block_layout(
+            mi::base::make_handle(
+            new Target_value_layout(layout.get(), m_strings_mapped_to_ids)).get());
+        ASSERT(M_BACKENDS, index == arg_block_index && "Unit and target code should be in sync");
+
+        m_arg_block_comp_material_args.push_back(
+            mi::base::make_handle(compiled_material->get_arguments()));
+        ASSERT(M_BACKENDS, index == m_arg_block_comp_material_args.size() - 1 &&
+               "Unit and arg block material arg list should be in sync");
+
+        (void) index;  // avoid warning about unused variable
+    }
+
+    // pass out the block index
+    for (size_t i = 0; i < description_count; ++i) {
+        function_descriptions[i].argument_block_index = arg_block_index;
+        function_descriptions[i].return_code = 0;
+    }
+
+    return 0;
+}
+
 mi::Sint32 Link_unit::add_material(
     MDL::Mdl_compiled_material const             *compiled_material,
     mi::neuraylib::Target_function_description   *function_descriptions,
     mi::Size                                      description_count,
     MDL::Execution_context                       *context)
 {
+    // adding a group of functions with a single init function?
+    if (description_count > 0 &&
+        function_descriptions[0].path != NULL &&
+        strcmp(function_descriptions[0].path, "init") == 0)
+    {
+        return add_material_single_init(
+            compiled_material, function_descriptions, description_count, context);
+    }
+
     if (compiled_material == NULL) {
         MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
         return -1;
@@ -2178,8 +2508,6 @@ mi::Sint32 Link_unit::add_material(
     // (initialized by the first function that requires material arguments)
     size_t arg_block_index = ~0;
 
-    mi::base::Handle<MDL::IExpression_factory> ef(MDL::get_expression_factory());
-    mi::mdl::IType_factory* tf = m_compiler->get_type_factory();
     MDL::Mdl_call_resolver resolver(m_transaction);
 
     bool resolve_resources =
@@ -2217,26 +2545,25 @@ mi::Sint32 Link_unit::add_material(
         if (function_descriptions[i].path == NULL) {
             function_descriptions[i].return_code = MDL::add_context_error(
                 context,
-                "Invalid parameters (NULL pointer) for function at index" + std::to_string(i),
+                "Invalid parameters (NULL pointer) for function at index " + std::to_string(i),
                 -1);
             return -1;
         }
 
         // get the field corresponding to path
-        const mi::mdl::IType* field_type = 0;
         mi::base::Handle<const MDL::IExpression> field(
-            compiled_material->lookup_sub_expression(
-                m_transaction, function_descriptions[i].path, tf, &field_type));
+            compiled_material->lookup_sub_expression(function_descriptions[i].path));
 
         if (!field) {
-            function_descriptions[i].return_code = 
-                MDL::add_context_error(context, "Invalid path (non-existing) for function at index "
-                    + std::to_string(i) + ".", -2);
+            MDL::add_context_error(context, "Invalid path (non-existing) for function at index "
+                + std::to_string(i) + ".", -2);
+            function_descriptions[i].return_code = -2;
             return -1;
         }
 
         // and the type of the field
-        field_type = field_type->skip_type_alias();
+        mi::base::Handle<const MDL::IType> field_int_type(field->get_type());
+        field_int_type = field_int_type->skip_all_type_aliases();
 
         // use the provided base name or generate one
         std::stringstream sstr;
@@ -2250,44 +2577,44 @@ mi::Sint32 Link_unit::add_material(
         std::string function_name = sstr.str();
         std::replace(function_name.begin(), function_name.end(), '.', '_');
 
-        switch (field_type->get_kind())
+        switch (field_int_type->get_kind())
         {
             // DF types that are supported
-            case mi::mdl::IType::TK_BSDF:
-            case mi::mdl::IType::TK_HAIR_BSDF:
-            case mi::mdl::IType::TK_EDF:
-            //case mi::mdl::IType::TK_VDF:
+            case mi::neuraylib::IType::TK_BSDF:
+            case mi::neuraylib::IType::TK_HAIR_BSDF:
+            case mi::neuraylib::IType::TK_EDF:
+            //case mi::neuraylib::IType::TK_VDF:
             {
                 // set infos that are passed back
-                switch (field_type->get_kind())
+                switch (field_int_type->get_kind())
                 {
-                    case mi::mdl::IType::TK_BSDF:
+                    case mi::neuraylib::IType::TK_BSDF:
                         function_descriptions[i].distribution_kind =
                             mi::neuraylib::ITarget_code::DK_BSDF;
                         break;
 
-                    case mi::mdl::IType::TK_HAIR_BSDF:
+                    case mi::neuraylib::IType::TK_HAIR_BSDF:
                         function_descriptions[i].distribution_kind =
                             mi::neuraylib::ITarget_code::DK_HAIR_BSDF;
                         break;
 
-                    case mi::mdl::IType::TK_EDF:
+                    case mi::neuraylib::IType::TK_EDF:
                         function_descriptions[i].distribution_kind =
                             mi::neuraylib::ITarget_code::DK_EDF;
                         break;
 
-                    //case mi::mdl::IType::TK_VDF:
+                    //case mi::neuraylib::IType::TK_VDF:
                     //    function_descriptions[i].distribution_kind =
                     //        mi::neuraylib::ITarget_code::DK_VDF;
                     //    break;
 
                     default:
-                        function_descriptions[i].return_code =  
-                            MDL::add_context_error(
-                                context,
-                                "VDFs are not supported for function at index" +
-                                std::to_string(i),
-                                -900);
+                        MDL::add_context_error(
+                            context,
+                            "VDFs are not supported for function at index" +
+                            std::to_string(i),
+                            -900);
+                        function_descriptions[i].return_code = -900;
                         function_descriptions[i].distribution_kind =
                             mi::neuraylib::ITarget_code::DK_INVALID;
                         break;
@@ -2309,18 +2636,20 @@ mi::Sint32 Link_unit::add_material(
 
                 if (!dist_func.is_valid_interface())
                 {
-                    function_descriptions[i].return_code = 
-                        MDL::add_context_error(
-                            context, builder.get_error_string(), builder.get_error_code() * 100);
+                    MDL::add_context_error(
+                        context, builder.get_error_string(), builder.get_error_code() * 100);
+                    function_descriptions[i].return_code = builder.get_error_code() * 100;
                     return -1;
                 }
 
-                mi::base::Handle<mi::mdl::ILambda_function> main_df(dist_func->get_main_df());
+                mi::base::Handle<mi::mdl::ILambda_function> main_func(
+                    dist_func->get_main_function(0));
+                MDL_ASSERT(main_func);
 
                 // check if the distribution function is the default one, e.g. 'bsdf()'
                 // if that's the case we don't need to translate as the evaluation of the function
                 // will result in zero, if not explicitly enabled
-                const mi::mdl::DAG_node* body = main_df->get_body();
+                const mi::mdl::DAG_node* body = main_func->get_body();
                 if (!m_compile_consts && body->get_kind() == mi::mdl::DAG_node::EK_CONSTANT &&
                     mi::mdl::cast<mi::mdl::DAG_constant>(body)->get_value()->get_kind()
                         == mi::mdl::IValue::VK_INVALID_REF)
@@ -2330,15 +2659,17 @@ mi::Sint32 Link_unit::add_material(
                 }
 
                 // ... enumerate resources: must be done before we compile ...
-                //     all resource information will be collected in main_df
+                //     all resource information will be collected in root_lambda
+                mi::base::Handle<mi::mdl::ILambda_function> root_lambda(
+                    dist_func->get_root_lambda());
                 m_tc_reg->set_in_argument_mode(false);
                 Function_enumerator enumerator(
-                    *m_tc_reg, main_df.get(), m_transaction, m_tex_idx,
+                    *m_tc_reg, root_lambda.get(), m_transaction, m_tex_idx,
                     m_lp_idx, m_bm_idx, m_res_index_map,
                     !resolve_resources, resolve_resources);
-                main_df->enumerate_resources(resolver, enumerator, main_df->get_body());
+                root_lambda->enumerate_resources(resolver, enumerator, main_func->get_body());
                 if (!resolve_resources)
-                    main_df->set_has_resource_attributes(false);
+                    root_lambda->set_has_resource_attributes(false);
 
                 size_t expr_lambda_count = dist_func->get_expr_lambda_count();
                 for (size_t i = 0; i < expr_lambda_count; ++i)
@@ -2371,7 +2702,7 @@ mi::Sint32 Link_unit::add_material(
                 }
 
                 add_list_items[i].dist_func = dist_func;
-                add_list_items[i].lambda_func = main_df;
+                add_list_items[i].lambda_func = root_lambda;
                 break;
             }
 
@@ -2389,9 +2720,9 @@ mi::Sint32 Link_unit::add_material(
 
                 if (!lambda.is_valid_interface())
                 {
-                    function_descriptions[i].return_code =
-                        MDL::add_context_error(
-                            context, builder.get_error_string(), builder.get_error_code() * 10);
+                    MDL::add_context_error(
+                        context, builder.get_error_string(), builder.get_error_code() * 10);
+                    function_descriptions[i].return_code = builder.get_error_code() * 10;
                     return -1;
                 }
 
@@ -2439,15 +2770,19 @@ mi::Sint32 Link_unit::add_material(
                 add_list_items[i].dist_func.get(),
                 &resolver,
                 &arg_block_index,
-                &index))
+                &index,
+                1))
             {
                 MDL::report_messages(m_unit->access_messages(), context);
-                function_descriptions[i].return_code =
-                    MDL::add_context_error(context,
-                        "The JIT backend failed to compile the function at index "
-                        + std::to_string(i) + ".", -300);
+                MDL::add_context_error(context,
+                    "The JIT backend failed to compile the function at index "
+                    + std::to_string(i) + ".", -300);
+                function_descriptions[i].return_code = -300;
                 return -1;
             }
+            // for distribution functions, let function_index point to the init function,
+            // which does not count as main function
+            function_descriptions[i].function_index = index - 1;
         } else {
             if (!m_unit->add(
                 add_list_items[i].lambda_func.get(),
@@ -2457,14 +2792,14 @@ mi::Sint32 Link_unit::add_material(
                 &index))
             {
                 MDL::report_messages(m_unit->access_messages(), context);
-                function_descriptions[i].return_code =
-                    MDL::add_context_error(
-                        context, "The JIT backend failed to compile the function at index" +
-                        std::to_string(i), -30);
+                MDL::add_context_error(
+                    context, "The JIT backend failed to compile the function at index" +
+                    std::to_string(i), -30);
+                function_descriptions[i].return_code = -30;
                 return -1;
             }
+            function_descriptions[i].function_index = index;
         }
-        function_descriptions[i].function_index = index;
     }
 
     // Was a target argument block layout created for this entity?
@@ -2723,6 +3058,17 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             return -2;
         }
         jit_options.set_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY, value);
+        return 0;
+    }
+    if (strcmp(name, "eval_dag_ternary_strictly") == 0) {
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+        } else if (strcmp(value, "on") == 0) {
+            value = "true";
+        } else {
+            return -2;
+        }
+        jit_options.set_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY, value);
         return 0;
     }
     if (strcmp(name, "df_handle_slot_mode") == 0) {
@@ -3274,26 +3620,23 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         return NULL;
     }
 
-    mi::base::Handle<mi::mdl::ILambda_function> main_df(
-        dist_func->get_main_df());
+    mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
 
     MDL::Mdl_call_resolver resolver(transaction);
 
     // ... enumerate resources: must be done before we compile ...
-    //     all resource information will be collected in main_df
+    //     all resource information will be collected in root_lambda
     bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
     Target_code_register tc_reg;
-    Function_enumerator enumerator(tc_reg, main_df.get(), transaction,
+    Function_enumerator enumerator(tc_reg, root_lambda.get(), transaction,
         !resolve_resources, resolve_resources);
-    main_df->enumerate_resources(resolver, enumerator, main_df->get_body());
-    if (!resolve_resources)
-        main_df->set_has_resource_attributes(false);
-
-    // ... also enumerate resources from arguments ...
-    if (compiled_material->get_parameter_count() != 0) {
-        tc_reg.set_in_argument_mode(true);
-        lambda_builder.enumerate_resource_arguments(main_df.get(), compiled_material, enumerator);
+    for (size_t i = 0, n = dist_func->get_main_function_count(); i < n; ++i) {
+        mi::base::Handle<mi::mdl::ILambda_function> main_func(
+            dist_func->get_main_function(i));
+        root_lambda->enumerate_resources(resolver, enumerator, main_func->get_body());
     }
+    if (!resolve_resources)
+        root_lambda->set_has_resource_attributes(false);
 
     size_t expr_lambda_count = dist_func->get_expr_lambda_count();
     for (size_t i = 0; i < expr_lambda_count; ++i) {
@@ -3303,6 +3646,13 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         enumerator.set_additional_lambda(lambda.get());
 
         lambda->enumerate_resources(resolver, enumerator, lambda->get_body());
+    }
+
+    // ... also enumerate resources from arguments ...
+    if (compiled_material->get_parameter_count() != 0) {
+        tc_reg.set_in_argument_mode(true);
+        lambda_builder.enumerate_resource_arguments(
+            root_lambda.get(), compiled_material, enumerator);
     }
 
     // ... and compile

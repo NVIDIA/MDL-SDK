@@ -86,19 +86,20 @@ public:
     /// main DF function of \p dist_func suffixed with \c "_init", \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
     ///
-    /// \param dist_func            the distribution function to compile
-    /// \param name_resolver        the call name resolver
-    /// \param arg_block_index      this variable will receive the index of the target argument
-    ///                             block used for this distribution function or ~0 if none is used
-    /// \param function_index       the index of the callable function in the created target code.
-    ///                             This parameter is option, provide NULL if not required.
-    ///
+    /// \param dist_func                  the distribution function to compile
+    /// \param name_resolver              the call name resolver
+    /// \param arg_block_index            variable receiving the index of the target argument block
+    ///                                   used for this distribution function or ~0 if none is used
+    /// \param main_function_indices      array receiving the (first) indices of the main functions.
+    ///                                   This parameter is optional, provide NULL if not required.
+    /// \param num_main_function_indices  the size of \p main_function_indices in number of entries
     /// \return true on success
     bool add(
         IDistribution_function const *dist_func,
         ICall_name_resolver const    *name_resolver,
         size_t                       *arg_block_index,
-        size_t                       *function_index) MDL_FINAL;
+        size_t                       *main_function_indices,
+        size_t                        num_main_function_indices) MDL_FINAL;
 
     /// Get the number of functions in this link unit.
     size_t get_function_count() const MDL_FINAL;

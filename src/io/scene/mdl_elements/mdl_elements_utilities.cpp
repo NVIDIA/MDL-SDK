@@ -925,19 +925,12 @@ const mi::mdl::IType* get_field_type( const mi::mdl::IType_struct* type, const c
     return nullptr;
 }
 
-const IValue* lookup_sub_value(
-    const mi::mdl::IType* type,
-    const IValue* value,
-    const char* path,
-    const mi::mdl::IType** sub_type)
+const IValue* lookup_sub_value( const IValue* value, const char* path)
 {
     ASSERT( M_SCENE, value && path);
-    ASSERT( M_SCENE, (!type && !sub_type) || (type && sub_type)); //-V728 PVS
 
     // handle empty paths
     if( path[0] == '\0') {
-        if( sub_type)
-            *sub_type = type;
         value->retain();
         return value;
     }
@@ -945,75 +938,40 @@ const IValue* lookup_sub_value(
     // handle non-compounds
     mi::base::Handle<const IValue_compound> value_compound(
         value->get_interface<IValue_compound>());
-    if( !value_compound) {
-        if( sub_type)
-            *sub_type = nullptr;
+    if( !value_compound)
         return nullptr;
-    }
 
     std::string head, tail;
     split_next_dot_or_bracket( path, head, tail);
 
     // handle structs via field name
     if( value_compound->get_kind() == IValue::VK_STRUCT) {
-        const mi::mdl::IType_struct* type_struct = type ? as<mi::mdl::IType_struct>( type) : nullptr;
-        ASSERT( M_SCENE, type_struct || !type);
         mi::base::Handle<const IValue_struct> value_struct(
             value_compound->get_interface<IValue_struct>());
-        const mi::mdl::IType* tail_type = get_field_type( type_struct, head.c_str());
-        if( type && !tail_type) {
-            if( sub_type)
-                *sub_type = nullptr;
-            return nullptr;
-        }
-        ASSERT( M_SCENE, tail_type || !type);
         mi::base::Handle<const IValue> tail_value( value_struct->get_field( head.c_str()));
-        if( !tail_value) {
-            if( sub_type)
-                *sub_type = nullptr;
+        if( !tail_value)
             return nullptr;
-        }
-        return lookup_sub_value( tail_type, tail_value.get(), tail.c_str(), sub_type);
+        return lookup_sub_value( tail_value.get(), tail.c_str());
     }
 
     // handle other compounds via index
     STLEXT::Likely<mi::Size> index_likely = STRING::lexicographic_cast_s<mi::Size>( head);
-    if( !index_likely.get_status()) {
-        if( sub_type)
-            *sub_type = nullptr;
+    if( !index_likely.get_status())
         return nullptr;
-    }
     mi::Size index = *index_likely.get_ptr(); //-V522 PVS
-    const mi::mdl::IType_compound* type_compound = type ? as<mi::mdl::IType_compound>( type) : nullptr;
-    ASSERT( M_SCENE, type_compound || !type);
-    const mi::mdl::IType* tail_type
-        = type_compound ? type_compound->get_compound_type( static_cast<mi::Uint32>( index)) : nullptr;
-    if( type && !tail_type) {
-        if( sub_type)
-            *sub_type = nullptr;
+    mi::base::Handle<const IValue> tail_value( value_compound->get_value( index));
+    if( !tail_value)
         return nullptr;
-    }
-    ASSERT( M_SCENE, tail_type || !type);
-    const IValue* tail_value = value_compound->get_value( index);
-    if( !tail_value) {
-        if( sub_type)
-            *sub_type = nullptr;
-        return nullptr;
-    }
-    return lookup_sub_value( tail_type, tail_value, tail.c_str(), sub_type);
+    return lookup_sub_value( tail_value.get(), tail.c_str());
 }
 
 const IExpression* lookup_sub_expression(
-    DB::Transaction* transaction,
     const IExpression_factory* ef,
     const IExpression_list* temporaries,
-    const mi::mdl::IType* type,
     const IExpression* expr,
-    const char* path,
-    const mi::mdl::IType** sub_type)
+    const char* path)
 {
-    ASSERT( M_SCENE, expr && path);
-    ASSERT( M_SCENE, (!transaction && !type && !sub_type) || (transaction && type && sub_type));
+    ASSERT( M_SCENE, ef && expr && path);
 
     // resolve temporaries
     IExpression::Kind kind = expr->get_kind();
@@ -1022,25 +980,20 @@ const IExpression* lookup_sub_expression(
             expr->get_interface<IExpression_temporary>());
         mi::Size index = expr_temporary->get_index();
         expr = temporaries->get_expression( index);
-        if( !expr) {
-            if( sub_type)
-                *sub_type = nullptr;
+        if( !expr)
             return nullptr;
-        }
         expr->release(); // rely on refcount in temporaries
         // type is unchanged
         kind = expr->get_kind();
     }
 
     // handle empty paths
-    if (path[0] == '\0') {
-        if (sub_type)
-            *sub_type = type;
+    if( path[0] == '\0') {
         expr->retain();
         return expr;
     }
 
-    switch (kind) {
+    switch( kind) {
 
         case IExpression::EK_CONSTANT: {
 
@@ -1048,13 +1001,10 @@ const IExpression* lookup_sub_expression(
                 expr->get_interface<IExpression_constant>());
             mi::base::Handle<const IValue> value( expr_constant->get_value());
             mi::base::Handle<const IValue> result(
-                lookup_sub_value( type, value.get(), path, sub_type));
-            if (!result) {
-                if (sub_type)
-                    *sub_type = nullptr;
+                lookup_sub_value( value.get(), path));
+            if( !result)
                 return nullptr;
-            }
-            return ef->create_constant( const_cast<IValue*>( result.get()));
+            return ef->create_constant( result.get());
         }
 
         case IExpression::EK_DIRECT_CALL: {
@@ -1067,33 +1017,11 @@ const IExpression* lookup_sub_expression(
             std::string head, tail;
             split_next_dot_or_bracket( path, head, tail);
             mi::Size index = arguments->get_index( head.c_str());
-            if( index == static_cast<mi::Size>( -1)) {
-                if( sub_type)
-                    *sub_type = nullptr;
+            if( index == static_cast<mi::Size>( -1))
                 return nullptr;
-            }
-
-            const mi::mdl::IType* tail_type = nullptr;
-            if( sub_type && transaction && type) {
-                DB::Tag tag = expr_direct_call->get_definition(transaction);
-                if (!tag.is_valid())
-                    return nullptr;
-                DB::Access<Mdl_function_definition> definition( tag, transaction);
-                mi::mdl::IDefinition::Semantics sema = definition->get_mdl_semantic();
-                if( sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
-                    const mi::mdl::IType_array* type_array
-                        = mi::mdl::as<mi::mdl::IType_array>( type);
-                    tail_type = type_array->get_element_type();
-                } else
-                    tail_type = definition->get_mdl_parameter_type(
-                        transaction, static_cast<mi::Uint32>( index));
-                ASSERT( M_SCENE, tail_type);
-            }
-
             mi::base::Handle<const IExpression> argument( arguments->get_expression( index));
-
             return lookup_sub_expression(
-                transaction, ef, temporaries, tail_type, argument.get(), tail.c_str(), sub_type);
+                ef, temporaries, argument.get(), tail.c_str());
         }
 
         case IExpression::EK_CALL:
@@ -3470,7 +3398,9 @@ const mi::mdl::IType* int_type_to_mdl_type(
     const IType *type,
     mi::mdl::IType_factory &tf)
 {
+    // the type factory from mi::mdl::IMDL itself has no valid symbol table
     mi::mdl::ISymbol_table* symtab = tf.get_symbol_table();
+    ASSERT( M_SCENE, symtab && "type factory has no valid symbol table");
 
     switch (type->get_kind()) {
     case IType::TK_ALIAS: {

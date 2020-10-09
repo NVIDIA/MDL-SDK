@@ -149,7 +149,11 @@ protected:
     /// declaration is traversed and eventually copied.
     IExpression *post_visit(IExpression_reference *expr) MDL_FINAL;
 
-    IExpression *post_visit(IExpression_literal *lit) MDL_FINAL;
+    /// End of a literal expression.
+    IExpression *post_visit(IExpression_literal *expr) MDL_FINAL;
+
+    /// End of a binary expression.
+    IExpression *post_visit(IExpression_binary *expr) MDL_FINAL;
 
     void post_visit(IType_name *tn) MDL_FINAL;
 

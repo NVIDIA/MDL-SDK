@@ -203,16 +203,10 @@ __device__ inline const char* get_arg_block(
     return params.arg_block_list[mdl_arg_block_indices[index.z]];
 }
 
-// restores the normal since the BSDF init will change it
-// sets the read-only data segment pointer for large arrays
-__device__ inline void prepare_state(
-    const Kernel_params& params,
-    const Mdl_function_index& index,
-    Mdl_state& state,
-    const tct_float3& normal)
+// Init function
+__device__ inline Bsdf_init_func* as_init(const Mdl_function_index& index)
 {
-    state.ro_data_segment = params.tc_data[index.x].ro_data_segment;
-    state.normal = normal;
+    return mdl_functions[index.z + 0].bsdf_init;
 }
 
 // Expression functions
@@ -222,55 +216,45 @@ __device__ inline Mat_expr_func* as_expression(const Mdl_function_index& index)
 }
 
 // BSDF functions
-__device__ inline Bsdf_init_func* as_bsdf_init(const Mdl_function_index& index)
-{
-    return mdl_functions[index.z + 0].bsdf_init;
-}
-
 __device__ inline Bsdf_sample_func* as_bsdf_sample(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 1].bsdf_sample;
+    return mdl_functions[index.z + 0].bsdf_sample;
 }
 
 __device__ inline Bsdf_evaluate_func* as_bsdf_evaluate(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 2].bsdf_evaluate;
+    return mdl_functions[index.z + 1].bsdf_evaluate;
 }
 
 __device__ inline Bsdf_pdf_func* as_bsdf_pdf(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 3].bsdf_pdf;
+    return mdl_functions[index.z + 2].bsdf_pdf;
 }
 
 __device__ inline Bsdf_auxiliary_func* as_bsdf_auxiliary(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 4].bsdf_auxiliary;
+    return mdl_functions[index.z + 3].bsdf_auxiliary;
 }
 
 // EDF functions
-__device__ inline Edf_init_func* as_edf_init(const Mdl_function_index& index)
-{
-    return mdl_functions[index.z + 0].edf_init;
-}
-
 __device__ inline Edf_sample_func* as_edf_sample(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 1].edf_sample;
+    return mdl_functions[index.z + 0].edf_sample;
 }
 
 __device__ inline Edf_evaluate_func* as_edf_evaluate(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 2].edf_evaluate;
+    return mdl_functions[index.z + 1].edf_evaluate;
 }
 
 __device__ inline Edf_pdf_func* as_edf_pdf(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 3].edf_pdf;
+    return mdl_functions[index.z + 2].edf_pdf;
 }
 
 __device__ inline Edf_auxiliary_func* as_edf_auxiliary(const Mdl_function_index& index)
 {
-    return mdl_functions[index.z + 4].edf_auxiliary;
+    return mdl_functions[index.z + 3].edf_auxiliary;
 }
 
 
@@ -869,8 +853,10 @@ __device__ inline bool trace_scene(
     // material of the current object
     Df_cuda_material material = params.material_buffer[params.current_material];
 
-    // access textures and other resource data
-    Mdl_resource_handler mdl_resources;
+    Mdl_function_index func_idx;
+    func_idx = get_mdl_function_index(material.init);
+    if (!is_valid(func_idx))
+        return false;
 
     // create state
     Mdl_state state = {
@@ -882,12 +868,22 @@ __device__ inline bool trace_scene(
         &hit.tangent_u,
         &hit.tangent_v,
         texture_results,
-        NULL,
+        params.tc_data[func_idx.x].ro_data_segment,
         identity,
         identity,
         0,
         1.0f
     };
+
+    // access textures and other resource data
+    // expect that the target code index is the same for all functions of a material
+    Mdl_resource_handler mdl_resources;
+    mdl_resources.set_target_code_index(params, func_idx);    // init resource handler
+
+    const char* arg_block = get_arg_block(params, func_idx);  // get material parameters
+
+    // initialize the state
+    as_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
     // for evaluating parts of the BSDF individually, e.g. for implementing LPEs
     // the MDL SDK provides several options to pass out the BSDF, EDF, and auxiliary data
@@ -911,18 +907,12 @@ __device__ inline bool trace_scene(
     #endif
 
 
-    Mdl_function_index func_idx;
-
     // apply volume attenuation after first bounce
     // (assuming uniform absorption coefficient and ignoring scattering coefficient)
     if (ray_state.intersection > 0)
     {
         func_idx = get_mdl_function_index(material.volume_absorption);
         if (is_valid(func_idx)) {
-            mdl_resources.set_target_code_index(params, func_idx);    // init resource handler
-            const char* arg_block = get_arg_block(params, func_idx);  // get material parameters
-            prepare_state(params, func_idx, state, hit.normal); // init state
-
             float3 abs_coeff;
             as_expression(func_idx)(
                 &abs_coeff, &state, &mdl_resources.data, NULL, arg_block);
@@ -942,20 +932,9 @@ __device__ inline bool trace_scene(
         Mdl_function_index intensity_func_idx = get_mdl_function_index(material.emission_intensity);
         if (is_valid(intensity_func_idx))
         {
-            // init for the use of the materials emission intensity
-            mdl_resources.set_target_code_index(params, intensity_func_idx); // init resource handler
-            const char* arg_block = get_arg_block(params, intensity_func_idx); // get material parameters
-            prepare_state(params, intensity_func_idx, state, hit.normal); // init state
-
             as_expression(intensity_func_idx)(
                 &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
         }
-
-        // init for the use of the materials EDF
-        mdl_resources.set_target_code_index(params, func_idx); // init resource handler
-        const char* arg_block = get_arg_block(params, func_idx); // get material parameters
-        prepare_state(params, func_idx, state, hit.normal); // init state
-        as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
         // evaluate EDF
         Edf_evaluate_data<(Df_handle_slot_mode) DF_HANDLE_SLOTS> eval_data;
@@ -1001,15 +980,6 @@ __device__ inline bool trace_scene(
     func_idx = get_mdl_function_index(material.bsdf);
     if (is_valid(func_idx))
     {
-        // init for the use of the materials BSDF
-        mdl_resources.set_target_code_index(params, func_idx); // init resource handler
-        const char* arg_block = get_arg_block(params, func_idx); // get material parameters
-        prepare_state(params, func_idx, state, hit.normal); // init state
-
-        // initialize BSDF
-        // Note, that this will change the state.normal (needs to be reset before using EDFs)
-        as_bsdf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
-
         // reuse memory for function data
         union
         {

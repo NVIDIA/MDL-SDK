@@ -437,7 +437,7 @@ mi::Sint32 Mdl_module_builder::add_intern(
                 if (maps_to_mdl_function) {
                     const mi::mdl::IExpression_reference* ref = ast_builder.to_reference(param_symbol);
                     const mi::mdl::IArgument* call_argument =
-                        m_ef->create_named_argument(param_simple_name, ref);
+                        m_ef->create_named_argument(m_nf->create_simple_name(param_symbol), ref);
                     call_to_prototype->add_argument(call_argument); //-V595 PVS
                 }
                 else {

@@ -92,6 +92,9 @@ index.
 \if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_distilling "Material distilling"
   - \ref mi_neuray_example_distilling "Baking material sub-expressions"
+
+  - \ref mi_neuray_example_distilling_unity "Compiling into one link unit"
+  - \ref mi_neuray_example_distilling_unity "Baking material to Unity texture channel layout"
   
   - \ref mi_neuray_example_distilling_glsl "Mapping distilled materials to a GLSL shader"
 \endif

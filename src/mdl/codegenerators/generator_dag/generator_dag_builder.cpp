@@ -1052,8 +1052,7 @@ Null_resource_modifer null_modifier;
 DAG_builder::DAG_builder(
     IAllocator            *alloc,
     DAG_node_factory_impl &node_factory,
-    DAG_mangler           &mangler,
-    File_resolver         &resolver)
+    DAG_mangler           &mangler)
 : m_alloc(alloc)
 , m_node_factory(node_factory)
 , m_value_factory(*node_factory.get_value_factory())
@@ -1061,7 +1060,6 @@ DAG_builder::DAG_builder(
 , m_sym_tab(*m_type_factory.get_symbol_table())
 , m_mangler(mangler)
 , m_printer(mangler.get_printer())
-, m_resolver(resolver)
 , m_resource_modifier(&null_modifier)
 , m_tmp_value_map(
     0, Definition_temporary_map::hasher(), Definition_temporary_map::key_equal(), alloc)
@@ -1673,7 +1671,6 @@ DAG_constant const *DAG_builder::lit_to_dag(
     IValue const *value = lit->get_value();
     value = m_value_factory.import(value);
     if (IValue_resource const *res = as<IValue_resource>(value)) {
-        res = process_resource_urls(res, lit->access_position());
         value = m_resource_modifier->modify(res, tos_module(), m_value_factory);
     }
     return m_node_factory.create_constant(value);
@@ -3153,40 +3150,6 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
     MDL_ASSERT(!"unsupported type kind");
     return m_value_factory.create_bad();
 }
-
-// Process a resource and update a relative resource URL if necessary.
-IValue_resource const *DAG_builder::process_resource_urls(
-    IValue_resource const *res,
-    Position const        &pos)
-{
-    char const *url = res->get_string_value();
-    if (url != NULL && url[0] != '\0') {
-
-        // check for special marker for non-resolved  weak relative paths, keep it.
-        for (size_t i = 0, n = strlen(url); i < n; ++i) {
-            if (url[i] == ':' && i+1 < n && url[i+1] == ':')
-                return res;
-        }
-        // non-empty URL, check if relative
-        if (url[0] != '/') {
-            // found a relative url. We might be in the context of a module PA::A, but compile
-            // a material of PB::B. If PA != PB, then relative urls will not work and must be
-            // updated.
-            IModule const *owner = tos_module();
-
-            return retarget_resource_url(
-                res,
-                pos,
-                get_allocator(),
-                m_type_factory,
-                m_value_factory,
-                owner,
-                m_resolver);
-        }
-    }
-    return res;
-}
-
 
 } // mdl
 } // mi

@@ -331,6 +331,8 @@ public:
 
     virtual IExpression_constant* create_constant( IValue* value) const = 0;
 
+    virtual const IExpression_constant* create_constant( const IValue* value) const = 0;
+
     virtual IExpression_call* create_call( const IType* type, DB::Tag tag) const = 0;
 
     virtual IExpression_parameter* create_parameter( const IType* type, mi::Size index) const = 0;

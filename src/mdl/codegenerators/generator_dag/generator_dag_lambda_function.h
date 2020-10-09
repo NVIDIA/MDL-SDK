@@ -656,13 +656,14 @@ class Distribution_function : public Allocator_interface_implement<IDistribution
 
 public:
     /// Initialize this distribution function object for the given material
-    /// with the given distribution function node. Any additionally required
-    /// expressions from the material will also be handled.
-    /// Any material parameters must already be registered in the main DF lambda at this point.
-    /// The DAG nodes must already be owned by the main DF lambda.
+    /// with the given requested functions.
+    /// Any additionally required expressions from the material will also be handled.
+    /// Any material parameters must already be registered in the root lambda at this point.
+    /// The DAG nodes must already be owned by the root lambda.
     ///
     /// \param material_constructor       the DAG node of the material constructor
-    /// \param path                       the path of the distribution function
+    /// \param requested_functions        the expressions for which functions will be generated
+    /// \param num_functions              the number of requested functions
     /// \param include_geometry_normal    if true, the geometry normal will be handled
     /// \param calc_derivative_infos      if true, derivative information will be calculated
     /// \param allow_double_expr_lambdas  if true, expression lambdas may be created for double
@@ -672,14 +673,30 @@ public:
     /// \returns EC_NONE, if initialization was successful, an error code otherwise.
     Error_code initialize(
         DAG_node const            *material_constructor,
-        char const                *df_path,
+        Requested_function        *requested_functions,
+        size_t                     num_functions,
         bool                       include_geometry_normal,
         bool                       calc_derivative_infos,
         bool                       allow_double_expr_lambdas,
         ICall_name_resolver const *name_resolver) MDL_FINAL;
 
-    /// Get the main DF function representing a DF DAG call.
-    ILambda_function *get_main_df() const MDL_FINAL;
+    /// Get the root lambda function used to build nodes and manage parameters and resources.
+    ILambda_function *get_root_lambda() const MDL_FINAL;
+
+    /// Add the given function as main lambda function.
+    ///
+    /// \param lambda  the function to add
+    size_t add_main_function(ILambda_function *lambda);
+
+    /// Get the main lambda function for the given index, representing a requested function.
+    ///
+    /// \param index  the index of the main lambda
+    ///
+    /// \returns  the requested main lambda function or NULL, if the index is invalid
+    ILambda_function *get_main_function(size_t index) const MDL_FINAL;
+
+    /// Get the number of main lambda functions.
+    size_t get_main_function_count() const MDL_FINAL;
 
     /// Add the given expression lambda function to the distribution function.
     /// The index as a decimal string can be used as name in DAG call nodes with the semantics
@@ -738,6 +755,37 @@ public:
         return m_df_handles.size() - 1;
     }
 
+    /// Register a distribution function handle for a main function.
+    ///
+    /// \param main_func_index  the index of the main function
+    /// \param handle_name      the name of the new handle
+    ///
+    /// \return the index of the handle
+    size_t add_main_func_df_handle(size_t main_func_index, char const *handle_name)
+    {
+        MDL_ASSERT(main_func_index < m_main_func_df_handles.size());
+        m_main_func_df_handles[main_func_index].push_back(handle_name);
+        return m_main_func_df_handles[main_func_index].size() - 1;
+    }
+
+    /// Returns the number of distribution function handles referenced by a given main function.
+    ///
+    /// \param main_func_index  the index of the main function
+    ///
+    /// \returns  the requested count or ~0, if the index is invalid
+    size_t get_main_func_df_handle_count(size_t main_func_index) const MDL_FINAL;
+
+    /// Returns a distribution function handle referenced by a given main function.
+    ///
+    /// \param main_func_index  the index of the main function
+    /// \param index            the index of the handle to return
+    ///
+    /// \return the name of the handle, or \c NULL, if the \p index was out of range.
+    char const *get_main_func_df_handle(size_t main_func_index, size_t index) const MDL_FINAL;
+
+    /// Get the resource attribute map of this distribution function.
+    Resource_attr_map const &get_resource_attribute_map() const;
+
     /// Set a tag, version pair for a resource value that might be reachable from this
     /// function.
     ///
@@ -795,8 +843,11 @@ private:
     /// The MDL compiler.
     mi::base::Handle<MDL> m_mdl;
 
-    /// The root lambda function.
-    mi::base::Handle<ILambda_function> m_main_df;
+    /// One lambda function, which owns all nodes and values, and manages parameters and resources.
+    mi::base::Handle<ILambda_function> m_root_lambda;
+
+    /// The main lambda functions, which will be exported.
+    vector<mi::base::Handle<ILambda_function> >::Type m_main_functions;
 
     /// Collection of expression lambdas generated from the DAG.
     vector<mi::base::Handle<ILambda_function> >::Type m_expr_lambdas;
@@ -812,8 +863,11 @@ private:
     /// The derivative analysis information, if requested during initialization.
     Derivative_infos m_deriv_infos;
 
-    /// List of DF handle strings owned by the value factory of the main lambda function.
+    /// List of DF handle strings owned by the value factory of all main functions.
     vector<char const *>::Type m_df_handles;
+
+    /// List of DF handle strings owned by the value factory per main function.
+    vector<vector<char const *>::Type>::Type m_main_func_df_handles;
 
     typedef vector<Resource_tag_tuple>::Type Resource_tag_map;
 

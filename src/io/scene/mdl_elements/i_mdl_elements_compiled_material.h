@@ -167,26 +167,12 @@ public:
 
     /// Looks up a sub-expression of the compiled material.
     ///
-    /// \param transaction     The DB transaction used to access the parameter types of direct
-    ///                        calls.
     /// \param path            The path to follow in the body of this compiled material. The path
     ///                        may contain dots or bracket pairs as separators. The path component
     ///                        up to the next separator is used to select struct fields or direct
     ///                        call arguments by name or other compound elements by index.
-    /// \param type_factory    The type factory. Used to obtain the initial material struct type.
-    /// \param[out] sub_type   The address to store the MDL type corresponding to the
-    ///                        return value.
     /// \return                A sub-expression for \p expr according to \p path, or \c NULL in case
     ///                        of errors.
-    const IExpression* lookup_sub_expression(
-        DB::Transaction* transaction,
-        const char* path,
-        mi::mdl::IType_factory* type_factory,
-        const mi::mdl::IType** sub_type) const;
-
-    /// Looks up a sub-expression of the compiled material.
-    ///
-    /// Same as overload above, but without the sub-type computation.
     const IExpression* lookup_sub_expression( const char* path) const;
 
     /// Improved version of SERIAL::Serializable::dump().

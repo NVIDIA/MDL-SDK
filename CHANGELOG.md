@@ -1,7 +1,54 @@
 Change Log
 ==========
-MDL SDK 2020.1 (334300.2228): 11 Aug 2020
+MDL SDK 2020.1.1 (334300.4226): 29 Sep 2020
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2020.1.1 (334300.4226) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+
+    - Thumbnail paths are now resolved when they are requested. Before, the resolving was done
+      during the module loading.
+    - A new backend option `eval_dag_ternary_strictly` has been added, which enables strict
+      evaluation of ternary operators (?:) on the DAG to reduce code size. By default it is enabled.
+
+- MDL Compiler and Backends
+
+    - Added single-init mode for a set of functions added to a link unit, allowing all these
+      functions to reuse values calculated in the init function and stored in the texture results
+      field of the state struct. To enable this mode, the first path in the target function
+      description list given to `ILink_unit::add_material()` must be `"init"`. (Note: the init
+      function will not be marked as `ITarget_code::DK_BSDF` anymore.)
+
+- MDL SDK examples
+
+    - Examples Shared
+        - Enabled CMake option for linking MSVC dynamic runtime (/MD) instead of static (/MT) by
+          default.
+
+    - Example Code Generation
+        - Updated MaterialX support to incorporate latest changes from the MaterialX github
+          repository (branch 1.3.8).
+
+    - Example DXR
+        - Added `-e` option to specify which expressions to compile.
+
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+
+    - Fixed `IFunction_call::get_arguments()` for the array constructor, such that it always
+      uses `"0"`, `"1"`, and so on as argument names.
+    - Fixed failing MDLE export if the `tex::gamma_mode` type is only referenced by an
+      annotation.
+    - Fixed storing matrices in texture results taking up all the space without much benefit.
+
+
+MDL SDK 2020.1 (334300.2228): 11 Aug 2020
+-----------------------------------------
 
 ABI compatible with the MDL SDK 2020.1 (334300.2228) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))

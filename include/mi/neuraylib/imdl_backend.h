@@ -95,6 +95,9 @@ public:
     ///
     /// - \c "inline_aggressively": Enables/disables aggressive inlining. Possible values:
     ///   \c "on", \c "off". Default: \c "off".
+    /// - \c "eval_dag_ternary_strictly": Enables/disables strict evaluation of ternary operators
+    ///   on the DAG. Possible values:
+    ///   \c "on", \c "off". Default: \c "on".
     /// - \c "enable_exceptions": Enables/disables support for exceptions through runtime function
     ///   calls. For PTX, this options is always treated as disabled. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
@@ -1453,12 +1456,16 @@ public:
         IMdl_execution_context* context) = 0;
 
     /// Add (multiple) MDL distribution functions and expressions of a material to this link unit.
-    /// For each distribution function this results in four functions, suffixed with \c "_init",
-    /// \c "_sample", \c "_evaluate", and \c "_pdf". Functions can be selected by providing a list
-    /// of \c Target_function_descriptions. Each of them needs to define the \c path, the root
-    /// of the expression that should be translated. After calling this function, each element of
-    /// the list will contain information for later usage in the application,
-    /// e.g., the \c argument_block_index and the \c function_index.
+    /// Functions can be selected by providing a list of \c Target_function_descriptions.
+    /// If the first function in the list uses the path "init", one init function will be generated,
+    /// precalculating values which will be used by the other requested functions.
+    /// Each other entry in the list needs to define the \c path, the root of the expression that
+    /// should be translated.
+    /// For each distribution function it results in three or four functions, suffixed with
+    /// \c "_init" (if first requested path was not \c "init"), \c "_sample", \c "_evaluate",
+    /// and \c "_pdf".
+    /// After calling this function, each element of the list will contain information for later
+    /// usage in the application, e.g., the \c argument_block_index and the \c function_index.
     ///
     /// \param material                 The compiled MDL material.
     /// \param[inout] function_descriptions The list of descriptions of function to translate.
@@ -1490,6 +1497,7 @@ public:
         IMdl_execution_context*         context) = 0;
 };
 
+/// Description of target function
 struct Target_function_description
 {
     Target_function_description(

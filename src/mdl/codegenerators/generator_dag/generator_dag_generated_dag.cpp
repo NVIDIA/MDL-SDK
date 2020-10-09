@@ -35,7 +35,6 @@
 #include <mdl/compiler/compilercore/compilercore_streams.h>
 #include <mdl/compiler/compilercore/compilercore_mdl.h>
 #include <mdl/compiler/compilercore/compilercore_visitor.h>
-#include <mdl/compiler/compilercore/compilercore_file_resolution.h>
 #include <mdl/compiler/compilercore/compilercore_hash.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 
@@ -1229,19 +1228,7 @@ void Generated_code_dag::compile_function(
         }
     }
 
-    // Note: The file resolver might produce error messages when non-existing resources are
-    // processed. Catch them but throw them away
-    Messages_impl dummy_msgs(get_allocator(), module->get_filename());
-    File_resolver file_resolver(
-        *m_mdl.get(),
-        /*module_cache=*/NULL,
-        m_mdl->get_external_resolver(),
-        m_mdl->get_search_path(),
-        m_mdl->get_search_path_lock(),
-        dummy_msgs,
-        /*front_path=*/NULL);
-
-    DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler, file_resolver);
+    DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler);
 
     Function_info func(
         get_allocator(),
@@ -1430,19 +1417,7 @@ void Generated_code_dag::compile_annotation(
         f_node->get_dag_simple_name(),
         f_node->get_dag_alias_name());
 
-    // Note: The file resolver might produce error messages when non-existing resources are
-    // processed. Catch them but throw them away
-    Messages_impl dummy_msgs(get_allocator(), module->get_filename());
-    File_resolver file_resolver(
-        *m_mdl.get(),
-        /*module_cache=*/NULL,
-        m_mdl->get_external_resolver(),
-        m_mdl->get_search_path(),
-        m_mdl->get_search_path_lock(),
-        dummy_msgs,
-        /*front_path=*/NULL);
-
-    DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler, file_resolver);
+    DAG_builder dag_builder(get_allocator(), m_node_factory, m_mangler);
 
     size_t parameter_count = f_node->get_parameter_count();
     for (size_t k = 0; k < parameter_count; ++k) {
@@ -2071,19 +2046,7 @@ void Generated_code_dag::compile(IModule const *module)
 
     m_node_factory.enable_cse(true);
 
-    // Note: The file resolver might produce error messages when non-existing resources are
-    // processed. Catch them but throw them away
-    Messages_impl dummy_msgs(get_allocator(), module->get_filename());
-    File_resolver file_resolver(
-        *m_mdl.get(),
-        /*module_cache=*/NULL,
-        m_mdl->get_external_resolver(),
-        m_mdl->get_search_path(),
-        m_mdl->get_search_path_lock(),
-        dummy_msgs,
-        /*front_path=*/NULL);
-
-    DAG_builder  dag_builder(get_allocator(), m_node_factory, m_mangler, file_resolver);
+    DAG_builder  dag_builder(get_allocator(), m_node_factory, m_mangler);
     Module_scope scope(dag_builder, module);
 
 
@@ -3500,20 +3463,8 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
 
     Generated_code_dag const *dag = impl_cast<Generated_code_dag>(code_dag);
 
-    // Note: The file resolver might produce error messages when non-existing resources are
-    // processed. Catch them but throw them away
-    Messages_impl dummy_msgs(get_allocator(), code_dag->get_module_file_name());
-    File_resolver file_resolver(
-        *m_mdl.get(),
-        /*module_cache=*/NULL,
-        m_mdl->get_external_resolver(),
-        m_mdl->get_search_path(),
-        m_mdl->get_search_path_lock(),
-        dummy_msgs,
-        /*front_path=*/NULL);
-
     DAG_mangler dag_mangler(get_allocator(), m_mdl.get());
-    DAG_builder dag_builder(get_allocator(), m_node_factory, dag_mangler, file_resolver);
+    DAG_builder dag_builder(get_allocator(), m_node_factory, dag_mangler);
 
 
     // set the resource modifier here, so inlining will modify resources

@@ -604,6 +604,8 @@ char const *get_error_template(
         case ABSOLUTE_ALIAS_NOT_AT_BEGINNING:
             return "Alias name '$0' defines an absolute path, but is not at the beginning of a "
                 "qualified name";
+        case INVALID_CHARACTER_IN_RESOURCE:
+            return "Resource file path contains forbidden character '$0'";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:

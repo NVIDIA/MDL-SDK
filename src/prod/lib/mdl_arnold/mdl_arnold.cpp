@@ -698,7 +698,7 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     }
 
     // create a link unit (to keep it simple we use one per material)
-    mi::neuraylib::IMdl_backend *backend = &mdl_sdk.get_native_backend();
+    mi::base::Handle<mi::neuraylib::IMdl_backend> backend(mdl_sdk.create_native_backend());
     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
         backend->create_link_unit(&mdl_sdk.get_transaction(), mdl_context.get()));
     if (!mdl_sdk.log_messages(mdl_context.get()))

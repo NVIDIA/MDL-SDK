@@ -296,21 +296,6 @@ Mdl_sdk_interface::Mdl_sdk_interface()
     mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
     m_transaction = scope->create_transaction();
 
-    // create back-end for native code generation
-    mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
-        m_mdl_sdk->get_api_component<mi::neuraylib::IMdl_backend_api>());
-    m_native_backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_NATIVE);
-
-    #ifdef ENABLE_DERIVATIVES
-        m_native_backend->set_option("texture_runtime_with_derivs", "on");
-    #else
-        m_native_backend->set_option("texture_runtime_with_derivs", "off");
-    #endif
-    m_native_backend->set_option("num_texture_results", std::to_string(NUM_TEXTURE_RESULTS).c_str());
-    m_native_backend->set_option("num_texture_spaces", "1");
-    m_native_backend->set_option("use_builtin_resource_handler", "on");
-    m_native_backend->set_option("enable_auxiliary", "on");
-
     // create factories required to create expressions
     m_factory = m_mdl_sdk->get_api_component<mi::neuraylib::IMdl_factory>();
     m_tf = m_factory->create_type_factory(m_transaction.get());
@@ -376,6 +361,28 @@ Mdl_sdk_interface::~Mdl_sdk_interface()
 
     if (!unload(m_so_handle))
         AiMsgWarning("[mdl] Unloading the plugin failed.\n");
+}
+
+mi::neuraylib::IMdl_backend* Mdl_sdk_interface::create_native_backend()
+{
+    // create backend for native code generation.
+    // each thread needs its own backend object
+    mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
+        m_mdl_sdk->get_api_component<mi::neuraylib::IMdl_backend_api>());
+    mi::neuraylib::IMdl_backend* backend =
+        mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_NATIVE);
+
+    #ifdef ENABLE_DERIVATIVES
+        backend->set_option("texture_runtime_with_derivs", "on");
+    #else
+        backend->set_option("texture_runtime_with_derivs", "off");
+    #endif
+    backend->set_option("num_texture_results", std::to_string(NUM_TEXTURE_RESULTS).c_str());
+    backend->set_option("num_texture_spaces", "1");
+    backend->set_option("use_builtin_resource_handler", "on");
+    backend->set_option("enable_auxiliary", "on");
+
+    return backend;
 }
 
 mi::neuraylib::IMdl_execution_context* Mdl_sdk_interface::create_context()
