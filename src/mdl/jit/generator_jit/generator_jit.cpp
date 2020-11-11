@@ -140,6 +140,10 @@ Code_generator_jit::Code_generator_jit(
         "false",
         "HLSL: Pass an extra user defined resource data struct to resource callbacks");
     m_options.add_option(
+        MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS,
+        "false",
+        "Use a renderer provided function to adapt microfacet roughness");
+    m_options.add_option(
         MDL_JIT_OPTION_ENABLE_AUXILIARY,
         "false",
         "Enable code generation for auxiliary functions on DFs");

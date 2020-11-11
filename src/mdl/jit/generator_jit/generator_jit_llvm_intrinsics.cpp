@@ -3386,6 +3386,25 @@ llvm::Function *MDL_runtime_creator::create_state_object_id(
     return func;
 }
 
+// Generate LLVM IR for state::get_adapt_microfacet_roughness()
+llvm::Function *MDL_runtime_creator::create_state_adapt_microfacet_roughness(
+    Internal_function const *int_func)
+{
+    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+    llvm::Function    *func     = ctx_data->get_function();
+    unsigned          flags     = ctx_data->get_function_flags();
+
+    Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
+
+    llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
+    llvm::Value *a = load_by_value(ctx, arg_it++);
+
+    // just return the roughness unmodified
+    ctx.create_return(a);
+    return func;
+}
+
 llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_resolution(
     Internal_function const *int_func)
 {
@@ -3847,6 +3866,25 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
         case Internal_function::KI_STATE_GET_ARG_BLOCK_UINT:
         case Internal_function::KI_STATE_GET_ARG_BLOCK_BOOL:
             m_internal_funcs[kind] = create_state_get_arg_block_value(int_func);
+            break;
+
+        case Internal_function::KI_STATE_ADAPT_MICROFACET_ROUGHNESS:
+            if (m_code_gen.m_use_renderer_adapt_microfacet_roughness) {
+                Function_instance inst(
+                    m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+                LLVM_context_data *ctx_data =
+                    m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+                llvm::Function *func = ctx_data->get_function();
+                func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+                func->setName("mdl_adapt_microfacet_roughness");
+                func->setDoesNotThrow();
+                func->setOnlyReadsMemory();
+                func->addParamAttr(0, llvm::Attribute::ReadOnly);  // mark state param as read-only
+                func->addParamAttr(0, llvm::Attribute::NoCapture);
+                m_internal_funcs[kind] = ctx_data->get_function();
+            } else {
+                m_internal_funcs[kind] = create_state_adapt_microfacet_roughness(int_func);
+            }
             break;
 
         case Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION:

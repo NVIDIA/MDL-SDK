@@ -86,6 +86,8 @@ def PTX65 : SubtargetFeature<"ptx65", "PTXVersion", "65",
                              "Use PTX version 6.5">;
 def PTX70 : SubtargetFeature<"ptx70", "PTXVersion", "70",
                              "Use PTX version 7.0">;
+def PTX71 : SubtargetFeature<"ptx71", "PTXVersion", "71",
+                             "Use PTX version 7.1">;
 
 //===----------------------------------------------------------------------===//
 // NVPTX supported processors.
@@ -109,7 +111,7 @@ def : Proc<"sm_62", [SM62, PTX50]>;
 def : Proc<"sm_70", [SM70, PTX60]>;
 def : Proc<"sm_75", [SM75, PTX63]>;
 def : Proc<"sm_80", [SM80, PTX70]>;
-def : Proc<"sm_86", [SM86, PTX70]>;
+def : Proc<"sm_86", [SM86, PTX71]>;
 
 def NVPTXInstrInfo : InstrInfo {
 }

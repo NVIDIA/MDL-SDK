@@ -123,6 +123,8 @@ public:
 /// - #mi::Float32 "wavelength_max": The largest supported wavelength. Default: 780.0f.
 /// - #mi::Float32 "fold_ternary_on_df": Fold all ternary operators of *df types, even in class
 ///   compilation mode. Default: \c false.
+/// - \c bool "ignore_noinline": If true, anno::noinline() annotations are ignored during material
+///   compilation. Default: \c false.
 ///
 /// Options for code generation
 /// - \c bool "fold_meters_per_scene_unit": If true, occurrences of the functions

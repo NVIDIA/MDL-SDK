@@ -2973,6 +2973,9 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     // by default we disable HLSL resource data
     options.set_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA, "false");
 
+    // by default we don't use a renderer provided microfacet roughness adaption function
+    options.set_option(MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS, "false");
+
     // by default we expect a texture runtime without derivative support
     options.set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, "false");
 
@@ -3144,6 +3147,20 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         }
         jit_options.set_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES, value);
         return 0;
+    }
+
+    if (strcmp(name, "use_renderer_adapt_microfacet_roughness") == 0) {
+        // TODO: currently only supported for HLSL backend
+        if (m_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL)
+            return -1;
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+        } else if (strcmp(value, "on") == 0) {
+            value = "true";
+        } else {
+            return -2;
+        }
+        jit_options.set_option(MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS, value);
     }
 
     if (strcmp(name, "scene_data_names") == 0) {

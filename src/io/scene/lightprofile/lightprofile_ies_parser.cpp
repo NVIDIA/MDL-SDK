@@ -1318,6 +1318,7 @@ static inline void compute_hermite_3_coefficients(
     c2 = ((t-2.f)*t+1.f) * t;
     c3 = t2*(t-1.f);
 }
+
 static void compute_cubic_interpolation(
    const std::vector<Scalar>& vertical_angles,      // Vertical angles to map with boundary angles
    const std::vector<Scalar>& horizontal_angles,    // Horizontal angles to map with boundary angles
@@ -1467,10 +1468,10 @@ Uint compute_resolution(const std::vector<Scalar>& angles)
     // (numbered from 0 to n), such that the following computations can be done in integers. The
     // number n is chosen such that we can represent 0.1 degrees as well as an equidistant grid of
     // resolution l.
-    Dscalar range = 180.0f * (angles[l-1] - angles[0]) / M_PI;
+    Dscalar range = (180.0 / M_PI) * (angles[l-1] - angles[0]);
     Uint precision = static_cast<Uint>(10 * range + 1);
     Uint n = lcm(precision-1, l-1);
-    Dscalar factor = n / range * 180.0f / M_PI;
+    Dscalar factor = n / range * (180.0 / M_PI);
 
     std::vector<Uint> differences(l-1);
     for (size_t i = 0; i+1 < l; ++i)

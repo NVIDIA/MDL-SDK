@@ -1001,8 +1001,11 @@ BSDF_API void simple_glossy_bsdf_sample(
     const float3 &tangent_u,
     const scatter_mode mode,
     const int handle)
-{    
-    const Distribution_phong_vcavities ph(roughness_u, roughness_v);
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1012,7 +1015,7 @@ BSDF_API void simple_glossy_bsdf_sample(
         ph, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         SIMPLE_GLOSSY_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1029,7 +1032,10 @@ BSDF_API void simple_glossy_bsdf_evaluate(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_phong_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1038,7 +1044,7 @@ BSDF_API void simple_glossy_bsdf_evaluate(
     const float2 contrib = microfacet_evaluate(
         ph, data, state, inherited_normal, tangent_u, mode,
         SIMPLE_GLOSSY_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
@@ -1060,7 +1066,10 @@ BSDF_API void simple_glossy_bsdf_pdf(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_phong_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1068,7 +1077,7 @@ BSDF_API void simple_glossy_bsdf_pdf(
 
     microfacet_pdf(ph, data, state, inherited_normal, tangent_u, mode,
         SIMPLE_GLOSSY_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1131,15 +1140,19 @@ BSDF_API void sheen_bsdf_sample(
     const float3 &multiscatter_tint,
     const int handle)
 {
-    const Distribution_sheen_vcavities ph(roughness);
+    const float adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness, roughness)).x;
+    const Distribution_sheen_vcavities ph(adapted_roughness);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SHEEN_MULTISCATTER);
 
     microfacet_sample(
-        ph, data, state, inherited_normal, state->texture_tangent_u(0), math::saturate(tint), math::saturate(multiscatter_tint),
-        scatter_reflect, handle, SHEEN_BSDF, roughness, roughness, multiscatter_texture_id);
+        ph, data, state, inherited_normal, state->texture_tangent_u(0),
+        math::saturate(tint), math::saturate(multiscatter_tint),
+        scatter_reflect, handle, SHEEN_BSDF,
+        adapted_roughness, adapted_roughness, multiscatter_texture_id);
 }
 
 BSDF_API void sheen_bsdf_evaluate(
@@ -1152,7 +1165,9 @@ BSDF_API void sheen_bsdf_evaluate(
     const float3 &multiscatter_tint,
     const int handle)
 {
-    const Distribution_sheen_vcavities ph(roughness);
+    const float adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness, roughness)).x;
+    const Distribution_sheen_vcavities ph(adapted_roughness);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1160,7 +1175,7 @@ BSDF_API void sheen_bsdf_evaluate(
 
     const float2 contrib = microfacet_evaluate(
         ph, data, state, inherited_normal, state->texture_tangent_u(0), scatter_reflect,
-        SHEEN_BSDF, roughness, roughness, multiscatter_texture_id);
+        SHEEN_BSDF, adapted_roughness, adapted_roughness, multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle,
@@ -1178,7 +1193,9 @@ BSDF_API void sheen_bsdf_pdf(
     const float3 &multiscatter_tint,
     const int handle)
 {
-    const Distribution_sheen_vcavities ph(roughness);
+    const float adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness, roughness)).x;
+    const Distribution_sheen_vcavities ph(adapted_roughness);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1186,7 +1203,7 @@ BSDF_API void sheen_bsdf_pdf(
 
     microfacet_pdf(
         ph, data, state, inherited_normal, scatter_reflect,
-        SHEEN_BSDF, roughness, roughness, multiscatter_texture_id);
+        SHEEN_BSDF, adapted_roughness, adapted_roughness, multiscatter_texture_id);
 }
 
 BSDF_API void sheen_bsdf_auxiliary(
@@ -1349,9 +1366,12 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
         return;
     }
 
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
     float nk1, nk2;
     const float glossy_contrib = backscattering_glossy_evaluate(
-        data, state, g, roughness_u, roughness_v, nk1, nk2);
+        data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1366,7 +1386,7 @@ BSDF_API void backscattering_glossy_reflection_bsdf_evaluate(
     {
         multiscatter_contrib = multiscatter::evaluate(
             state, BACKSCATTERING_GLOSSY_BSDF,
-            roughness_u, roughness_v,
+            adapted_roughness.x, adapted_roughness.y,
             nk1, nk2, -1.0f, multiscatter_texture_id);
 
         data->pdf *= multiscatter_contrib.x; // * rho1
@@ -1442,9 +1462,13 @@ BSDF_API void backscattering_glossy_reflection_bsdf_sample(
         return;
     }
 
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
     // sample the single scattering (glossy) bsdf
     float nk1, nk2;
-    backscattering_glossy_sample(data, state, g, roughness_u, roughness_v, handle, nk1);
+    backscattering_glossy_sample(
+        data, state, g, adapted_roughness.x, adapted_roughness.y, handle, nk1);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1458,14 +1482,15 @@ BSDF_API void backscattering_glossy_reflection_bsdf_sample(
     // sample, in case the multi-scattering part is sampled, k2 will change and rho1 will be > 0
     const float rho1 = multiscatter::sample(
         state, BACKSCATTERING_GLOSSY_BSDF,
-        roughness_u, roughness_v, 
+        adapted_roughness.x, adapted_roughness.y,
         nk1, -1.0f, multiscatter_texture_id, data, g, tint, multiscatter_tint);
 
     // recompute glossy pdf for new direction
     if (rho1 > 0.0f)
     {
         BSDF_pdf_data pdf_data = to_pdf_data(data);
-        backscattering_glossy_pdf(&pdf_data, state, g, roughness_u, roughness_v, nk1, nk2);
+        backscattering_glossy_pdf(
+            &pdf_data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
         // incorporate multi-scatter part to pdf for the new k2
         multiscatter::sample_update_single_scatter_probability(data, pdf_data.pdf, rho1);
@@ -1489,8 +1514,11 @@ BSDF_API void backscattering_glossy_reflection_bsdf_pdf(
         return;
     }
 
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
     float nk1, nk2;
-    backscattering_glossy_pdf(data, state, g, roughness_u, roughness_v, nk1, nk2);
+    backscattering_glossy_pdf(data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1502,7 +1530,7 @@ BSDF_API void backscattering_glossy_reflection_bsdf_pdf(
     data->pdf = multiscatter::pdf(
         data->pdf,
         state, BACKSCATTERING_GLOSSY_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         nk1, nk2, -1.0f, multiscatter_texture_id);
 }
 
@@ -1566,7 +1594,10 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_sample(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_beckmann_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1576,7 +1607,7 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_sample(
         ph, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1593,7 +1624,10 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_evaluate(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_beckmann_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1602,7 +1636,7 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_evaluate(
     const float2 contrib = microfacet_evaluate(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
@@ -1624,7 +1658,10 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_pdf(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_beckmann_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1633,7 +1670,7 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_pdf(
     microfacet_pdf(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1697,7 +1734,10 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_sample(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_ggx_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1707,7 +1747,7 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_sample(
         ph, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_GGX_VCAVITIES_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1724,7 +1764,10 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_evaluate(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_ggx_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1733,7 +1776,7 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_evaluate(
     const float2 contrib = microfacet_evaluate(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_VCAVITIES_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
@@ -1755,7 +1798,10 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_pdf(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_ggx_vcavities ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1764,7 +1810,7 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_pdf(
     microfacet_pdf(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_VCAVITIES_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1841,7 +1887,10 @@ BSDF_API void microfacet_beckmann_smith_bsdf_sample(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_beckmann_smith ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
     
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1851,7 +1900,7 @@ BSDF_API void microfacet_beckmann_smith_bsdf_sample(
         ph, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_BECKMANN_SMITH_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1868,7 +1917,10 @@ BSDF_API void microfacet_beckmann_smith_bsdf_evaluate(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_beckmann_smith ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1877,7 +1929,7 @@ BSDF_API void microfacet_beckmann_smith_bsdf_evaluate(
     const float2 contrib = microfacet_evaluate(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_SMITH_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
@@ -1899,7 +1951,10 @@ BSDF_API void microfacet_beckmann_smith_bsdf_pdf(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_beckmann_smith ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1908,7 +1963,7 @@ BSDF_API void microfacet_beckmann_smith_bsdf_pdf(
     microfacet_pdf(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_SMITH_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -1985,7 +2040,10 @@ BSDF_API void microfacet_ggx_smith_bsdf_sample(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_ggx_smith ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -1995,7 +2053,7 @@ BSDF_API void microfacet_ggx_smith_bsdf_sample(
         ph, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_GGX_SMITH_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -2012,7 +2070,10 @@ BSDF_API void microfacet_ggx_smith_bsdf_evaluate(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_ggx_smith ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -2021,7 +2082,7 @@ BSDF_API void microfacet_ggx_smith_bsdf_evaluate(
     const float2 contrib = microfacet_evaluate(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_SMITH_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 
     add_elemental_bsdf_evaluate_contribution(
@@ -2043,7 +2104,10 @@ BSDF_API void microfacet_ggx_smith_bsdf_pdf(
     const scatter_mode mode,
     const int handle)
 {
-    const Distribution_ggx_smith ph(roughness_u, roughness_v);
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -2052,7 +2116,7 @@ BSDF_API void microfacet_ggx_smith_bsdf_pdf(
     microfacet_pdf(
         ph, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_SMITH_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
 }
 
@@ -2223,10 +2287,13 @@ BSDF_API void ward_geisler_moroder_bsdf_sample(
         return;
     }
 
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
     // sample the single scattering (glossy) bsdf
     float nk1, nk2;
     ward_geisler_moroder_sample(
-        data, state, g, roughness_u, roughness_v, handle, nk1);
+        data, state, g, adapted_roughness.x, adapted_roughness.y, handle, nk1);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -2240,14 +2307,15 @@ BSDF_API void ward_geisler_moroder_bsdf_sample(
     // sample, in case the multi-scattering part is sampled, k2 will change and rho1 will be > 0
     const float rho1 = multiscatter::sample(
         state, WARD_GEISLER_MORODER_BSDF,
-        roughness_u, roughness_v, 
+        adapted_roughness.x, adapted_roughness.y,
         nk1, -1.0f, multiscatter_texture_id, data, g, tint, multiscatter_tint);
 
     // recompute glossy pdf for new direction
     if (rho1 > 0.0f)
     {
         BSDF_pdf_data pdf_data = to_pdf_data(data);
-        ward_geisler_moroder_shared_eval(&pdf_data, state, g, roughness_u, roughness_v, nk1, nk2);
+        ward_geisler_moroder_shared_eval(
+            &pdf_data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
         // incorporate multi-scatter part to pdf for the new k2
         multiscatter::sample_update_single_scatter_probability(data, pdf_data.pdf, rho1);
@@ -2273,9 +2341,12 @@ BSDF_API void ward_geisler_moroder_bsdf_evaluate(
         return;
     }
 
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
     float nk1, nk2;
     const float glossy_contrib = ward_geisler_moroder_shared_eval(
-        data, state, g, roughness_u, roughness_v, nk1, nk2);
+        data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -2290,7 +2361,7 @@ BSDF_API void ward_geisler_moroder_bsdf_evaluate(
     {
         multiscatter_contrib = multiscatter::evaluate(
             state, WARD_GEISLER_MORODER_BSDF,
-            roughness_u, roughness_v,
+            adapted_roughness.x, adapted_roughness.y,
             nk1, nk2, -1.0f, multiscatter_texture_id);
         data->pdf *= multiscatter_contrib.x; // * rho1
         if (math::dot(g.n.geometry_normal, data->k2) >= 0.0f)
@@ -2324,9 +2395,12 @@ BSDF_API void ward_geisler_moroder_bsdf_pdf(
         return;
     }
 
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
     float nk1, nk2;
     ward_geisler_moroder_shared_eval(
-        data, state, g, roughness_u, roughness_v, nk1, nk2);
+        data, state, g, adapted_roughness.x, adapted_roughness.y, nk1, nk2);
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
@@ -2338,7 +2412,7 @@ BSDF_API void ward_geisler_moroder_bsdf_pdf(
     data->pdf = multiscatter::pdf(
         data->pdf,
         state, WARD_GEISLER_MORODER_BSDF,
-        roughness_u, roughness_v,
+        adapted_roughness.x, adapted_roughness.y,
         nk1, nk2, -1.0f, multiscatter_texture_id);
 }
 

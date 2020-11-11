@@ -1090,6 +1090,8 @@ LLVM_code_generator::LLVM_code_generator(
 , m_always_inline(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY))
 , m_eval_dag_ternary_strictly(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY))
 , m_hlsl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA))
+, m_use_renderer_adapt_microfacet_roughness(options.get_bool_option(
+    MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS))
 , m_in_intrinsic_generator(false)
 , m_runtime(create_mdl_runtime(
     m_arena_builder,
@@ -1245,6 +1247,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_int_func_state_get_arg_block_uint(NULL)
 , m_int_func_state_get_arg_block_bool(NULL)
 , m_int_func_state_get_measured_curve_value(NULL)
+, m_int_func_state_adapt_microfacet_roughness(NULL)
 , m_int_func_df_bsdf_measurement_resolution(NULL)
 , m_int_func_df_bsdf_measurement_evaluate(NULL)
 , m_int_func_df_bsdf_measurement_sample(NULL)
@@ -1349,7 +1352,7 @@ void LLVM_code_generator::prepare_internal_functions()
     m_int_func_state_set_normal = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::state::set_normal(float3)",
-        "_ZN5state10set_normalE6float3",
+        "_ZN5state10set_normalERK6float3",
         Internal_function::KI_STATE_SET_NORMAL,
         Internal_function::FL_HAS_STATE,
         /*ret_type=*/ m_type_mapper.get_void_ptr_type(),
@@ -1485,7 +1488,7 @@ void LLVM_code_generator::prepare_internal_functions()
     m_int_func_state_get_measured_curve_value = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::state::get_measured_curve_value(int,int)",
-        "_ZN5state24get_measured_curve_valueERK6float3ii",
+        "_ZN5state24get_measured_curve_valueEii",
         Internal_function::KI_STATE_GET_MEASURED_CURVE_VALUE,
         Internal_function::FL_HAS_STATE |
         Internal_function::FL_HAS_RES | Internal_function::FL_HAS_EXC |
@@ -1493,6 +1496,16 @@ void LLVM_code_generator::prepare_internal_functions()
         /*ret_type=*/ m_type_mapper.get_float3_type(),
         /*param_types=*/ Array_ref<IType const *>(measured_param_types),
         /*param_names=*/ Array_ref<char const *>(measured_param_names));
+
+    m_int_func_state_adapt_microfacet_roughness = m_arena_builder.create<Internal_function>(
+        m_arena_builder.get_arena(),
+        "::state::adapt_microfacet_roughness(float2)",
+        "_ZN5state26adapt_microfacet_roughnessERK6float2",
+        Internal_function::KI_STATE_ADAPT_MICROFACET_ROUGHNESS,
+        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_EXEC_CTX,
+        /*ret_type=*/ m_type_mapper.get_float2_type(),
+        /*param_types=*/ Array_ref<IType const *>(float2_type),
+        /*param_names=*/ Array_ref<char const *>("roughness_uv"));
 
     IType const* resolution_param_types[] = { int_type, int_type };
     char const* resolution_param_names[] = { "bm_index", "part" };
@@ -1509,7 +1522,6 @@ void LLVM_code_generator::prepare_internal_functions()
     IType const* lookup_param_types[] = { int_type, float2_type, float2_type, int_type };
     char const* lookup_param_names[] =
         { "bm_index", "theta_phi_in", "theta_phi_out", "part" };
-
     m_int_func_df_bsdf_measurement_evaluate = m_arena_builder.create<Internal_function>(
         m_arena_builder.get_arena(),
         "::df::bsdf_measurement_evaluate(int,float2,float2,int)",

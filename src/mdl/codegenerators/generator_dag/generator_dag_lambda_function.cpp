@@ -896,6 +896,10 @@ void Resource_collector::visit_call(DAG_call const *call)
     if (sema == IDefinition::DS_UNKNOWN) {
         // visit function and other material bodies
         char const *signature = call->get_name();
+        if (signature[0] == '#') {
+            // skip prefix for derivative variants
+            ++signature;
+        }
         mi::base::Handle<mi::mdl::IModule const> mod(
             m_resolver.get_owner_module(signature));
         if (mod.is_valid_interface()) {
@@ -2810,14 +2814,6 @@ public:
 
         Distribution_function *dist_func = impl_cast<Distribution_function>(idist_func);
 
-        // use root_lambda to optimize the material, forcing inlining of code when possible.
-        // We need to do this before calculating the derivative information, because the
-        // inlining won't update the derivative information
-        root_lambda->set_body(mat_root_node);
-        root_lambda->optimize(resolver, NULL);
-        mat_root_node = root_lambda->get_body();
-        root_lambda->set_body(NULL);
-
         if (calc_derivative_infos) {
             // calculate derivative information and rebuild DAG with derivative types
             Derivative_infos *deriv_infos = dist_func->get_writable_derivative_infos();
@@ -2937,9 +2933,25 @@ public:
             // According to MDL Spec 1.6 13.3, the geometry fields are evaluated before all surface
             // fields and the normal evaluation happens last within the geometry fields.
             Distribution_function_builder::Eval_state eval_state;
-            if (path_parts.size() > 0 && strcmp(path_parts[0], "geometry") == 0)
+            if (path_parts.size() > 0 && strcmp(path_parts[0], "geometry") == 0) {
                 eval_state = Distribution_function_builder::ES_BEGIN_STATE;
-            else
+
+                // remap "geometry.normal" to state::normal(), if it will be included
+                if (include_geometry_normal &&
+                    path_parts.size() > 1 &&
+                    strcmp(path_parts[1], "normal") == 0)
+                {
+                    IType const *float3_type = mat_builder.m_type_factory.create_vector(
+                        mat_builder.m_type_factory.create_float(), 3);
+
+                    node = mat_builder.m_root_lambda->create_call(
+                        "::state::normal()",
+                        IDefinition::DS_INTRINSIC_STATE_NORMAL,
+                        NULL,
+                        0,
+                        float3_type);
+                }
+            } else
                 eval_state = Distribution_function_builder::ES_AFTER_GEOMETRY_NORMAL;
 
             mat_builder.collect_flags_and_used_nodes(node, eval_state, ++walk_id);
@@ -3129,11 +3141,19 @@ public:
     bool collect_flags_and_used_nodes(
         DAG_node const *expr, Eval_state eval_state, unsigned &walk_id)
     {
-        // Stop when already visited in this walk.
-        // Otherwise stop, if the node was already seen in at least two walks
         Node_info &info = m_node_info_map[expr];
-        if (info.already_visited(walk_id) || info.inc_count(eval_state, walk_id) > 1)
+
+        // Stop when already visited in this walk
+        if (info.already_visited(walk_id))
             return info.is_eval_state_dependent;
+
+        // Stop if the node was already seen in at least two walks
+        if (info.get_count(eval_state) > 0) {
+            info.inc_count(eval_state, walk_id);
+            return info.is_eval_state_dependent;
+        }
+
+        unsigned node_walk_id = walk_id;
 
         bool res = false;
         switch (expr->get_kind()) {
@@ -3187,7 +3207,12 @@ public:
                 }
             }
         }
+
         info.is_eval_state_dependent = res;
+
+        // update counter now, that evaluation state dependence is known
+        info.inc_count(eval_state, node_walk_id);
+
         return res;
     }
 
@@ -3479,6 +3504,10 @@ private:
     bool is_eval_state_dependent_direct(DAG_call const *call)
     {
         char const *signature = call->get_name();
+        if (signature[0] == '#') {
+            // skip prefix for derivative variants
+            ++signature;
+        }
         mi::base::Handle<IModule const> mod(m_resolver->get_owner_module(signature));
         if (!mod.is_valid_interface())
             return false;

@@ -693,6 +693,8 @@ public:
         const float2& crop_w) const;
 
     unsigned get_bsdf_data_texture_id(Bsdf_data_kind bsdf_data_kind) const;
+
+    float2 adapt_microfacet_roughness(const float2& roughness_uv) const;
 };
 
 #include "libbsdf_runtime.h"

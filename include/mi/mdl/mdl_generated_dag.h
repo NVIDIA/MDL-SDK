@@ -496,6 +496,7 @@ public:
             /// CLASS_COMPILATION: Do not create layering calls for transparent layers, i.e., with
             /// weight 0.0f.
             NO_TRANSPARENT_LAYERS     = 1 << 8,
+            IGNORE_NOINLINE           = 1 << 9,  ///< Ignore anno::noinline() annotations.
 
             DEFAULT_CLASS_COMPILATION =  ///< Do class compilation with default flags.
                 CLASS_COMPILATION |

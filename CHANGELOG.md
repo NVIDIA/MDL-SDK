@@ -1,7 +1,47 @@
 Change Log
 ==========
-MDL SDK 2020.1.1 (334300.4226): 29 Sep 2020
+MDL SDK 2020.1.2 (334300.5582): 12 Nov 2020
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2020.1.2 (334300.5582) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL Compiler and Backends
+
+    - A new HLSL backend option `use_renderer_adapt_microfacet_roughness` has been added, which
+      allows a renderer to adapt the roughness values provided to microfacet BSDFs right before
+      using them. The prototype of the function the renderer has to provide is `float2
+      mdl_adapt_microfacet_roughness(Shading_state_material state, float2 roughness_uv)`.
+    - A new execution context option `ignore_noinline` has been added, which allows to ignore
+      `anno::noinline()` annotations, enabling inlining when creating a compiled material.
+      Previously this happened later when generating code for distribution functions. But
+      optimizing at this time could lead to a changed DAG which may not contain the nodes requested
+      by the user anymore.
+
+**Fixed Bugs**
+
+- General
+
+    - Fixed a crash in the `i18n` tool when accessing module annotations.
+
+- MDL Compiler and Backends
+
+    - Fixed wrong optimization for ternary operators selecting different vector elements in HLSL
+      always returning the true expression.
+    - Fixed wrong PTX version used for sm_86.
+    - In single-init mode, don't let a requested `geometry.normal` expression calculate the normal
+      again.
+    - Fixed analysis of derivative variants of functions not being recognized as depending on
+      `state::normal()`.
+    - Reduced number of texture result slots used in generated init functions.
+    - Do not generate HLSL code containing `min16int` to ensure compatibility to Slang.
+    - Fixed translation of conversion of an 8-bit to a 32-bit integer for HLSL.
+
+
+MDL SDK 2020.1.1 (334300.4226): 29 Sep 2020
+-------------------------------------------
 
 ABI compatible with the MDL SDK 2020.1.1 (334300.4226) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
@@ -14,6 +54,8 @@ ABI compatible with the MDL SDK 2020.1.1 (334300.4226) binary release
       during the module loading.
     - A new backend option `eval_dag_ternary_strictly` has been added, which enables strict
       evaluation of ternary operators (?:) on the DAG to reduce code size. By default it is enabled.
+    - Improved generated code of compiled materials and lambda functions to benefit from CSE across
+      arguments of the root node.
 
 - MDL Compiler and Backends
 
@@ -45,6 +87,8 @@ ABI compatible with the MDL SDK 2020.1.1 (334300.4226) binary release
     - Fixed failing MDLE export if the `tex::gamma_mode` type is only referenced by an
       annotation.
     - Fixed storing matrices in texture results taking up all the space without much benefit.
+    - Fixed failure to add functions to link units when the path involves template-like
+      functions.
 
 
 MDL SDK 2020.1 (334300.2228): 11 Aug 2020

@@ -4878,9 +4878,17 @@ bool Generated_code_dag::Material_instance::Instantiate_helper::is_layer_qualifi
 DAG_call const *
 Generated_code_dag::Material_instance::Instantiate_helper::compile()
 {
-    // Deactivate inlining in general: We want instantiation as fast as possible and
-    // the material bodies were inlined during material (class) compilation.
-    No_INLINE_scope no_inline(m_node_factory);
+    bool old_ignore_noinline = false;
+    bool old_inline = false;
+
+    // Ignore anno::noinline(), if requested
+    if ((m_flags & mi::mdl::IGenerated_code_dag::IMaterial_instance::IGNORE_NOINLINE) != 0) {
+        old_ignore_noinline = m_node_factory.enable_ignore_noinline(true);
+    } else {
+        // Otherwise, deactivate inlining in general: We want instantiation as fast as possible and
+        // the material bodies were inlined during material (class) compilation.
+        old_inline = m_node_factory.enable_inline(false);
+    }
 
     // unfortunately we don't have the module of our material here, so retrieve it from the
     // name resolver
@@ -4899,6 +4907,13 @@ Generated_code_dag::Material_instance::Instantiate_helper::compile()
     if (m_params > 0) {
         // ensure that every parameter is used AFTER the optimization, if not, renumber
         node = renumber_parameter(node);
+    }
+
+    // Restore old node factory settings
+    if ((m_flags & mi::mdl::IGenerated_code_dag::IMaterial_instance::IGNORE_NOINLINE) != 0) {
+        m_node_factory.enable_ignore_noinline(old_ignore_noinline);
+    } else {
+        m_node_factory.enable_inline(old_inline);
     }
 
     return cast<DAG_call>(node);

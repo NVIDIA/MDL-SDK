@@ -63,6 +63,7 @@ public:
     bool m_fold_ternary_on_df = false;
     bool m_fold_all_bool_parameters = false;
     bool m_fold_all_enum_parameters = false;
+    bool m_ignore_noinline = true;
     std::string m_backend = "hlsl";
     bool m_use_derivatives = false;
 
@@ -172,12 +173,13 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
             : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS; // Instance Compilation
 
         // Set more optimization options (by default, they are all disabled)
-        // They affect only class compilation and allow to select individual optimizations to
-        // narrow the performance gap towards instance compilation while sacrificing some parts
-        // of the real-time parameter edits.
+        // The first three only affect class compilation and allow to select individual
+        // optimizations to narrow the performance gap towards instance compilation while
+        // sacrificing some parts of the real-time parameter edits.
         context->set_option("fold_ternary_on_df", options.m_fold_ternary_on_df);
         context->set_option("fold_all_bool_parameters", options.m_fold_all_bool_parameters);
         context->set_option("fold_all_enum_parameters", options.m_fold_all_enum_parameters);
+        context->set_option("ignore_noinline", options.m_ignore_noinline);
 
         mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
             material_instance->create_compiled_material(flags, context.get()));
@@ -390,6 +392,7 @@ options:
   --ft                          Fold ternary operators when used on distribution functions.
   --fb                          Fold boolean parameters.
   --fe                          Fold enum parameters.
+  --dian                        Disable ignoring anno::noinline() annotations.
 )";
 }
 
@@ -415,6 +418,8 @@ bool Options::parse(int argc, char* argv[])
             m_fold_all_bool_parameters = true;
         else if (arg == "--ft")
             m_fold_all_enum_parameters = true;
+        else if (arg == "--dian")
+            m_ignore_noinline = false;
         else if (arg == "-p" || arg == "--mdl_path")
         {
             if (i == argc - 1)

@@ -95,7 +95,7 @@ bool Optimizer::same_expr(Expr *a, Expr *b) const
             Expr_ref *ra = cast<Expr_ref>(a);
             Expr_ref *rb = cast<Expr_ref>(b);
 
-            return ra->get_definition()== rb->get_definition();
+            return ra->get_definition() != NULL && ra->get_definition() == rb->get_definition();
         }
     case Expr::EK_UNARY:
         {

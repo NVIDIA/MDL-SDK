@@ -216,6 +216,7 @@ public:
         KI_STATE_GET_ARG_BLOCK_UINT,            ///< Kind of state::get_arg_block_uint(int)
         KI_STATE_GET_ARG_BLOCK_BOOL,            ///< Kind of state::get_arg_block_bool(int)
         KI_STATE_GET_MEASURED_CURVE_VALUE,      ///< Kind of state::get_measured_curve_value()
+        KI_STATE_ADAPT_MICROFACET_ROUGHNESS,    ///< Kind of state::adapt_microfacet_roughness()
 
         /// Kind of df::bsdf_measurement_resolution(int,int)
         KI_DF_BSDF_MEASUREMENT_RESOLUTION,
@@ -3326,6 +3327,10 @@ private:
     /// If true, pass a user defined resource data struct to all resource callbacks.
     bool m_hlsl_use_resource_data;
 
+    /// If true, use a renderer provided function to adapt microfacet roughness,
+    /// otherwise use a function returning roughness unmodified.
+    bool m_use_renderer_adapt_microfacet_roughness;
+
     /// If true, we generating code for an intrinsic function.
     bool m_in_intrinsic_generator;
 
@@ -3810,6 +3815,9 @@ private:
 
     /// The internal state::get_measured_curve_value() function, only available for libbsdf.
     Internal_function *m_int_func_state_get_measured_curve_value;
+
+    /// The internal state::adapt_microfacet_roughness(float2) function, only available for libbsdf.
+    Internal_function *m_int_func_state_adapt_microfacet_roughness;
 
     /// The internal df::bsdf_measurement_resolution(int,int) function, only available for libbsdf.
     Internal_function *m_int_func_df_bsdf_measurement_resolution;

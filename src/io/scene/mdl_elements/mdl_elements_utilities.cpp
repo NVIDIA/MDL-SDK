@@ -6081,6 +6081,7 @@ Execution_context::Execution_context() : m_result(0)
     add_option(Option(MDL_CTX_OPTION_EXPERIMENTAL, false, false));
     add_option(Option(MDL_CTX_OPTION_RESOLVE_RESOURCES, true, false));
     add_option(Option(MDL_CTX_OPTION_FOLD_TERNARY_ON_DF, false, false));
+    add_option(Option(MDL_CTX_OPTION_IGNORE_NOINLINE, false, false));
     add_option(Option(MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS, false, false));
     add_option(Option(MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS, false, false));
     add_option(Option(MDL_CTX_OPTION_FOLD_PARAMETERS,

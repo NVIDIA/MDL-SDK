@@ -6191,7 +6191,7 @@ class SignatureParser:
 		self.create_constructor(f)
 
 		# write prototypes of internal function creation functions
-		self.write(f, "/// Generate LLVM IR for state::set_normal(float3)\n")
+		self.write(f, "/// Generate LLVM IR for state::set_normal()\n")
 		self.write(f, "llvm::Function *create_state_set_normal(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for state::get_texture_results()\n")
 		self.write(f, "llvm::Function *create_state_get_texture_results(Internal_function const *int_func);\n\n")
@@ -6207,6 +6207,8 @@ class SignatureParser:
 		self.write(f, "llvm::Function *create_state_get_material_ior(Internal_function const *int_func);\n")
 		self.write(f, "/// Generate LLVM IR for state::get_thin_walled()\n")
 		self.write(f, "llvm::Function *create_state_get_thin_walled(Internal_function const *int_func);\n")
+		self.write(f, "/// Generate LLVM IR for state::adapt_microfacet_roughness()\n")
+		self.write(f, "llvm::Function *create_state_adapt_microfacet_roughness(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_resolution()\n")
 		self.write(f, "llvm::Function *create_df_bsdf_measurement_resolution(Internal_function const *int_func);\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_evaluate()\n")

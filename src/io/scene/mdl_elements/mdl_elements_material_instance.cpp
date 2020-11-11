@@ -364,6 +364,7 @@ Mdl_material_instance::create_dag_material_instance(
         MDL_CTX_OPTION_FOLD_TRIVIAL_CUTOUT_OPACITY);
     bool fold_transparent_layers = context->get_option<bool>(
         MDL_CTX_OPTION_FOLD_TRANSPARENT_LAYERS);
+    bool ignore_noinline = context->get_option<bool>(MDL_CTX_OPTION_IGNORE_NOINLINE);
 
     // convert fold_parameters to array of const char*
     std::vector<const char*> fold_parameters_converted;
@@ -426,6 +427,8 @@ Mdl_material_instance::create_dag_material_instance(
     } else {
         flags =  mi::mdl::IGenerated_code_dag::IMaterial_instance::INSTANCE_COMPILATION;
     }
+    if (ignore_noinline)
+        flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::IGNORE_NOINLINE;
 
     error_code = instance->initialize(
         &resolver,

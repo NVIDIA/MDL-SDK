@@ -1065,6 +1065,11 @@ class ICode_generator_jit : public
     /// The name of the option to enable the HLSL resource data struct argument.
     #define MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA "jit_hlsl_use_resource_data"
 
+    /// The name of the option to enable using a renderer provided function to adapt microfacet
+    /// roughness.
+    #define MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS \
+        "jit_use_renderer_adapt_microfacet_roughness"
+
     /// The name of the option specifying a comma-separated list of names for which scene data
     /// may be available in the renderer.
     /// For names not in the list, scene::data_isvalid will always return false and
@@ -1399,8 +1404,9 @@ These options are specific to the MDL JIT code generator:
 - \ref mdl_option_jit_tex_runtime_with_derivs    "jit_tex_runtime_with_derivs"
 - \ref mdl_option_jit_use_bitangent              "jit_use_bitangent"*/
 /*!
-- \ref mdl_option_jit_use_builtin_res_h       "jit_use_builtin_resource_handler_cpu"
-- \ref mdl_option_jit_visible_functions       "jit_visible_functions"
+- \ref mdl_option_jit_use_builtin_res_h          "jit_use_builtin_resource_handler_cpu"
+- \ref mdl_option_jit_use_renderer_adapt_rough   "jit_use_renderer_adapt_microfacet_roughness"
+- \ref mdl_option_jit_visible_functions          "jit_visible_functions"
 
 \section mdl_cg_options Generic MDL code generator options
 
@@ -1525,6 +1531,15 @@ These options are specific to the MDL JIT code generator:
 - <b>jit_use_builtin_resource_handler_cpu</b>: If set to \c "false", the built-in texture handler
   is not used when running CPU code. Instead, the user needs to provide a vtable of texture
   functions via the tex_data parameter.
+  Default: \c "false"
+
+\anchor mdl_option_jit_use_renderer_adapt_rough
+- <b>jit_use_renderer_adapt_microfacet_roughness</b>: If set to \c "true", the generated code
+  expects the renderer to provide a function with the prototype
+  \c "float2 mdl_adapt_microfacet_roughness(Shading_state_material state, float2 roughness_uv)"
+  which can adapt the roughness of microfacet BSDFs. For sheen_bsdf, the same roughness will
+  be provided in both dimensions and only the \c x component of the result will be used.
+  Currently only supported for HLSL.
   Default: \c "false"
 
 \anchor mdl_option_jit_visible_functions

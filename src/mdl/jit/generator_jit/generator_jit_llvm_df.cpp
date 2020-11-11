@@ -307,23 +307,16 @@ public:
             // determine the cost of calculating the result of the expression lambda
             int cost = Cost_calculator::calc_lambda_cost(m_alloc, lambda);
 
-            // determine the size of the result
-            IType const *mdl_type = lambda.get_return_type();
-            llvm::Type *lambda_ret_type = m_type_mapper.lookup_type(m_llvm_context, mdl_type);
-
-            // replace lambda float3 types by float3 struct type used in libbsdf, except for
-            // geometry normal
-            if (i != geometry_normal_index && lambda_ret_type == m_type_mapper.get_float3_type())
-                lambda_ret_type = m_float3_struct_type;
-
-            unsigned res_alloc_size = unsigned(m_data_layout->getTypeAllocSize(lambda_ret_type));
-
             m_lambda_infos.push_back(Lambda_info(m_alloc));
             Lambda_info &cur = m_lambda_infos.back();
 
             // due to construction in backends_backends.cpp,
             // all required lambdas are already available
             cur.calc_dependencies(lambda.get_body(), m_lambda_infos);
+
+            // the result of geometry.normal will be stored in state.normal
+            if (i == geometry_normal_index)
+                continue;
 
             // not worth storing the result?
             if (cost < Cost_calculator::MIN_STORE_RESULT_COST)
@@ -334,8 +327,18 @@ public:
                 continue;
 
             // don't store matrices in lambda results, they are far too expensive
+            IType const *mdl_type = lambda.get_return_type();
             if (is<IType_matrix>(m_type_mapper.skip_deriv_type(mdl_type)))
                 continue;
+
+            // determine the size of the result
+            llvm::Type *lambda_ret_type = m_type_mapper.lookup_type(m_llvm_context, mdl_type);
+
+            // replace lambda float3 types by float3 struct type used in libbsdf
+            if (lambda_ret_type == m_type_mapper.get_float3_type())
+                lambda_ret_type = m_float3_struct_type;
+
+            unsigned res_alloc_size = unsigned(m_data_layout->getTypeAllocSize(lambda_ret_type));
 
             // we want to materialize the result, so register a slot
             m_lambda_slots.push_back(Lambda_result_slot(
@@ -1717,6 +1720,15 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
 
             Function_instance inst(get_allocator(),
                 reinterpret_cast<size_t>(m_int_func_state_get_measured_curve_value));
+            p_data = get_context_data(inst);
+            handled = true;
+        }
+        else if (demangled_name == "::state::adapt_microfacet_roughness(float2)")
+        {
+            func = get_internal_function(m_int_func_state_adapt_microfacet_roughness);
+
+            Function_instance inst(get_allocator(),
+                reinterpret_cast<size_t>(m_int_func_state_adapt_microfacet_roughness));
             p_data = get_context_data(inst);
             handled = true;
         }

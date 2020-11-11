@@ -381,6 +381,7 @@ private:
 #define MDL_CTX_OPTION_EXPERIMENTAL                       "experimental"
 #define MDL_CTX_OPTION_RESOLVE_RESOURCES                  "resolve_resources"
 #define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF                 "fold_ternary_on_df"
+#define MDL_CTX_OPTION_IGNORE_NOINLINE                    "ignore_noinline"
 #define MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS           "fold_all_bool_parameters"
 #define MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS           "fold_all_enum_parameters"
 #define MDL_CTX_OPTION_FOLD_PARAMETERS                    "fold_parameters"

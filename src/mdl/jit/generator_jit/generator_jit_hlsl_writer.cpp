@@ -1590,20 +1590,13 @@ hlsl::Value *HLSLWriterPass::translate_constant_data_vector(llvm::ConstantDataVe
             llvm::IntegerType *int_type = llvm::cast<llvm::IntegerType>(cv->getElementType());
             switch (int_type->getBitWidth()) {
             case 1:
-            case 8:
+            case 8:  // TODO: maybe not bool but really 8-bit
                 hlsl_type = m_type_factory.get_vector(m_type_factory.get_bool(), num_elems);
                 for (size_t i = 0; i < num_elems; ++i) {
                     values[i] = m_value_factory.get_bool(cv->getElementAsInteger(i) != 0);
                 }
                 break;
-            case 16:
-                // TODO: sign
-                hlsl_type = m_type_factory.get_vector(m_type_factory.get_min16int(), num_elems);
-                for (size_t i = 0; i < num_elems; ++i) {
-                    values[i] = m_value_factory.get_int16(
-                        int16_t(cv->getElementAsAPInt(i).getSExtValue()));
-                }
-                break;
+            case 16:  // always treat as 32-bit
             case 32:
                 // TODO: sign
                 hlsl_type = m_type_factory.get_vector(m_type_factory.get_int(), num_elems);
@@ -1672,23 +1665,14 @@ hlsl::Expr *HLSLWriterPass::translate_constant_data_array(llvm::ConstantDataArra
             llvm::IntegerType *int_type = llvm::cast<llvm::IntegerType>(cv->getElementType());
             switch (int_type->getBitWidth()) {
             case 1:
-            case 8:
+            case 8:  // TODO: maybe not bool but really 8-bit
                 hlsl_type = m_type_factory.get_vector(m_type_factory.get_bool(), num_elems);
                 for (size_t i = 0; i < num_elems; ++i) {
                     values[i] = m_expr_factory.create_literal(
                         zero_loc, m_value_factory.get_bool(cv->getElementAsInteger(i) != 0));
                 }
                 break;
-            case 16:
-                // TODO: sign
-                hlsl_type = m_type_factory.get_vector(m_type_factory.get_min16int(), num_elems);
-                for (size_t i = 0; i < num_elems; ++i) {
-                    values[i] = m_expr_factory.create_literal(
-                        zero_loc,
-                        m_value_factory.get_int16(
-                            int16_t(cv->getElementAsAPInt(i).getSExtValue())));
-                }
-                break;
+            case 16:  // always treat as 32-bit
             case 32:
                 // TODO: sign
                 hlsl_type = m_type_factory.get_vector(m_type_factory.get_int(), num_elems);
@@ -2548,19 +2532,17 @@ hlsl::Expr *HLSLWriterPass::translate_expr_cast(llvm::CastInst *inst)
         {
             if (inst->isIntegerCast()) {
                 unsigned src_bits  = src_type->getIntegerBitWidth();
-                if (src_bits == 1) {
-                    // i1 -> i*
-                    // Note: HLSL can implicitly convert from bool to integer, but it doesn't
-                    //    work when resolving overloads (for example for asfloat())
-                    hlsl::Type *hlsl_type = convert_type(inst->getType());
-                    return create_cast(hlsl_type, expr);
-                }
-
                 unsigned dest_bits = dest_type->getIntegerBitWidth();
                 if (src_bits == 32 && dest_bits == 64) {
                     // FIXME: i32 -> i64: ignore is not true in general
                     return expr;
                 }
+
+                // i* -> i*
+                // Note: HLSL can implicitly convert from bool to integer, but it doesn't
+                //    work when resolving overloads (for example for asfloat())
+                hlsl::Type *hlsl_type = convert_type(inst->getType());
+                return create_cast(hlsl_type, expr);
             }
             MDL_ASSERT(!"unsupported LLVM ZExt cast instruction");
             return expr;
@@ -3395,9 +3377,7 @@ hlsl::Type *HLSLWriterPass::convert_type(llvm::Type *type)
             // Support such constructs
             // %X = trunc i32 %Y to i2
             // %Z = icmp i2 %X, 1
-            if (bit_width > 1 && bit_width <= 16)
-                return m_type_factory.get_min16int();
-            if (bit_width > 16 && bit_width <= 32)
+            if (bit_width > 1 && bit_width <= 32)
                 return m_type_factory.get_int();
 
             switch (int_type->getBitWidth()) {

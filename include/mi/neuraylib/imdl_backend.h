@@ -159,6 +159,13 @@ public:
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     /// - \c "df_handle_slot_mode": The option \c "pointer" is not available (see above).
+    /// - \c "use_renderer_adapt_microfacet_roughness": If enabled, the generated code expects
+    ///   the renderer to provide a function with the prototype
+    ///   \c "float2 mdl_adapt_microfacet_roughness(Shading_state_material state, float2 roughness_uv)"
+    ///   which can adapt the roughness of microfacet BSDFs. For sheen_bsdf, the same roughness will
+    ///   be provided in both dimensions and only the \c x component of the result will be used.
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     ///
     /// \param name       The name of the option.
     /// \param value      The value of the option.
