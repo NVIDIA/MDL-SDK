@@ -348,7 +348,7 @@ static Expected<FileContents> upgrade(ArrayRef<BitcodeModule> BMs) {
   StringTableBuilder StrtabBuilder(StringTableBuilder::RAW);
   BumpPtrAllocator Alloc;
   if (Error E = build(Mods, FC.Symtab, StrtabBuilder, Alloc))
-    return std::move(E);
+    return E;
 
   StrtabBuilder.finalizeInOrder();
   FC.Strtab.resize(StrtabBuilder.getSize());
@@ -356,7 +356,7 @@ static Expected<FileContents> upgrade(ArrayRef<BitcodeModule> BMs) {
 
   FC.TheReader = {{FC.Symtab.data(), FC.Symtab.size()},
                   {FC.Strtab.data(), FC.Strtab.size()}};
-  return std::move(FC);
+  return FC;
 }
 
 Expected<FileContents> irsymtab::readBitcode(const BitcodeFileContents &BFC) {
@@ -390,5 +390,5 @@ Expected<FileContents> irsymtab::readBitcode(const BitcodeFileContents &BFC) {
   if (FC.TheReader.getNumModules() != BFC.Mods.size())
     return upgrade(std::move(BFC.Mods));
 
-  return std::move(FC);
+  return FC;
 }
