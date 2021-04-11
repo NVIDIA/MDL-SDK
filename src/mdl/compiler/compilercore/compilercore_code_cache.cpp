@@ -26,6 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
+#include <cstdint>
+
 #include "pch.h"
 
 #include "compilercore_code_cache.h"
