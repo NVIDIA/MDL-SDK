@@ -69,6 +69,12 @@ IType const *Definition::get_type() const
     return m_type;
 }
 
+// Get the declared type of the (function) definition.
+IType const *Definition::get_decl_type() const
+{
+    return m_decl_type != NULL ? m_decl_type : get_type();
+}
+
 // Get the declaration of the definition.
 IDeclaration const *Definition::get_declaration() const
 {
@@ -270,11 +276,32 @@ unsigned Definition::get_parameter_derivable_mask() const
     return m_parameter_deriv_mask;
 }
 
+// Return the mask specifying which parameters of a function must be literals.
+unsigned Definition::get_literal_parameter_mask() const
+{
+    return m_literal_param_mask;
+}
+
 // Change the type of the definition.
 void Definition::set_type(IType const *type)
 {
-    MDL_ASSERT(m_kind == DK_VARIABLE || m_kind == DK_CONSTANT || is<IType_error>(type));
+    MDL_ASSERT(
+        m_kind == DK_VARIABLE ||
+        m_kind == DK_CONSTANT ||
+        m_kind == DK_FUNCTION ||
+        is<IType_error>(type));
     m_type = type;
+}
+
+// Set the declaration type of the definition.
+void Definition::set_decl_type(IType const *type)
+{
+    MDL_ASSERT(
+        m_kind == DK_VARIABLE ||
+        m_kind == DK_CONSTANT ||
+        m_kind == DK_FUNCTION ||
+        is<IType_error>(type));
+    m_decl_type = type;
 }
 
 // Set the declaration of the definition.
@@ -365,6 +392,7 @@ Definition::Definition(
 , m_original_module_import_idx(0)
 , m_sym(sym)
 , m_type(type)
+, m_decl_type(NULL)
 , m_parameter_inits(NULL)
 , m_def_scope(parent_scope)
 , m_own_scope(NULL)
@@ -380,6 +408,7 @@ Definition::Definition(
 , m_version_flags(0)
 , m_flags()
 , m_parameter_deriv_mask(0)
+, m_literal_param_mask(0)
 {
     m_u.code = 0;
 }
@@ -389,6 +418,7 @@ Definition::Definition(
     Definition const &other,
     ISymbol const    *imp_sym,
     IType const      *imp_type,
+    IType const      *imp_decl_type,
     Position const   *imp_pos,
     Scope            *parent_scope,
     Definition       *outer,
@@ -403,6 +433,7 @@ Definition::Definition(
 , m_original_module_import_idx(owner_import_idx)
 , m_sym(imp_sym)
 , m_type(imp_type)
+, m_decl_type(imp_decl_type)
 , m_parameter_inits(NULL)
 , m_def_scope(parent_scope)
 , m_own_scope(NULL)
@@ -418,6 +449,7 @@ Definition::Definition(
 , m_version_flags(other.m_version_flags)
 , m_flags(other.m_flags)
 , m_parameter_deriv_mask(other.m_parameter_deriv_mask)
+, m_literal_param_mask(other.m_literal_param_mask)
 {
     m_u.code = 0;
 
@@ -1121,6 +1153,16 @@ void Definition_table::serialize_def(
         Tag_t type_tag = serializer.get_type_tag(def->m_type);
         serializer.write_encoded_tag(type_tag);
         DOUT(("type %u\n", unsigned(type_tag)));
+
+        if (def->m_decl_type != NULL) {
+            // write the declaration type of this definition
+            Tag_t decl_type_tag = serializer.get_type_tag(def->m_decl_type);
+            serializer.write_encoded_tag(decl_type_tag);
+            DOUT(("decl type %u\n", unsigned(decl_type_tag)));
+        } else {
+            serializer.write_encoded_tag(0);
+            DOUT(("decl type 0\n"));
+        }
     }
 
     if (def->m_parameter_inits != NULL) {
@@ -1243,6 +1285,7 @@ void Definition_table::serialize_def(
     // serialize parameter derivative mask for functions
     if (def->m_kind == Definition::DK_FUNCTION) {
         serializer.write_unsigned(def->m_parameter_deriv_mask);
+        serializer.write_unsigned(def->m_literal_param_mask);
     }
 
     // serialize namespace
@@ -1291,12 +1334,20 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
     ISymbol const *sym = deserializer.get_symbol(sym_tag);
     DOUT(("sym %u (%s)\n", unsigned(sym_tag), sym->get_name()));
 
-    IType const *type = NULL;
+    IType const *type      = NULL;
+    IType const *decl_type = NULL;
     if (kind != Definition::DK_NAMESPACE) {
         // read the type of this definition
         Tag_t type_tag = deserializer.read_encoded_tag();
         type = deserializer.get_type(type_tag);
         DOUT(("type %u\n", unsigned(type_tag)));
+
+        // read the declaration type of this definition
+        Tag_t decl_type_tag = deserializer.read_encoded_tag();
+        if (decl_type_tag != Tag_t(0)) {
+            decl_type = deserializer.get_type(decl_type_tag);
+        }
+        DOUT(("decl type %u\n", unsigned(decl_type_tag)));
     }
 
     // no need to deserialize m_def_scope
@@ -1329,6 +1380,9 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
                 kind, m_owner.get_unique_id(), sym, type, pos,
                 m_curr_scope, curr_def, unique_id);
             m_curr_scope->add_definition(new_def);
+        }
+        if (decl_type != NULL) {
+            new_def->set_decl_type(decl_type);
         }
         set_definition(sym, new_def);
     }
@@ -1443,6 +1497,7 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
     // deserialize parameter derivative mask for functions
     if (new_def->m_kind == Definition::DK_FUNCTION) {
         new_def->m_parameter_deriv_mask = deserializer.read_unsigned();
+        new_def->m_literal_param_mask   = deserializer.read_unsigned();
     }
 
     // deserialize namespace
@@ -1763,15 +1818,23 @@ Definition *Definition_table::import_definition(
     size_t           owner_import_idx)
 {
     Definition     *new_def;
-    ISymbol const  *imp_sym  = m_owner.import_symbol(imported->get_sym());
-    IType const    *imp_type = m_owner.import_type(imported->get_type());
-    Position const *imp_pos  = m_owner.import_position(imported->get_position());
+    ISymbol const  *imp_sym = m_owner.import_symbol(imported->get_sym());
+    Position const *imp_pos = m_owner.import_position(imported->get_position());
+
+    IType const *imp_type      = imported->get_type();
+    IType const *imp_decl_type = imported->get_decl_type();
+    if (imp_decl_type != imp_type) {
+        imp_decl_type = m_owner.import_type(imp_decl_type);
+    } else {
+        imp_decl_type = NULL;
+    }
+    imp_type = m_owner.import_type(imp_type);
 
     Definition *curr_def = get_definition(imp_sym);
     if (curr_def && curr_def->get_def_scope() == m_curr_scope) {
         // there is already a definition for this symbol, append it */
         new_def = m_builder.create<Definition>(
-            *imported, imp_sym, imp_type, imp_pos,
+            *imported, imp_sym, imp_type, imp_decl_type, imp_pos,
             m_curr_scope, (Definition *)0,
             m_owner.get_unique_id(), ++m_next_definition_id,
             owner_import_idx);
@@ -1779,7 +1842,7 @@ Definition *Definition_table::import_definition(
     } else {
         // no definition inside this scope
         new_def = m_builder.create<Definition>(
-            *imported, imp_sym, imp_type, imp_pos,
+            *imported, imp_sym, imp_type, imp_decl_type, imp_pos,
             m_curr_scope, curr_def,
             m_owner.get_unique_id(), ++m_next_definition_id,
             owner_import_idx);
@@ -1935,9 +1998,10 @@ void Definition_table::deserialize(Module_deserializer &deserializer)
     // register all definition in the predefined scope
     register_predefined_entities(deserializer, m_predef_scope, Tag_t(1));
 
-    Tag_t t;
-
-    t = deserializer.read_section_tag();
+#ifdef ENABLE_ASSERT
+    Tag_t t =
+#endif
+    deserializer.read_section_tag();
     MDL_ASSERT(t == Serializer::ST_DEF_TABLE);
 
     Tag_t def_tbl_tag = deserializer.read_encoded_tag();
@@ -1953,7 +2017,10 @@ void Definition_table::deserialize(Module_deserializer &deserializer)
         ISymbol const *alias = deserializer.get_symbol(alias_tag);
         DOUT(("alias %u (%s)\n", unsigned(alias_tag), alias->get_name()));
 
-        t = deserializer.read_section_tag();
+#ifdef ENABLE_ASSERT
+        t =
+#endif
+        deserializer.read_section_tag();
         MDL_ASSERT(t == Serializer::ST_DEFINITION);
 
         Definition *def = deserialize_def(deserializer);
@@ -1961,7 +2028,10 @@ void Definition_table::deserialize(Module_deserializer &deserializer)
     }
 
     // must start with a scope
-    t = deserializer.read_section_tag();
+#ifdef ENABLE_ASSERT
+    t =
+#endif
+    deserializer.read_section_tag();
     MDL_ASSERT(t == Serializer::ST_SCOPE_START);
 
     // deserialize the global scope

@@ -50,13 +50,13 @@ class Dxt_decompressor
 public:
 
     /// Decompression mode
-    enum Mode { 
+    enum Mode {
         COLOR_ALPHA,  //< Decompress color and alpha.
         ALPHA_ONLY,   //< Decompress only alpha.
         COLOR_ONLY,   //< Decompress only color.
         ALPHA_AS_GREY //< Decompress alpha as grey value.
     };
-    
+
     /// Constructor.
     Dxt_decompressor();
 
@@ -69,7 +69,7 @@ public:
         Dds_compress_fmt format,
         mi::Uint32 width,
         mi::Uint32 height);
-     
+
     /// Sets format of the target data.
     ///
     /// This method might invalidate the address returned by #get_buffer().
@@ -81,30 +81,30 @@ public:
     void set_target_format(
         mi::Uint32 component_count,
         mi::Uint32 width);
-    
+
     /// Sets the decompression mode, default is #COLOR_ALPHA.
     ///
     /// \param mode   The new decompression mode.
     void set_mode( Mode mode) { m_mode = mode; }
-     
+
     /// Returns the decompression mode.
     Mode get_mode() const { return m_mode; }
 
     /// Decompresses one line of DXT blocks.
     /// \param blocks    The block data.
     /// \param block_y   The block line to decompress, range from 0 .. get_block_count_y().
-    void decompress_blockline( const mi::Uint8* blocks, mi::Uint32 block_y);
-     
+    void decompress_blockline( const mi::Uint8* blocks, const mi::Uint32 block_y);
+
     /// Returns the buffer of decompressed pixel data in target format.
     ///
     /// The buffer has get_block_dimension() scanlines. This value might be invalidated by
     /// later #set_target_format() calls.
     const mi::Uint8* get_buffer() const { return &m_buffer[0]; }
-    
+
     /// Returns the buffer of decompressed pixel data in target format for one scanline.
     ///
     /// The buffer has get_block_dimension() scanlines.
-    const mi::Uint8* get_scanline( mi::Uint32 scan_line) const
+    const mi::Uint8* get_scanline( const mi::Uint32 scan_line) const
     {
         assert( scan_line < BLOCK_PIXEL_DIM);
         return get_buffer() + scan_line * m_target_width;
@@ -115,7 +115,7 @@ public:
 
     /// Returns the number of blocks in y direction.
     mi::Uint32 get_block_count_y() const { return m_blocks_y; }
-    
+
     /// Returns the number of bytes per block for the current compression format.
     mi::Uint32 get_bytes_per_block() const
     {
@@ -125,16 +125,16 @@ public:
         assert( false);
         return 0;
     }
-    
+
     /// Returns the number of scanlines per block.
     mi::Uint32 get_block_dimension() const { return BLOCK_PIXEL_DIM; }
-    
+
     /// Indicates whether color data will be decompressed (see #Mode).
     bool color_enabled() const;
-    
+
     /// Indicates whether alpha data will be decompressed (see #Mode).
     bool alpha_enabled() const;
-    
+
 private:
 
     /// Blocks have a size of 4x4 pixels.
@@ -144,26 +144,26 @@ private:
     ///
     /// \param block    The compressed DXT1 block (8 bytes), input.
     /// \param pixels   The decompressed pixel data, output.
-    void decompress_dxtc1( const mi::Uint8* block, mi::Uint8* pixels);
+    void decompress_dxtc1( const mi::Uint8* const block, mi::Uint8* pixels);
 
     /// Block decompressor method for DXTC3
     ///
     /// \param block    The compressed DXT3 block (16 bytes), input.
     /// \param pixels   The decompressed pixel data, output.
-    void decompress_dxtc3( const mi::Uint8* block, mi::Uint8* pixels);
+    void decompress_dxtc3( const mi::Uint8* const block, mi::Uint8* pixels);
 
     /// Block decompressor method for DXTC5
     ///
     /// \param block    The compressed DXT5 block (16 bytes), input.
     /// \param pixels   The decompressed pixel data, output.
-    void decompress_dxtc5( const mi::Uint8* block, mi::Uint8* pixels);
+    void decompress_dxtc5( const mi::Uint8* const block, mi::Uint8* const pixels);
 
     /// Decodes color data for DXTC3 and DXTC5
     ///
     /// \param block    The color data block, input.
     /// \param pixels   The decompressed pixel data, output.
-    void decode_colors( const mi::Uint8* color_block, mi::Uint8* pixels);
-    
+    void decode_colors( const mi::Uint8* const color_block, mi::Uint8* pixels);
+
     /// Type of the decompressor methods.
     typedef void (Dxt_decompressor::*FDecompress)(const mi::Uint8*, mi::Uint8*);
 
@@ -187,7 +187,7 @@ private:
 
     /// The decompression mode.
     Mode m_mode;
-            
+
     /// The buffer for decompressed pixel data.
     std::vector<mi::Uint8> m_buffer;
 };

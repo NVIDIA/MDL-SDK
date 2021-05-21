@@ -62,7 +62,7 @@ struct Resource_tag_tuple {
     }
 };
 
-typedef std::vector<Resource_tag_tuple> Resource_tag_map;
+using Resource_tag_map = std::vector<Resource_tag_tuple>;
 
 } // namespace MDL
 } // namespace MI

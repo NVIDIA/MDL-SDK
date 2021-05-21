@@ -92,6 +92,8 @@ namespace mi { namespace examples { namespace dxr
         << "--gpu <num>               Select a specific (non-default GPU) in case there are.\n"
         << "                          multiple available. See log output for option.\n"
 
+        << "--gpu-debug               Enable the D3D Debug Layer and DRED\n"
+
         << "--nogui                   Don't open interactive display\n"
 
         << "--hide_gui                GUI can be toggled by pressing SPACE.\n(default: "
@@ -206,6 +208,10 @@ namespace mi { namespace examples { namespace dxr
                 else if (wcscmp(opt, L"--gpu") == 0 && i < argc - 1)
                 {
                     options.gpu = std::max(_wtoi(argv[++i]), -1);
+                }
+                else if (wcscmp(opt, L"--gpu-debug") == 0)
+                {
+                    options.gpu_debug = true;
                 }
                 else if ((wcscmp(opt, L"-o" ) == 0 || wcscmp(opt, L"--output") == 0) && i < argc - 1)
                 {

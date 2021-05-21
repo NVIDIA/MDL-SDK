@@ -77,6 +77,7 @@ public:
     void set_name(IQualified_name const *name) { m_name = name; }
 
 protected:
+    /// Constructor.
     explicit Annotation_base(Memory_arena *arena, IQualified_name const *name)
     : Base()
     , m_name(name)
@@ -95,7 +96,7 @@ protected:
     Position_impl m_pos;
 };
 
-// Implementation of IAnnotation
+// Implementation of IAnnotation.
 class Annotation : public Annotation_base<IAnnotation>
 {
     typedef Annotation_base<IAnnotation> Base;
@@ -103,12 +104,12 @@ class Annotation : public Annotation_base<IAnnotation>
 private:
 
     explicit Annotation(Memory_arena *arena, IQualified_name const *name)
-        : Base(arena, name)
+    : Base(arena, name)
     {
     }
 };
 
-/// Implementation of IAnnotation_enable_if,
+/// Implementation of IAnnotation_enable_if.
 class Annotation_enable_if : public Annotation_base<IAnnotation_enable_if>
 {
     typedef Annotation_base<IAnnotation_enable_if> Base;
@@ -123,8 +124,8 @@ public:
 
 private:
     explicit Annotation_enable_if(Memory_arena *arena, IQualified_name const *name)
-        : Base(arena, name)
-        , m_expr(NULL)
+    : Base(arena, name)
+    , m_expr(NULL)
     {
     }
 
@@ -159,8 +160,27 @@ public:
 
     /// Delete an annotation.
     void delete_annotation(int index) MDL_FINAL {
-        if (0 <= index && size_t(index) < m_annos.size())
+        if (0 <= index && size_t(index) < m_annos.size()) {
             m_annos.erase(m_annos.begin() + index);
+        }
+    }
+
+    /// Replace the annotation at index.
+    ///
+    /// \param index  the index of the requested annotation
+    /// \param anno   the new anno
+    ///
+    /// \return the old anno or NULL if the index was invalid
+    IAnnotation const *set_annotation(
+        int               index,
+        IAnnotation const *anno) MDL_FINAL
+    {
+        IAnnotation const *ret = NULL;
+        if (0 <= index && size_t(index) < m_annos.size()) {
+            ret = m_annos[index];
+            m_annos[index] = anno;
+        }
+        return ret;
     }
 
 private:
@@ -186,7 +206,7 @@ Annotation_factory::Annotation_factory(Memory_arena &arena)
 {
 }
 
-/// Create a new annotation.
+// Create a new annotation.
 IAnnotation *Annotation_factory::create_annotation(
     IQualified_name const *qname,
     int start_line,
@@ -194,14 +214,25 @@ IAnnotation *Annotation_factory::create_annotation(
     int end_line,
     int end_column)
 {
-    IAnnotation *result;
-    // The qname definition is not set, yet, so check the components directly
-    if (qname->get_component_count() == 2 &&
-            strcmp(qname->get_component(1)->get_symbol()->get_name(), "enable_if") == 0 &&
-            strcmp(qname->get_component(0)->get_symbol()->get_name(), "anno") == 0)
-        result = m_builder.create<Annotation_enable_if>(m_builder.get_arena(), qname);
-    else
-        result = m_builder.create<Annotation>(m_builder.get_arena(), qname);
+    IAnnotation *result = m_builder.create<Annotation>(m_builder.get_arena(), qname);
+    Position &pos = result->access_position();
+    pos.set_start_line(start_line);
+    pos.set_start_column(start_column);
+    pos.set_end_line(end_line);
+    pos.set_end_column(end_column);
+    return result;
+}
+
+// Create a new enable_if annotation.
+IAnnotation_enable_if *Annotation_factory::create_enable_if_annotation(
+    IQualified_name const *qname,
+    int start_line,
+    int start_column,
+    int end_line,
+    int end_column)
+{
+    IAnnotation_enable_if *result = m_builder.create<Annotation_enable_if>(
+        m_builder.get_arena(), qname);
     Position &pos = result->access_position();
     pos.set_start_line(start_line);
     pos.set_start_column(start_column);

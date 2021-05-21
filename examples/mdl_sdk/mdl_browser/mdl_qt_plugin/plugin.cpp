@@ -114,14 +114,13 @@ void Mdl_qt_plugin::show_select_material_dialog(
     Mdl_qt_plguin_browser_handle* out_handle)
 {
     // setup callbacks to get the result
-    context->get_mdl_browser_callbacks()->on_accepted = [&](const std::string& s)
+    context->get_mdl_browser_callbacks()->on_accepted = [out_handle](const char* s)
     {
-        out_handle->result.append(s);
+        out_handle->result = s;
         out_handle->accepted = true;
     };
 
     out_handle->result = "";
-    out_handle->result.reserve(4096);
     out_handle->accepted = false;
     out_handle->thread = std::thread([&, context]()
     {
@@ -158,7 +157,7 @@ void Mdl_qt_plugin::show_select_material_dialog(
         int exit_code = app.exec();
         if (exit_code != 0)
         {
-            qDebug() << "[error] Qt application crashed.\n";
+            std::cout << "[error] Qt application crashed.\n";
         }
         engine.removeImageProvider(QLatin1String("mdl_archive"));
         delete view_model;

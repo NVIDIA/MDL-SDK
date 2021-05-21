@@ -39,8 +39,7 @@ namespace mi {
 
 namespace neuraylib {
 
-    class IMaterial_instance;
-    class IMdl_execution_context;
+class IMdl_execution_context;
 
 /** \addtogroup mi_neuray_mdl_elements
 @{
@@ -275,8 +274,8 @@ public:
 
     /// Looks up the database name of the mdl instance connected to the argument of a compiled
     /// material.
-    /// 
-    /// The parameters on the compiled material in class compilation mode can have more complex 
+    ///
+    /// The parameters on the compiled material in class compilation mode can have more complex
     /// names if a shade graph has been compiled. The name corresponds to a path through the shade
     /// graph identifying a node and a parameter on that node whose value should be passed into
     /// the parameter of the compiled result. For example, the path "a.b.x" refers to a parameter
@@ -296,7 +295,7 @@ public:
     ///                                    - -1: The parameter material_instance_name is NULL or a
     ///                                          material instance of that name does not exist in
     ///                                          the database.
-    ///                                    - -2: The given parameter index exceeds the parameter 
+    ///                                    - -2: The given parameter index exceeds the parameter
     ///                                          count of the compiled material.
     ///                                    - -3: The function could not be found in the database.
     ///                                          This might be due to the fact that the given
@@ -308,7 +307,7 @@ public:
         const char* material_instance_name,
         Size parameter_index,
         Sint32* errors = 0) const = 0;
-    
+
     /// Returns the opacity of the material.
     ///
     /// First, the cutout_opacity is checked. In case of opaque

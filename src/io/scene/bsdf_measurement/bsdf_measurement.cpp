@@ -258,17 +258,17 @@ const SERIAL::Serializable* Bsdf_measurement::serialize( SERIAL::Serializer* ser
 {
     Scene_element_base::serialize( serializer);
 
-    serializer->write( serializer->is_remote() ? "" : m_original_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_container_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_container_membername);
-    serializer->write( serializer->is_remote() ? "" : m_mdl_file_path);
-    serializer->write( HAL::Ospath::sep());
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_original_filename);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_filename);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_filename);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_membername);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_mdl_file_path);
+    SERIAL::write(serializer, HAL::Ospath::sep());
 
-    serializer->write( m_impl_tag);
-    serializer->write( m_impl_hash);
+    SERIAL::write(serializer, m_impl_tag);
+    SERIAL::write(serializer, m_impl_hash);
 
-    serializer->write( m_cached_is_valid);
+    SERIAL::write(serializer, m_cached_is_valid);
 
     return this + 1;
 }
@@ -277,18 +277,18 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
 {
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_original_filename);
-    deserializer->read( &m_resolved_filename);
-    deserializer->read( &m_resolved_container_filename);
-    deserializer->read( &m_resolved_container_membername);
-    deserializer->read( &m_mdl_file_path);
+    SERIAL::read(deserializer, &m_original_filename);
+    SERIAL::read(deserializer, &m_resolved_filename);
+    SERIAL::read(deserializer, &m_resolved_container_filename);
+    SERIAL::read(deserializer, &m_resolved_container_membername);
+    SERIAL::read(deserializer, &m_mdl_file_path);
     std::string serializer_sep;
-    deserializer->read( &serializer_sep);
+    SERIAL::read(deserializer, &serializer_sep);
 
-    deserializer->read( &m_impl_tag);
-    deserializer->read( &m_impl_hash);
+    SERIAL::read(deserializer, &m_impl_tag);
+    SERIAL::read(deserializer, &m_impl_hash);
 
-    deserializer->read( &m_cached_is_valid);
+    SERIAL::read(deserializer, &m_cached_is_valid);
 
     // Adjust m_original_filename and m_resolved_filename for this host.
     if( !m_original_filename.empty()) {
@@ -483,7 +483,7 @@ size_t Bsdf_measurement_impl::get_size() const
 {
     size_t result = sizeof( *this);
 
-    // For memory-based BSDF measurements it is unclear whther the actual data should be counted
+    // For memory-based BSDF measurements it is unclear whether the actual data should be counted
     // here or not (data exclusively owned by us or not).
 
     result += 2 * sizeof( mi::neuraylib::Bsdf_isotropic_data);
@@ -524,7 +524,7 @@ void Bsdf_measurement_impl::serialize_bsdf_data(
     SERIAL::Serializer* serializer, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data)
 {
     bool exists = bsdf_data != 0;
-    serializer->write( exists);
+    SERIAL::write(serializer, exists);
     if( !exists)
         return;
 
@@ -532,9 +532,9 @@ void Bsdf_measurement_impl::serialize_bsdf_data(
     mi::Uint32 resolution_phi     = bsdf_data->get_resolution_phi();
     mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
 
-    serializer->write( resolution_theta);
-    serializer->write( resolution_phi);
-    serializer->write( static_cast<mi::Uint32>( type));
+    SERIAL::write(serializer, resolution_theta);
+    SERIAL::write(serializer, resolution_phi);
+    SERIAL::write(serializer, static_cast<mi::Uint32>( type));
 
     mi::Size size = resolution_theta * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
@@ -548,7 +548,7 @@ mi::neuraylib::IBsdf_isotropic_data* Bsdf_measurement_impl::deserialize_bsdf_dat
     SERIAL::Deserializer* deserializer)
 {
     bool exists;
-    deserializer->read( &exists);
+    SERIAL::read(deserializer, &exists);
     if( !exists)
         return nullptr;
 
@@ -556,9 +556,9 @@ mi::neuraylib::IBsdf_isotropic_data* Bsdf_measurement_impl::deserialize_bsdf_dat
     mi::Uint32 resolution_phi;
     mi::Uint32 type;
 
-    deserializer->read( &resolution_theta);
-    deserializer->read( &resolution_phi);
-    deserializer->read( &type);
+    SERIAL::read(deserializer, &resolution_theta);
+    SERIAL::read(deserializer, &resolution_phi);
+    SERIAL::read(deserializer, &type);
 
     mi::neuraylib::Bsdf_isotropic_data* bsdf_data = new mi::neuraylib::Bsdf_isotropic_data(
         resolution_theta, resolution_phi, static_cast<mi::neuraylib::Bsdf_type>( type));

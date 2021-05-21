@@ -265,6 +265,9 @@ public:
     /// Add an import at the end of all other imports or namespace aliases.
     void add_import(char const *name);
 
+    /// Add a namespace alias at the end of all other namespace aliases.
+    void add_namespace_alias(char const *alias_name, char const *namespace_name);
+
     /// Get the name factory.
     Name_factory *get_name_factory() const MDL_FINAL;
 
@@ -835,12 +838,14 @@ public:
 
     /// Find the definition of a signature.
     ///
-    /// \param signature      a (function) signature
-    /// \param only_exported  if true, only exported function are found, else
-    ///                       local ones are allowed
+    /// \param signature         a (function or annotation) signature
+    /// \param only_exported     if true, only exported entities are found, else
+    ///                          local ones are allowed
+    /// \param find_function     find function or annotation?
     IDefinition const *find_signature(
         char const *signature,
-        bool       only_exported) const;
+        bool       only_exported,
+        bool       find_function = true) const;
 
     /// Find the definition of a signature of a standard library function.
     ///
@@ -935,17 +940,28 @@ public:
 
     /// Possible MDL version promotion rules.
     enum Promotion_rules {
-        PR_NO_CHANGE                    = 0x000,
-        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x001, ///< add a spread param to spot_edf()
-        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x002, ///< add a multiplier param to measured_edf()
-        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x004, ///< add a tangent_u param to measured_edf()
-        PR_FRESNEL_LAYER_TO_COLOR       = 0x008, ///< convert fresnel_layer() to color_*()
-        PR_WIDTH_HEIGHT_ADD_UV_TILE     = 0x010, ///< add an uv_tile param to width()/height()
-        PR_TEXEL_ADD_UV_TILE            = 0x020, ///< add an uv_tile param to texel_*()
-        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x040, ///< add roundness param to rounded_corner_normal
-        PR_MATERIAL_ADD_HAIR            = 0x080, ///< add hair bsdf to material constructor
-        PR_GLOSSY_ADD_MULTISCATTER      = 0x100, ///< add a multiscatter_tint param to
-                                                 ///  all glossy bsdfs()
+        PR_NO_CHANGE                    = 0x00000,
+        PR_SPOT_EDF_ADD_SPREAD_PARAM    = 0x00001, ///< add a spread param to spot_edf()
+        PC_MEASURED_EDF_ADD_MULTIPLIER  = 0x00002, ///< add a multiplier param to measured_edf()
+        PR_MEASURED_EDF_ADD_TANGENT_U   = 0x00004, ///< add a tangent_u param to measured_edf()
+        PR_FRESNEL_LAYER_TO_COLOR       = 0x00008, ///< convert fresnel_layer() to color_*()
+        PR_WIDTH_HEIGHT_ADD_UV_TILE     = 0x00010, ///< add an uv_tile param to width()/height()
+        PR_TEXEL_ADD_UV_TILE            = 0x00020, ///< add an uv_tile param to texel_*()
+        PR_ROUNDED_CORNER_ADD_ROUNDNESS = 0x00040, ///< add roundness param to rounded_corner_normal
+        PR_MATERIAL_ADD_HAIR            = 0x00080, ///< add hair bsdf to material constructor
+        PR_GLOSSY_ADD_MULTISCATTER      = 0x00100, ///< add a multiscatter_tint param to
+                                                   ///  all glossy bsdfs()
+        PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY
+                                        = 0x00200, ///< add emission_intenbsity to material_volume
+                                                   ///  constructor
+        PR_SHEEN_ADD_MULTISCATTER       = 0x00400, ///< add multiscatter to sheen_bsdf()
+        PR_WIDTH_HEIGHT_2D_ADD_FRAME    = 0x00800, ///< add a frame param to width()/height() on tex2d
+        PR_WIDTH_HEIGHT_3D_ADD_FRAME    = 0x01000, ///< add a frame param to width()/height() on tex3d
+        PR_LOOKUP_2D_ADD_FRAME          = 0x02000, ///< add a frame param to texel_() on tex2d
+        PR_LOOKUP_3D_ADD_FRAME          = 0x04000, ///< add a frame param to texel_() on tex3d
+        PR_TEXEL_2D_ADD_FRAME           = 0x08000, ///< add a frame param to texel_() on tex2d
+        PR_TEXEL_3D_ADD_FRAME           = 0x10000, ///< add a frame param to texel_() on tex3d
+        PR_TEXTURE_ADD_SELECTOR         = 0x20000, ///< add a selector param to tex constructor
     };
 
     /// Alters one call argument according to the given promotion rules.

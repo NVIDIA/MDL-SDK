@@ -52,7 +52,7 @@ namespace {
 // ---------------------- Internal target resource callback class ---------------------
 
 /// Implementation of the internal version of the #mi::neuraylib::ITarget_resource_callback
-/// callback interface operating on MI::MDL::IValue_resource objects.
+/// callback interface operating on MDL::IValue_resource objects.
 class Target_resource_callback_internal : public ITarget_resource_callback_internal
 {
 public:
@@ -83,7 +83,7 @@ public:
     /// \param resource  the resource value
     ///
     /// \returns a resource index or 0 if no resource index can be returned
-    mi::Uint32 get_resource_index(MI::MDL::IValue_resource const *resource) final {
+    mi::Uint32 get_resource_index(MDL::IValue_resource const *resource) final {
         return m_target_code->get_known_resource_index(m_transaction, resource);
     }
 
@@ -93,7 +93,7 @@ public:
     /// The value 0 is always the "not known string".
     ///
     /// \param s  the string value
-    mi::Uint32 get_string_index(MI::MDL::IValue_string const *s) final {
+    mi::Uint32 get_string_index(MDL::IValue_string const *s) final {
         return m_target_code->get_string_index(s->get_value());
     }
 
@@ -134,7 +134,7 @@ Target_code::Target_code()
 // Constructor from executable code.
 Target_code::Target_code(
     mi::mdl::IGenerated_code_executable* code,
-    MI::DB::Transaction* transaction,
+    DB::Transaction* transaction,
     bool string_ids,
     bool use_derivatives,
     bool use_builtin_resource_handler,
@@ -183,7 +183,7 @@ Target_code::~Target_code()
 
 void Target_code::finalize(
     mi::mdl::IGenerated_code_executable* code,
-    MI::DB::Transaction* transaction,
+    DB::Transaction* transaction,
     bool use_derivatives)
 {
     m_native_code = mi::base::make_handle(
@@ -976,7 +976,7 @@ mi::neuraylib::ITarget_argument_block *Target_code::create_argument_block(
 // resource lists.
 void Target_code::init_argument_block(
     Size index,
-    MI::DB::Transaction* transaction,
+    DB::Transaction* transaction,
     const MDL::IValue_list* args)
 {
     ASSERT( M_BACKENDS, index < m_cap_arg_blocks.size() &&
@@ -1006,7 +1006,7 @@ void Target_code::init_argument_block(
 
     for (mi::Size i = 0; i < num_args; ++i) {
         mi::neuraylib::Target_value_layout_state state = layout->get_nested_state( i);
-        mi::base::Handle<const MI::MDL::IValue> arg_val( args->get_value( i));
+        mi::base::Handle<const MDL::IValue> arg_val( args->get_value( i));
         layout->set_value(
             block->get_data(),
             arg_val.get(),
@@ -1087,8 +1087,8 @@ mi::Uint32 Target_code::get_known_resource_index(
 /// Returns the resource index for use in an \c ITarget_argument_block of resources already
 /// known when this \c Target_code object was generated.
 mi::Uint32 Target_code::get_known_resource_index(
-    MI::DB::Transaction* transaction,
-    MI::MDL::IValue_resource const *resource) const
+    DB::Transaction* transaction,
+    MDL::IValue_resource const *resource) const
 {
     DB::Tag tag = DB::Tag(resource->get_value());
 
@@ -1191,67 +1191,63 @@ mi::Uint32 Target_code::get_known_resource_index(
 // -------------------------------------------------------------------------------------------------
 // Serialization and Deserialization of the Target Code and its data structures
 
-const MI::SERIAL::Serializable* Callable_function_info::serialize(MI::SERIAL::Serializer* serializer) const
+const SERIAL::Serializable* Callable_function_info::serialize(SERIAL::Serializer* serializer) const
 {
-    serializer->write(m_name);
-    serializer->write(static_cast<mi::Sint32>(m_dist_kind));
-    serializer->write(static_cast<mi::Sint32>(m_kind));
-    MI::SERIAL::write(serializer, m_prototypes);
-    serializer->write(m_arg_block_index);
-    MI::SERIAL::write(serializer, m_df_handle_name_table);
-    serializer->write(static_cast<mi::Sint32>(m_state_usage));
+    SERIAL::write(serializer, m_name);
+    SERIAL::write_enum(serializer, m_dist_kind);
+    SERIAL::write_enum(serializer, m_kind);
+    SERIAL::write(serializer, m_prototypes);
+    SERIAL::write(serializer, m_arg_block_index);
+    SERIAL::write(serializer, m_df_handle_name_table);
+    SERIAL::write(serializer, m_state_usage);
     return this + 1;
 }
 
-MI::SERIAL::Serializable* Callable_function_info::deserialize(MI::SERIAL::Deserializer* deserializer)
+SERIAL::Serializable* Callable_function_info::deserialize(SERIAL::Deserializer* deserializer)
 {
-    deserializer->read(&m_name);
-    mi::Sint32 value;
-    deserializer->read(&value);
-    m_dist_kind = static_cast<mi::neuraylib::ITarget_code::Distribution_kind>(value);
-    deserializer->read(&value);
-    m_kind = static_cast<mi::neuraylib::ITarget_code::Function_kind>(value);
-    MI::SERIAL::read(deserializer, &m_prototypes);
-    deserializer->read(&m_arg_block_index);
-    MI::SERIAL::read(deserializer, &m_df_handle_name_table);
-    deserializer->read(&value);
-    m_state_usage = static_cast<mi::neuraylib::ITarget_code::State_usage>(value);
+    SERIAL::read(deserializer, &m_name);
+    SERIAL::read_enum(deserializer, &m_dist_kind);
+    SERIAL::read_enum(deserializer, &m_kind);
+    SERIAL::read(deserializer, &m_prototypes);
+    SERIAL::read(deserializer, &m_arg_block_index);
+    SERIAL::read(deserializer, &m_df_handle_name_table);
+    SERIAL::read(deserializer, &m_state_usage);
     return this + 1;
 }
 
-const MI::SERIAL::Serializable* Target_code::Resource_info::serialize(MI::SERIAL::Serializer* serializer) const
+const SERIAL::Serializable* Target_code::Resource_info::serialize(SERIAL::Serializer* serializer) const
 {
-    serializer->write(m_db_name);
-    serializer->write(m_mdl_url);
-    serializer->write(m_owner_module);
+    SERIAL::write(serializer, m_db_name);
+    SERIAL::write(serializer, m_mdl_url);
+    SERIAL::write(serializer, m_owner_module);
     return this + 1;
 }
 
-MI::SERIAL::Serializable* Target_code::Resource_info::deserialize(MI::SERIAL::Deserializer* deserializer)
+SERIAL::Serializable* Target_code::Resource_info::deserialize(SERIAL::Deserializer* deserializer)
 {
-    deserializer->read(&m_db_name);
-    deserializer->read(&m_mdl_url);
-    deserializer->read(&m_owner_module);
+    SERIAL::read(deserializer, &m_db_name);
+    SERIAL::read(deserializer, &m_mdl_url);
+    SERIAL::read(deserializer, &m_owner_module);
     return this + 1;
 }
 
-const MI::SERIAL::Serializable* Target_code::Texture_info::serialize(MI::SERIAL::Serializer* serializer) const
+const SERIAL::Serializable* Target_code::Texture_info::serialize(SERIAL::Serializer* serializer) const
 {
     Target_code::Resource_info::serialize(serializer);
-    serializer->write(m_gamma);
-    serializer->write(static_cast<mi::Sint32>(m_texture_shape));
-    serializer->write(static_cast<mi::Sint32>(m_df_data_kind));
+    SERIAL::write(serializer, m_gamma);
+    SERIAL::write(serializer, static_cast<mi::Sint32>(m_texture_shape));
+    SERIAL::write(serializer, static_cast<mi::Sint32>(m_df_data_kind));
     return this + 1;
 }
 
-MI::SERIAL::Serializable* Target_code::Texture_info::deserialize(MI::SERIAL::Deserializer* deserializer)
+SERIAL::Serializable* Target_code::Texture_info::deserialize(SERIAL::Deserializer* deserializer)
 {
     Target_code::Resource_info::deserialize(deserializer);
-    deserializer->read(&m_gamma);
+    SERIAL::read(deserializer, &m_gamma);
     mi::Sint32 value;
-    deserializer->read(&value);
+    SERIAL::read(deserializer, &value);
     m_texture_shape = static_cast<mi::neuraylib::ITarget_code::Texture_shape>(value);
-    deserializer->read(&value);
+    SERIAL::read(deserializer, &value);
     m_df_data_kind = static_cast<mi::mdl::IValue_texture::Bsdf_data_kind>(value);
     return this + 1;
 }
@@ -1262,17 +1258,17 @@ bool Target_code::supports_serialization() const
            m_backend_kind == mi::neuraylib::IMdl_backend_api::Mdl_backend_kind::MB_HLSL;
 }
 
-const MI::SERIAL::Serializable* Target_code::Segment::serialize(MI::SERIAL::Serializer* serializer) const
+const SERIAL::Serializable* Target_code::Segment::serialize(SERIAL::Serializer* serializer) const
 {
-    serializer->write(m_name);
-    MI::SERIAL::write(serializer, m_data);
+    SERIAL::write(serializer, m_name);
+    SERIAL::write(serializer, m_data);
     return this + 1;
 }
 
-MI::SERIAL::Serializable* Target_code::Segment::deserialize(MI::SERIAL::Deserializer* deserializer)
+SERIAL::Serializable* Target_code::Segment::deserialize(SERIAL::Deserializer* deserializer)
 {
-    deserializer->read(&m_name);
-    MI::SERIAL::read(deserializer, &m_data);
+    SERIAL::read(deserializer, &m_name);
+    SERIAL::read(deserializer, &m_data);
     return this + 1;
 }
 
@@ -1280,8 +1276,8 @@ namespace {
 
     static const char* MDL_TCI_HEADER = "MDLTCI\0\0";                     // 8 byte marker
     static const mi::Uint16 MDL_TCI_CURRENT_PROTOCOL = (1u << 8u) + 1u;   // 1.1
-    static const std::string MDL_SDK_VERSION = MI::VERSION::get_platform_version();
-    static const std::string MDL_SDK_OS = MI::VERSION::get_platform_os();
+    static const std::string MDL_SDK_VERSION = VERSION::get_platform_version();
+    static const std::string MDL_SDK_OS = VERSION::get_platform_os();
 
     /// Wraps a memory block identified by a pointer and a length as mi::neuraylib::IBuffer.
     class Copy_buffer
@@ -1325,44 +1321,44 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
 
     // header
     serializer.write(MDL_TCI_HEADER, 8);
-    serializer.write(MDL_TCI_CURRENT_PROTOCOL);
-    serializer.write(MDL_SDK_VERSION);
-    serializer.write(MDL_SDK_OS);
+    SERIAL::write(&serializer, MDL_TCI_CURRENT_PROTOCOL);
+    SERIAL::write(&serializer, MDL_SDK_VERSION);
+    SERIAL::write(&serializer, MDL_SDK_OS);
 
     // target code info data
-    serializer.write(static_cast<mi::Sint32>(m_backend_kind));
-    serializer.write(m_code);
-    MI::SERIAL::write(&serializer, m_code_segments);
-    MI::SERIAL::write(&serializer, m_code_segment_descriptions);
-    MI::SERIAL::write(&serializer, m_callable_function_infos);
-    serializer.write(m_body_texture_count);
-    serializer.write(m_body_light_profile_count);
-    serializer.write(m_body_bsdf_measurement_count);
+    SERIAL::write(&serializer, static_cast<mi::Sint32>(m_backend_kind));
+    SERIAL::write(&serializer, m_code);
+    SERIAL::write(&serializer, m_code_segments);
+    SERIAL::write(&serializer, m_code_segment_descriptions);
+    SERIAL::write(&serializer, m_callable_function_infos);
+    SERIAL::write(&serializer, m_body_texture_count);
+    SERIAL::write(&serializer, m_body_light_profile_count);
+    SERIAL::write(&serializer, m_body_bsdf_measurement_count);
 
     if (serialize_instance_data)
     {
-        MI::SERIAL::write(&serializer, m_texture_table);
-        MI::SERIAL::write(&serializer, m_light_profile_table);
-        MI::SERIAL::write(&serializer, m_bsdf_measurement_table);
+        SERIAL::write(&serializer, m_texture_table);
+        SERIAL::write(&serializer, m_light_profile_table);
+        SERIAL::write(&serializer, m_bsdf_measurement_table);
     }
     else
     {
         auto copy_texture_table = m_texture_table;
         copy_texture_table.resize(m_body_texture_count);
-        MI::SERIAL::write(&serializer, copy_texture_table);
+        SERIAL::write(&serializer, copy_texture_table);
 
         auto copy_light_profile_table = m_light_profile_table;
         copy_light_profile_table.resize(m_body_light_profile_count);
-        MI::SERIAL::write(&serializer, copy_light_profile_table);
+        SERIAL::write(&serializer, copy_light_profile_table);
 
         auto copy_bsdf_measurement_table = m_bsdf_measurement_table;
         copy_bsdf_measurement_table.resize(m_body_bsdf_measurement_count);
-        MI::SERIAL::write(&serializer, copy_bsdf_measurement_table);
+        SERIAL::write(&serializer, copy_bsdf_measurement_table);
     }
 
-    MI::SERIAL::write(&serializer, m_string_constant_table);
-    serializer.write(m_render_state_usage);
-    MI::SERIAL::write(&serializer, m_data_segments);
+    SERIAL::write(&serializer, m_string_constant_table);
+    SERIAL::write(&serializer, m_render_state_usage);
+    SERIAL::write(&serializer, m_data_segments);
 
     size_t arg_layout_count = m_cap_arg_layouts.size();
     serializer.write_size_t(arg_layout_count);
@@ -1381,7 +1377,7 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
 
         serializer.write_size_t(data_size);
         serializer.write(data, data_size);
-        serializer.write(map_strings);
+        SERIAL::write(&serializer, map_strings);
     }
 
     size_t arg_block_count = serialize_instance_data ? m_cap_arg_blocks.size() : 0;
@@ -1396,8 +1392,8 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
         serializer.write(block_data, block_size);
     }
 
-    serializer.write(m_string_args_mapped_to_ids);
-    serializer.write(m_use_builtin_resource_handler);
+    SERIAL::write(&serializer, m_string_args_mapped_to_ids);
+    SERIAL::write(&serializer, m_use_builtin_resource_handler);
 
     mi::base::Handle<mi::neuraylib::IBuffer> buffer(new Copy_buffer(
         serializer.get_buffer(), serializer.get_buffer_size()));
@@ -1427,7 +1423,7 @@ bool Target_code::deserialize(
     }
 
     mi::Uint16 mdl_tci_protocol_version;
-    deserializer.read(&mdl_tci_protocol_version);
+    SERIAL::read(&deserializer, &mdl_tci_protocol_version);
     if (mdl_tci_protocol_version != MDL_TCI_CURRENT_PROTOCOL)
     {
         if (context)
@@ -1439,8 +1435,8 @@ bool Target_code::deserialize(
 
     std::string mdl_sdk_version;
     std::string mdl_sdk_os;
-    deserializer.read(&mdl_sdk_version);
-    deserializer.read(&mdl_sdk_os);
+    SERIAL::read(&deserializer, &mdl_sdk_version);
+    SERIAL::read(&deserializer, &mdl_sdk_os);
     if (mdl_sdk_version != MDL_SDK_VERSION || mdl_sdk_os != MDL_SDK_OS)
     {
         if (context)
@@ -1452,21 +1448,21 @@ bool Target_code::deserialize(
 
     // target code info data
     mi::Sint32 value;
-    deserializer.read(&value);
+    SERIAL::read(&deserializer, &value);
     m_backend_kind = static_cast<mi::neuraylib::IMdl_backend_api::Mdl_backend_kind>(value);
-    deserializer.read(&m_code);
-    MI::SERIAL::read(&deserializer, &m_code_segments);
-    MI::SERIAL::read(&deserializer, &m_code_segment_descriptions);
-    MI::SERIAL::read(&deserializer, &m_callable_function_infos);
-    deserializer.read(&m_body_texture_count);
-    deserializer.read(&m_body_light_profile_count);
-    deserializer.read(&m_body_bsdf_measurement_count);
-    MI::SERIAL::read(&deserializer, &m_texture_table);
-    MI::SERIAL::read(&deserializer, &m_light_profile_table);
-    MI::SERIAL::read(&deserializer, &m_bsdf_measurement_table);
-    MI::SERIAL::read(&deserializer, &m_string_constant_table);
-    deserializer.read(&m_render_state_usage);
-    MI::SERIAL::read(&deserializer, &m_data_segments);
+    SERIAL::read(&deserializer, &m_code);
+    SERIAL::read(&deserializer, &m_code_segments);
+    SERIAL::read(&deserializer, &m_code_segment_descriptions);
+    SERIAL::read(&deserializer, &m_callable_function_infos);
+    SERIAL::read(&deserializer, &m_body_texture_count);
+    SERIAL::read(&deserializer, &m_body_light_profile_count);
+    SERIAL::read(&deserializer, &m_body_bsdf_measurement_count);
+    SERIAL::read(&deserializer, &m_texture_table);
+    SERIAL::read(&deserializer, &m_light_profile_table);
+    SERIAL::read(&deserializer, &m_bsdf_measurement_table);
+    SERIAL::read(&deserializer, &m_string_constant_table);
+    SERIAL::read(&deserializer, &m_render_state_usage);
+    SERIAL::read(&deserializer, &m_data_segments);
 
     // Argument Layouts
     size_t arg_layout_count;
@@ -1504,13 +1500,13 @@ bool Target_code::deserialize(
         std::vector<char> layout_data(data_size);
         deserializer.read(layout_data.data(), data_size);
         bool map_strings;
-        deserializer.read(&map_strings);
+        SERIAL::read(&deserializer, &map_strings);
 
         internal_layout_impl->set_layout_data(layout_data.data(), data_size);
         internal_layout_impl->set_strings_mapped_to_ids(map_strings);
 
         // compose the layout
-        m_cap_arg_layouts[i] = new MI::BACKENDS::Target_value_layout(
+        m_cap_arg_layouts[i] = new BACKENDS::Target_value_layout(
             internal_layout_impl, map_strings);
     }
 
@@ -1532,8 +1528,8 @@ bool Target_code::deserialize(
         deserializer.read(m_cap_arg_blocks[i]->get_data(), block_size);
     }
 
-    deserializer.read(&m_string_args_mapped_to_ids);
-    deserializer.read(&m_use_builtin_resource_handler);
+    SERIAL::read(&deserializer, &m_string_args_mapped_to_ids);
+    SERIAL::read(&deserializer, &m_use_builtin_resource_handler);
     return true;
 }
 

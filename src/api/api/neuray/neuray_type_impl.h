@@ -518,6 +518,8 @@ public:
     const mi::neuraylib::IType_struct* get_predefined_struct(
         mi::neuraylib::IType_struct::Predefined_id id) const override;
 
+    mi::neuraylib::IType_list* clone( const mi::neuraylib::IType_list* type_list) const override;
+
     mi::Sint32 compare(
         const mi::neuraylib::IType* lhs,
         const mi::neuraylib::IType* rhs) const override;

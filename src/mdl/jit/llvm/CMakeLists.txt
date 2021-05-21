@@ -48,6 +48,15 @@ create_from_base_preset(
         ${CMAKE_CURRENT_BINARY_DIR}/llvm.d
     )
 
+# set the platform name
+if(${MI_PLATFORM_NAME} MATCHES "linux-aarch64")
+    set(_LLVM_PLATFORM_NAME_LOWER_CASE "aarch64")
+    set(_LLVM_PLATFORM_NAME_MIXED_CASE "AArch64")
+else()
+    set(_LLVM_PLATFORM_NAME_LOWER_CASE "x86")
+    set(_LLVM_PLATFORM_NAME_MIXED_CASE "X86")
+endif()
+
 # list of llvm Libraries we need
 set(_LLVM_LIB_NAMES
     LLVMAggressiveInstCombine
@@ -91,13 +100,13 @@ set(_LLVM_LIB_NAMES
     LLVMTarget
     LLVMTransformUtils
     LLVMVectorize
-    LLVMX86AsmParser
-    LLVMX86AsmPrinter
-    LLVMX86CodeGen
-    LLVMX86Desc
-    LLVMX86Disassembler
-    LLVMX86Info
-    LLVMX86Utils
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmParser
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmPrinter
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}CodeGen
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Desc
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Disassembler
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Info
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Utils
     )
 
 # -------------------------------------------------------------------------------------------------
@@ -107,7 +116,7 @@ set(_LLVM_LIB_NAMES
 # disable unneeded stuff
 # Here, we define the options before they are created within the dist/CMakeLists.txt.
 # This allows to change the default values without altering the code inside the dist folder.
-set(LLVM_TARGETS_TO_BUILD "X86;NVPTX" CACHE STRING "Semicolon-separated list of targets to build, or \"all\".")
+set(LLVM_TARGETS_TO_BUILD "${_LLVM_PLATFORM_NAME_MIXED_CASE};NVPTX" CACHE STRING "Semicolon-separated list of targets to build, or \"all\".")
 option(LLVM_INCLUDE_TESTS "Generate build targets for the LLVM unit tests." OFF)
 option(LLVM_INCLUDE_GO_TESTS "Include the Go bindings tests in test build targets." OFF)
 option(LLVM_INCLUDE_EXAMPLES "Generate build targets for the LLVM examples" OFF)
@@ -223,18 +232,8 @@ function(LLVM_TARGET_SETUP)
         target_compile_options(${LLVM_TARGET_SETUP_TARGET}
             PRIVATE
                 "-fPIC"
-                "-Wno-misleading-indentation"
-                "-Wno-unused-function"
-                "-Wno-nonnull-compare"
-                "-Wno-implicit-fallthrough"
-                "-Wno-unused-but-set-variable"
+                "-w"
             )
-        if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "8.0")
-            target_compile_options(${LLVM_TARGET_SETUP_TARGET}
-                PRIVATE
-                    "-Wno-cast-function-type"
-            )
-        endif()
     endif()
 
 
@@ -311,7 +310,7 @@ set(_LLVM_ADDITIONAL_TARGETS
     intrinsics_gen
     LibOptionsTableGen
     NVPTXCommonTableGen
-    X86CommonTableGen
+    ${_LLVM_PLATFORM_NAME_MIXED_CASE}CommonTableGen
     # misc
     llvm_vcsrevision_h
 )
@@ -390,7 +389,7 @@ add_custom_command(
         # ${CMAKE_CURRENT_BINARY_DIR}/dist/include/llvm/support/cmakefiles/llvm_vcsrevision_h
         # ${CMAKE_CURRENT_BINARY_DIR}/dist/cmakefiles/configure_llvm_native
         # ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/nvptx/cmakefiles/nvptxcommontablegen
-        # ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/x86/cmakefiles/x86commontablegen
+        # ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/${_LLVM_PLATFORM_NAME_LOWER_CASE}/cmakefiles/${_LLVM_PLATFORM_NAME_LOWER_CASE}commontablegen
         # ${CMAKE_CURRENT_BINARY_DIR}/dist/utils/tablegen/cmakefiles/llvm-tablegen-host
         ${CMAKE_CURRENT_BINARY_DIR}/llvm.d
     DEPENDS 
@@ -412,8 +411,8 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E touch          ${CMAKE_CURRENT_BINARY_DIR}/dist/cmakefiles/configure_llvm_native
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/nvptx/cmakefiles
     COMMAND ${CMAKE_COMMAND} -E touch          ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/nvptx/cmakefiles/nvptxcommontablegen
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/x86/cmakefiles
-    COMMAND ${CMAKE_COMMAND} -E touch          ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/x86/cmakefiles/x86commontablegen
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/${_LLVM_PLATFORM_NAME_LOWER_CASE}/cmakefiles
+    COMMAND ${CMAKE_COMMAND} -E touch          ${CMAKE_CURRENT_BINARY_DIR}/dist/lib/target/${_LLVM_PLATFORM_NAME_LOWER_CASE}/cmakefiles/${_LLVM_PLATFORM_NAME_LOWER_CASE}commontablegen
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/dist/utils/tablegen/cmakefiles
     COMMAND ${CMAKE_COMMAND} -E touch          ${CMAKE_CURRENT_BINARY_DIR}/dist/utils/tablegen/cmakefiles/llvm-tablegen-host
 

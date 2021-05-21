@@ -110,6 +110,30 @@ const char* Texture_impl::get_image() const
     return get_db_transaction()->tag_to_name( tag);
 }
 
+mi::Sint32 Texture_impl::set_volume( const char* name)
+{
+    if( !name)
+        return -1;
+
+    DB::Transaction* db_transaction = get_db_transaction();
+    const DB::Tag tag = db_transaction->name_to_tag( name);
+    if( !tag.is_valid())
+        return -2;
+
+    if( !can_reference_tag( tag))
+        return -3;
+
+    get_db_element()->set_volume_data( tag);
+    add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    return 0;
+}
+
+const char* Texture_impl::get_volume() const
+{
+    const DB::Tag tag = get_db_element()->get_volume_data();
+    return get_db_transaction()->tag_to_name( tag);
+}
+
 void Texture_impl::set_gamma( Float32 gamma)
 {
     get_db_element()->set_gamma( gamma);

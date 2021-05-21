@@ -125,6 +125,16 @@ public:
     ///
     /// \param index  the index of the annotation to remove
     virtual void delete_annotation(int index) = 0;
+
+    /// Replace the annotation at index.
+    ///
+    /// \param index  the index of the requested annotation
+    /// \param anno   the new anno
+    ///
+    /// \return the old anno or NULL if the index was invalid
+    virtual IAnnotation const *set_annotation(
+        int               index,
+        IAnnotation const *anno) = 0;
 };
 
 /// The interface for creating annotations in the MDL AST.
@@ -143,6 +153,22 @@ public:
     ///
     /// \return the newly created annotation
     virtual IAnnotation *create_annotation(
+        IQualified_name const *qname,
+        int                   start_line = 0,
+        int                   start_column = 0,
+        int                   end_line = 0,
+        int                   end_column = 0) = 0;
+
+    /// Create a new enable_if annotation.
+    ///
+    /// \param qname         the qualified name of the annotation
+    /// \param start_line    start line in the input
+    /// \param start_column  start column in the input
+    /// \param end_line      end line in the input
+    /// \param end_column    end column in the input
+    ///
+    /// \return the newly created annotation
+    virtual IAnnotation_enable_if *create_enable_if_annotation(
         IQualified_name const *qname,
         int                   start_line = 0,
         int                   start_column = 0,

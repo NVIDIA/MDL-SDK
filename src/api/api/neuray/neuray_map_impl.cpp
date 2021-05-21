@@ -118,7 +118,7 @@ bool Map_impl::has_key( const char* key) const
     if( !key)
         return false;
 
-    m_map_type::const_iterator it = m_map.find( key);
+    Map_type::const_iterator it = m_map.find( key);
     return it != m_map.end();
 }
 
@@ -127,7 +127,7 @@ const mi::base::IInterface* Map_impl::get_value( const char* key) const
     if( !key)
         return nullptr;
 
-    m_map_type::const_iterator it = m_map.find( key);
+    Map_type::const_iterator it = m_map.find( key);
     if( it == m_map.end())
         return nullptr;
 
@@ -140,7 +140,7 @@ mi::base::IInterface* Map_impl::get_value( const char* key)
     if( !key)
         return nullptr;
 
-    m_map_type::iterator it = m_map.find( key);
+    Map_type::iterator it = m_map.find( key);
     if( it == m_map.end())
         return nullptr;
 
@@ -171,7 +171,7 @@ mi::Sint32 Map_impl::set_value( const char* key, mi::base::IInterface* value)
     if( !key || !value)
         return -1;
 
-    m_map_type::iterator it = m_map.find( key);
+    Map_type::iterator it = m_map.find( key);
     if( it == m_map.end())
         return -2;
 
@@ -202,8 +202,8 @@ void Map_impl::clear()
 {
     m_cache_valid = false;
 
-    m_map_type::iterator it  = m_map.begin();
-    m_map_type::iterator end = m_map.end();
+    Map_type::iterator it  = m_map.begin();
+    Map_type::iterator end = m_map.end();
     for ( ; it != end; ++it)
         it->second->release();
 
@@ -215,7 +215,7 @@ mi::Sint32 Map_impl::insert( const char* key, mi::base::IInterface* value)
     if( !key || !value)
         return -1;
 
-    m_map_type::iterator it = m_map.find( key);
+    Map_type::iterator it = m_map.find( key);
     if( it != m_map.end())
         return -2;
 
@@ -234,7 +234,7 @@ mi::Sint32 Map_impl::erase( const char* key)
     if( !key)
         return -1;
 
-    m_map_type::iterator it = m_map.find( key);
+    Map_type::iterator it = m_map.find( key);
     if( it == m_map.end())
         return -2;
 
@@ -276,7 +276,7 @@ bool Map_impl::index_to_key( mi::Size index, std::string& key) const
     if( index >= m_map.size())
         return false;
 
-    m_map_type::const_iterator it;
+    Map_type::const_iterator it;
     mi::Size i;
     if( m_cache_valid && index >= m_cached_index) {
         it = m_cached_iterator;
@@ -288,8 +288,9 @@ bool Map_impl::index_to_key( mi::Size index, std::string& key) const
     ASSERT( M_NEURAY_API, i <= index);
     ASSERT( M_NEURAY_API, it != m_map.end());
 
-    for( ; i < index; ++i, ++it)
-        ;
+    for( ; i < index; ++i, ++it) {
+        ASSERT( M_NEURAY_API, it != m_map.end());
+    }
 
     m_cache_valid     = true;
     m_cached_iterator = it;

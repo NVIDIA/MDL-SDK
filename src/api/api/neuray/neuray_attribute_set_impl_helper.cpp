@@ -77,7 +77,7 @@ class Attribute_context : public mi::base::Interface_implement<IAttribute_contex
 public:
     Attribute_context(
         const IDb_element* db_element,
-        const boost::shared_ptr<ATTR::Attribute>& attribute)
+        const std::shared_ptr<ATTR::Attribute>& attribute)
     {
         ASSERT( M_NEURAY_API, db_element);
         ASSERT( M_NEURAY_API, attribute);
@@ -120,7 +120,7 @@ public:
 
 private:
     mi::base::Handle<const IDb_element> m_db_element;
-    boost::shared_ptr<ATTR::Attribute> m_attribute;
+    std::shared_ptr<ATTR::Attribute> m_attribute;
 };
 
 mi::base::Lock Attribute_set_impl_helper::s_register_decls_lock;
@@ -169,8 +169,8 @@ mi::IData* Attribute_set_impl_helper::create_attribute(
 
     // Create the attribute.
     ATTR::Attribute_id id = ATTR::Attribute::id_create( name);
-    boost::shared_ptr<ATTR::Attribute> attribute = boost::shared_ptr<ATTR::Attribute>(
-        new ATTR::Attribute( id, attribute_type, ATTR::PROPAGATION_STANDARD));
+    auto attribute = std::make_shared<ATTR::Attribute>(
+            id, attribute_type, ATTR::PROPAGATION_STANDARD);
     attribute->set_global( true);
     ASSERT( M_NEURAY_API, attribute);
     if( !attribute)
@@ -214,7 +214,7 @@ const mi::IData* Attribute_set_impl_helper::access_attribute(
 
     std::string top_level_name = get_top_level_name( name);
     ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( top_level_name.c_str());
-    boost::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
+    std::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
     if( !attribute)
         return nullptr;
 
@@ -233,7 +233,7 @@ mi::IData* Attribute_set_impl_helper::edit_attribute(
 
     std::string top_level_name = get_top_level_name( name);
     ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( top_level_name.c_str());
-    boost::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
+    std::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
     if( !attribute)
         return nullptr;
 
@@ -254,7 +254,7 @@ bool Attribute_set_impl_helper::is_attribute(
 
     std::string top_level_name = get_top_level_name( name);
     ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( top_level_name.c_str());
-    boost::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
+    std::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
     if( !attribute || !has_valid_api_type( attribute.get()))
         return false;
 
@@ -274,7 +274,7 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
 
     std::string top_level_name = get_top_level_name( name);
     ATTR::Attribute_id attribute_id = ATTR::Attribute::id_lookup( top_level_name.c_str());
-    boost::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
+    std::shared_ptr<ATTR::Attribute> attribute = attribute_set->lookup_shared_ptr( attribute_id);
     if( !attribute)
         return "";
 

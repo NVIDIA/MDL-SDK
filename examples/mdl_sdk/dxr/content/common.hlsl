@@ -104,6 +104,7 @@ enum RadianceHitInfoFlags
     #define FLAG_INSIDE             1
     #define FLAG_DONE               2
     #define FLAG_FIRST_PATH_SEGMENT 4
+    #define FLAG_LAST_PATH_SEGMENT  8
 #endif
 
 void add_flag(inout uint flags, uint to_add) { flags |= to_add; }

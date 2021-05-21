@@ -141,6 +141,21 @@ public:
         m_front_path = front_path == NULL ? "" : front_path;
     }
 
+    /// Get the virtual root package.
+    char const *get_virtual_root_package() const {
+        return m_virtual_root.empty() ? NULL : m_virtual_root.c_str();
+    }
+
+    /// Set the virtual root package.
+    ///
+    /// \param root   the new virtual root
+    ///
+    /// If non-NULL, this virtual root is ignored when file names are constructed from
+    /// module names.
+    void set_virtual_root_package(char const *root) {
+        m_virtual_root = root == NULL ? "" : root;
+    }
+
     /// Set the module replacement path.
     ///
     /// \param module_name  an absolute module name
@@ -190,6 +205,9 @@ private:
 
     /// Front path.
     string m_front_path;
+
+    /// Virtual root package if any.
+    string m_virtual_root;
 
     /// Module replacement: absolute module name
     string m_repl_module_name;

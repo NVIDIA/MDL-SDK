@@ -181,16 +181,6 @@ std::string formatted_string(const char *format, Args ... args)
     return s.substr(0, size - 1);
 }
 
-/// create a formated string.
-/// \param  format  printf-like format string
-/// \param  args    arguments to insert into the format string
-/// \return the formated string
-template <typename... Args>
-std::string formatted_string(const std::string& format, Args ... args)
-{
-    return formatted_string(format.c_str(), std::forward<Args>(args)...);
-}
-
 }
 }
 

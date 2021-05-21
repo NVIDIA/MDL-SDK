@@ -334,15 +334,17 @@ mi::Sint32 Mdl_package_info_impl::shadow_measured_bsdf(
     return -1;
 }
 
-const Mdl_package_info_impl* Mdl_package_info_impl::merge_packages(
+Mdl_package_info_impl* Mdl_package_info_impl::merge_packages(
     const Mdl_package_info_impl* old_node, 
     const Mdl_package_info_impl* new_node)
 {
     Mdl_package_info_impl* merge_node = new Mdl_package_info_impl(*old_node);
     if (new_node->get_search_path_index_count() > 0) {
+        mi::base::Handle<const mi::IString> resolved_path(
+            new_node->get_resolved_path(0));
         merge_node->add_path(new_node->get_search_path(0));
         merge_node->add_path_index(new_node->get_search_path_index(0));
-        merge_node->add_resolved_path(new_node->get_resolved_path(0)->get_c_str());
+        merge_node->add_resolved_path(resolved_path->get_c_str());
         merge_node->add_in_archive(new_node->in_archive(0));
     }
     return merge_node;
@@ -603,14 +605,14 @@ namespace {
         if (input.size() == 0)
             output = input;
 
-        std::string sentance(input);
+        std::string sentence(input);
         size_t offset(0);
         size_t pos(0);
-        while ((pos = sentance.find(old, offset)) != std::string::npos) {
-            sentance.replace(pos, old.length(), with);
+        while ((pos = sentence.find(old, offset)) != std::string::npos) {
+            sentence.replace(pos, old.length(), with);
             offset = pos + with.length();
         }
-        output = sentance;
+        output = sentence;
     }
 
     bool validate_archive(
@@ -811,10 +813,9 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
 
             mi::Sint32 idx = parent->check_package(child_package.get());
             if (idx >= 0) { 
-                const Mdl_package_info_impl* mg(parent->get_package(idx));
-                mg = parent->merge_packages(mg, child_package.get());
-                mi::base::Handle< Mdl_package_info_impl> merge_package(
-                    new Mdl_package_info_impl(*mg));
+                mi::base::Handle<const Mdl_package_info_impl> mg(parent->get_package(idx));
+                mi::base::Handle<Mdl_package_info_impl> merge_package(
+                    parent->merge_packages(mg.get(), child_package.get()));
 
                 // Continue recursion with a merged node
                 discover_filesystem_recursive(
@@ -1201,8 +1202,8 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
                 mi::Sint32 idx = parent->check_package(new_package.get());
                 if (idx >= 0) {
                     // Reuse package
-                    const Mdl_package_info_impl* mg(parent->get_package(idx));
-                    mi::base::Handle<Mdl_package_info_impl> reuse_pkg(new Mdl_package_info_impl(*mg));
+                    mi::base::Handle<const Mdl_package_info_impl> mg(parent->get_package(idx));
+                    mi::base::Handle<Mdl_package_info_impl> reuse_pkg(new Mdl_package_info_impl(*mg.get()));
                     if (!is_known_search_path(search_path, reuse_pkg)) {
                         reuse_pkg->add_path(search_path);
                         reuse_pkg->add_path_index(s_idx);

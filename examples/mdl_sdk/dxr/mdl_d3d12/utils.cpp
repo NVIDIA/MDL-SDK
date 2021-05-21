@@ -28,6 +28,7 @@
 
 #include "utils.h"
 #include <Windows.h>
+#include <wrl.h>
 #include <d3d12.h>
 #include <iostream>
 #include <fstream>
@@ -35,6 +36,7 @@
 #include <thread>
 #include <atomic>
 #include <utils/strings.h>
+#include <chrono>
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -52,7 +54,25 @@ static std::atomic<size_t> s_log_file_active_counter = 0;
 static std::mutex s_log_file_mtx;
 static std::ofstream s_log_file;
 
+
+template<class T>
+using ComPtr = Microsoft::WRL::ComPtr<T>;
+static ID3D12Device* s_dred_device;
+
 // ------------------------------------------------------------------------------------------------
+
+std::string current_time()
+{
+    std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+    char text[12] = { '\0' };
+    auto res = std::strftime(text, sizeof(text), "[%H:%M:%S] ", std::localtime(&now));
+    return text;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+
 
 void print(
     const std::string& prefix,
@@ -60,7 +80,8 @@ void print(
     const std::string& file,
     int line)
 {
-    std::string m = prefix;
+    std::string m = current_time();
+    m.append(prefix);
     m.append(message);
     if (!file.empty())
     {
@@ -141,6 +162,162 @@ std::string to_string(HRESULT error_code)
 
 // ------------------------------------------------------------------------------------------------
 
+std::string to_string(D3D12_AUTO_BREADCRUMB_OP op)
+{
+    switch (op)
+    {
+    case D3D12_AUTO_BREADCRUMB_OP_SETMARKER:
+        return "SETMARKER";
+    case D3D12_AUTO_BREADCRUMB_OP_BEGINEVENT:
+        return "BEGINEVENT";
+    case D3D12_AUTO_BREADCRUMB_OP_ENDEVENT:
+        return "ENDEVENT";
+    case D3D12_AUTO_BREADCRUMB_OP_DRAWINSTANCED:
+        return "DRAWINSTANCED";
+    case D3D12_AUTO_BREADCRUMB_OP_DRAWINDEXEDINSTANCED:
+        return "DRAWINDEXEDINSTANCED";
+    case D3D12_AUTO_BREADCRUMB_OP_EXECUTEINDIRECT:
+        return "EXECUTEINDIRECT";
+    case D3D12_AUTO_BREADCRUMB_OP_DISPATCH:
+        return "DISPATCH";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYBUFFERREGION:
+        return "COPYBUFFERREGION";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYTEXTUREREGION:
+        return "COPYTEXTUREREGION";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYRESOURCE:
+        return "COPYRESOURCE";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYTILES:
+        return "COPYTILES";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOLVESUBRESOURCE:
+        return "RESOLVESUBRESOURCE";
+    case D3D12_AUTO_BREADCRUMB_OP_CLEARRENDERTARGETVIEW:
+        return "CLEARRENDERTARGETVIEW";
+    case D3D12_AUTO_BREADCRUMB_OP_CLEARUNORDEREDACCESSVIEW:
+        return "CLEARUNORDEREDACCESSVIEW";
+    case D3D12_AUTO_BREADCRUMB_OP_CLEARDEPTHSTENCILVIEW:
+        return "CLEARDEPTHSTENCILVIEW";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOURCEBARRIER:
+        return "RESOURCEBARRIER";
+    case D3D12_AUTO_BREADCRUMB_OP_EXECUTEBUNDLE:
+        return "EXECUTEBUNDLE";
+    case D3D12_AUTO_BREADCRUMB_OP_PRESENT:
+        return "PRESENT";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOLVEQUERYDATA:
+        return "RESOLVEQUERYDATA";
+    case D3D12_AUTO_BREADCRUMB_OP_BEGINSUBMISSION:
+        return "BEGINSUBMISSION";
+    case D3D12_AUTO_BREADCRUMB_OP_ENDSUBMISSION:
+        return "ENDSUBMISSION";
+    case D3D12_AUTO_BREADCRUMB_OP_DECODEFRAME:
+        return "DECODEFRAME";
+    case D3D12_AUTO_BREADCRUMB_OP_PROCESSFRAMES:
+        return "PROCESSFRAMES";
+    case D3D12_AUTO_BREADCRUMB_OP_ATOMICCOPYBUFFERUINT:
+        return "ATOMICCOPYBUFFERUINT";
+    case D3D12_AUTO_BREADCRUMB_OP_ATOMICCOPYBUFFERUINT64:
+        return "ATOMICCOPYBUFFERUINT64";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOLVESUBRESOURCEREGION:
+        return "RESOLVESUBRESOURCEREGION";
+    case D3D12_AUTO_BREADCRUMB_OP_WRITEBUFFERIMMEDIATE:
+        return "WRITEBUFFERIMMEDIATE";
+    case D3D12_AUTO_BREADCRUMB_OP_DECODEFRAME1:
+        return "DECODEFRAME1";
+    case D3D12_AUTO_BREADCRUMB_OP_SETPROTECTEDRESOURCESESSION:
+        return "SETPROTECTEDRESOURCESESSION";
+    case D3D12_AUTO_BREADCRUMB_OP_DECODEFRAME2:
+        return "DECODEFRAME2";
+    case D3D12_AUTO_BREADCRUMB_OP_PROCESSFRAMES1:
+        return "PROCESSFRAMES1";
+    case D3D12_AUTO_BREADCRUMB_OP_BUILDRAYTRACINGACCELERATIONSTRUCTURE:
+        return "BUILDRAYTRACINGACCELERATIONSTRUCTURE";
+    case D3D12_AUTO_BREADCRUMB_OP_EMITRAYTRACINGACCELERATIONSTRUCTUREPOSTBUILDINFO:
+        return "EMITRAYTRACINGACCELERATIONSTRUCTUREPOSTBUILDINFO";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYRAYTRACINGACCELERATIONSTRUCTURE:
+        return "COPYRAYTRACINGACCELERATIONSTRUCTURE";
+    case D3D12_AUTO_BREADCRUMB_OP_DISPATCHRAYS:
+        return "DISPATCHRAYS";
+    case D3D12_AUTO_BREADCRUMB_OP_INITIALIZEMETACOMMAND:
+        return "INITIALIZEMETACOMMAND";
+    case D3D12_AUTO_BREADCRUMB_OP_EXECUTEMETACOMMAND:
+        return "EXECUTEMETACOMMAND";
+    case D3D12_AUTO_BREADCRUMB_OP_ESTIMATEMOTION:
+        return "ESTIMATEMOTION";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOLVEMOTIONVECTORHEAP:
+        return "RESOLVEMOTIONVECTORHEAP";
+    case D3D12_AUTO_BREADCRUMB_OP_SETPIPELINESTATE1:
+        return "SETPIPELINESTATE1";
+
+    // available from 10.0.18362.0
+    #if WDK_NTDDI_VERSION > NTDDI_WIN10_RS5
+        case D3D12_AUTO_BREADCRUMB_OP_INITIALIZEEXTENSIONCOMMAND:
+            return "INITIALIZEEXTENSIONCOMMAND";
+        case D3D12_AUTO_BREADCRUMB_OP_EXECUTEEXTENSIONCOMMAND:
+            return "EXECUTEEXTENSIONCOMMAND";
+    #endif
+
+    default:
+        return "";
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+
+std::string evaluate_dred()
+{
+    if (!s_dred_device)
+        return "";
+
+    // see https://docs.microsoft.com/en-us/windows/win32/direct3d12/use-dred
+    // for more information
+
+    std::string output = "";
+    // available from 10.0.18362.0
+    #if WDK_NTDDI_VERSION > NTDDI_WIN10_RS5
+
+        ComPtr<ID3D12DeviceRemovedExtendedData> pDred;
+        SUCCEEDED(s_dred_device->QueryInterface(IID_PPV_ARGS(&pDred)));
+        D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;
+        D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
+        SUCCEEDED(pDred->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput));
+        SUCCEEDED(pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput));
+
+        size_t max_nodes_to_print = 128; // arbitrary
+        size_t current_node_i = 0;
+        const D3D12_AUTO_BREADCRUMB_NODE* current =
+            DredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
+
+        while (current && current_node_i < max_nodes_to_print)
+        {
+            UINT32 bc_count = current->BreadcrumbCount;
+            UINT32 last_value = *current->pLastBreadcrumbValue;
+            bool crashed = bc_count != last_value;
+
+            output += mi::examples::strings::format("\n[%03d] Node has %d breadcrumbs.",
+                current_node_i, bc_count);
+
+            // ring buffer of size 65536, rest is lost
+            for (UINT32 b = 0; b < (bc_count % 65536); ++b)
+            {
+                output += mi::examples::strings::format("\n      %-5d %-55s %s",
+                    b,
+                    to_string(current->pCommandHistory[b]).c_str(),
+                    crashed ? (b < last_value ? "COMPLETED" : "NOT COMPLETE (probably)") : "");
+            }
+            current = current->pNext;
+            current_node_i++;
+        }
+
+        // printing this once is enough
+        s_dred_device = nullptr;
+
+    #endif
+
+    // TODO evaluate DredPageFaultOutput
+    return output;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 std::string print_nested_exceotion(const std::exception& e)
 {
     std::string message = e.what();
@@ -215,6 +392,11 @@ bool log_on_failure(
         readable_error += " (" + std::to_string(error_code) + ")";
     else
         readable_error = std::to_string(error_code);
+
+    if (error_code == DXGI_ERROR_DEVICE_REMOVED)
+    {
+        readable_error += "\n" + evaluate_dred() + "\n";
+    }
 
     print("[MDL_D3D12] [FAILURE] ",
             message + "\n                     return code: " + readable_error,
@@ -292,20 +474,26 @@ void set_debug_name(ID3D12Object* obj, const std::string& name)
 }
 
 // ------------------------------------------------------------------------------------------------
+
+void set_dred_device(ID3D12Device* device)
+{
+    s_dred_device = device;
+}
+
 // ------------------------------------------------------------------------------------------------
 
 Timing::Timing(std::string operation)
     : m_operation(operation)
 {
-    m_start = std::chrono::high_resolution_clock::now();
+    m_start = std::chrono::steady_clock::now();
 }
 
 // ------------------------------------------------------------------------------------------------
 
 Timing::~Timing()
 {
-    auto stop = std::chrono::high_resolution_clock::now();
-    double elapsed_seconds = (stop - m_start).count() * 1e-9;
+    auto stop = std::chrono::steady_clock::now();
+    double elapsed_seconds = std::chrono::duration<double>(stop - m_start).count();
     log_info("Finished '" + m_operation + "' after " +
                 std::to_string(elapsed_seconds) + " seconds.");
 }
@@ -317,15 +505,15 @@ Profiling::Measurement::Measurement(Profiling* p, std::string operation)
     : m_profiling(p)
     , m_operation(operation)
 {
-    m_start = std::chrono::high_resolution_clock::now();
+    m_start = std::chrono::steady_clock::now();
 }
 
 // ------------------------------------------------------------------------------------------------
 
 Profiling::Measurement::~Measurement()
 {
-    auto stop = std::chrono::high_resolution_clock::now();
-    double elapsed_seconds = (stop - m_start).count() * 1e-9;
+    auto stop = std::chrono::steady_clock::now();
+    double elapsed_seconds = std::chrono::duration<double>(stop - m_start).count();
     m_profiling->on_measured(*this, elapsed_seconds);
 }
 

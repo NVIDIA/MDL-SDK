@@ -56,6 +56,9 @@ is running.
   <tr><td>#mi::neuraylib::IMdl_impexp_api          </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IMdl_i18n_configuration  </td><td>no </td></tr>
   <tr><td>#mi::neuraylib::IMdle_api                </td><td>no </td></tr>
+<!-- Technically available, but the header is not included.
+  <tr><td>#mi::neuraylib::IPlugin_api              </td><td>yes</td></tr>
+-->
   <tr><td>#mi::neuraylib::IPlugin_configuration    </td><td>yes</td></tr>
   <tr><td>#mi::neuraylib::IVersion                 </td><td>yes</td></tr>
 </table>

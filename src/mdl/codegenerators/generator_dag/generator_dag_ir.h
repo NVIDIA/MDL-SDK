@@ -351,12 +351,15 @@ private:
     /// \param tex_type  the type of the texture
     /// \param url       the resource url
     /// \param gamma     the non-const gamma expression
+    /// \param selector  the channel selector
     DAG_node const *do_avoid_non_const_gamma(
         IType_texture const *tex_type,
         DAG_constant const  *url,
-        DAG_node const      *gamma);
+        DAG_node const      *gamma,
+        DAG_constant const  *selector);
 
     /// Create an operator call.
+    ///
     /// \param name            The name of the called operator.
     /// \param op              The operator.
     /// \param call_args       The arguments of the called operator.
@@ -366,6 +369,12 @@ private:
         char const                    *name,
         IExpression::Operator         op,
         DAG_call::Call_argument const call_args[],
+        IType const                   *ret_type);
+
+    /// Create a call to df::diffuse_reflection_bsdf() with default values.
+    ///
+    /// \param ret_type  the bsdf type
+    DAG_node const *create_diffuse_reflection_bsdf(
         IType const                   *ret_type);
 
     /// Converts a constant into a elemental constructor.

@@ -705,6 +705,7 @@ void Function_hasher::hash(IType const *tp)
     case IType::TK_VDF:
     case IType::TK_COLOR:
     case IType::TK_BSDF_MEASUREMENT:
+    case IType::TK_AUTO:
         // for all these, it is enough to hash the kind
         hash(kind);
         return;
@@ -816,7 +817,6 @@ void Function_hasher::hash(IType const *tp)
         }
         return;
 
-    case IType::TK_INCOMPLETE:
     case IType::TK_ERROR:
         MDL_ASSERT(!"unexpected type kind");
         hash(kind);

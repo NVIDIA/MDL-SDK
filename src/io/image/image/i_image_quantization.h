@@ -35,7 +35,7 @@
 #include <climits>
 #include <limits>
 
-#ifndef __CUDACC__
+#ifndef __CUDA_ARCH__
 #include <base/system/main/platform.h>
 #include <base/system/main/i_assert.h>
 #include <base/system/stlext/i_stlext_binary_cast.h>
@@ -54,7 +54,7 @@ namespace IMAGE {
 /*template <unsigned char bits> // number of bits to map to
 MI_HOST_DEVICE_INLINE float dequantize_unsigned(const unsigned int i)
 {
-#ifndef __CUDACC__
+#ifndef __CUDA_ARCH__
     using std::min;
 #endif
     enum { N = (1u << bits) - 1 };
@@ -64,7 +64,7 @@ MI_HOST_DEVICE_INLINE float dequantize_unsigned(const unsigned int i)
 template <unsigned char bits> // number of bits to map to
 MI_HOST_DEVICE_INLINE unsigned quantize_unsigned(const float x)
 {
-#ifndef __CUDACC__
+#ifndef __CUDA_ARCH__
     MI_ASSERT(!std::isnan(x));
     //MI_ASSERT(std::isfinite(x)); // is handled in the second code variant below
     MI_ASSERT(x >= 0.f);
@@ -73,7 +73,7 @@ MI_HOST_DEVICE_INLINE unsigned quantize_unsigned(const float x)
 #endif
     enum { N = (1u << bits) - 1, Np1 = (1u << bits) };
     //return min((unsigned)(x * (float)Np1),(unsigned)N); // does not handle large values, as these trigger undefined behavior (on x86: 0)
-#ifdef __CUDACC__
+#ifdef __CUDA_ARCH__
     return (unsigned)(fminf(x, uint_as_float(0x3f800000u-1)) * (float)Np1);
 #else
     return (unsigned)(min(x, MI::STLEXT::binary_cast<float>(0x3f800000u-1)) * (float)Np1);
@@ -84,7 +84,7 @@ MI_HOST_DEVICE_INLINE unsigned quantize_unsigned(const float x)
 template <typename T>
 MI_HOST_DEVICE_INLINE T quantize_unsigned(const float x)
 {
-#ifndef __CUDACC__
+#ifndef __CUDA_ARCH__
     static_assert(std::numeric_limits<T>::is_integer && !std::numeric_limits<T>::is_signed,"can only quantize to unsigned integer types");
 #endif
     return T(quantize_unsigned<sizeof(T)*CHAR_BIT>(x));
@@ -94,7 +94,7 @@ MI_HOST_DEVICE_INLINE T quantize_unsigned(const float x)
 template <unsigned char bits> // number of bits to map to, including negative numbers, so mapping just to unsigned: bits+1 (0..255 -> bits = 9)
 MI_HOST_DEVICE_INLINE int quantize_signed(const float x)
 {
-#ifndef __CUDACC__
+#ifndef __CUDA_ARCH__
     MI_ASSERT(!std::isnan(x));
     MI_ASSERT(std::isfinite(x));
     using std::max;
@@ -110,7 +110,7 @@ MI_HOST_DEVICE_INLINE int quantize_signed(const float x)
 template <typename T>
 MI_HOST_DEVICE_INLINE T quantize_signed(const float x)
 {
-#ifndef __CUDACC__
+#ifndef __CUDA_ARCH__
     static_assert(std::numeric_limits<T>::is_integer && std::numeric_limits<T>::is_signed,"can only quantize to signed integer types");
 #endif
     return T(quantize_signed<sizeof(T)*CHAR_BIT>(x));

@@ -145,7 +145,7 @@ class IExpression_direct_call : public
 public:
     static const Kind s_kind = EK_DIRECT_CALL;
 
-    virtual DB::Tag get_definition(DB::Transaction *transaction) const = 0;
+    virtual DB::Tag get_definition( DB::Transaction* transaction) const = 0;
 
     virtual DB::Tag get_module() const = 0;
 
@@ -229,21 +229,27 @@ public:
 
     virtual mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const = 0;
 
+    virtual bool is_exported() const = 0;
+
+    virtual void get_mdl_version(
+        mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const = 0;
+
     virtual mi::Size get_parameter_count() const = 0;
 
-    virtual const char* get_parameter_name(mi::Size index) const = 0;
+    virtual const char* get_parameter_name( mi::Size index) const = 0;
 
-    virtual mi::Size get_parameter_index(const char* name) const = 0;
+    virtual mi::Size get_parameter_index( const char* name) const = 0;
 
     virtual const IType_list* get_parameter_types() const = 0;
 
     virtual const IExpression_list* get_defaults() const = 0;
 
-    virtual bool is_exported() const = 0;
-
     virtual const IAnnotation_block* get_annotations() const = 0;
 
-    virtual const IAnnotation* create_annotation(const IExpression_list* arguments) const = 0;
+    virtual const IAnnotation* create_annotation( const IExpression_list* arguments) const = 0;
+
+    virtual void get_mdl_version(
+        mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
 
@@ -260,7 +266,7 @@ public:
 
     virtual const IExpression_list* get_arguments() const = 0;
 
-    virtual const IAnnotation_definition* get_definition(DB::Transaction* transaction) const = 0;
+    virtual const IAnnotation_definition* get_definition( DB::Transaction* transaction) const = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
 };
@@ -311,11 +317,11 @@ class IAnnotation_definition_list : public
     mi::base::Interface_declare<0xa43330cc,0xb1c4,0x41dd,0x9f,0x1b,0xed,0xcc,0x9,0x5b,0x51,0x1>
 {
 public:
-    virtual mi::Sint32 add_definition(const IAnnotation_definition* anno_def) = 0;
+    virtual mi::Sint32 add_definition( const IAnnotation_definition* anno_def) = 0;
 
-    virtual const IAnnotation_definition* get_definition(mi::Size index) const = 0;
+    virtual const IAnnotation_definition* get_definition( mi::Size index) const = 0;
 
-    virtual const IAnnotation_definition* get_definition(const char* name) const = 0;
+    virtual const IAnnotation_definition* get_definition( const char* name) const = 0;
 
     virtual mi::Size get_size() const = 0;
 
@@ -358,6 +364,8 @@ public:
         const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics sema,
         bool is_exported,
+        mi::mdl::IMDL::MDL_version since_version,
+        mi::mdl::IMDL::MDL_version removed_version,
         const IType_list* parameter_types,
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations) const = 0;

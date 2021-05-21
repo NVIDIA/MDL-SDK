@@ -129,7 +129,7 @@ public:
         DS_NATIVE_ANNOTATION,                    ///< This is the internal native() annotation.
         DS_EXPERIMENTAL_ANNOTATION,              ///< This is the internal experimental()
                                                  ///  annotation.
-        DS_LITERAL_PARAM_ANNOTATION,             ///< This is the internal literal_param()
+        DS_LITERAL_PARAM_MASK_ANNOTATION,        ///< This is the internal literal_param_mask()
                                                  ///  annotation.
 
         DS_UNUSED_ANNOTATION,                    ///< This is the unused() annotation.
@@ -223,6 +223,11 @@ public:
         DS_INTRINSIC_MATH_TRANSPOSE,             ///< The math::transpose() intrinsic function.
         DS_INTRINSIC_MATH_BLACKBODY,             ///< The math::blackbody() intrinsic function.
         DS_INTRINSIC_MATH_EMISSION_COLOR,        ///< The math::emission_color() intrinsic function.
+        DS_INTRINSIC_MATH_COSH,                  ///< The math::cosh() intrinsic function.
+        DS_INTRINSIC_MATH_SINH,                  ///< The math::sinh() intrinsic function.
+        DS_INTRINSIC_MATH_TANH,                  ///< The math::tanh() intrinsic function.
+        DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT,     ///< The math::float_bits_to_int() function.
+        DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT,     ///< The math::int_bits_to_float() function.
         DS_INTRINSIC_MATH_DX,                    ///< The math::DX() intrinsic function.
         DS_INTRINSIC_MATH_DY,                    ///< The math::DY() intrinsic function.
         DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
@@ -231,7 +236,8 @@ public:
         DS_INTRINSIC_STATE_FIRST = 0x0400,
 
         /// The state::position() function.
-        DS_INTRINSIC_STATE_POSITION = DS_INTRINSIC_STATE_FIRST,
+        DS_INTRINSIC_STATE_POSITION              ///< The state::position() function.
+            = DS_INTRINSIC_STATE_FIRST,
         DS_INTRINSIC_STATE_NORMAL,               ///< The state::normal() function.
         DS_INTRINSIC_STATE_GEOMETRY_NORMAL,      ///< The state::geometry_normal() function.
         DS_INTRINSIC_STATE_MOTION,               ///< The state::motion() function.
@@ -262,21 +268,28 @@ public:
         DS_INTRINSIC_TEX_FIRST = 0x0500,
 
         /// The tex::width() function.
-        DS_INTRINSIC_TEX_WIDTH = DS_INTRINSIC_TEX_FIRST,
-        DS_INTRINSIC_TEX_HEIGHT,          ///< The tex::height() function.
-        DS_INTRINSIC_TEX_DEPTH,           ///< The tex::depth() function.
-        DS_INTRINSIC_TEX_LOOKUP_FLOAT,    ///< The tex::lookup_float() function.
-        DS_INTRINSIC_TEX_LOOKUP_FLOAT2,   ///< The tex::lookup_float2() function.
-        DS_INTRINSIC_TEX_LOOKUP_FLOAT3,   ///< The tex::lookup_float3() function.
-        DS_INTRINSIC_TEX_LOOKUP_FLOAT4,   ///< The tex::lookup_float4() function.
-        DS_INTRINSIC_TEX_LOOKUP_COLOR,    ///< The tex::lookup_color() function.
-        DS_INTRINSIC_TEX_TEXEL_FLOAT,     ///< The tex::texel_float() function.
-        DS_INTRINSIC_TEX_TEXEL_FLOAT2,    ///< The tex::texel_float2() function.
-        DS_INTRINSIC_TEX_TEXEL_FLOAT3,    ///< The tex::texel_float3() function.
-        DS_INTRINSIC_TEX_TEXEL_FLOAT4,    ///< The tex::texel_float4() function.
-        DS_INTRINSIC_TEX_TEXEL_COLOR,     ///< The tex::texel_color() function.
-        DS_INTRINSIC_TEX_TEXTURE_ISVALID, ///< The tex::texture_isvalid() function.
-        DS_INTRINSIC_TEX_LAST = DS_INTRINSIC_TEX_TEXTURE_ISVALID,
+        DS_INTRINSIC_TEX_WIDTH                 ///< The tex::width() function.
+            = DS_INTRINSIC_TEX_FIRST,
+        DS_INTRINSIC_TEX_HEIGHT,               ///< The tex::height() function.
+        DS_INTRINSIC_TEX_DEPTH,                ///< The tex::depth() function.
+        DS_INTRINSIC_TEX_LOOKUP_FLOAT,         ///< The tex::lookup_float() function.
+        DS_INTRINSIC_TEX_LOOKUP_FLOAT2,        ///< The tex::lookup_float2() function.
+        DS_INTRINSIC_TEX_LOOKUP_FLOAT3,        ///< The tex::lookup_float3() function.
+        DS_INTRINSIC_TEX_LOOKUP_FLOAT4,        ///< The tex::lookup_float4() function.
+        DS_INTRINSIC_TEX_LOOKUP_COLOR,         ///< The tex::lookup_color() function.
+        DS_INTRINSIC_TEX_TEXEL_FLOAT,          ///< The tex::texel_float() function.
+        DS_INTRINSIC_TEX_TEXEL_FLOAT2,         ///< The tex::texel_float2() function.
+        DS_INTRINSIC_TEX_TEXEL_FLOAT3,         ///< The tex::texel_float3() function.
+        DS_INTRINSIC_TEX_TEXEL_FLOAT4,         ///< The tex::texel_float4() function.
+        DS_INTRINSIC_TEX_TEXEL_COLOR,          ///< The tex::texel_color() function.
+        DS_INTRINSIC_TEX_TEXTURE_ISVALID,      ///< The tex::texture_isvalid() function.
+        DS_INTRINSIC_TEX_WIDTH_OFFSET,         ///< The tex::width_offset() function.
+        DS_INTRINSIC_TEX_HEIGHT_OFFSET,        ///< The tex::height_offset() function.
+        DS_INTRINSIC_TEX_DEPTH_OFFSET,         ///< The tex::depth_offset() function.
+        DS_INTRINSIC_TEX_FIRST_FRAME,          ///< The tex::first_frame() function.
+        DS_INTRINSIC_TEX_LAST_FRAME,           ///< The tex::last_frame() function.
+        DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE, ///< The tex::grid_to_object_space() function.
+        DS_INTRINSIC_TEX_LAST = DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE,
 
         // df module intrinsics
         DS_INTRINSIC_DF_FIRST = 0x0600,
@@ -320,12 +333,15 @@ public:
         DS_INTRINSIC_DF_MEASURED_FACTOR,
         DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
         DS_INTRINSIC_DF_SHEEN_BSDF,
-        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_SHEEN_BSDF,
+        DS_INTRINSIC_DF_UNBOUNDED_MIX,
+        DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
+        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
 
         // scene module intrinsics
         DS_INTRINSIC_SCENE_FIRST = 0x0800,
 
-        DS_INTRINSIC_SCENE_DATA_ISVALID = DS_INTRINSIC_SCENE_FIRST,
+        DS_INTRINSIC_SCENE_DATA_ISVALID
+            = DS_INTRINSIC_SCENE_FIRST,
         DS_INTRINSIC_SCENE_DATA_LOOKUP_INT,
         DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2,
         DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3,
@@ -348,16 +364,19 @@ public:
 
         // debug module
         DS_INTRINSIC_DEBUG_FIRST = 0x0900,
-        DS_INTRINSIC_DEBUG_BREAKPOINT = DS_INTRINSIC_DEBUG_FIRST,
-        DS_INTRINSIC_DEBUG_ASSERT,
-        DS_INTRINSIC_DEBUG_PRINT,
+
+        DS_INTRINSIC_DEBUG_BREAKPOINT       ///< The debug::breakpoint() function.
+            = DS_INTRINSIC_DEBUG_FIRST,
+        DS_INTRINSIC_DEBUG_ASSERT,          ///< The debug::assert() function.
+        DS_INTRINSIC_DEBUG_PRINT,           ///< The debug::print() function.
         DS_INTRINSIC_DEBUG_LAST = DS_INTRINSIC_DEBUG_PRINT,
 
         // DAG backend intrinsic functions
         DS_INTRINSIC_DAG_FIRST = 0x0A00,
 
         /// This is a structure field access function.
-        DS_INTRINSIC_DAG_FIELD_ACCESS = DS_INTRINSIC_DAG_FIRST,
+        DS_INTRINSIC_DAG_FIELD_ACCESS       ///< This is a field access (aka select).
+            = DS_INTRINSIC_DAG_FIRST,
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR, ///< This is an array constructor.
         DS_INTRINSIC_DAG_ARRAY_LENGTH,      ///< This is the array length operator.
         DS_INTRINSIC_DAG_SET_OBJECT_ID,     ///< Specifies the used object id.
@@ -368,8 +387,23 @@ public:
                                             ///< value, setting dx and dy to zero.
         DS_INTRINSIC_DAG_LAST = DS_INTRINSIC_DAG_MAKE_DERIV,
 
+        // nvidia::baking annotations
+        DS_BAKING_FIRST = 0x0B00,
+
+        DS_BAKING_TMM_ANNOTATION =               ///< This is the baking::target_material_model()
+                                                 ///  annotation.
+            DS_BAKING_FIRST,
+        DS_BAKING_BAKE_TO_TEXTURE_ANNOTATION,    ///< This is the baking::bake_to_texture()
+                                                 ///  annotation.
+
+        DS_BAKING_LAST = DS_BAKING_BAKE_TO_TEXTURE_ANNOTATION,
+
         // JIT Backend intrinsic functions
-        DS_INTRINSIC_JIT_LOOKUP = 0x8000,   ///< Texture result lookup.
+        DS_INTRINSIC_JIT_FIRST = 0x8000,
+
+        DS_INTRINSIC_JIT_LOOKUP             ///< Texture result lookup.
+            = DS_INTRINSIC_JIT_FIRST,
+        DS_INTRINSIC_JIT_LAST = DS_INTRINSIC_JIT_LOOKUP,
     };
 
     /// Returns the kind of this definition.
@@ -380,6 +414,11 @@ public:
 
     /// Get the type of the definition.
     virtual IType const *get_type() const = 0;
+
+    /// Get the declared type of the (function) definition.
+    ///
+    /// \note This is only different from get_type() for functions declared auto return.
+    virtual IType const *get_decl_type() const = 0;
 
     /// Get the declaration of the definition if any.
     ///
@@ -428,6 +467,11 @@ public:
     /// For example, if bit 0 is set, a backend supporting derivatives may provide derivative
     /// values as the first parameter of the function.
     virtual unsigned get_parameter_derivable_mask() const = 0;
+
+    /// Return the mask specifying which parameters of a function must be literals.
+    ///
+    /// For example, if bit 0 is set, the first parameter of the function must be a literal value.
+    virtual unsigned get_literal_parameter_mask() const = 0;
 };
 
 /// Check if the given semantic describes a constructor.
@@ -490,6 +534,12 @@ inline bool semantic_is_operator(IDefinition::Semantics sema)
 inline bool semantic_is_annotation(IDefinition::Semantics sema)
 {
     return IDefinition::DS_ANNOTATION_FIRST <= sema && sema <= IDefinition::DS_ANNOTATION_LAST;
+}
+
+/// Checks if a definition semantics is a nvidia::baking annotation.
+inline bool semantic_is_baking_annotation(IDefinition::Semantics sema)
+{
+    return IDefinition::DS_BAKING_FIRST <= sema && sema <= IDefinition::DS_BAKING_LAST;
 }
 
 /// Converts a definition semantics to an expression operator.
@@ -612,6 +662,9 @@ inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
     case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM:
     case IDefinition::DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID:
     case IDefinition::DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID:
+
+    case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
         return false;
 
     default:

@@ -104,6 +104,7 @@ struct Lightprofile
 {
     explicit Lightprofile()
         : angular_resolution(make_uint2(0, 0))
+        , inv_angular_resolution(make_float2(0.0f, 0.0f))
         , theta_phi_start(make_float2(0.0f, 0.0f))
         , theta_phi_delta(make_float2(0.0f, 0.0f))
         , theta_phi_inv_delta(make_float2(0.0f, 0.0f))
@@ -114,6 +115,7 @@ struct Lightprofile
     }
 
     uint2           angular_resolution;     // angular resolution of the grid
+    float2          inv_angular_resolution; // inverse angular resolution of the grid
     float2          theta_phi_start;        // start of the grid
     float2          theta_phi_delta;        // angular step size
     float2          theta_phi_inv_delta;    // inverse step size
@@ -595,16 +597,24 @@ extern "C" __device__ void tex_resolution_2d(
 }
 
 // Implementation of resolution_3d function needed by generated code.
-// Note: 3d textures are not supported
 extern "C" __device__ void tex_resolution_3d(
     int                         result[3],
     Texture_handler_base const *self_base,
     unsigned                    texture_idx)
 {
-    // invalid texture returns zero
-    result[0] = 0;
-    result[1] = 0;
-    result[2] = 0;
+    Texture_handler const* self = static_cast<Texture_handler const*>(self_base);
+
+    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
+        // invalid texture returns zero
+        result[0] = 0;
+        result[1] = 0;
+        result[2] = 0;
+    }
+
+    Texture const& tex = self->textures[texture_idx - 1];
+    result[0] = tex.size.x;
+    result[1] = tex.size.y;
+    result[2] = tex.size.z;
 }
 
 // Implementation of texture_isvalid().
@@ -694,8 +704,8 @@ extern "C" __device__ float df_light_profile_evaluate(
     const Lightprofile& lp = self->lightprofiles[light_profile_idx - 1];
 
     // map theta to 0..1 range
-    const float u = (theta_phi[0] - lp.theta_phi_start.x) *
-        lp.theta_phi_inv_delta.x / float(lp.angular_resolution.x - 1);
+    float u = (theta_phi[0] - lp.theta_phi_start.x) *
+        lp.theta_phi_inv_delta.x * lp.inv_angular_resolution.x;
 
     // converting input phi from -pi..pi to 0..2pi
     float phi = (theta_phi[1] > 0.0f) ? theta_phi[1] : (float(2.0 * M_PI) + theta_phi[1]);
@@ -706,7 +716,12 @@ extern "C" __device__ float df_light_profile_evaluate(
 
     // (phi < 0.0f) is no problem, this is handle by the (black) border
     // since it implies lp.theta_phi_start.y > 0 (and we really have "no data" below that)
-    const float v = phi * lp.theta_phi_inv_delta.y / float(lp.angular_resolution.y - 1);
+    float v = phi * lp.theta_phi_inv_delta.y * lp.inv_angular_resolution.y;
+
+    // half pixel offset
+    // see https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#linear-filtering
+    u += 0.5f * lp.inv_angular_resolution.x;
+    v += 0.5f * lp.inv_angular_resolution.y;
 
     // wrap_mode: border black would be an alternative (but it produces artifacts at low res)
     if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f) return 0.0f;

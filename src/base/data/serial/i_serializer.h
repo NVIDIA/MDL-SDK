@@ -107,6 +107,7 @@
 
 #include <mi/math/vector.h>
 #include <mi/math/matrix.h>
+#include <mi/math/bbox.h>
 #include <base/lib/mem/i_mem_allocatable.h>
 #include <base/lib/cont/i_cont_array.h>
 #include <cstddef>
@@ -120,9 +121,11 @@
 #include <string>
 #include <vector>
 #include <utility>
+#include <type_traits>
 
 #include <mi/base/interface_implement.h>
-#include <mi/base/iinterface.h>
+#include <mi/neuraylib/iserializer.h>
+#include <mi/neuraylib/ideserializer.h>
 
 namespace mi {
 namespace math {
@@ -168,7 +171,7 @@ public:
     /// Override to return true if the data is intended to be sent to a remote cluster. Some
     /// db elements might need to serialize differently when the deserialization will take place
     /// in a remote cluster where for instance the file system will be different.
-    virtual bool is_remote() = 0;
+    virtual bool is_remote() const = 0;
 
     /// Directly serialize the given Serializable. This will write the class id into the
     /// serialization stream, automatically. On the deserialization side the class id is taken to
@@ -214,9 +217,6 @@ public:
     /// Write out back more complex types (typically implemented by using the previous types).
     virtual void write(const DB::Tag& value) = 0;
     virtual void write(const char* value) = 0;
-    virtual void write(const std::string& value) = 0;
-    virtual void write(const mi::base::Uuid& value) = 0;
-    virtual void write(const mi::math::Color& value) = 0;
     virtual void write(const CONT::Bitvector& value) = 0;
     virtual void write(const CONT::Dictionary& value) = 0;
 
@@ -298,7 +298,7 @@ public:
     /// Override to return true if the data is received from a remote cluster. Some
     /// db elements might need to deserialize differently when the serialization took place
     /// in a remote cluster where for instance the file system will be different.
-    virtual bool is_remote() = 0;
+    virtual bool is_remote() const = 0;
 
     /// Directly deserialize an object. This will assume that the next data to be read is a class
     /// id. The class id will be used to construct the object using a factory function registered
@@ -343,9 +343,6 @@ public:
     /// Read back more complex types (typically implemented by using the previous types).
     virtual void read(DB::Tag* value_pointer) = 0;
     virtual void read(char** value_pointer) = 0; ///< Use release() to free the memory.
-    virtual void read(std::string* value_pointer) = 0;
-    virtual void read( mi::base::Uuid* value_pointer) = 0;
-    virtual void read(mi::math::Color* value_pointer) = 0;
     virtual void read(CONT::Bitvector* value_type) = 0;
     virtual void read(CONT::Dictionary* value_pointer) = 0;
 
@@ -394,61 +391,103 @@ public:
     virtual void set_error_handler(IDeserializer_error_handler<>* handler) = 0;
 };
 
+namespace {
+
+template <typename From, typename T, typename... Ts>
+struct is_convertible {
+    static const auto value = std::is_convertible<From&,T&>::value
+                           || is_convertible<From,Ts...>::value;
+};
+
+template <typename From, typename T>
+struct is_convertible<From,T> { static const auto value = std::is_convertible<From&,T&>::value; };
+
+template <typename T>
+struct enable_if_serializer {
+    using type = typename std::enable_if_t<is_convertible<T,
+                Serializer,
+                mi::neuraylib::ISerializer
+            >::value>;
+};
+
+template <typename T>
+struct enable_if_deserializer {
+    using type = typename std::enable_if_t<is_convertible<T,
+                Deserializer,
+                mi::neuraylib::IDeserializer
+            >::value>;
+};
+
+}
+
+template <typename T> using enable_if_serializer_t = typename enable_if_serializer<T>::type;
+template <typename T> using enable_if_deserializer_t = typename enable_if_deserializer<T>::type;
+
 /// Write out various value types
-void write(Serializer* serial, bool value);
-void write(Serializer* serial, Uint8 value);
-void write(Serializer* serial, Uint16 value);
-void write(Serializer* serial, Uint32 value);
-void write(Serializer* serial, Uint64 value);
-void write(Serializer* serial, Sint8 value);
-void write(Serializer* serial, Sint16 value);
-void write(Serializer* serial, Sint32 value);
-void write(Serializer* serial, Sint64 value);
-void write(Serializer* serial, float value);
-void write(Serializer* serial, double value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, bool value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Uint8 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Uint16 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Uint32 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Uint64 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Sint8 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Sint16 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Sint32 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Sint64 value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, float value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, double value);
 
 /// These functions offer a default implementation build atop the above functions.
 void write(Serializer* serial, const DB::Tag& value);
 template <class T> void write(Serializer* serial, const DB::Typed_tag<T>& value);
 void write(Serializer* serial, const DB::Tag_version& value);
-template <typename T, Size R, Size C> void write(Serializer* serial,const mi::math::Matrix<T,R,C>&);
-void write(Serializer* serial, const char* value);
-void write(Serializer* serial, const std::string& value);
-void write(Serializer* serial, const mi::base::Uuid& value);
-void write(Serializer* serial, const mi::math::Color& value);
-template <typename T, Size DIM> void write(Serializer* serial,const mi::math::Vector<T,DIM>& value);
+template <typename T, Size R, Size C, typename S, typename = enable_if_serializer_t<S>>
+void write(S*, const mi::math::Matrix_struct<T,R,C>&);
+void write(Serializer*, const char* value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S*, const std::string& value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S*, const mi::base::Uuid& value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S*, const mi::math::Color& value);
+template <typename T, Size DIM, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serial,const mi::math::Vector_struct<T,DIM>& value);
+template <typename T, Size DIM, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serial,const mi::math::Bbox_struct<T,DIM>& value);
+template <typename T, Size DIM, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serial,const mi::math::Bbox<T,DIM>& value);
 void write(Serializer* serial, const CONT::Bitvector& value);
 void write(Serializer* serial, const CONT::Dictionary& value);
 void write(Serializer* serial, const DB::Transaction_id& value);
 void write(Serializer* serial, const Serializable& object);
+void write(mi::neuraylib::ISerializer* serial, const mi::neuraylib::ISerializable& object);
 
 /// Read back various value types
-void read(Deserializer* deser, bool* value_pointer);
-void read(Deserializer* deser, Uint8* value_pointer);
-void read(Deserializer* deser, Uint16* value_pointer);
-void read(Deserializer* deser, Uint32* value_pointer);
-void read(Deserializer* deser, Uint64* value_pointer);
-void read(Deserializer* deser, Sint8* value_pointer);
-void read(Deserializer* deser, Sint16* value_pointer);
-void read(Deserializer* deser, Sint32* value_pointer);
-void read(Deserializer* deser, Sint64* value_pointer);
-void read(Deserializer* deser, float* value_pointer);
-void read(Deserializer* deser, double* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, bool* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Uint8* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Uint16* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Uint32* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Uint64* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Sint8* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Sint16* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Sint32* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Sint64* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, float* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, double* value_pointer);
 
 /// These functions offer a default implementation build atop the above functions.
 void read(Deserializer* deser, DB::Tag* value_pointer);
 template <class T> void read(Deserializer* deser, DB::Typed_tag<T>* value_pointer);
 void read(Deserializer* deser, DB::Tag_version* value_pointer);
-template <typename T, Size R, Size C> void read(Deserializer* deser, mi::math::Matrix<T,R,C>*);
+template <typename T, Size R, Size C, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Matrix_struct<T,R,C>*);
 void read(Deserializer* deser, char** value_pointer);
-void read(Deserializer* deser, std::string* value_pointer);
-void read(Deserializer* deser, const mi::base::Uuid* value_pointer);
-void read(Deserializer* deser, mi::math::Color* value_pointer);
-template <typename T, Size DIM> void read(Deserializer* deser, mi::math::Vector<T,DIM>* value_type);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, std::string* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, mi::base::Uuid*);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, mi::math::Color* value_pointer);
+template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Vector_struct<T,DIM>* value_type);
+template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Bbox_struct<T,DIM>* value_type);
+template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Bbox<T,DIM>* value_type);
 void read(Deserializer* deser, CONT::Bitvector* value_type);
 void read(Deserializer* deser, CONT::Dictionary* value_pointer);
 void read(Deserializer* deser, DB::Transaction_id* value_pointer);
 void read(Deserializer* deser, Serializable* object);
+void read(mi::neuraylib::IDeserializer* deser, mi::neuraylib::ISerializable* object);
 
 /// A small helper function for de-serializing ranges of values. The function iterates over the
 /// range "[begin, end)" and reads a value into every position using the given serializer. As an
@@ -466,15 +505,15 @@ void read(Deserializer* deser, Serializable* object);
 /// \param deserializer   de-serializer to read from
 /// \param begin          first spot of the range
 /// \param end            one past the last spot of the range
-template <class Iterator>
-inline void read_range(Deserializer& deserializer, Iterator begin, Iterator end);
+template <class Iterator, typename D, typename = enable_if_deserializer_t<D>>
+inline void read_range(D& deserializer, Iterator begin, Iterator end);
 
 /// A small helper function for de-serializing arrays of values.
 ///
 /// \param deserializer   de-serializer to read from
 /// \param arr            the array to deserialize
-template <typename T, size_t N>
-inline void read_range(Deserializer& deserializer, T (&arr)[N]);
+template <typename T, size_t N, typename D, typename = enable_if_deserializer_t<D>>
+inline void read_range(D& deserializer, T (&arr)[N]);
 
 /// A small helper function for serializing ranges of values. write_range() can serialize ranges of
 /// any serializable type from any given container.
@@ -482,81 +521,80 @@ inline void read_range(Deserializer& deserializer, T (&arr)[N]);
 /// \param serializer     serializer to write to
 /// \param begin          first spot of the range
 /// \param end            one past the last spot of the range
-template <class Iterator>
-inline void write_range(Serializer& serializer, Iterator begin, Iterator end);
+template <class Iterator, typename S, typename = enable_if_serializer_t<S>>
+inline void write_range(S& serializer, Iterator begin, Iterator end);
 
 /// A small helper function for serializing ranges of values. write_range() can serialize arrays.
 ///
 /// \param serializer     serializer to write to
 /// \param arr            the array to serialize
-template <typename T, size_t N>
-inline void write_range(Serializer& serializer, const T (&arr)[N]);
+template <typename T, size_t N, typename S, typename = enable_if_serializer_t<S>>
+inline void write_range(S& serializer, const T (&arr)[N]);
 
 /// Serialize a vector.
-template <typename T>
-void write(Serializer* serializer, const std::vector<T>& array);
-template <typename T,typename A>
-void write(Serializer* serializer, const std::vector<T,A>& array);
-template <typename T>
-void write(Serializer* serializer, const std::vector<T*>& array);
-template <typename T,typename A>
-void write(Serializer* serializer, const std::vector<T*,A>& array);
+template <typename T, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::vector<T>& array);
+template <typename T,typename A, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::vector<T,A>& array);
+template <typename T, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::vector<T*>& array);
+template <typename T,typename A, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::vector<T*,A>& array);
 
 /// Deserialize a vector.
-template <typename T>
-void read(Deserializer* deserializer, std::vector<T>* array);
-inline void read(Deserializer* deserializer, const std::vector<bool>* array);
-template <typename T,typename A>
-void read(Deserializer* deserializer, std::vector<T,A>* array);
-template <typename T>
-void read(Deserializer* deserializer, std::vector<T*>* array);
-template <typename T,typename A>
-void read(Deserializer* deserializer, std::vector<T*,A>* array);
+template <typename T, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::vector<T>* array);
+template <typename T,typename A, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::vector<T,A>* array);
+template <typename T, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::vector<T*>* array);
+template <typename T,typename A, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::vector<T*,A>* array);
 
 /// Serialize a list.
-template <typename T>
-void write(Serializer* serializer, const std::list<T>& list);
+template <typename T, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::list<T>& list);
 
 /// Deserialize a list.
-template <typename T>
-void read(Deserializer* deserializer, std::list<T>* list);
+template <typename T, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::list<T>* list);
 
 /// Serialize a pair.
-template <typename T, typename U>
-void write(Serializer* serializer, const std::pair<T, U>& pair);
+template <typename T, typename U, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::pair<T, U>& pair);
 
 /// Deserialize a pair.
-template <typename T, typename U>
-void read(Deserializer* deserializer, std::pair<T, U>* pair);
+template <typename T, typename U, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::pair<T, U>* pair);
 
 /// Serialize a set.
-template <typename T, typename SWO>
-void write(Serializer* serializer, const std::set<T,SWO>& set);
+template <typename T, typename SWO, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::set<T,SWO>& set);
 
 /// Deserialize a set.
-template <typename T, typename SWO>
-void read(Deserializer* deserializer, std::set<T,SWO>* set);
+template <typename T, typename SWO, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::set<T,SWO>* set);
 
 /// Serialize a map.
-template <typename T, typename U, typename SWO>
-void write(Serializer* serializer, const std::map<T,U,SWO>& map);
+template <typename T, typename U, typename SWO, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::map<T,U,SWO>& map);
 
 /// Deserialize a map.
-template <typename T, typename U, typename SWO>
-void read(Deserializer* deserializer, std::map<T,U,SWO>* map);
+template <typename T, typename U, typename SWO, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::map<T,U,SWO>* map);
 
 
-template<class K, class V, class C, class A>
-void write(Serializer* serializer, const std::multimap<K,V,C,A>&);
+template<class K, class V, class C, class A, typename S, typename = enable_if_serializer_t<S>>
+void write(S* serializer, const std::multimap<K,V,C,A>&);
 
-template<class K, class V, class C, class A>
-void read(Deserializer* deserializer, std::multimap<K,V,C,A>*);
+template<class K, class V, class C, class A, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deserializer, std::multimap<K,V,C,A>*);
 
-template <typename Enum_type>
-void write_enum(Serializer* serializer, Enum_type enum_value );
+template <typename Enum_type, typename S, typename = enable_if_serializer_t<S>>
+void write_enum(S* serializer, Enum_type enum_value );
 
-template <typename Enum_type>
-void read_enum(Deserializer* deserializer, Enum_type* enum_value );
+template <typename Enum_type, typename D, typename = enable_if_deserializer_t<D>>
+void read_enum(D* deserializer, Enum_type* enum_value );
 
 } /// namespace SERIAL
 

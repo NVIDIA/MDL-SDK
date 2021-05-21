@@ -198,10 +198,20 @@ private:
         llvm::Value *pointer,
         uint64_t write_size);
 
+    /// Get the definition for a compound type field.
+    ///
+    /// \param type    the compound type
+    /// \param sym     the symbol of the field
+    ///
+    /// \return the definition of the fielkd or NULL if the field or the type was not found
+    hlsl::Definition *get_field_definition(
+        hlsl::Type   *type,
+        hlsl::Symbol *sym);
+
     /// Create an lvalue expression for the compound element given by the type walk stack.
     hlsl::Expr *create_compound_elem_expr(
         Type_walk_stack &stack,
-        llvm::Value *base_pointer);
+        llvm::Value     *base_pointer);
 
     /// Return true, if the index is valid for the given composite type.
     /// We define valid here as is not out of bounds according to the type.
@@ -375,7 +385,8 @@ private:
     /// Convert an LLVM struct type to an HLSL type.
     hlsl::Type *convert_struct_type(llvm::StructType *type);
 
-    /// Create an HLSL struct with the given names for the given LLVM struct type.
+    /// Create an HLSL struct definition and type with the given names for the given
+    /// LLVM struct type.
     ///
     /// \param type             the LLVM struct type
     /// \param type_name        the name for the HLSL struct type
@@ -429,12 +440,22 @@ private:
     /// Get an HLSL symbol for a string.
     hlsl::Symbol *get_sym(char const *str);
 
-    /// Get a valid HLSL symbol for an LLVM string and a template.
+    /// Get an unique HLSL symbol for an LLVM string and a template.
+    ///
+    /// \param str    an LLVM string (representing an LLVM symbol name)
+    /// \param templ  if str contains invalid characters, use this as a template
+    ///
+    /// \return amn unique HLSL symbol
     hlsl::Symbol *get_unique_hlsl_sym(
         llvm::StringRef const &str,
         char const            *templ);
 
-    /// Get a valid HLSL symbol for an LLVM string and a template.
+    /// Get an unique HLSL symbol for an LLVM string and a template.
+    ///
+    /// \param str    a string (representing a symbol name)
+    /// \param templ  if str contains invalid characters, use this as a template
+    ///
+    /// \return amn unique HLSL symbol
     hlsl::Symbol *get_unique_hlsl_sym(
         char const *str,
         char const *templ);
@@ -481,17 +502,35 @@ private:
     /// Translates constants 0 - 3 to x, y, z, w. Otherwise returns nullptr.
     hlsl::Symbol *get_vector_index_sym(llvm::Value *index);
 
-    /// Create a reference to a variable of the given type.
-    hlsl::Expr *create_reference(hlsl::Type_name *type_name, hlsl::Type *type);
+    /// Create a reference to an entity of the given name and type.
+    ///
+    /// \param type_name  the type name of the entity
+    /// \param type       the HLSL type of the entity
+    hlsl::Expr_ref *create_reference(
+        hlsl::Type_name *type_name,
+        hlsl::Type      *type);
 
-    /// Create a reference to a variable of the given type.
-    hlsl::Expr *create_reference(hlsl::Symbol *var_sym, hlsl::Type *type);
+    /// Create a reference to an entity of the given symbol and HLSL type.
+    ///
+    /// \param sym        the symbol of the entity
+    /// \param type       the HLSL type of the entity
+    hlsl::Expr_ref *create_reference(
+        hlsl::Symbol *sym,
+        hlsl::Type   *type);
 
-    /// Create a reference to a variable of the given type.
-    hlsl::Expr *create_reference(hlsl::Symbol *var_sym, llvm::Type *type);
+    /// Create a reference to an entity of the given symbol and LLVM type.
+    ///
+    /// \param sym        the symbol of the entity
+    /// \param type       the LLVM type of the entity
+    hlsl::Expr_ref *create_reference(
+        hlsl::Symbol *sym,
+        llvm::Type   *type);
 
     /// Create a reference to an entity.
-    hlsl::Expr *create_reference(hlsl::Definition *def);
+    ///
+    /// \param def       the definition the entity
+    hlsl::Expr_ref *create_reference(
+        hlsl::Definition *def);
 
     /// Create a select or array_subscript expression on a field of a compound.
     hlsl::Expr *create_compound_access(hlsl::Expr *struct_expr, unsigned comp_index);
@@ -572,7 +611,7 @@ private:
     /// \param cv  the LLVM constant
     hlsl::Def_variable *create_local_const(llvm::Constant *cv);
 
-    /// Generates a new global const variable to hold an LLVM constant.
+    /// Generates a new global static const variable to hold an LLVM constant.
     ///
     /// \param cv  the LLVM constant
     hlsl::Def_variable *create_global_const(llvm::Constant *cv);

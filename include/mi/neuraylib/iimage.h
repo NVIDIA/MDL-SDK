@@ -308,7 +308,7 @@ public:
     /// \return            0 on success, -1 if uvtile_id is out of range.
     virtual Sint32 get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const = 0;
 
-    // Returns the uvtile-id corresponding to the tile at u,v.
+    /// Returns the uvtile-id corresponding to the tile at u,v.
     ///
     /// \param u           The u-component of the uv-tile
     /// \param v           The v-component of the uv-tile

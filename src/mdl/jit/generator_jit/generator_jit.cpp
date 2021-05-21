@@ -144,6 +144,10 @@ Code_generator_jit::Code_generator_jit(
         "false",
         "Use a renderer provided function to adapt microfacet roughness");
     m_options.add_option(
+        MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL,
+        "false",
+        "Use a renderer provided function to adapt normals");
+    m_options.add_option(
         MDL_JIT_OPTION_ENABLE_AUXILIARY,
         "false",
         "Enable code generation for auxiliary functions on DFs");
@@ -185,6 +189,7 @@ mi::base::IInterface const *Code_generator_jit::get_interface(
 // Compile a whole module.
 IGenerated_code_executable *Code_generator_jit::compile(
     IModule const    *module,
+    IModule_cache    *module_cache,
     Compilation_mode mode)
 {
     Generated_code_jit *result = m_builder.create<Generated_code_jit>(
@@ -192,12 +197,16 @@ IGenerated_code_executable *Code_generator_jit::compile(
         m_jitted_code.get(),
         module->get_filename());
 
-    if (mode == CM_NATIVE) {
-        result->compile_module_to_llvm(module, m_options);
-    } else if (mode == CM_HLSL) {
-        result->compile_module_to_hlsl(module, m_options);
-    } else {
-        result->compile_module_to_ptx(module, m_options);
+    switch (mode) {
+    case CM_NATIVE:
+        result->compile_module_to_llvm(module, module_cache, m_options);
+        break;
+    case CM_HLSL:
+        result->compile_module_to_hlsl(module, module_cache, m_options);
+        break;
+    default:
+        result->compile_module_to_ptx(module, module_cache, m_options);
+        break;
     }
 
     return result;
@@ -206,10 +215,12 @@ IGenerated_code_executable *Code_generator_jit::compile(
 // Compile a lambda function using the JIT into an environment (shader) of a scene.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_environment(
     ILambda_function const    *ilambda,
+    IModule_cache             *module_cache,
     ICall_name_resolver const *resolver)
 {
     return compile_into_generic_function(
         ilambda,
+        module_cache,
         resolver,
         /*num_texture_spaces=*/ 0,
         /*num_texture_results=*/ 0,
@@ -355,7 +366,8 @@ private:
 
 // Compile a lambda function using the JIT into a constant function.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function(
-    ILambda_function const    *ilambda,
+    ILambda_function const     *ilambda,
+    IModule_cache              *cache,
     ICall_name_resolver const  *resolver,
     ILambda_resource_attribute *attr,
     Float4_struct const        world_to_object[4],
@@ -363,8 +375,9 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
     int                        object_id)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
+    if (lambda == NULL) {
         return NULL;
+    }
 
     DAG_node const *body = lambda->get_body();
     if (body == NULL || lambda->get_root_expr_count() != 0) {
@@ -401,7 +414,11 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
 
     // const function are evaluated on the CPU only
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
+        m_jitted_code.get(),
+        compiler.get(),
+        cache,
+        code->access_messages(),
+        code->get_llvm_context(),
         LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
@@ -449,13 +466,15 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
 // function computing one of the root expressions.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_function(
     ILambda_function const    *ilambda,
+    IModule_cache             *cache,
     ICall_name_resolver const *resolver,
     unsigned                  num_texture_spaces,
     unsigned                  num_texture_results)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
+    if (lambda == NULL) {
         return NULL;
+    }
 
     if (lambda->get_root_expr_count() < 1) {
         // there must be at least one root
@@ -481,7 +500,11 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
     // switch functions are used in the core and for displacement, only in the later case
     // a texture handler is available
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
+        m_jitted_code.get(),
+        compiler.get(),
+        cache,
+        code->access_messages(),
+        code->get_llvm_context(),
         LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
@@ -543,14 +566,16 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
 IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for_gpu(
     ICode_cache               *code_cache,
     ILambda_function const    *ilambda,
+    IModule_cache             *module_cache,
     ICall_name_resolver const *resolver,
     unsigned                  num_texture_spaces,
     unsigned                  num_texture_results,
     unsigned                  sm_version)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
+    if (lambda == NULL) {
         return NULL;
+    }
 
     if (lambda->get_root_expr_count() < 1) {
         // there must be at least one root
@@ -624,7 +649,11 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
 
     // GPU switch functions are used in the core only
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
+        m_jitted_code.get(),
+        compiler.get(),
+        module_cache,
+        code->access_messages(),
+        llvm_context,
         LLVM_code_generator::TL_PTX,
         Type_mapper::TM_PTX,
         sm_version,
@@ -686,14 +715,16 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
 // Compile a lambda function into a generic function using the JIT.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_function(
     ILambda_function const    *ilambda,
+    IModule_cache             *cache,
     ICall_name_resolver const *resolver,
     unsigned                  num_texture_spaces,
     unsigned                  num_texture_results,
     ILambda_call_transformer  *transformer)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
+    if (lambda == NULL) {
         return NULL;
+    }
 
     if (lambda->get_body() == NULL || lambda->get_root_expr_count() != 0) {
         // not a simple lambda
@@ -719,7 +750,11 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
 
     // generic functions are for CPU only
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
+        m_jitted_code.get(),
+        compiler.get(),
+        cache,
+        code->access_messages(),
+        code->get_llvm_context(),
         LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
@@ -784,14 +819,16 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
 // Compile a lambda function into a LLVM-IR using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
     ILambda_function const    *ilambda,
+    IModule_cache             *cache,
     ICall_name_resolver const *resolver,
     unsigned                  num_texture_spaces,
     unsigned                  num_texture_results,
     bool                      enable_simd)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
+    if (lambda == NULL) {
         return NULL;
+    }
 
     DAG_node const *body = lambda->get_body();
     if (body == NULL && lambda->get_root_expr_count() < 1) {
@@ -815,7 +852,11 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
     mi::base::Handle<MDL> compiler(lambda->get_compiler());
 
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
+        m_jitted_code.get(),
+        compiler.get(),
+        cache,
+        code->access_messages(),
+        llvm_context,
         LLVM_code_generator::TL_NATIVE,
         enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR,
         /*sm_version=*/0,
@@ -888,6 +929,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
 // Compile a distribution function into native code using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cpu(
     IDistribution_function const *idist_func,
+    IModule_cache                *cache,
     ICall_name_resolver const    *resolver,
     unsigned                     num_texture_spaces,
     unsigned                     num_texture_results)
@@ -911,7 +953,11 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
     mi::base::Handle<MDL> compiler(dist_func->get_compiler());
 
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), code->get_llvm_context(),
+        m_jitted_code.get(),
+        compiler.get(),
+        cache,
+        code->access_messages(),
+        code->get_llvm_context(),
         LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
@@ -964,6 +1010,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
 // Compile a distribution function into a PTX or HLSL using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gpu(
     IDistribution_function const *idist_func,
+    IModule_cache                *cache,
     ICall_name_resolver const    *resolver,
     unsigned                     num_texture_spaces,
     unsigned                     num_texture_results,
@@ -980,13 +1027,13 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     Allocator_builder builder(alloc);
 
     IGenerated_code_executable::Kind code_kind;
-    if (llvm_ir_output)
+    if (llvm_ir_output) {
         code_kind = IGenerated_code_executable::CK_LLVM_IR;
-    else if (comp_mode == ICode_generator_jit::CM_PTX)
+    } else if (comp_mode == ICode_generator_jit::CM_PTX) {
         code_kind = IGenerated_code_executable::CK_PTX;
-    else if (comp_mode == ICode_generator_jit::CM_HLSL)
+    } else if (comp_mode == ICode_generator_jit::CM_HLSL) {
         code_kind = IGenerated_code_executable::CK_HLSL;
-    else {
+    } else {
         MDL_ASSERT(!"Invalid compilation_mode for compile_distribution_function_gpu");
         return NULL;
     }
@@ -1005,7 +1052,11 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     mi::base::Handle<MDL> compiler(dist_func->get_compiler());
 
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
+        m_jitted_code.get(),
+        compiler.get(),
+        cache,
+        code->access_messages(),
+        llvm_context,
         comp_mode == ICode_generator_jit::CM_PTX ?
             LLVM_code_generator::TL_PTX : LLVM_code_generator::TL_HLSL,
         comp_mode == ICode_generator_jit::CM_PTX ?
@@ -1037,16 +1088,17 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 
     if (module != NULL) {
         if (llvm_ir_output) {
-            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE))
+            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 code_gen.llvm_bc_compile(module, code->access_src_code());
-            else
+            } else {
                 code_gen.llvm_ir_compile(module, code->access_src_code());
-        }
-        else {
-            if (comp_mode == ICode_generator_jit::CM_PTX)
+            }
+        } else {
+            if (comp_mode == ICode_generator_jit::CM_PTX) {
                 code_gen.ptx_compile(module, code->access_src_code());
-            else
+            } else {
                 code_gen.hlsl_compile(module, code->access_src_code());
+            }
         }
         code_gen.fill_function_info(code);
 
@@ -1081,7 +1133,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 
 // Fill a code object from a code cache entry.
 void Code_generator_jit::fill_code_from_cache(
-    Generated_code_source *code,
+    Generated_code_source    *code,
     ICode_cache::Entry const *entry)
 {
     IAllocator        *alloc = get_allocator();
@@ -1128,8 +1180,8 @@ void Code_generator_jit::fill_code_from_cache(
 // Enter a code object into the code cache.
 void Code_generator_jit::enter_code_into_cache(
     Generated_code_source *code,
-    ICode_cache *code_cache,
-    unsigned char const cache_key[16])
+    ICode_cache           *code_cache,
+    unsigned char const   cache_key[16])
 {
     string const &code_str = code->access_src_code();
 
@@ -1200,6 +1252,7 @@ void Code_generator_jit::enter_code_into_cache(
 IGenerated_code_executable *Code_generator_jit::compile_into_source(
     ICode_cache               *code_cache,
     ILambda_function const    *ilambda,
+    IModule_cache             *module_cache,
     ICall_name_resolver const *resolver,
     unsigned                  num_texture_spaces,
     unsigned                  num_texture_results,
@@ -1208,8 +1261,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
     bool                      llvm_ir_output)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
+    if (lambda == NULL) {
         return NULL;
+    }
 
     DAG_node const *body = lambda->get_body();
     if (body == NULL && lambda->get_root_expr_count() < 1) {
@@ -1221,13 +1275,13 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
     Allocator_builder builder(alloc);
 
     IGenerated_code_executable::Kind code_kind;
-    if (llvm_ir_output)
+    if (llvm_ir_output) {
         code_kind = IGenerated_code_executable::CK_LLVM_IR;
-    else if (comp_mode == ICode_generator_jit::CM_PTX)
+    } else if (comp_mode == ICode_generator_jit::CM_PTX) {
         code_kind = IGenerated_code_executable::CK_PTX;
-    else if (comp_mode == ICode_generator_jit::CM_HLSL)
+    } else if (comp_mode == ICode_generator_jit::CM_HLSL) {
         code_kind = IGenerated_code_executable::CK_HLSL;
-    else {
+    } else {
         MDL_ASSERT(!"Invalid compilation_mode for compile_into_source");
         return NULL;
     }
@@ -1303,7 +1357,11 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
     mi::base::Handle<MDL> compiler(lambda->get_compiler());
 
     LLVM_code_generator code_gen(
-        m_jitted_code.get(), compiler.get(), code->access_messages(), llvm_context,
+        m_jitted_code.get(),
+        compiler.get(),
+        module_cache,
+        code->access_messages(),
+        llvm_context,
         comp_mode == ICode_generator_jit::CM_PTX ?
             LLVM_code_generator::TL_PTX : LLVM_code_generator::TL_HLSL,
         comp_mode == ICode_generator_jit::CM_PTX ?
@@ -1344,15 +1402,17 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         llvm::Module *module = func->getParent();
 
         if (llvm_ir_output) {
-            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE))
+            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 code_gen.llvm_bc_compile(module, code->access_src_code());
-            else
+            } else {
                 code_gen.llvm_ir_compile(module, code->access_src_code());
+            }
         } else {
-            if (comp_mode == ICode_generator_jit::CM_PTX)
+            if (comp_mode == ICode_generator_jit::CM_PTX) {
                 code_gen.ptx_compile(module, code->access_src_code());
-            else
+            } else {
                 code_gen.hlsl_compile(module, code->access_src_code());
+            }
         }
         code_gen.fill_function_info(code);
 
@@ -1369,13 +1429,10 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
 
         // create the argument block layout if any arguments are captured
         mi::base::Handle<Generated_code_value_layout> layout;
-        char const *layout_data = NULL;
-        size_t layout_data_size = 0;
         if (code_gen.get_captured_arguments_llvm_type() != NULL) {
             layout = mi::base::make_handle(
                 builder.create<Generated_code_value_layout>(alloc, &code_gen));
             code->add_captured_arguments_layout(layout.get());
-            layout_data = layout->get_layout_data(layout_data_size);
         }
 
         // copy the string constant table.
@@ -1397,7 +1454,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
 
 // Get the device library for PTX compilation for the given target architecture.
 unsigned char const *Code_generator_jit::get_libdevice_for_gpu(
-    size_t   &size)
+    size_t &size)
 {
     unsigned min_ptx_version = 0;
     return LLVM_code_generator::get_libdevice(size, min_ptx_version);
@@ -1406,9 +1463,9 @@ unsigned char const *Code_generator_jit::get_libdevice_for_gpu(
 // Get the resolution of the libbsdf multi-scattering lookup table data.
 bool Code_generator_jit::get_libbsdf_multiscatter_data_resolution(
     IValue_texture::Bsdf_data_kind bsdf_data_kind,
-    size_t &out_theta,
-    size_t &out_roughness,
-    size_t &out_ior) const
+    size_t                         &out_theta,
+    size_t                         &out_roughness,
+    size_t                         &out_ior) const
 {
     return libbsdf_data::get_libbsdf_multiscatter_data_resolution(
         bsdf_data_kind, out_theta, out_roughness, out_ior);
@@ -1436,28 +1493,28 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
     Link_unit_jit::Target_kind target_kind;
     Type_mapper::Type_mapping_mode tm_mode;
     switch (mode) {
-        case CM_PTX:
-            target_kind = Link_unit_jit::TK_PTX;
-            tm_mode = Type_mapper::TM_PTX;
-            break;
+    case CM_PTX:
+        target_kind = Link_unit_jit::TK_PTX;
+        tm_mode = Type_mapper::TM_PTX;
+        break;
 
-        case CM_LLVM_IR:
-            target_kind = Link_unit_jit::TK_LLVM_IR;
-            tm_mode = enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR;
-            break;
+    case CM_LLVM_IR:
+        target_kind = Link_unit_jit::TK_LLVM_IR;
+        tm_mode = enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR;
+        break;
 
-        case CM_NATIVE:
-            target_kind = Link_unit_jit::TK_NATIVE;
-            tm_mode = Type_mapper::TM_NATIVE_X86;
-            break;
+    case CM_NATIVE:
+        target_kind = Link_unit_jit::TK_NATIVE;
+        tm_mode = Type_mapper::TM_NATIVE_X86;
+        break;
 
-        case CM_HLSL:
-            target_kind = Link_unit_jit::TK_HLSL;
-            tm_mode = Type_mapper::TM_HLSL;
-            break;
+    case CM_HLSL:
+        target_kind = Link_unit_jit::TK_HLSL;
+        tm_mode = Type_mapper::TM_HLSL;
+        break;
 
-        default:
-            return NULL;
+    default:
+        return NULL;
     }
 
     return m_builder.create<Link_unit_jit>(
@@ -1479,11 +1536,13 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
 IGenerated_code_executable *Code_generator_jit::compile_unit(
     ILink_unit const *iunit)
 {
-    if (iunit == NULL)
+    if (iunit == NULL) {
         return NULL;
+    }
     size_t num_funcs = iunit->get_function_count();
-    if (num_funcs == 0)
+    if (num_funcs == 0) {
         return NULL;
+    }
 
     Link_unit_jit const &unit = *impl_cast<Link_unit_jit>(iunit);
 
@@ -1537,10 +1596,11 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
             unit->hlsl_compile(module, code->access_src_code());
         } else {
             MDL_ASSERT(unit.get_target_kind() == Link_unit_jit::TK_LLVM_IR);
-            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE))
+            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 unit->llvm_bc_compile(module, code->access_src_code());
-            else
+            } else {
                 unit->llvm_ir_compile(module, code->access_src_code());
+            }
         }
         unit->fill_function_info(code.get());
 
@@ -1582,11 +1642,13 @@ unsigned Code_generator_jit::get_state_mapping() const
 {
     unsigned res = 0;
 
-    if (m_options.get_bool_option(MDL_JIT_OPTION_USE_BITANGENT))
+    if (m_options.get_bool_option(MDL_JIT_OPTION_USE_BITANGENT)) {
         res |= Type_mapper::SM_USE_BITANGENT;
+    }
 
-    if (m_options.get_bool_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE))
+    if (m_options.get_bool_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE)) {
         res |= Type_mapper::SM_INCLUDE_UNIFORM_STATE;
+    }
 
     return res;
 }
@@ -1625,6 +1687,7 @@ Link_unit_jit::Link_unit_jit(
 , m_code_gen(
     jitted_code,
     compiler,
+    /*module_cache=*/NULL,
     access_messages(),
     *get_llvm_context(),
     get_target_lang(target_kind),
@@ -1812,8 +1875,7 @@ void Link_unit_jit::add_resource_tag_mapping(
 // Access messages.
 const Messages &Link_unit_jit::access_messages() const
 {
-    switch (m_target_kind)
-    {
+    switch (m_target_kind) {
     case TK_NATIVE:
         {
             mi::base::Handle<Generated_code_lambda_function> native_code(
@@ -1835,8 +1897,7 @@ const Messages &Link_unit_jit::access_messages() const
 // Get write access to the messages of the generated code.
 Messages_impl &Link_unit_jit::access_messages()
 {
-    switch (m_target_kind)
-    {
+    switch (m_target_kind) {
     case TK_NATIVE:
         {
             mi::base::Handle<Generated_code_lambda_function> native_code(
@@ -1869,23 +1930,28 @@ llvm::LLVMContext *Link_unit_jit::get_llvm_context()
 // Add a lambda function to this link unit.
 bool Link_unit_jit::add(
     ILambda_function const                    *ilambda,
+    IModule_cache                             *module_cache,
     ICall_name_resolver const                 *resolver,
     IGenerated_code_executable::Function_kind  kind,
     size_t                                    *arg_block_index,
     size_t                                    *function_index)
 {
-    if (arg_block_index == NULL)
+    if (arg_block_index == NULL) {
         return false;
+    }
 
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
-    if (lambda == NULL)
+    if (lambda == NULL) {
         return false;
+    }
 
     DAG_node const *body = lambda->get_body();
     if (body == NULL && lambda->get_root_expr_count() < 1) {
         // there must be at least one root or a body
         return false;
     }
+
+    Module_cache_scope scope(*this, module_cache);
 
     // we compile a new lambda, do an update of the resource attribute map
     update_resource_attribute_map(lambda);
@@ -1918,8 +1984,9 @@ bool Link_unit_jit::add(
         }
 
         // pass out the function index
-        if (function_index != NULL)
+        if (function_index != NULL) {
             *function_index = func_index;
+        }
 
         return true;
     }
@@ -1929,19 +1996,25 @@ bool Link_unit_jit::add(
 // Add a distribution function to this link unit.
 bool Link_unit_jit::add(
     IDistribution_function const *idist_func,
+    IModule_cache                *module_cache,
     ICall_name_resolver const    *resolver,
     size_t                       *arg_block_index,
     size_t                       *main_function_indices,
     size_t                        num_main_function_indices)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
-    if (dist_func == NULL)
+    if (dist_func == NULL) {
         return false;
+    }
 
     // wrong size of main_function_indices array?
     if (main_function_indices != NULL &&
-            num_main_function_indices != dist_func->get_main_function_count())
+        num_main_function_indices != dist_func->get_main_function_count())
+    {
         return false;
+    }
+
+    Module_cache_scope scope(*this, module_cache);
 
     mi::base::Handle<ILambda_function> root_lambda_handle(dist_func->get_root_lambda());
     Lambda_function const *root_lambda = impl_cast<Lambda_function>(root_lambda_handle.get());
@@ -1963,8 +2036,9 @@ bool Link_unit_jit::add(
         next_arg_block_index,
         main_function_indices);
 
-    if (module == NULL)
+    if (module == NULL) {
         return false;
+    }
 
     if (m_code_gen.get_captured_arguments_llvm_type() != NULL && *arg_block_index == ~0) {
         IAllocator        *alloc = get_allocator();
@@ -2014,8 +2088,9 @@ size_t Link_unit_jit::get_function_arg_block_layout_index(size_t i) const
 llvm::Function *Link_unit_jit::get_function(size_t i) const
 {
     LLVM_code_generator::Exported_function *exp_func = m_code_gen.get_current_exported_function(i);
-    if (exp_func == NULL)
+    if (exp_func == NULL) {
         return NULL;
+    }
 
     return exp_func->func;
 }
@@ -2066,8 +2141,9 @@ Jitted_code *create_jitted_code_singleton(IAllocator *alloc)
 // Terminate the jitted code singleton.
 void terminate_jitted_code_singleton(Jitted_code *jitted_code)
 {
-    if (jitted_code != NULL)
+    if (jitted_code != NULL) {
         jitted_code->release();
+    }
 }
 
 } // mdl

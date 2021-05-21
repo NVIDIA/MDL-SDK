@@ -65,11 +65,17 @@ public:
     Mdl_function_call();
 
     /// Constructor.
+    ///
+    /// \param is_material            Indicates whether this is a material or a function. Note that
+    ///                               the elemental constructor and copy constructor for material
+    ///                               are functions, even though their return type is "material".
+    /// \param definition_name        MDL name of the corresponding function definition.
     Mdl_function_call(
         DB::Tag module_tag,
         const char* module_db_name,
         DB::Tag definition_tag,
         Mdl_ident definition_ident,
+        bool m_is_material,
         IExpression_list* arguments,
         mi::mdl::IDefinition::Semantics semantic,
         const char* definition_name,
@@ -88,6 +94,8 @@ public:
     DB::Tag get_function_definition(DB::Transaction *transaction) const;
 
     const char* get_mdl_function_definition() const;
+
+    bool is_material() const { return m_is_material; }
 
     const IType* get_return_type() const;
 
@@ -109,8 +117,12 @@ public:
     mi::Sint32 set_argument(
         DB::Transaction* transaction, const char* name, const IExpression* argument);
 
-    // Get the list of enable_if conditions.
     const IExpression_list* get_enable_if_conditions() const;
+
+    Mdl_compiled_material* create_compiled_material(
+        DB::Transaction* transaction,
+        bool class_compilation,
+        Execution_context* context) const;
 
     // internal methods
 
@@ -137,8 +149,11 @@ public:
     const mi::mdl::IType* get_mdl_parameter_type(
         DB::Transaction* transaction, mi::Uint32 index) const;
 
-    /// Returns the module tag of the calls' definition. Can be \c NULL for immutable calls.
-    DB::Tag get_module() const;
+    /// Returns the module tag of the call's definition.
+    DB::Tag get_module( DB::Transaction* transaction) const;
+
+    /// Indicates whether the corresponding definition is valid.
+    bool is_valid_definition( DB::Transaction* transaction) const;
 
     /// Returns the identifier of the definition.
     Mdl_ident get_definition_ident() const { return m_definition_ident; }
@@ -178,6 +193,34 @@ public:
         mi::Float32 mdl_wavelength_min,
         mi::Float32 mdl_wavelength_max,
         Sint32* errors = nullptr) const;
+
+    /// Creates a DAG material instance for this DB material instance (used by the DB compiled
+    /// material instance and an utility function).
+    ///
+    /// \param transaction                 The transaction.
+    /// \param use_temporaries             Indicates whether temporaries are used to represent
+    ///                                    common subexpressions.
+    /// \param class_compilation           Flag that selects class compilation instead of instance
+    ///                                    compilation.
+    /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
+    /// \param mdl_wavelength_min          The smallest supported wavelength.
+    /// \param mdl_wavelength_max          The largest supported wavelength.
+    /// \param errors                      An optional pointer to an mi::Sint32 to which an error
+    ///                                    code will be written. The error codes have the following
+    ///                                    meaning:
+    ///                                    -  0: Success.
+    ///                                    - -1: An argument of the material instance has an
+    ///                                          incorrect type.
+    ///                                    - -2: The thin-walled material instance has different
+    ///                                          transmission for surface and backface.
+    ///                                    - -3: An varying argument was attached to an uniform
+    ///                                          parameter.
+    /// \return                            The DAG material instance, or \c NULL in case of failure.
+    const mi::mdl::IGenerated_code_dag::IMaterial_instance* create_dag_material_instance(
+        DB::Transaction* transaction,
+        bool use_temporaries,
+        bool class_compilation,
+        Execution_context* context) const;
 
     /// Improved version of SERIAL::Serializable::dump().
     ///
@@ -249,6 +292,7 @@ private:
     std::string m_definition_name;               ///< The MDL name of the function definition. (*)
     std::string m_definition_db_name;            ///< The DB name of the function definition. (*)
     bool m_immutable;                            ///< The immutable flag (set for defaults).
+    bool m_is_material;                          ///< Material or function
 
     mi::base::Handle<const IType_list> m_parameter_types;            // (*)
     mi::base::Handle<const IType> m_return_type;                     // (*)

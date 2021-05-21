@@ -103,8 +103,9 @@ Call_graph::Call_graph(
 Call_node *Call_graph::get_call_node(Definition *def)
 {
     Definition_call_map::iterator it = m_call_nodes.find(def);
-    if (it != m_call_nodes.end())
+    if (it != m_call_nodes.end()) {
         return it->second;
+    }
     Call_node *node = m_builder.create<Call_node>(&m_arena, def);
     m_call_nodes[def] = node;
     return node;
@@ -114,8 +115,9 @@ Call_node *Call_graph::get_call_node(Definition *def)
 Call_node *Call_graph::get_root_call_node(Definition *def)
 {
     Definition_call_map::iterator it = m_call_nodes.find(def);
-    if (it != m_call_nodes.end())
+    if (it != m_call_nodes.end()) {
         return it->second;
+    }
     Call_node *node = m_builder.create<Call_node>(&m_arena, def);
     m_call_nodes[def] = node;
     m_root_set.push_back(node);
@@ -150,7 +152,7 @@ void Call_graph::remove_node(Definition const *def)
 // Add a call from caller to callee to the call graph.
 void Call_graph::add_call(Definition *caller, Definition *callee)
 {
-    MDL_ASSERT(caller != NULL && caller != NULL);
+    MDL_ASSERT(caller != NULL && callee != NULL);
     Call_node *caller_node = get_call_node(caller);
     Call_node *callee_node = get_call_node(callee);
     caller_node->add_callee(callee_node);
@@ -161,8 +163,9 @@ Call_node *Call_graph::get_call_graph_for_material(Definition *mat)
 {
     Call_node *node = get_call_node(mat);
     for (size_t i = 0, n = m_root_set.size(); i < n; ++i) {
-        if (m_root_set[i] == node)
+        if (m_root_set[i] == node) {
             return node;
+        }
     }
     return NULL;
 }
@@ -239,8 +242,9 @@ void Call_graph::finalize(ICallgraph_scc_visitor *visitor)
     create_root_set();
     distribute_reachability();
 
-    for (size_t i = 0, n = m_root_set.size(); i < n; ++i)
+    for (size_t i = 0, n = m_root_set.size(); i < n; ++i) {
         calc_scc(m_root_set[i], visitor);
+    }
 
     // fill the definite definitions map
     m_definition_set.clear();
@@ -250,8 +254,9 @@ void Call_graph::finalize(ICallgraph_scc_visitor *visitor)
         Definition *def  = node->get_definition();
 
         def = def->get_definite_definition();
-        if (def)
+        if (def != NULL) {
             m_definition_set.insert(def);
+        }
     }
 }
 
@@ -298,8 +303,9 @@ void Call_graph::create_root_set()
     {
         Call_node *node = it->second;
 
-        if (node->m_visit_count < curr_visited_count)
+        if (node->m_visit_count < curr_visited_count) {
             all_nodes.push_back(node);
+        }
     }
 
     // all non-visited nodes are unreachable: mark them and put them into the root set
@@ -359,11 +365,12 @@ void Call_graph::distribute_reachability()
     for (size_t i = 0, n = m_root_set.size(); i < n; ++i) {
         Call_node *root = m_root_set[i];
 
-        if (root->m_reachability != Call_node::FL_UNREACHABLE)
+        if (root->m_reachability != Call_node::FL_UNREACHABLE) {
             queue.push(root);
+        }
     }
 
-    while (! queue.empty()) {
+    while (!queue.empty()) {
         Call_node *node = queue.front();
         queue.pop();
 
@@ -440,8 +447,9 @@ void Dumper::dump()
 {
     m_printer->print("digraph \"");
     char const *name = m_cg.get_name();
-    if (name == NULL || name[0] == '\0')
+    if (name == NULL || name[0] == '\0') {
         name = "call_graph";
+    }
     m_printer->print(name);
     m_printer->print("\" {\n");
     m_printer->print("root [label=\"RootSet\"];\n");
@@ -485,9 +493,9 @@ void Dumper::node(Call_node const *n, char const *color)
         if (kind == Definition::DK_FUNCTION) {
             IType const *ret_type = func_type->get_return_type();
 
-            IType_struct const *s_type = as<IType_struct>(ret_type);
-            if (s_type != NULL && s_type->get_predefined_id() == IType_struct::SID_MATERIAL)
+            if (is_material_type(ret_type)) {
                 use_box_shape = true;
+            }
 
             m_printer->print(ret_type);
             m_printer->print(" ");
@@ -500,8 +508,9 @@ void Dumper::node(Call_node const *n, char const *color)
             ISymbol const *p_sym;
             func_type->get_parameter(i, p_type, p_sym);
 
-            if (i > 0)
+            if (i > 0) {
                 m_printer->print(", ");
+            }
             m_printer->print(p_type);
         }
     }
@@ -512,8 +521,9 @@ void Dumper::node(Call_node const *n, char const *color)
         m_printer->print(color);
     }
 
-    if (use_box_shape)
+    if (use_box_shape) {
         m_printer->print(" shape=box");
+    }
 
     m_printer->print("];\n");
 }
@@ -578,16 +588,18 @@ void Call_graph_walker::do_walk(Call_node *node)
 {
     node->m_visit_count = m_cg.m_visit_count;
 
-    if (m_visitor != NULL)
+    if (m_visitor != NULL) {
         m_visitor->visit_cg_node(node, ICallgraph_visitor::PRE_ORDER);
+    }
     for (Callee_iterator it = node->callee_begin(); it != node->callee_end(); ++it) {
         Call_node *callee = *it;
         if (callee->m_visit_count < m_cg.m_visit_count) {
             do_walk(callee);
         }
     }
-    if (m_visitor != NULL)
+    if (m_visitor != NULL) {
         m_visitor->visit_cg_node(node, ICallgraph_visitor::POST_ORDER);
+    }
 }
 
 // Walk the graph, starting at a given root.
@@ -611,7 +623,6 @@ void Call_graph_walker::walk()
         }
     }
 }
-
 
 }  // mdl
 }  // mi

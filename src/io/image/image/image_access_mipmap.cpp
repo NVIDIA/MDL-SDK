@@ -88,7 +88,7 @@ void Access_mipmap::set( const IMipmap* mipmap)
 const IMipmap* Access_mipmap::get() const
 {
     if( !m_mipmap)
-        return 0;
+        return nullptr;
     m_mipmap->retain();
     return m_mipmap.get();
 }
@@ -119,7 +119,7 @@ bool Access_mipmap::read_rect(
         return false;
 
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( m_mipmap->get_level( miplevel));
-    if( !canvas.is_valid_interface())
+    if( !canvas)
         return false;
 
     Access_canvas access_canvas( canvas.get());
@@ -167,7 +167,7 @@ void Edit_mipmap::set( IMipmap* mipmap)
     m_mipmap = make_handle_dup( mipmap);
     if( !m_mipmap) {
         m_miplevels      = 0;
-        m_edit_canvas_0.set( 0);
+        m_edit_canvas_0.set( nullptr);
         m_resolution_x_0 = 0;
         m_resolution_y_0 = 0;
         m_nr_of_layers         = 0;
@@ -184,7 +184,7 @@ void Edit_mipmap::set( IMipmap* mipmap)
 IMipmap* Edit_mipmap::get() const
 {
     if( !m_mipmap)
-        return 0;
+        return nullptr;
     m_mipmap->retain();
     return m_mipmap.get();
 }
@@ -221,7 +221,7 @@ bool Edit_mipmap::read_rect(
 
     // Get the actual canvas for higher miplevels
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( m_mipmap->get_level( miplevel));
-    if( !canvas.is_valid_interface())
+    if( !canvas)
         return false;
 
     Access_canvas access_canvas( canvas.get());
@@ -253,7 +253,7 @@ bool Edit_mipmap::write_rect(
 
     // Get the actual canvas for higher miplevels
     mi::base::Handle<mi::neuraylib::ICanvas> canvas( m_mipmap->get_level( miplevel));
-    if( !canvas.is_valid_interface())
+    if( !canvas)
         return false;
 
     Edit_canvas edit_canvas( canvas.get());
@@ -274,11 +274,11 @@ bool Edit_mipmap::lookup(
 
     // Get the actual canvas for higher miplevels
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( m_mipmap->get_level( miplevel));
-    if( !canvas.is_valid_interface())
+    if( !canvas)
         return false;
 
-    mi::base::Handle<const mi::neuraylib::ITile> tile( canvas->get_tile( x, y, z));
-    if( !tile.is_valid_interface())
+    mi::base::Handle<const mi::neuraylib::ITile> tile( canvas->deprecated_get_tile( x, y, z));
+    if( !tile)
         return false;
 
     mi::Uint32 local_x = x % tile->get_resolution_x();
@@ -299,11 +299,11 @@ bool Edit_mipmap::store(
 
     // Get the actual canvas for higher miplevels
     mi::base::Handle<mi::neuraylib::ICanvas> canvas( m_mipmap->get_level( miplevel));
-    if( !canvas.is_valid_interface())
+    if( !canvas)
         return false;
 
-    mi::base::Handle<mi::neuraylib::ITile> tile( canvas->get_tile( x, y, z));
-    if( !tile.is_valid_interface())
+    mi::base::Handle<mi::neuraylib::ITile> tile( canvas->deprecated_get_tile( x, y, z));
+    if( !tile)
         return false;
 
     mi::Uint32 local_x = x % tile->get_resolution_x();

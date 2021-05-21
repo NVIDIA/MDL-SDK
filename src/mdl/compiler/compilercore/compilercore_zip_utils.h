@@ -235,7 +235,9 @@ enum MDL_zip_container_error_code
     EC_CONTAINER_NOT_EXIST,     ///< A container does not exists.
     EC_CONTAINER_OPEN_FAILED,   ///< A container could not be opened.
     EC_FILE_OPEN_FAILED,        ///< A file could not be opened.
-    EC_INVALID_CONTAINER,       ///< A container is invalid.
+    EC_INVALID_CONTAINER,       ///< A container is invalid (compression error).
+    EC_INVALID_MANIFEST,        ///< A container has no MANIFEST, or it is not the first entry.
+    EC_MANIFEST_PARSER,         ///< The parser for the MANIFEST detects an error.
     EC_NOT_FOUND,               ///< A file was not found (inside an archive).
     EC_IO_ERROR,                ///< Some I/O error occurred.
     EC_CRC_ERROR,               ///< A CRC error occurred.

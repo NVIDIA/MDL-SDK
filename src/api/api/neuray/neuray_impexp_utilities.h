@@ -361,7 +361,7 @@ public:
     ///
     /// \param db_transaction   The DB transaction to be used.
     /// \param tags             The elements to be exported.
-    /// \param recurse          Indicates whether dependecies are to be included.
+    /// \param recurse          Indicates whether dependencies are to be included.
     /// \param time_stamp       Only elements that have been changed since the time stamp are
     ///                         included (or \c NULL to include all elements).
     /// \param shortcuts_mdl    If \c true, some MDL dependencies are skipped/simplified, e.g.,
@@ -384,7 +384,7 @@ private:
     ///
     /// \param db_transaction   The DB transaction to be used.
     /// \param tag              The element to be exported.
-    /// \param recurse          Indicates whether dependecies are to be included.
+    /// \param recurse          Indicates whether dependencies are to be included.
     /// \param time_stamp       Only elements that have been changed since the time stamp are
     ///                         included (or \c NULL to include all elements).
     /// \param shortcuts_mdl    If \c true, some MDL dependencies are skipped/simplified, e.g.,

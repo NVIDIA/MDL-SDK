@@ -65,7 +65,7 @@ bool DAG_ir_checker::check_instance(Generated_code_dag::Material_instance const 
     Store<Type_factory const *>          type_fact(m_tf,        &inst->get_type_factory());
     Store<Value_factory const *>         value_fact(m_vf,       &inst->get_value_factory());
 
-    DAG_ir_walker walker(m_alloc, /*as_tree=*/false);
+    DAG_ir_walker walker(m_alloc);
 
     m_errors = 0;
 
@@ -285,14 +285,12 @@ size_t DAG_ir_checker::check_call(DAG_call const *call)
                 IType_array const *a_a_tp = as<IType_array>(arg_tp);
 
                 IType const *c_p_tp = p_type;
-                IType const *c_a_tp = arg_tp;
 
                 if (p_a_tp != NULL && a_a_tp != NULL &&
                     !p_a_tp->is_immediate_sized() && a_a_tp->is_immediate_sized())
                 {
                     // assigning an immediate size to a deferred size is ok
                     c_p_tp = p_a_tp->get_element_type();
-                    c_a_tp = a_a_tp->get_element_type();
                 }
 
                 // TODO: type binding

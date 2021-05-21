@@ -108,7 +108,7 @@ public:
     /// Returns \c NULL if not supported.
     virtual mi::neuraylib::ICanvas* get_canvas( mi::Size i) const = 0;
 
-    /// Returns the image format, or the empy string if not available.
+    /// Returns the image format, or the empty string if not available.
     virtual const char* get_image_format() const = 0;
 
     /// Creates a mipmap for the i'th uv-tile.
@@ -395,7 +395,7 @@ public:
     /// and \c NULL otherwise.
     const std::string& get_resolved_container_membername( mi::Uint32 uvtile_id = 0) const;
 
-    /// Retuns the tag of the implementation class.
+    /// Returns the tag of the implementation class.
     ///
     /// Might be an invalid tag after default construction.
     DB::Tag get_impl_tag() const { return m_impl_tag; }

@@ -37,11 +37,12 @@
 #include "neuray_expression_impl.h"
 #include "neuray_function_call_impl.h"
 #include "neuray_function_definition_impl.h"
+#include "neuray_material_definition_impl.h"
 #include "neuray_mdl_execution_context_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_type_impl.h"
 
-#include <boost/shared_ptr.hpp>
+#include <mi/neuraylib/inumber.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 
@@ -64,14 +65,86 @@ mi::base::IInterface* Function_definition_impl::create_api_class(
     mi::Uint32 argc,
     const mi::base::IInterface* argv[])
 {
-    if( argc != 0)
+    if( argc != 1)
         return nullptr;
-    return (new Function_definition_impl())->cast_to_major();
+
+    mi::base::Handle<const mi::IBoolean> arg0( argv[0]->get_interface<mi::IBoolean>());
+    if( !arg0)
+        return nullptr;
+
+    return (new Function_definition_impl( arg0->get_value<bool>()))->cast_to_major();
+}
+
+Function_definition_impl::Function_definition_impl( bool materials_are_functions)
+  : Parent_type(),
+    m_materials_are_functions( materials_are_functions)
+{
+}
+
+const mi::base::IInterface* Function_definition_impl::get_interface(
+    const mi::base::Uuid& interface_id) const
+{
+    // Handle all other cases first. In particular, IDb_element is requested before the instance is
+    // fully set up and functionality on the underlying DB element, like is_material(), is
+    // available.
+    if(    interface_id != mi::neuraylib::IMaterial_definition::IID()
+        && interface_id != mi::neuraylib::IFunction_definition::IID())
+        return Parent_type::get_interface( interface_id);
+
+    // Handle special cases of function and material definitions.
+    bool is_mat = is_material();
+
+    if( interface_id == mi::neuraylib::IMaterial_definition::IID() && !is_mat)
+        return nullptr;
+    if( interface_id == mi::neuraylib::IMaterial_definition::IID() &&  is_mat)
+        return Material_definition_impl::create_api_class( this);
+
+    if( interface_id == mi::neuraylib::IFunction_definition::IID() && !is_mat)
+        return Parent_type::get_interface( interface_id);
+    if( interface_id == mi::neuraylib::IFunction_definition::IID() && is_mat)
+        return m_materials_are_functions ? Parent_type::get_interface( interface_id) : nullptr;
+
+    ASSERT( M_NEURAY_API, false);
+    return nullptr;
+}
+
+mi::base::IInterface* Function_definition_impl::get_interface(
+    const mi::base::Uuid& interface_id)
+{
+    // Handle all other cases first. In particular, IDb_element is requested before the instance is
+    // fully set up and functionality on the underlying DB element, like is_material(), is
+    // available.
+    if(    interface_id != mi::neuraylib::IMaterial_definition::IID()
+        && interface_id != mi::neuraylib::IFunction_definition::IID())
+        return Parent_type::get_interface( interface_id);
+
+    // Handle special cases of function and material definitions.
+    bool is_mat = is_material();
+
+    if( interface_id == mi::neuraylib::IMaterial_definition::IID() && !is_mat)
+        return nullptr;
+    if( interface_id == mi::neuraylib::IMaterial_definition::IID() &&  is_mat)
+        return Material_definition_impl::create_api_class( this);
+
+    if( interface_id == mi::neuraylib::IFunction_definition::IID() && !is_mat)
+        return Parent_type::get_interface( interface_id);
+    if( interface_id == mi::neuraylib::IFunction_definition::IID() && is_mat)
+        return m_materials_are_functions ? Parent_type::get_interface( interface_id) : nullptr;
+
+    ASSERT( M_NEURAY_API, false);
+    return nullptr;
 }
 
 mi::neuraylib::Element_type Function_definition_impl::get_element_type() const
 {
-    return mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION;
+    bool is_mat = is_material();
+
+    if( !is_mat)
+        return mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION;
+
+    return m_materials_are_functions
+        ? mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION
+        : mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION;
 }
 
 const char* Function_definition_impl::get_module() const
@@ -124,6 +197,11 @@ bool Function_definition_impl::is_exported() const
 bool Function_definition_impl::is_uniform() const
 {
     return get_db_element()->is_uniform();
+}
+
+bool Function_definition_impl::is_material() const
+{
+    return get_db_element()->is_material();
 }
 
 const mi::neuraylib::IType* Function_definition_impl::get_return_type() const
@@ -206,7 +284,8 @@ const mi::neuraylib::IAnnotation_list* Function_definition_impl::get_parameter_a
 
 const char* Function_definition_impl::get_thumbnail() const
 {
-    return get_db_element()->get_thumbnail();
+    m_cached_thumbnail = get_db_element()->get_thumbnail();
+    return !m_cached_thumbnail.empty() ? m_cached_thumbnail.c_str() : nullptr;
 }
 
 bool Function_definition_impl::is_valid(mi::neuraylib::IMdl_execution_context* context) const
@@ -215,21 +294,6 @@ bool Function_definition_impl::is_valid(mi::neuraylib::IMdl_execution_context* c
     MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
 
     return  get_db_element()->is_valid(get_db_transaction(), mdl_context);
-}
-
-mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
-    const mi::neuraylib::IExpression_list* arguments, mi::Sint32* errors) const
-{
-    mi::base::Handle<const MDL::IExpression_list> arguments_int(
-        get_internal_expression_list( arguments));
-    boost::shared_ptr<MDL::Mdl_function_call> db_call(
-        get_db_element()->create_function_call( get_db_transaction(), arguments_int.get(), errors));
-    if( !db_call)
-        return nullptr;
-    mi::neuraylib::IFunction_call* api_call
-        = get_transaction()->create<mi::neuraylib::IFunction_call>(  "__Function_call");
-    static_cast<Function_call_impl* >( api_call)->get_db_element()->swap( *db_call.get());
-    return api_call;
 }
 
 const mi::neuraylib::IExpression* Function_definition_impl::get_body() const
@@ -257,6 +321,28 @@ const mi::neuraylib::IExpression* Function_definition_impl::get_temporary( mi::S
 const char* Function_definition_impl::get_temporary_name( mi::Size index) const
 {
     return get_db_element()->get_temporary_name( get_db_transaction(), index );
+}
+
+mi::neuraylib::IFunction_call* Function_definition_impl::create_function_call(
+    const mi::neuraylib::IExpression_list* arguments, mi::Sint32* errors) const
+{
+    mi::base::Handle<const MDL::IExpression_list> arguments_int(
+        get_internal_expression_list( arguments));
+    std::shared_ptr<MDL::Mdl_function_call> db_call(
+        get_db_element()->create_function_call( get_db_transaction(), arguments_int.get(), errors));
+    if( !db_call)
+        return nullptr;
+
+   mi::base::Handle<mi::IBoolean> materials_are_functions(
+        get_transaction()->create<mi::IBoolean>());
+    materials_are_functions->set_value( m_materials_are_functions);
+    const mi::base::IInterface* argv[1];
+    argv[0] = materials_are_functions.get();
+    mi::neuraylib::IFunction_call* api_call
+        = get_transaction()->create<mi::neuraylib::IFunction_call>(  "__Function_call", 1, argv);
+
+    static_cast<Function_call_impl* >( api_call)->get_db_element()->swap( *db_call.get());
+    return api_call;
 }
 
 } // namespace NEURAY

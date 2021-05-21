@@ -60,6 +60,7 @@ public:
         // configurations.
         //
         // Param:  transaction     The DB transaction to resolve resources.
+        // Param:  mdl_factory     The MDL factory.
         // Param:  keep_structure  The structures produced by the compiler do not always 
         //                         match the structure of the input material, e.g., constants are 
         //                         transformed to parameters this printer focuses on producing mdl 
@@ -67,6 +68,7 @@ public:
         //                         closer to the compiler output. Therefore, set true.
         Context(
             mi::neuraylib::ITransaction* transaction,
+            mi::neuraylib::IMdl_factory* mdl_factory,
             bool keep_structure);
 
         // modules that have been imported directly by the module and used by the input material
@@ -87,8 +89,14 @@ public:
         // reset private fields of the context to allow reuse
         void reset();
 
+        // calls IMdl_factory::decode_name() if encoded names are enabled, otherwise returns \p name
+        std::string decode_name(const std::string& name);
+
         // required to resolve resources
         mi::neuraylib::ITransaction* m_transaction;
+
+        // the MDL factory
+        mi::base::Handle<mi::neuraylib::IMdl_factory> m_mdl_factory;
 
         // stream to build up the mdl code
         std::stringstream m_print;

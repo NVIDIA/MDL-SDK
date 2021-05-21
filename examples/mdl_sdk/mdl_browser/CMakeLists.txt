@@ -76,5 +76,7 @@ add_subdirectory(mdl_qt_plugin)
 # applications
 add_subdirectory(mdl_browser)
 
-# add tests if available
+# -------------------------------------------------------------------------------------------------
+# Add tests if available
+# -------------------------------------------------------------------------------------------------
 add_tests()

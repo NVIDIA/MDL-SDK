@@ -263,7 +263,7 @@ float2 apply_smootherstep_filter(float2 uv, uint2 size)
 // Texturing functions, 2D
 // ------------------------------------------------------------------------------------------------
 
-uint2 tex_res_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile)
+uint2 tex_res_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
 {
     if (tex == 0) return uint2(0, 0); // invalid texture
 
@@ -278,11 +278,17 @@ uint2 tex_res_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile)
     return res;
 }
 
-// corresponds to ::tex::width(uniform texture_2d tex, int2 uv_tile)
-uint tex_width_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile) { return tex_res_2d(RES_DATA_PARAM tex, uv_tile).x; }
+// corresponds to ::tex::width(uniform texture_2d tex, int2 uv_tile, float frame)
+uint tex_width_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
+{
+    return tex_res_2d(RES_DATA_PARAM tex, uv_tile, frame).x;
+}
 
 // corresponds to ::tex::height(uniform texture_2d tex, int2 uv_tile)
-uint tex_height_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile) { return tex_res_2d(RES_DATA_PARAM tex, uv_tile).y; }
+uint tex_height_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
+{
+    return tex_res_2d(RES_DATA_PARAM tex, uv_tile, frame).y;
+}
 
 // corresponds to ::tex::lookup_float4(uniform texture_2d tex, float2 coord, ...)
 float4 tex_lookup_float4_2d(
@@ -292,7 +298,8 @@ float4 tex_lookup_float4_2d(
     int wrap_u,
     int wrap_v,
     float2 crop_u,
-    float2 crop_v)
+    float2 crop_v,
+    float frame)
 {
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
@@ -322,24 +329,24 @@ float4 tex_lookup_float4_2d(
         mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int2(0, 0));
 }
 
-float3 tex_lookup_float3_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float3 tex_lookup_float3_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).xyz;
+    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float3 tex_lookup_color_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float3 tex_lookup_color_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).xyz;
+    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float2 tex_lookup_float2_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float2 tex_lookup_float2_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).xy;
+    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xy;
 }
 
-float tex_lookup_float_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float tex_lookup_float_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).x;
+    return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).x;
 }
 
 // corresponds to ::tex::lookup_float4(uniform texture_2d tex, float2 coord, ...) when derivatives are enabled
@@ -350,7 +357,8 @@ float4 tex_lookup_deriv_float4_2d(
     int wrap_u,
     int wrap_v,
     float2 crop_u,
-    float2 crop_v)
+    float2 crop_v,
+    float frame)
 {
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
@@ -380,24 +388,24 @@ float4 tex_lookup_deriv_float4_2d(
         mdl_sampler_tex, coord.val, coord.dx, coord.dy, /*offset=*/ int2(0, 0));
 }
 
-float3 tex_lookup_deriv_float3_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float3 tex_lookup_deriv_float3_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).xyz;
+    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float3 tex_lookup_deriv_color_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float3 tex_lookup_deriv_color_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).xyz;
+    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float2 tex_lookup_deriv_float2_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float2 tex_lookup_deriv_float2_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).xy;
+    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xy;
 }
 
-float tex_lookup_deriv_float_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v)
+float tex_lookup_deriv_float_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
-    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v).x;
+    return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).x;
 }
 
 
@@ -406,7 +414,8 @@ float4 tex_texel_float4_2d(
     RES_DATA_PARAM_DECL
     uint tex,
     int2 coord,
-    int2 uv_tile)
+    int2 uv_tile,
+    float frame)
 {
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
@@ -425,24 +434,24 @@ float4 tex_texel_float4_2d(
     return mdl_textures_2d[NonUniformResourceIndex(array_index)].Load(int3(coord, /*mipmaplevel=*/ 0));
 }
 
-float3 tex_texel_float3_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile)
+float3 tex_texel_float3_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
 {
-    return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile).xyz;
+    return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile, frame).xyz;
 }
 
-float3 tex_texel_color_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile)
+float3 tex_texel_color_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
 {
-    return tex_texel_float3_2d(RES_DATA_PARAM tex, coord, uv_tile);
+    return tex_texel_float3_2d(RES_DATA_PARAM tex, coord, uv_tile, frame);
 }
 
-float2 tex_texel_float2_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile)
+float2 tex_texel_float2_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
 {
-    return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile).xy;
+    return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile, frame).xy;
 }
 
-float tex_texel_float_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile)
+float tex_texel_float_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
 {
-    return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile).x;
+    return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile, frame).x;
 }
 
 
@@ -450,7 +459,7 @@ float tex_texel_float_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile)
 // Texturing functions, 3D
 // ------------------------------------------------------------------------------------------------
 
-uint3 tex_res_3d(RES_DATA_PARAM_DECL uint tex)
+uint3 tex_res_3d(RES_DATA_PARAM_DECL uint tex, float frame)
 {
     if (tex == 0) return uint3(0, 0, 0); // invalid texture
 
@@ -466,13 +475,13 @@ uint3 tex_res_3d(RES_DATA_PARAM_DECL uint tex)
 }
 
 // corresponds to ::tex::width(uniform texture_3d tex, int2 uv_tile)
-uint tex_width_3d(RES_DATA_PARAM_DECL uint tex) { return tex_res_3d(RES_DATA_PARAM tex).x; }
+uint tex_width_3d(RES_DATA_PARAM_DECL uint tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).x; }
 
 // corresponds to ::tex::height(uniform texture_3d tex, int2 uv_tile)
-uint tex_height_3d(RES_DATA_PARAM_DECL uint tex) { return tex_res_3d(RES_DATA_PARAM tex).y; }
+uint tex_height_3d(RES_DATA_PARAM_DECL uint tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).y; }
 
 // corresponds to ::tex::depth(uniform texture_3d tex, int2 uv_tile)
-uint tex_depth_3d(RES_DATA_PARAM_DECL uint tex) { return tex_res_3d(RES_DATA_PARAM tex).z; }
+uint tex_depth_3d(RES_DATA_PARAM_DECL uint tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).z; }
 
 // corresponds to ::tex::lookup_float4(uniform texture_3d tex, float2 coord, ...)
 float4 tex_lookup_float4_3d(
@@ -484,7 +493,8 @@ float4 tex_lookup_float4_3d(
     int wrap_w,
     float2 crop_u,
     float2 crop_v,
-    float2 crop_w)
+    float2 crop_w,
+    float frame)
 {
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
@@ -514,31 +524,32 @@ float4 tex_lookup_float4_3d(
         mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
 }
 
-float3 tex_lookup_float3_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,float2 crop_u, float2 crop_v, float2 crop_w)
+float3 tex_lookup_float3_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
-    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xyz;
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).xyz;
 }
 
-float3 tex_lookup_color_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w)
+float3 tex_lookup_color_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
-    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xyz;
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).xyz;
 }
 
-float2 tex_lookup_float2_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w)
+float2 tex_lookup_float2_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
-    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).xy;
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).xy;
 }
 
-float tex_lookup_float_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w)
+float tex_lookup_float_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
-    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w).x;
+    return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).x;
 }
 
 // corresponds to ::tex::texel_float4(uniform texture_3d tex, float3 coord)
 float4 tex_texel_float4_3d(
     RES_DATA_PARAM_DECL
     uint tex,
-    int3 coord)
+    int3 coord,
+    float frame)
 {
     if (tex == 0) return float4(0, 0, 0, 0); // invalid texture
 
@@ -556,24 +567,24 @@ float4 tex_texel_float4_3d(
     return mdl_textures_3d[NonUniformResourceIndex(array_index)].Load(int4(coord, /*mipmaplevel=*/ 0));
 }
 
-float3 tex_texel_float3_3d(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float3 tex_texel_float3_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
 {
-    return tex_texel_float4_3d(RES_DATA_PARAM tex, coord).xyz;
+    return tex_texel_float4_3d(RES_DATA_PARAM tex, coord, frame).xyz;
 }
 
-float3 tex_texel_color_3d(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float3 tex_texel_color_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
 {
-    return tex_texel_float3_3d(RES_DATA_PARAM tex, coord);
+    return tex_texel_float3_3d(RES_DATA_PARAM tex, coord, frame);
 }
 
-float2 tex_texel_float2_3d(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float2 tex_texel_float2_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
 {
-    return tex_texel_float4_3d(RES_DATA_PARAM tex, coord).xy;
+    return tex_texel_float4_3d(RES_DATA_PARAM tex, coord, frame).xy;
 }
 
-float tex_texel_float_3d(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float tex_texel_float_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
 {
-    return tex_texel_float4_3d(RES_DATA_PARAM tex, coord).x;
+    return tex_texel_float4_3d(RES_DATA_PARAM tex, coord, frame).x;
 }
 
 
@@ -856,7 +867,9 @@ float4 scene_data_lookup_floatX(
         }
 
         // convert to float, int or color data
-        float4 value_a, value_b, value_c;
+        float4 value_a = float4(0, 0, 0, 0);
+        float4 value_b = float4(0, 0, 0, 0);
+        float4 value_c = float4(0, 0, 0, 0);
         switch (info.GetElementType())
         {
             case SCENE_DATA_ELEMENT_TYPE_FLOAT: // reinterpret as float
@@ -1034,7 +1047,9 @@ int4 scene_data_lookup_intX(
         }
 
         // convert to float, int or color data
-        int4 value_a, value_b, value_c;
+        int4 value_a = int4(0, 0, 0, 0);
+        int4 value_b = int4(0, 0, 0, 0);
+        int4 value_c = int4(0, 0, 0, 0);
         switch (info.GetElementType())
         {
             case SCENE_DATA_ELEMENT_TYPE_FLOAT: // reinterpret as float and convert to int

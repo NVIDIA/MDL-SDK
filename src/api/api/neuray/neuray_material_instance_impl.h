@@ -35,46 +35,75 @@
 
 #include <mi/neuraylib/imaterial_instance.h>
 
-#include "neuray_db_element_impl.h"
-#include "neuray_attribute_set_impl.h"
+#include <mi/base/handle.h>
+#include <mi/base/interface_implement.h>
+#include <mi/neuraylib/ifunction_call.h>
 
 namespace MI {
 
-namespace MDL { class Mdl_material_instance; }
+namespace MDL { class Mdl_function_call; }
 
 namespace NEURAY {
 
 /// This class implements MDL material instances.
+///
+/// Note that this class does not use the usual mixins, but implements all methods by forwarding to
+/// the wrapped function call (with the exception of get_element_type() and get_interface()).
 class Material_instance_impl final
-    : public Attribute_set_impl<Db_element_impl<mi::neuraylib::IMaterial_instance,
-    MDL::Mdl_material_instance> >
+  : public mi::base::Interface_implement<mi::neuraylib::IMaterial_instance>
 {
-
 public:
 
-    static DB::Element_base* create_db_element(
-        mi::neuraylib::ITransaction* transaction,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[]);
+    static mi::neuraylib::IMaterial_instance* create_api_class(
+        mi::neuraylib::IFunction_call* impl);
 
-    static mi::base::IInterface* create_api_class(
-        mi::neuraylib::ITransaction* transaction,
-        mi::Uint32 argc,
-        const mi::base::IInterface* argv[]);
+    static const mi::neuraylib::IMaterial_instance* create_api_class(
+        const mi::neuraylib::IFunction_call* impl);
 
-    // public API methods
+    // public API methods (IInterface)
+
+    const mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) const;
+
+    mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id);
+
+    // public API methods (IAttribute_set)
+
+    mi::IData* create_attribute( const char* name, const char* type) final;
+
+    bool destroy_attribute( const char* name) final;
+
+    const mi::IData* access_attribute( const char* name) const final;
+
+    mi::IData* edit_attribute( const char* name) final;
+
+    bool is_attribute( const char* name) const final;
+
+    const char* get_attribute_type_name( const char* name) const final;
+
+    mi::Sint32 set_attribute_propagation(
+        const char* name, mi::neuraylib::Propagation_type value) final;
+
+    mi::neuraylib::Propagation_type get_attribute_propagation( const char* name) const final;
+
+    const char* enumerate_attributes( mi::Sint32 index) const final;
+
+    // public API methods (IScene_element)
 
     mi::neuraylib::Element_type get_element_type() const final;
+
+    // public API methods (IMaterial_instance)
 
     const char* get_material_definition() const final;
 
     const char* get_mdl_material_definition() const final;
 
+    const mi::neuraylib::IType* get_return_type() const final;
+
     mi::Size get_parameter_count() const final;
 
-    const char* get_parameter_name(mi::Size index) const final;
+    const char* get_parameter_name( mi::Size index) const final;
 
-    mi::Size get_parameter_index(const char* name) const final;
+    mi::Size get_parameter_index( const char* name) const final;
 
     const mi::neuraylib::IType_list* get_parameter_types() const final;
 
@@ -91,19 +120,28 @@ public:
         const char* name,
         const mi::neuraylib::IExpression* argument) final;
 
-    mi::neuraylib::ICompiled_material* create_compiled_material(
-        mi::Uint32 flags,
-        mi::neuraylib::IMdl_execution_context* context) const final;
-
     bool is_default() const final;
 
-    bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
-
-    mi_static_assert(sizeof(Compilation_options) == sizeof(mi::Uint32));
+    bool is_valid( mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi::Sint32 repair(
         mi::Uint32 flags,
         mi::neuraylib::IMdl_execution_context* context) final;
+
+    mi::neuraylib::ICompiled_material* create_compiled_material(
+        mi::Uint32 flags,
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    // internal (part of IDb_element, although not derived from it)
+
+    const MDL::Mdl_function_call* get_db_element() const;
+
+    MDL::Mdl_function_call* get_db_element();
+
+private:
+    Material_instance_impl( mi::neuraylib::IFunction_call* impl);
+
+    mi::base::Handle<mi::neuraylib::IFunction_call> m_impl;
 };
 
 } // namespace NEURAY

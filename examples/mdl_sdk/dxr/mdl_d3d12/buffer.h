@@ -193,10 +193,13 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 round_to_power_of_two(size_in_byte,
                 D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT))
         {
+
+            auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+            auto resource_desc = CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte);
             if (log_on_failure(m_app->get_device()->CreateCommittedResource(
-                &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+                &heap_properties,
                 D3D12_HEAP_FLAG_NONE,
-                &CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte),
+                &resource_desc,
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(&m_resource)),

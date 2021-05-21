@@ -93,11 +93,17 @@ private:
     /// The DDS header.
     Header m_header;
 
-    /// The DDS image.
-    mutable Image m_image;
+    /// The DDS DX10 header extension.
+    Header_dx10 m_header_dx10;
+
+    /// Indicates whether a DX10 header present / #m_header_dx10 is valid.
+    bool m_is_header_dx10;
 
     /// The pixel type (decoded from the header).
     IMAGE::Pixel_type m_pixel_type;
+
+    /// The DDS image.
+    mutable Image m_image;
 };
 
 } // namespace DDS

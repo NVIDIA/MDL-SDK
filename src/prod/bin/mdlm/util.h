@@ -80,6 +80,7 @@ namespace mdlm
         static void log_verbose(const std::string & msg);
         static void log_debug(const std::string & msg);
         static void log(const std::string & msg, mi::base::Message_severity severity);
+        static void log(const mi::neuraylib::IMdl_execution_context* context);
 
         /// Utility routines for logging messages
         /// This is not controlled by verbosity

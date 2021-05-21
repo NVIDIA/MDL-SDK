@@ -65,6 +65,10 @@ them, assertions, and configurations.
   - \subpage mi_neuray_examples
   - \ref mi_neuray_example_topics
 
+\section mi_neuray_contents_bindings Language Bindings
+
+  - \subpage mi_neuray_bindings_python
+
 \section mi_neuray_contents_ref_manual Reference Manual
 
   - \BaseApiName Reference
@@ -115,7 +119,7 @@ them, assertions, and configurations.
   - \subpage mi_neuray_biblio
   - \subpage mi_def_lexicographic_order
 \if MDL_BIN_RELEASE  
-  - <b><a href="../../release_notes/relnotes_mdl_sdk.pdf">Release Notes</a></b> 
+  - <b><a href="../release_notes/relnotes_mdl_sdk.pdf">Release Notes</a></b> 
 \endif
 
 */

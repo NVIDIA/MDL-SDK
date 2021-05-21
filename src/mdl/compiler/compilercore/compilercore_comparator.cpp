@@ -1142,7 +1142,7 @@ bool Comparator::compare_types(
     case IType::TK_EDF:
     case IType::TK_VDF:
     case IType::TK_BSDF_MEASUREMENT:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         return true;
     case IType::TK_ENUM:

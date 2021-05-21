@@ -71,21 +71,7 @@ public:
     mi::neuraylib::IExpression_factory* create_expression_factory(
         mi::neuraylib::ITransaction* transaction) final;
 
-    mi::Sint32 create_variants(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const mi::IArray* variant_data) final;
-
-    mi::Sint32 create_materials(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const mi::IArray* material_data) final;
-
-    mi::Sint32 create_materials(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const mi::IArray* mdl_data,
-        mi::neuraylib::IMdl_execution_context *context) final;
+    mi::neuraylib::IMdl_execution_context* create_execution_context() final;
 
     mi::neuraylib::IValue_texture* create_texture(
         mi::neuraylib::ITransaction* transaction,
@@ -107,16 +93,55 @@ public:
         bool shared,
         mi::Sint32* errors) final;
 
-    mi::neuraylib::IMdl_execution_context* create_execution_context() final;
-    
+    mi::neuraylib::IMdl_module_builder* create_module_builder(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        mi::neuraylib::Mdl_version min_module_version,
+        mi::neuraylib::Mdl_version max_module_version,
+        mi::neuraylib::IMdl_execution_context* context) final;
+
     mi::neuraylib::IMdl_module_transformer* create_module_transformer(
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         mi::neuraylib::IMdl_execution_context* context) final;
-    
+
     const mi::IString* get_db_module_name( const char* mdl_name) final;
 
     const mi::IString* get_db_definition_name( const char* mdl_name) final;
+
+    void analyze_uniform(
+        mi::neuraylib::ITransaction* transaction,
+        const char* root_name,
+        bool root_uniform,
+        const mi::neuraylib::IExpression* query_expr,
+        bool& query_result,
+        mi::IString* error_path,
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    const mi::IString* decode_name( const char* name) final;
+
+    const mi::IString* encode_module_name( const char* name) final;
+
+    const mi::IString* encode_function_definition_name(
+        const char* name, const mi::IArray* parameter_types) const final;
+
+    const mi::IString* encode_type_name( const char* name) const final;
+
+    mi::Sint32 deprecated_create_variants(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const mi::IArray* variant_data) final;
+
+    mi::Sint32 deprecated_create_materials(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const mi::IArray* material_data) final;
+
+    mi::Sint32 deprecated_create_materials(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const mi::IArray* mdl_data,
+        mi::neuraylib::IMdl_execution_context *context) final;
 
     // internal methods
 

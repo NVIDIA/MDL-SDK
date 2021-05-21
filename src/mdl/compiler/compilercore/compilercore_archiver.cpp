@@ -110,8 +110,9 @@ protected:
 
     /// Fire an event.
     void fire_event(IArchive_tool_event::Event ev, char const *name) {
-        if (m_cb != NULL)
+        if (m_cb != NULL) {
             m_cb->fire_event(ev, name);
+        }
     }
 
     /// Creates a new error.
@@ -848,8 +849,9 @@ static void print_list(T const &list, char const *n)
 void Archive_builder::add_compressed_resource_suffix(
     char const *suffix)
 {
-    if (suffix[0] == '.')
+    if (suffix[0] == '.') {
         ++suffix;
+    }
 
     string s(suffix, m_alloc);
     lower_suffix(s);
@@ -896,8 +898,9 @@ bool Archive_builder::collect(
             package_name = string(root_package, scope, m_alloc);
             root_package = scope + 2;
 
-            if (!m_arch_prefix.empty())
+            if (!m_arch_prefix.empty()) {
                 m_arch_prefix.append('/');
+            }
             m_arch_prefix.append(package_name);
         }
 
@@ -906,8 +909,9 @@ bool Archive_builder::collect(
             m_mdl_16_names = true;
         }
 
-        if (!m_archive_name.empty())
+        if (!m_archive_name.empty()) {
             m_archive_name.append('.');
+        }
         m_archive_name.append(package_name);
 
         if (scope != NULL) {
@@ -980,11 +984,12 @@ bool Archive_builder::check_content(
             continue;
         }
 
-        if (e == package)
+        if (e == package) {
             continue;
-        if (package_mdl_allowed && e == package + ".mdl")
+        }
+        if (package_mdl_allowed && e == package + ".mdl") {
             continue;
-        else {
+        } else {
             if (!m_allow_extra_files) {
                 // extra files found
                 error(
@@ -1074,10 +1079,11 @@ string Archive_builder::convert_to_module_name(
     for (size_t i = 0, n = name.size() - 4; i < n; ++i) {
         char c = name[i];
 
-        if (c == '/')
+        if (c == '/') {
             res.append("::");
-        else
+        } else {
             res.append(c);
+        }
     }
     return res;
 }
@@ -1096,8 +1102,9 @@ public:
         IModule const *owner,
         char const    *url) MDL_OVERRIDE
     {
-        if (url == NULL || url[0] == '\0')
+        if (url == NULL || url[0] == '\0') {
             return IResource_restriction_handler::RR_NOT_EXISTANT;
+        }
 
         IAllocator *alloc = m_builder.get_allocator();
         string res(url, alloc);
@@ -1232,8 +1239,9 @@ void Archive_builder::lower_suffix(string &suffix)
 bool Archive_builder::should_be_compressed(string const &fname) const
 {
     size_t suffix_pos = fname.rfind('.');
-    if (suffix_pos == string::npos)
+    if (suffix_pos == string::npos) {
         return false;
+    }
     string suffix = fname.substr(suffix_pos + 1);
     lower_suffix(suffix);
 
@@ -1378,8 +1386,9 @@ bool Archive_builder::create_zip_archive()
             // do not compress resources by default
             zip_int32_t comp_method = ZIP_CM_STORE;
 
-            if (should_be_compressed(fname))
+            if (should_be_compressed(fname)) {
                 comp_method = ZIP_CM_DEFAULT;
+            }
 
             fire_event(
                 comp_method == ZIP_CM_STORE ?
@@ -1400,8 +1409,9 @@ bool Archive_builder::create_zip_archive()
         }
     }
 
-    if (zip_close(za) != 0)
+    if (zip_close(za) != 0) {
         translate_zip_error(za);
+    }
 
     if (m_has_error) {
         return false;
@@ -1578,8 +1588,9 @@ void Archive_extractor::extract(
     }
 
     if (!m_has_error) {
-        if (!m_dest_path.empty())
+        if (!m_dest_path.empty()) {
             mkdir(m_dest_path);
+        }
 
         zip_int64_t n = zip_get_num_entries(za, ZIP_FL_UNCHANGED);
 
@@ -1617,8 +1628,9 @@ void Archive_extractor::extract(
                 mkdir(full_dir);
             }
 
-            if (is_directory)
+            if (is_directory) {
                 continue;
+            }
 
             zip_file_t *zf = zip_fopen_index(za, i, ZIP_FL_UNCHANGED);
             if (zf == NULL) {
@@ -1696,10 +1708,11 @@ void Archive_extractor::mkdir(string const &path)
             mkdir_utf8(get_allocator(), dir.c_str());
         }
 
-        if (next != string::npos)
+        if (next != string::npos) {
             pos = next + 1;
-        else
+        } else {
             break;
+        }
     }
 }
 
@@ -1710,8 +1723,9 @@ void Archive_extractor::copy_data(FILE *dst, zip_file_t *src)
 
     for (;;) {
         zip_int64_t l = zip_fread(src, buf, 1024);
-        if (l == 0)
+        if (l == 0) {
             break;
+        }
         if (l < 0) {
             translate_zip_error(src);
             break;
@@ -1731,9 +1745,11 @@ void Archive_extractor::copy_data(FILE *dst, zip_file_t *src)
 // Normalize separators to '/'.
 void Archive_extractor::normalize_separators(string &path)
 {
-    for (size_t i = 0, n = path.size(); i < n; ++i)
-        if (path[i] == '\\')
+    for (size_t i = 0, n = path.size(); i < n; ++i) {
+        if (path[i] == '\\') {
             path[i] = '/';
+        }
+    }
 }
 
 // Map a file error.
@@ -1764,6 +1780,16 @@ void Archive_extractor::handle_file_error(
     case EC_INVALID_CONTAINER:
         error(
             INVALID_MDL_ARCHIVE,
+            Error_params(m_alloc).add(archive_name));
+        return;
+    case EC_INVALID_MANIFEST:
+        error(
+            ARCHIVE_HAS_BROKEN_MANIFEST,
+            Error_params(m_alloc).add(archive_name));
+        return;
+    case EC_MANIFEST_PARSER:
+        error(
+            ARCHIVE_MANIFEST_PARSE_ERROR,
             Error_params(m_alloc).add(archive_name));
         return;
     case EC_NOT_FOUND:
@@ -1797,6 +1823,7 @@ void Archive_extractor::handle_file_error(
     case EC_PRE_RELEASE_VERSION:
         error(MDR_PRE_RELEASE_VERSION, Error_params(m_alloc).add(archive_name));
         return;
+
     case EC_INTERNAL_ERROR:
         error(INTERNAL_ARCHIVER_ERROR, Error_params(m_alloc).add(archive_name));
         return;
@@ -1809,8 +1836,9 @@ void Archive_extractor::handle_file_error(
 unsigned char Manifest_scanner::look_byte(unsigned ofs)
 {
     MDL_ASSERT(ofs < 3);
-    if (ofs >= 3)
+    if (ofs >= 3) {
         ofs = 0;
+    }
 
     while (size() <= ofs) {
         int c = m_is->read_char();
@@ -1828,8 +1856,9 @@ unsigned char Manifest_scanner::look_byte(unsigned ofs)
 // Throw bytes from the ring buffer.
 void Manifest_scanner::throw_bytes(unsigned count)
 {
-    if (m_eof && count > size())
+    if (m_eof && count > size()) {
         return;
+    }
     MDL_ASSERT(count <= size());
     m_r_pos = (m_r_pos + count) & 7u;
 }
@@ -1910,8 +1939,9 @@ unsigned Manifest_scanner::get_unicode_char()
         ++m_curr_line;
     }
 
-    if (m_eof)
+    if (m_eof) {
         return ~0;
+    }
 
     return res;
 }
@@ -1942,8 +1972,9 @@ restart:
 
     m_text.clear();
 
-    if (m_c == ~0)
+    if (m_c == ~0) {
         return TK_EOF;
+    }
 
     // token start
     m_text.append(m_c);
@@ -1973,8 +2004,9 @@ restart:
         for (;;) {
             m_c = get_unicode_char();
 
-            if (m_c == '"' || m_c == ~0)
+            if (m_c == '"' || m_c == ~0) {
                 break;
+            }
             if (m_c == '\\') {
                 m_c = get_unicode_char();
                 if (m_c != '\\' && m_c != '"') {
@@ -2074,8 +2106,9 @@ void Manifest_parser::error()
     // forward to the next token starting at column 1
     for (;;) {
         m_scanner.next();
-        if (m_scanner.current_token() == TK_EOF || m_scanner.token_column() == 1)
+        if (m_scanner.current_token() == TK_EOF || m_scanner.token_column() == 1) {
             break;
+        }
     }
 }
 
@@ -2093,28 +2126,29 @@ MDL_zip_container_archive *MDL_zip_container_archive::open(
     MDL_zip_container_header header_info = header_supported_read_version;
     zip_t* za = MDL_zip_container::open(alloc, path, err, header_info);
 
-    if (err != EC_OK)
+    if (err != EC_OK) {
         return NULL;
+    }
 
     zip_int64_t manifest_idx = zip_name_locate(za, "MANIFEST", ZIP_FL_ENC_UTF_8);
     if (manifest_idx != 0) {
         // MANIFEST must be the first entry in an archive
         zip_close(za);
-        err = EC_INVALID_CONTAINER;
+        err = EC_INVALID_MANIFEST;
         return NULL;
     }
 
     zip_stat_t st;
     if (zip_stat_index(za, manifest_idx, ZIP_FL_ENC_UTF_8, &st) < 0) {
         zip_close(za);
-        err = EC_INVALID_CONTAINER;
+        err = EC_INVALID_MANIFEST;
         return NULL;
     }
 
     if ((st.valid & ZIP_STAT_COMP_METHOD) == 0 || st.comp_method != ZIP_CM_STORE) {
         // MANIFEST is not stored uncompressed
         zip_close(za);
-        err = EC_INVALID_CONTAINER;
+        err = EC_INVALID_MANIFEST;
         return NULL;
     }
 
@@ -2127,7 +2161,7 @@ MDL_zip_container_archive *MDL_zip_container_archive::open(
         if (!m.is_valid_interface()) {
             // MANIFEST missing or parse error occurred
             builder.destroy(archiv);
-            err = EC_INVALID_CONTAINER;
+            err = EC_MANIFEST_PARSER;
             return NULL;
         }
     }
@@ -2145,8 +2179,9 @@ Manifest const *MDL_zip_container_archive::get_manifest()
         m_manifest = parse_manifest();
         m = m_manifest.get();
     }
-    if (m != NULL)
+    if (m != NULL) {
         m->retain();
+    }
     return m;
 }
 
@@ -2191,10 +2226,11 @@ Manifest *MDL_zip_container_archive::parse_manifest()
         if (manifest != NULL) {
             string arc_name(get_container_name(), m_alloc);
             size_t pos = arc_name.rfind(os_separator());
-            if (pos == string::npos)
+            if (pos == string::npos) {
                 pos = 0;
-            else
+            } else {
                 pos += 1;
+            }
             size_t e = arc_name.length() - 4; // skip ".mdr"
             arc_name = arc_name.substr(pos, e - pos);
             manifest->set_archive_name(arc_name.c_str());
@@ -2288,23 +2324,25 @@ void Manifest_builder::add_pair(u32string const &key, u32string const &value)
         }
 
         IMDL::MDL_version ver = IMDL::MDL_VERSION_1_0;
-        if (v == "1.0")
+        if (v == "1.0") {
             ver = IMDL::MDL_VERSION_1_0;
-        else if (v == "1.1")
+        } else if (v == "1.1") {
             ver = IMDL::MDL_VERSION_1_1;
-        else if (v == "1.2")
+        } else if (v == "1.2") {
             ver = IMDL::MDL_VERSION_1_2;
-        else if (v == "1.3")
+        } else if (v == "1.3") {
             ver = IMDL::MDL_VERSION_1_3;
-        else if (v == "1.4")
+        } else if (v == "1.4") {
             ver = IMDL::MDL_VERSION_1_4;
-        else if (v == "1.5")
+        } else if (v == "1.5") {
             ver = IMDL::MDL_VERSION_1_5;
-        else if (v == "1.6")
+        } else if (v == "1.6") {
             ver = IMDL::MDL_VERSION_1_6;
-        else if (v == "1.7")
+        } else if (v == "1.7") {
             ver = IMDL::MDL_VERSION_1_7;
-        else {
+        } else if (v == "1.8") {
+            ver = IMDL::MDL_VERSION_1_8;
+        } else {
             error(EC_UNSUPPORTED_MDL_VERSION);
         }
 
@@ -2377,10 +2415,12 @@ void Manifest_builder::add_pair(u32string const &key, u32string const &value)
 // Check existence of mandatory fields.
 void Manifest_builder::check_mandatory_fields_existence()
 {
-    if ((m_seen_fields & MF_MDL) == 0)
+    if ((m_seen_fields & MF_MDL) == 0) {
         error(EC_MDL_FIELD_MISSING);
-    if ((m_seen_fields & MF_VERSION) == 0)
+    }
+    if ((m_seen_fields & MF_VERSION) == 0) {
         error(EC_VERSION_FIELD_MISSING);
+    }
 }
 
 // Return number of errors.
@@ -2395,8 +2435,9 @@ void Manifest_builder::parse_export(
     string const                   &full)
 {
     size_t ofs = 0;
-    if (full.length() >= 2 && full[0] == ':' && full[1] == ':')
+    if (full.length() >= 2 && full[0] == ':' && full[1] == ':') {
         ofs = 2;
+    }
 
     size_t pos = full.rfind("::");
     if (pos == string::npos || pos <= ofs) {
@@ -2428,8 +2469,9 @@ void Manifest_builder::parse_export(
 void Manifest_builder::parse_module(string const &full)
 {
     size_t ofs = 0;
-    if (full.length() >= 2 && full[0] == ':' && full[1] == ':')
+    if (full.length() >= 2 && full[0] == ':' && full[1] == ':') {
         ofs = 2;
+    }
 
     string m(full.substr(ofs));
 
@@ -2446,12 +2488,14 @@ void Manifest_builder::parse_dependency(string const &full)
     size_t l   = full.length();
     size_t s = 0, e = 0;
 
-    if (full.length() >= 2 && full[0] == ':' && full[1] == ':')
+    if (full.length() >= 2 && full[0] == ':' && full[1] == ':') {
         s = 2;
+    }
 
     for (e = s; e < l; ++e) {
-        if (full[e] == ' ')
+        if (full[e] == ' ') {
             break;
+        }
     }
 
     string m(full.substr(s, e - s));
@@ -2584,8 +2628,9 @@ void Manifest_builder::check_time_format(string const &s)
 void Manifest_builder::error(Error_code code)
 {
     // for now, just the first error
-    if (m_error == EC_OK)
+    if (m_error == EC_OK) {
         m_error = code;
+    }
 }
 
 // ---------------------------- Archiver ----------------------------
@@ -2651,8 +2696,9 @@ IArchive const *Archive_tool::create_archive(
         for (char const *p = NULL, *s = suffixes; s != NULL; s = p) {
             string suffix(get_allocator());
 
-            if (s[0] == '.')
+            if (s[0] == '.') {
                 ++s;
+            }
             p = strchr(s, ',');
             if (p != NULL) {
                 suffix = string(s, p, get_allocator());
@@ -2702,6 +2748,9 @@ IArchive const *Archive_tool::create_archive(
             break;
         case IArchive_manifest::ERR_SINGLE:
             error(SINGLE_VALUED_KEY, Error_params(alloc).add(key));
+            break;
+        case IArchive_manifest::ERR_KEY_FORMAT:
+            error(INVALID_KEY_IDENT, Error_params(alloc).add(key));
             break;
         }
     }

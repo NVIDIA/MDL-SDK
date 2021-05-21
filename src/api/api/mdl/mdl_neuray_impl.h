@@ -70,6 +70,7 @@ class Mdl_factory_impl;
 class Mdl_i18n_configuration_impl;
 class Mdl_impexp_api_impl;
 class Mdle_api_impl;
+class Plugin_api_impl;
 class Plugin_configuration_impl;
 }
 
@@ -125,6 +126,11 @@ public:
     /// \note This method does \em not increase the reference count of the return value.
     NEURAY::Class_factory* get_class_factory();
 
+    /// Returns the plugin API.
+    ///
+    /// Useful to get access to the plugin API while it is not yet registered as API component.
+    NEURAY::Plugin_api_impl* get_plugin_api();
+
     /// Counts the number of instances of this class.
     ///
     /// Used by mi_factory() to avoid multiple instances of this class.
@@ -156,6 +162,7 @@ private:
     NEURAY::Mdl_i18n_configuration_impl* m_mdl_i18n_configuration_impl;
     NEURAY::Mdl_impexp_api_impl* m_mdl_impexp_api_impl;
     NEURAY::Mdle_api_impl* m_mdle_api_impl;
+    NEURAY::Plugin_api_impl* m_plugin_api_impl;
     NEURAY::Plugin_configuration_impl* m_plugin_configuration_impl;
     /// Status of the instance, see #get_status().
     Status m_status;

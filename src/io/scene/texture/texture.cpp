@@ -33,7 +33,7 @@
 
 #include "i_texture.h"
 
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_stream.h>
 #include <base/data/serial/i_serializer.h>
 
 #include <mi/base/handle.h>
@@ -48,27 +48,39 @@
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h>
 
-#include <sstream>
 
 namespace MI {
 
 namespace TEXTURE {
 
 Texture::Texture()
+: m_volume_data{}
+, m_image{}
+, m_gamma{0.f}
+, m_compression{TEXTURE_NO_COMPRESSION}
 {
-    m_image       = DB::Tag();
-    m_gamma       = 0.0f;
-    m_compression = TEXTURE_NO_COMPRESSION;
 }
 
 void Texture::set_image( DB::Tag image)
 {
     m_image = image;
+    m_volume_data = DB::Tag{};
 }
 
 DB::Tag Texture::get_image() const
 {
     return m_image;
+}
+
+void Texture::set_volume_data( DB::Tag vol)
+{
+    m_volume_data = vol;
+    m_image = DB::Tag{};
+}
+
+DB::Tag Texture::get_volume_data() const
+{
+    return m_volume_data;
 }
 
 void Texture::set_gamma( mi::Float32 gamma)
@@ -110,6 +122,7 @@ const SERIAL::Serializable* Texture::serialize( SERIAL::Serializer* serializer) 
 {
     Scene_element_base::serialize( serializer);
 
+    serializer->write( m_volume_data);
     serializer->write( m_image);
     serializer->write( m_gamma);
     serializer->write( static_cast<Uint>( m_compression));
@@ -120,6 +133,7 @@ SERIAL::Serializable *Texture::deserialize( SERIAL::Deserializer* deserializer)
 {
     Scene_element_base::deserialize( deserializer);
 
+    deserializer->read( &m_volume_data);
     deserializer->read( &m_image);
     deserializer->read( &m_gamma);
     Uint value;
@@ -130,13 +144,14 @@ SERIAL::Serializable *Texture::deserialize( SERIAL::Deserializer* deserializer)
 
 void Texture::dump() const
 {
-    std::ostringstream s;
+    LOG::MESSAGE::Info log{M_SCENE, LOG::Mod_log::C_DATABASE};
 
-    s << "Image: tag " << m_image.get_uint() << std::endl;
-    s << "Gamma: " << m_gamma << std::endl;
-    s << "Compression: " << m_compression << std::endl;
-
-    LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
+    if (m_volume_data)
+        log << "Volume: tag " << m_volume_data.get_uint() << std::endl;
+    else
+        log << "Image: tag " << m_image.get_uint() << std::endl;
+    log << "Gamma: " << m_gamma << "\n"
+           "Compression: " << m_compression << std::endl;
 }
 
 size_t Texture::get_size() const
@@ -155,10 +170,10 @@ DB::Journal_type Texture::get_journal_flags() const
 
 Uint Texture::bundle( DB::Tag* results, Uint size) const
 {
-    if( !m_image || size == 0)
+    if( (!m_image && !m_volume_data) || size == 0)
         return 0;
 
-    *results = m_image;
+    *results = m_image ? m_image : m_volume_data;
     return 1;
 }
 
@@ -166,6 +181,8 @@ void Texture::get_scene_element_references( DB::Tag_set* result) const
 {
     if( m_image)
         result->insert( m_image);
+    if( m_volume_data)
+        result->insert( m_volume_data);
 }
 
 DB::Tag load_mdl_texture(

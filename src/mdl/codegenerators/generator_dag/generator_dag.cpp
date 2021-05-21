@@ -243,6 +243,10 @@ Code_generator_dag::Code_generator_dag(
         MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS,
         "false",
         "Exposes names of let expressions as named temporaries");
+    m_options.add_option(
+        MDL_CG_DAG_OPTION_TARGET_MATERIAL_MODE,
+        "false",
+        "Enable target mode compilation");
 }
 
 char const *Code_generator_dag::get_target_language() const
@@ -254,20 +258,23 @@ char const *Code_generator_dag::get_target_language() const
 IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
 {
     Generated_code_dag::Compile_options options = 0;
-    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS))
+    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS)) {
         options |= Generated_code_dag::FORBID_LOCAL_FUNC_CALLS;
-    else if (m_options.get_bool_option(MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES))
+    } else if (m_options.get_bool_option(MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES)) {
         options |= Generated_code_dag::INCLUDE_LOCAL_ENTITIES;
-
-    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_MARK_DAG_GENERATED))
+    }
+    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_MARK_DAG_GENERATED)) {
         options |= Generated_code_dag::MARK_GENERATED_ENTITIES;
-
-    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS))
+    }
+    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS)) {
         options |= Generated_code_dag::UNSAFE_MATH_OPTIMIZATIONS;
-
-
-    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS))
+    }
+    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS)) {
         options |= Generated_code_dag::EXPOSE_NAMES_OF_LET_EXPRESSIONS;
+    }
+    if (m_options.get_bool_option(MDL_CG_DAG_OPTION_TARGET_MATERIAL_MODE)) {
+        options |= Generated_code_dag::TARGET_MATERIAL_MODEL_MODE;
+    }
 
     Generated_code_dag *result = m_builder.create<Generated_code_dag>(
         m_builder.get_allocator(),

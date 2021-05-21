@@ -71,6 +71,10 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     [loop]
     for (uint i = 0; i < max_ray_depth; ++i)
     {
+        // last path segment skips next event estimation
+        if (i == max_ray_depth - 1)
+            add_flag(payload.flags, FLAG_LAST_PATH_SEGMENT);
+
         TraceRay(
             SceneBVH,               // AccelerationStructure
             RAY_FLAG_NONE,          // RayFlags

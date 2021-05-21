@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright 2020 NVIDIA Corporation. All rights reserved.
+ * Copyright 2021 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -765,11 +765,47 @@ export texture_coordinate_info transform_coordinate(
     // We would need access to all 3 vertices of the triangle to approximate tangents
     // worst is that we don't have info on the handedness of the source transformation
 
+    // TODO: Approximation1 disabled, requires improved texture result slot scheduling
+    return texture_coordinate_info(
+            float3(r_position.x,r_position.y,r_position.z),
+            coordinate.tangent_u,
+            coordinate.tangent_v);
+
+    //Approximation1: try approximating it for the case that the rotation is only aroud z and assuming the texture layout is nice and z is ~constant.
+    //just pretend there is no other rotation happening
+    //get rid of scaling and translation. Then extract fields where sin and cos would be in a simple 2d transform around z.
+    /*float4 u = transform[0];
+    float3 ru = math::normalize(float3(u.x,u.y,u.z));
+    float cos =  ru.x;
+    float sin =  ru.y;
+    if((math::abs(sin)+math::abs(cos)) > 0.01) //make sure there is a valid tangent after transform
+        return texture_coordinate_info(
+            float3(r_position.x,r_position.y,r_position.z),
+            math::normalize(cos * coordinate.tangent_u - sin * coordinate.tangent_v),
+            math::normalize(cos * coordinate.tangent_v + sin * coordinate.tangent_u));
+    else
+        return texture_coordinate_info(
+            float3(r_position.x,r_position.y,r_position.z),
+            coordinate.tangent_u,
+            coordinate.tangent_v);*/
+
+    //Approximation2: transform multiple points. and estimate based on difference. More expensive, maybe less issues if transform is really 3d?
+    /*float3 position_du = coordinate.position+coordinate.tangent_u;
+    float4 r_position_du = transform * float4(position_du.x,position_du.y,position_du.z,1);
+    float4 diff = r_position_du-r_position;
+    float3 new_tangent_u = math::normalize(float3(diff.x,diff.y,diff.z));
+    //orthonormalize and construct tangentv
+    float handedness =  math::dot(math::cross(coordinate.tangent_u,coordinate.tangent_v),state::normal());
+    float3 new_tangent_v = math::cross( new_tangent_u,state::normal());
+    new_tangent_u = math::cross(state::normal(), new_tangent_v );
+    if(handedness <0)
+        new_tangent_v = -new_tangent_v;
+
 
     return texture_coordinate_info(
         float3(r_position.x,r_position.y,r_position.z),
-        coordinate.tangent_u,
-        coordinate.tangent_v);
+        new_tangent_u,
+        new_tangent_v);*/
 }
 
 export uniform float4x4 rotation_translation_scale(
@@ -2271,7 +2307,7 @@ float texel_maximum(uniform texture_2d texture, int2 coord)
 {
     return math::max_value(tex::texel_color(texture, coord));
 }
-float texel_lookup(uniform texture_2d texture, int2 coord,uniform mono_mode bump_source = mono_average)
+float texel_lookup(uniform texture_2d texture, int2 coord, uniform mono_mode bump_source)
 {
     switch (bump_source){
     case mono_average:
@@ -2284,8 +2320,17 @@ float texel_lookup(uniform texture_2d texture, int2 coord,uniform mono_mode bump
         return  texel_maximum(texture, coord);
     }
 }
+float4 texels_lookup(uniform texture_2d texture, int y, int x0, int x1, int x2, int x3, uniform mono_mode bump_source)
+{
+    return float4(
+        texel_lookup(texture, int2(x0, y), bump_source),
+        texel_lookup(texture, int2(x1, y), bump_source),
+        texel_lookup(texture, int2(x2, y), bump_source),
+        texel_lookup(texture, int2(x3, y), bump_source));
+}
 
-float interpolate_texspace_l( uniform texture_2d texture, float4 st, int4 texi, uniform mono_mode bump_source=mono_average)
+
+float interpolate_texspace_l( uniform texture_2d texture, float4 st, int4 texi, uniform mono_mode bump_source)
 {
     return
         texel_lookup(texture, int2(texi.x, texi.y),bump_source) * st.z +
@@ -2293,6 +2338,30 @@ float interpolate_texspace_l( uniform texture_2d texture, float4 st, int4 texi, 
         texel_lookup(texture, int2(texi.x, texi.w),bump_source) * st.w +
         texel_lookup(texture, int2(texi.z, texi.w),bump_source) * st.x;
 }
+
+// cubic b-spline evaluation and derivative
+struct value_deriv {
+    float4 value;
+    float4 deriv;
+};
+value_deriv compute_spline_weights(float u)
+{
+    float uu = u * u;
+    float uuu = uu * u;
+    float tmp = 0.5f * uu;
+    return value_deriv(
+        float4(
+            (-1.0f / 6.0f) * uuu + tmp - 0.5f * u + (1.0f / 6.0f),
+                      0.5f * uuu -  uu +            (4.0f / 6.0f),
+                     -0.5f * uuu + tmp + 0.5f * u + (1.0f / 6.0f),
+            ( 1.0f / 6.0f) * uuu),
+        float4(
+            -tmp              + u - 0.5f,
+             1.5f * uu - 2.0f * u,
+            -1.5f * uu        + u + 0.5f,
+            tmp));
+}
+
 
 export float3 file_bump_texture(
     uniform texture_2d texture
@@ -2321,8 +2390,9 @@ export float3 file_bump_texture(
         [[
             anno::description("deprecated, usewrap_mode=tex::wrap_clip. Defines wrap_clamp behavior. If true, lookup outside [0,1] results in no bump"),
             anno::hidden()
-        ]]
-
+        ]],
+    uniform bool b_spline = false
+         [[ anno::description("Use b-Spline interpolation for smooth result") ]]
 )
 [[
     anno::description("Computes a normal based on a heightfield-style bump texture"),
@@ -2360,15 +2430,44 @@ export float3 file_bump_texture(
     int2 texi2 = texremapu( crop_texres, crop_ofs, float2(tex2.x + 1.f, tex2.y + 1.f), wrap_u, wrap_v );
     int2 texi3 = texremapu( crop_texres, crop_ofs, float2(tex2.x + 2.f, tex2.y + 2.f), wrap_u, wrap_v );
 
-    float2 lerp( tex2.x - math::floor(tex2.x), tex2.y - math::floor(tex2.y));
-    lerp.x *= lerp.x*lerp.x*(lerp.x*(lerp.x*6.f-15.f)+10.f); // smootherstep
-    lerp.y *= lerp.y*lerp.y*(lerp.y*(lerp.y*6.f-15.f)+10.f);
-    float4 st(lerp.x*lerp.y, lerp.x*(1.0f-lerp.y), (1.0f-lerp.x)*(1.0f-lerp.y), (1.0f-lerp.x)*lerp.y);
-    bump_texspace = float2(
-        (interpolate_texspace_l(texture, st, int4(texi2.x,texi1.y,texi3.x,texi2.y),bump_source)
-            - interpolate_texspace_l(texture, st, int4(texi0.x,texi1.y,texi1.x,texi2.y),bump_source)) * (-factor),
-        (interpolate_texspace_l(texture, st, int4(texi1.x,texi2.y,texi2.x,texi3.y),bump_source)
-            - interpolate_texspace_l(texture, st, int4(texi1.x,texi0.y,texi2.x,texi1.y),bump_source)) * (-factor));
+    float u = tex2.x - math::floor(tex2.x);
+    float v = tex2.y - math::floor(tex2.y);
+
+    if (!b_spline)
+    {
+        u *= u*u*(u*(u*6.0f-15.0f)+10.0f); // smootherstep
+        v *= v*v*(v*(v*6.0f-15.0f)+10.0f);
+        float4 st(u*v, u*(1.0f-v), (1.0f-u)*(1.0f-v), (1.0f-u)*v);
+        bump_texspace = float2(
+            (interpolate_texspace_l(texture, st, int4(texi2.x,texi1.y,texi3.x,texi2.y),bump_source)
+           - interpolate_texspace_l(texture, st, int4(texi0.x,texi1.y,texi1.x,texi2.y),bump_source)) * (-factor),
+            (interpolate_texspace_l(texture, st, int4(texi1.x,texi2.y,texi2.x,texi3.y),bump_source)
+           - interpolate_texspace_l(texture, st, int4(texi1.x,texi0.y,texi2.x,texi1.y),bump_source)) * (-factor));
+    }
+    else
+    {
+        float4 texels0 = texels_lookup(texture, texi0.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
+        float4 texels1 = texels_lookup(texture, texi1.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
+        float4 texels2 = texels_lookup(texture, texi2.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
+        float4 texels3 = texels_lookup(texture, texi3.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
+
+        value_deriv w_u = compute_spline_weights(u);
+        value_deriv w_v = compute_spline_weights(v);
+
+        bump_texspace.x =
+            (texels0.x * w_u.deriv.x + texels0.y * w_u.deriv.y + texels0.z * w_u.deriv.z + texels0.w * w_u.deriv.w) * w_v.value.x +
+            (texels1.x * w_u.deriv.x + texels1.y * w_u.deriv.y + texels1.z * w_u.deriv.z + texels1.w * w_u.deriv.w) * w_v.value.y +
+            (texels2.x * w_u.deriv.x + texels2.y * w_u.deriv.y + texels2.z * w_u.deriv.z + texels2.w * w_u.deriv.w) * w_v.value.z +
+            (texels3.x * w_u.deriv.x + texels3.y * w_u.deriv.y + texels3.z * w_u.deriv.z + texels3.w * w_u.deriv.w) * w_v.value.w;
+
+        bump_texspace.y =
+            (texels0.x * w_v.deriv.x + texels1.x * w_v.deriv.y + texels2.x * w_v.deriv.z + texels3.x * w_v.deriv.w) * w_u.value.x +
+            (texels0.y * w_v.deriv.x + texels1.y * w_v.deriv.y + texels2.y * w_v.deriv.z + texels3.y * w_v.deriv.w) * w_u.value.y +
+            (texels0.z * w_v.deriv.x + texels1.z * w_v.deriv.y + texels2.z * w_v.deriv.z + texels3.z * w_v.deriv.w) * w_u.value.z +
+            (texels0.w * w_v.deriv.x + texels1.w * w_v.deriv.y + texels2.w * w_v.deriv.z + texels3.w * w_v.deriv.w) * w_u.value.w;
+
+        bump_texspace *= (-2.0f * factor);
+    }
 
     float3 result = normal + uvw.tangent_u * bump_texspace.x + uvw.tangent_v * bump_texspace.y;
     return math::normalize(result);
@@ -2377,7 +2476,10 @@ export float3 file_bump_texture(
 
 export float3 tangent_space_normal_texture(
     uniform texture_2d texture
-        [[ anno::description("The input texture") ]],
+        [[
+            anno::description("The input texture"),
+            anno::usage("normal")
+        ]],
     uniform float factor = 1.0f
         [[ anno::description("Determines the degree of bumpiness") ]],
     uniform bool flip_tangent_u = false
@@ -4360,26 +4462,26 @@ export texture_return flake_noise_texture(
         [[
             anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
         ]],
-    uniform float  intensity = 1.0
+    float intensity = 1.0
         [[
             anno::description("Specifies the maximum reflectivity of any flake"),
             anno::hard_range(0.0, 1.0)
         ]],
-    uniform float  scale = 1.0
+    float scale = 1.0
         [[
             anno::description("Size of the features of the pattern")
         ]],
-    uniform float  density = 1.0
+    float density = 1.0
         [[
             anno::description("Controls the amount of flakes in the substrate. The higher the number, the bigger is the space between flakes"),
             anno::soft_range(0.0, 100.0)
         ]],
-    uniform int  noise_type = 0
+    uniform int noise_type = 0
         [[
             anno::description("Selects the noise type (0: Classic, 1: Worley)"),
             anno::hard_range(0, 1)
         ]],
-    uniform float  maximum_size = 1.0
+    float maximum_size = 1.0
         [[
             anno::description("Controls the shape of flakes in the secondary noise mode (Worley)")
         ]],
@@ -4435,20 +4537,20 @@ export float3 flake_noise_bump_texture(
         [[
             anno::description("Parameterization to be used for texture mapping. Defaults to texture channel 0.")
         ]],
-    uniform float  scale = 1.0
+    float scale = 1.0
         [[
             anno::description("Size of the features of the pattern")
         ]],
-    uniform float  strength = 1.0
+    float strength = 1.0
         [[
             anno::description("Controls the randomness of the flake orientation")
         ]],
-    uniform int  noise_type = 0
+    uniform int noise_type = 0
         [[
             anno::description("Selects the noise type (0: Classic, 1: Worley)"),
             anno::hard_range(0, 1)
         ]],
-    uniform float  maximum_size = 1.0
+    float maximum_size = 1.0
         [[
             anno::description("Controls the shape of flakes in the secondary noise mode (Worley)")
         ]],
@@ -4457,7 +4559,7 @@ export float3 flake_noise_bump_texture(
             anno::description("Metric used in the secondary noise mode (Worley: 0: Euclidean, 1: Manhattan, 2: Chebyshev)"),
             anno::hard_range(0, 2)
         ]],
-    float3  normal = state::normal()
+    float3 normal = state::normal()
         [[
             anno::description("Base normal for the bump mapping.")
         ]]
@@ -5019,7 +5121,7 @@ export float3 blend_normals(
 
     n1_t.z += 1.0f;
     n2_t.x = -n2_t.x;
-    n2_t.y = -n2_t.z;
+    n2_t.y = -n2_t.y;
 
     float3 n_t = n1_t * math::dot(n1_t, n2_t) / n1_t.z - n2_t;
 
@@ -5027,4 +5129,59 @@ export float3 blend_normals(
         tu * n_t.x +
         tv * n_t.y +
         n * n_t.z);
+}
+
+//
+// iray inhomogeneous volume support
+//
+
+// utility, describing the how the lookup works
+float volume_lookup_float(
+    uniform texture_3d vol,
+    uniform float4x4 transform,
+    uniform bool density_relative_to_size)
+{
+    // - definition: the volume scene element always has size [0,1]^3
+    // - it can be transformed in the scenegraph (by whatever transforms we may allow)
+    // => for the actual lookup we transform the position to object space (clipped to [0,1]^3 range)
+    float3 position = state::transform_point(state::coordinate_internal, state::coordinate_object, state::position());
+    float4 uvw4 = transform * float4(position.x, position.y, position.z, 1.0f);
+    float3 uvw = float3(uvw4.x, uvw4.y, uvw4.z);
+
+    float density = tex::lookup_float(vol, uvw, tex::wrap_clip);
+
+    // we offer two modes:
+    // - volume density doesn't change with scaling (cloud gets optically thicker if scaled up)
+    // - volume density changes with scaling (optical thickness stays the same)
+    // (note: of course that only works properly like that if the scaling is uniform along all axes)
+    if (density_relative_to_size)
+        density *= state::transform_scale(state::coordinate_object, state::coordinate_world, 1.0f);
+
+    return density;
+}
+
+export struct volume_coefficients {
+    color scattering_coefficient;
+    color absorption_coefficient;
+};
+
+// from scalar density (typically between 0 and 1) used as multiplier for uniform color coefficients
+export volume_coefficients lookup_volume_coefficients(
+    uniform texture_3d density,
+    uniform color scattering_multiplier,
+    uniform color absorption_multiplier,
+    uniform color scattering_offset = float3(0.0f),
+    uniform color absorption_offset = float3(0.0f),
+    uniform float4x4 transform = float4x4(1.0f),
+    uniform float density_multiplier = 1.0f,
+    uniform bool density_relative_to_size = false)
+[[
+    anno::noinline()
+]]
+{
+    float density_val = volume_lookup_float(density, transform, density_relative_to_size) * density_multiplier;
+
+    return volume_coefficients(
+        scattering_coefficient: scattering_multiplier * density_val + scattering_offset * density_multiplier,
+        absorption_coefficient: absorption_multiplier * density_val + absorption_offset * density_multiplier);
 }

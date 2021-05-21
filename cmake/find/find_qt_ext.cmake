@@ -179,7 +179,9 @@ function(QT_GEN_EMBEDDED_RESOURCES)
     list(APPEND _DEPS ${CMAKE_CURRENT_SOURCE_DIR}/${QT_GEN_EMBEDDED_RESOURCES_INPUT})
     foreach(_DEP ${QT_GEN_EMBEDDED_RESOURCES_DEPENDS})
         list(APPEND _DEPS ${CMAKE_CURRENT_SOURCE_DIR}/${_DEP})
-        message(STATUS "- depends:        ${CMAKE_CURRENT_SOURCE_DIR}/${_DEP}")
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- depends:        ${CMAKE_CURRENT_SOURCE_DIR}/${_DEP}")
+        endif()
     endforeach()
 
     add_custom_command(

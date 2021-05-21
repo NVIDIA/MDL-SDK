@@ -46,8 +46,6 @@ bool I18N_option_parser::Test()
 {
     I18N_option_parser optionParser;
 
-    //cout << "=========================== TEST OPTIONS" << endl;
-
     Option o;
     Option o1(o); // Copy ctor
     Option o2 = o1; // Copy ctor
@@ -55,18 +53,16 @@ bool I18N_option_parser::Test()
 
     // Test cmmand line parsing
     vector<string> command_line;
-    command_line.push_back("i18n");
-    command_line.push_back("-v");
-    command_line.push_back("6");
-    command_line.push_back("-h");
-    command_line.push_back("-p");
-    command_line.push_back("C:/Users/pamand/Documents/mdl");
+    command_line.push_back("-n");
     command_line.push_back("-p");
     command_line.push_back("C:/ProgramData/NVIDIA Corporation/mdl");
-    command_line.push_back("install");
-    command_line.push_back("--force");
-    command_line.push_back("automotive_catalog.mdr");
-    command_line.push_back("D:/MDL/Archives/automotive_catalog/trunk");
+    command_line.push_back("create_xliff");
+    command_line.push_back("-l");
+    command_line.push_back("de");
+    command_line.push_back("-f");
+    command_line.push_back("-m");
+    command_line.push_back("::nvidia::core_definitions");
+
     vector<string>::const_iterator it = command_line.begin();
 
     for (it = command_line.begin();

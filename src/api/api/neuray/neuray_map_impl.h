@@ -111,7 +111,7 @@ private:
     /// Note that a structure type name can become invalid because it was unregistered between check
     /// and the actual construction. Other types (like "Ref") require a transaction. Hence,
     /// create_api_class() checks whether the constructor was successful.
-    bool successfully_constructed() { return m_successfully_constructed; }
+    bool successfully_constructed() const { return m_successfully_constructed; }
 
     /// Indicates whether the value has the correct value type.
     ///
@@ -123,19 +123,15 @@ private:
     ///
     /// If \p index is a valid index, return \c true and the key in \c key.
     /// Otherwise return \c false.
-    ///
-    /// \note The implementation is sub-optimal (takes linear time). It should be possible to make
-    ///       it constant time for subsequent accesses to indices in increasing order by caching
-    ///       the last iterator (assuming there are no changes in between).
     bool index_to_key( mi::Size index, std::string& key) const;
 
     /// The type of the map of interface pointers below.
-    typedef std::map<std::string, mi::base::IInterface*> m_map_type;
+    typedef std::map<std::string, mi::base::IInterface*> Map_type;
 
     /// The map of interface pointers.
     ///
     /// Do not call resize() directly on this vector. Use set_length_internal() instead.
-    m_map_type m_map;
+    Map_type m_map;
 
     /// The type name of the map itself.
     std::string m_type_name;
@@ -161,7 +157,7 @@ private:
     mutable mi::Size m_cached_index;
 
     /// The iterator for #m_cached_index.
-    mutable m_map_type::const_iterator m_cached_iterator;
+    mutable Map_type::const_iterator m_cached_iterator;
 
     /// Indicates whether the constructor successfully constructed the instance.
     /// \see #successfully_constructed()

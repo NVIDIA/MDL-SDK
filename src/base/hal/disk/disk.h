@@ -255,50 +255,6 @@ bool file_copy(
 std::string convert_to_forward_slashes(
     const std::string& path);
 
-/// Enable disktrace verbosity.
-/// \note This implementation is based on a (global) static variable!
-void set_disktrace_enabled();
-
-/// Find a file on a given set of search paths.
-//@{
-/// Find a file either by its own name only or on the given directory \p dir.
-/// \param filename name of the file
-/// \param dir the given directory
-/// \return absolute path to the file when found, empty string else
-std::string find_file_on_path(
-    const char* file_name,
-    const std::string& dir=std::string());
-
-/// Find a file by name and given set of search paths.
-/// \param filename name of the file
-/// \param search_paths the list of search paths
-/// \return absolute path to the file when found, empty string else
-std::string find_file_on_paths(
-    const char* file_name,
-    const std::vector<std::string>& search_paths);
-
-/// Find a file by name and given set of search paths.
-/// \param filename name of the file
-/// \param begin begin of the list of search paths
-/// \param end end of the list of search paths
-/// \return absolute path to the file when found, empty string else
-template <typename InputIterator>
-std::string find_file_on_paths(
-    const char* file_name,
-    InputIterator begin,
-    InputIterator end);
-
-/// Find a file by name and given set of search paths. This function is for the sake of
-/// convenience only when using some of the interface functions of the path module or
-/// the IMill, eg \c const char* const* IMill::get_shader_path(int*).
-/// \param filename name of the file
-/// \param paths_count number of passed-in paths
-/// \param search_paths the list of search paths
-/// \return absolute path to the file when found, empty string else
-std::string find_file_on_paths(
-    const char* filename,
-    int paths_count,
-    const char* const* search_paths);
 //@}
 
 }

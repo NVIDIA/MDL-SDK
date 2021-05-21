@@ -74,4 +74,18 @@ void Scene_element_base::get_references( DB::Tag_set* result) const
 
 } // namespace SCENE
 
+namespace VOLUME {
+
+DB::Tag load_mdl_volume_texture(
+    DB::Transaction* transaction,
+    const std::string& file_name,
+    const std::string& container_file_name,
+    const std::string& container_member_name,
+    const std::string& channel,
+    bool shared)
+{
+    return DB::Tag{};
+}
+
+}
 } // namespace MI

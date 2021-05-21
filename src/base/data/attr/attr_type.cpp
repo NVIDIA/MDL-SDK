@@ -594,7 +594,7 @@ const SERIAL::Serializable *Type::do_serialize(
     SERIAL::Serializer	*serializer) const	// useful functions for byte streams
 {
     mi_static_assert(TYPE_NUM < 256);			// type and flags
-    serializer->write(m_name);
+    SERIAL::write(serializer,m_name);
     serializer->write(m_typecode);
     serializer->write(m_const);
     serializer->write(m_spare);
@@ -612,12 +612,12 @@ const SERIAL::Serializable *Type::do_serialize(
         if (m_enum) {
             serializer->write_size_t(m_enum->size());
             for (size_t i=0; i<m_enum->size(); ++i) {
-                serializer->write((*m_enum)[i].first);
-                serializer->write((*m_enum)[i].second);
+                SERIAL::write(serializer,(*m_enum)[i].first);
+                SERIAL::write(serializer,(*m_enum)[i].second);
             }
         }
     }
-    serializer->write(m_type_name);
+    SERIAL::write(serializer,m_type_name);
 
     return this+1;
 }
@@ -634,7 +634,7 @@ const SERIAL::Serializable *Type::do_serialize(
 SERIAL::Serializable *Type::deserialize(
     SERIAL::Deserializer *deser)	// useful functions for byte streams
 {
-    deser->read(&m_name);
+    SERIAL::read(deser,&m_name);
     deser->read(&m_typecode);
     deser->read(&m_const);
     deser->read(&m_spare);
@@ -667,16 +667,16 @@ SERIAL::Serializable *Type::deserialize(
             m_enum->reserve(s);
             for (size_t i=0; i<s; ++i) {
                 int i_val;
-                deser->read(&i_val);
+                SERIAL::read(deser,&i_val);
                 string s_val;
-                deser->read(&s_val);
+                SERIAL::read(deser,&s_val);
                 m_enum->push_back(std::make_pair(i_val, s_val));
             }
         }
         else
             m_enum = 0;
     }
-    deser->read(&m_type_name);
+    SERIAL::read(deser,&m_type_name);
 
     return this+1;
 }
@@ -725,45 +725,45 @@ std::string Type::print() const
         result += "const ";
     result += type_name(Type_code(m_typecode));
     if (m_arraysize != 1) {
-        result += "[";
+        result += '[';
         if (m_arraysize)
             result += std::to_string(m_arraysize);
-        result += "]";
+        result += ']';
     }
     if (!m_type_name.empty()) {
-        result += " ";
-        result += m_type_name.c_str();
+        result += ' ';
+        result += m_type_name;
     }
     if (m_typecode == TYPE_STRUCT) {
         result += " {";
         for(Type *c = m_child; c; c = c->m_next) {
-            result += " ";
+            result += ' ';
             result += c->print();
-            result += " ";
+            result += ' ';
             if(const char *field_name = c->get_name())
                 result += field_name;
             else
                 result += "<none>";
-            result += ";";
+            result += ';';
         }
         result += " }";
     }
     else if (m_typecode == TYPE_ATTACHABLE) {
-        result += "<";
+        result += '<';
         result += m_child->m_next->print();
-        result += ">";
+        result += '>';
     }
     else if (m_typecode == TYPE_CALL) {
         result += " {";
         for(Type *c = m_child; c; c = c->m_next) {
-            result += " ";
+            result += ' ';
             result += c->print();
-            result += " ";
+            result += ' ';
             if(const char *field_name = c->get_name())
                 result += field_name;
             else
                 result += "<none>";
-            result += ";";
+            result += ';';
         }
         result += " }";
     }
@@ -784,7 +784,7 @@ SERIAL::Serializable *Type::factory()
 // private implementation of the deep copy
 // Note that this code assumes a proper initialization of all members prior
 // to this call (since it simply calls delete on m_child, m_next, m_name).
-// As soon as there was a change to boost::shared_ptr the clean-up code can go away,
+// As soon as there was a change to std::shared_ptr the clean-up code can go away,
 // since assignment will properly free all allocated resources.
 void Type::do_the_deep_copy(
     const Type	&other)			// deep-copy this type
@@ -904,20 +904,27 @@ Type_iterator_rec &Type_iterator_rec::operator++()
         }
     }
 
+    // The code below does not work for m_roots.size() == 0. Causes a compiler warning with GCC 7
+    // and crashes at runtime (out of memory).
+    ASSERT(M_ATTR, m_roots.size() > 0);
+    if (m_roots.size() == 0)
+        return *this;
+    size_t n = m_roots.size() - 1;
+
     // ...or proceed to the next Type
     if ((next = m_iter->get_next()) != 0) {
         // simply replace current root with the next Type
-        m_roots[m_roots.size()-1] = next;
+        m_roots[n] = next;
         m_iter = next;
         return *this;
     }
 
     // ...or as a last resort proceed with the parent
     while (!next) {
-        m_roots.resize(m_roots.size()-1);
+        m_roots.resize(n);
         if (!m_roots.empty()) {
             next = get_root()->get_next();
-            //m_roots[m_roots.size()-1] = next;
+            //m_roots[n] = next;
         }
         else
             break;
@@ -925,7 +932,7 @@ Type_iterator_rec &Type_iterator_rec::operator++()
 
     if (next)
         // simply replace current root with the next Type
-        m_roots[m_roots.size()-1] = next;
+        m_roots[n] = next;
     m_iter = next;
 
     return *this;

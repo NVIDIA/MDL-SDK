@@ -173,6 +173,7 @@ void Mdlc::usage()
         "\t\tNONE\t(the default)\n"
         "\t\tMDL\n"
         "\t\tDAG\n"
+        "\t\tDAGTM\n"
         "\t\tBIN\n"
         "  --dump <option>\n"
         "  -d <option>\n"
@@ -312,6 +313,8 @@ int Mdlc::run(int argc, char *argv[])
                 m_target_lang = TL_MDL;
             } else if (strcasecmp(mi::getopt::optarg, "dag") == 0) {
                 m_target_lang = TL_DAG;
+            } else if (strcasecmp(mi::getopt::optarg, "dagtm") == 0) {
+                m_target_lang = TL_DAGTM;
             } else if (strcasecmp(mi::getopt::optarg, "bin") == 0) {
                 m_target_lang = TL_BIN;
             } else {
@@ -572,6 +575,7 @@ bool Mdlc::backend(IModule const *module)
         }
         break;
     case TL_DAG:
+    case TL_DAGTM:
         if (module->is_valid()) {
             mi::base::Handle<ICode_generator_dag> generator =
                 mi::base::make_handle(m_imdl->load_code_generator("dag"))
@@ -587,9 +591,10 @@ bool Mdlc::backend(IModule const *module)
             mi::mdl::Options &dag_opts = generator->access_options();
             dag_opts.set_option(
                 MDL_CG_OPTION_INTERNAL_SPACE, m_internal_space.c_str());
-            if (m_dump_dag)
+            if (m_dump_dag) {
                 dag_opts.set_option(
                     MDL_CG_DAG_OPTION_DUMP_MATERIAL_DAG, "true");
+            }
 
             // We support local entity usage inside MDL materials in neuray, but ...
             dag_opts.set_option( MDL_CG_DAG_OPTION_NO_LOCAL_FUNC_CALLS, "false");
@@ -597,6 +602,9 @@ bool Mdlc::backend(IModule const *module)
             dag_opts.set_option( MDL_CG_DAG_OPTION_INCLUDE_LOCAL_ENTITIES, "true");
             // We enable unsafe math optimizations
             dag_opts.set_option(MDL_CG_DAG_OPTION_UNSAFE_MATH_OPTIMIZATIONS, "true");
+            // Enable target material mode compilation if requested
+            dag_opts.set_option(MDL_CG_DAG_OPTION_TARGET_MATERIAL_MODE,
+                m_target_lang == TL_DAGTM ? "true" : "false");
 
             apply_backend_options(dag_opts);
 

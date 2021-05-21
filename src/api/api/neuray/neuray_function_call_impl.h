@@ -38,6 +38,8 @@
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
 
+namespace mi { namespace neuraylib { class ICompiled_material; } }
+
 namespace MI {
 
 namespace MDL { class Mdl_function_call; }
@@ -61,13 +63,25 @@ public:
         mi::Uint32 argc,
         const mi::base::IInterface* argv[]);
 
-    // public API methods
+    Function_call_impl( bool materials_are_functions);
+
+    // public API methods (IInterface)
+
+    const mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) const;
+
+    mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id);
+
+    // public API methods (IScene_element)
 
     mi::neuraylib::Element_type get_element_type() const final;
+
+    // public API methods (IFunction_call)
 
     const char* get_function_definition() const final;
 
     const char* get_mdl_function_definition() const final;
+
+    bool is_material() const final;
 
     const mi::neuraylib::IType* get_return_type() const final;
 
@@ -97,8 +111,15 @@ public:
     bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
 
     mi::Sint32 repair(
-        mi::Uint32 flags,
-        mi::neuraylib::IMdl_execution_context* context) final;
+        mi::Uint32 flags, mi::neuraylib::IMdl_execution_context* context) final;
+
+    // internal
+
+    mi::neuraylib::ICompiled_material* create_compiled_material(
+        mi::Uint32 flags, mi::neuraylib::IMdl_execution_context* context) const;
+
+private:
+    bool m_materials_are_functions;
 };
 
 } // namespace NEURAY

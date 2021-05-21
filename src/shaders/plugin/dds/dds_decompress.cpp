@@ -64,7 +64,8 @@ void Dxt_decompressor::set_source_format(
         case DXTC5:
             m_decompress_block = &Dxt_decompressor::decompress_dxtc5; break;
         default:
-            m_decompress_block = 0;
+            assert(false);
+            m_decompress_block = 0; break;
     }
 }
 
@@ -89,7 +90,7 @@ bool Dxt_decompressor::alpha_enabled() const
     return m_mode == COLOR_ALPHA || m_mode == ALPHA_ONLY || m_mode == ALPHA_AS_GREY;
 }
 
-void Dxt_decompressor::decompress_blockline( const mi::Uint8* blocks, mi::Uint32 block_y)
+void Dxt_decompressor::decompress_blockline( const mi::Uint8* blocks, const mi::Uint32 block_y)
 {
     const mi::Uint8* src = blocks + block_y * m_blocks_x * get_bytes_per_block();
     mi::Uint8* dest = &m_buffer[0];
@@ -102,12 +103,12 @@ void Dxt_decompressor::decompress_blockline( const mi::Uint8* blocks, mi::Uint32
 }
 
 /// Converts 16 bit BGR color (565) to 24 bit RGB color (888)
-static void bgr565_to_rgb888( const mi::Uint8* c_in, mi::Uint8* c_out)
+static void bgr565_to_rgb888( const mi::Uint8* const c_in, mi::Uint8* const c_out)
 {
     // red
     c_out[0] =  (c_in[1] & 0xf8 /*11111000*/);
     c_out[0] |= c_out[0] >> 5;
-    // green 
+    // green
     c_out[1] = ((c_in[1] & 0x07 /*00000111*/) << 5) | ((c_in[0] >> 3) & 0x1c /*00011100*/);
     c_out[1] |= c_out[1] >> 6;
     // blue
@@ -119,7 +120,7 @@ static void bgr565_to_rgb888( const mi::Uint8* c_in, mi::Uint8* c_out)
 ///
 /// The color sub-blocks of DXTC3 and DXTC5 are the same,
 /// they are a simpler version of the DXT1 format.
-void Dxt_decompressor::decode_colors( const mi::Uint8* color_block, mi::Uint8* pixels)
+void Dxt_decompressor::decode_colors( const mi::Uint8* const color_block, mi::Uint8* pixels)
 {
     // First 32bit of color_block represent the color table.
     mi::Uint8 color[4][3];
@@ -144,23 +145,23 @@ void Dxt_decompressor::decode_colors( const mi::Uint8* color_block, mi::Uint8* p
 /// Block decompressor method for DXTC1
 ///
 /// This is an expanded version of decode_colors() since DXTC1 supports a 1 bit alpha additionally.
-void Dxt_decompressor::decompress_dxtc1( const mi::Uint8* block, mi::Uint8* pixels)
+void Dxt_decompressor::decompress_dxtc1( const mi::Uint8* const block, mi::Uint8* pixels)
 {
     assert( block);
     assert( pixels);
-    
+
     // First 32bit of block represent the color table.
     mi::Uint8 color[4][4];
     memset( color, 0xff, sizeof( color));
-    
+
     // Decode colors only if requested.
     if( color_enabled()) {
 
         bgr565_to_rgb888( block, color[0]);
         bgr565_to_rgb888( block + 2, color[1]);
         // Interpret block colors as 16 bit integer for comparison
-        mi::Uint16 c0 = block[0] + (block[1] << 8);
-        mi::Uint16 c1 = block[2] + (block[3] << 8);
+        const mi::Uint16 c0 = block[0] + (block[1] << 8);
+        const mi::Uint16 c1 = block[2] + (block[3] << 8);
         if( c0 > c1) {
             for( mi::Uint32 c = 0; c < 3; ++c) {
                 color[2][c] = (2 * color[0][c] + color[1][c] + 1) / 3;
@@ -174,22 +175,22 @@ void Dxt_decompressor::decompress_dxtc1( const mi::Uint8* block, mi::Uint8* pixe
             // Set alpha component of special color.
             color[3][3] = (m_mode == COLOR_ALPHA) ? 0 : 0xff;
         }
-        
+
     } else if( alpha_enabled()) {
 
         // Interpret block colors as 16 bit integer for comparison
-        mi::Uint16 c0 = block[0] + (block[1] << 8);
-        mi::Uint16 c1 = block[2] + (block[3] << 8);
+        const mi::Uint16 c0 = block[0] + (block[1] << 8);
+        const mi::Uint16 c1 = block[2] + (block[3] << 8);
         // If only alpha is decoded, then all colors are white, except the special color.
         if( c0 <= c1) {
             color[3][0] = color[3][1] = color[3][2] = 0; // black
             color[3][3] = (m_mode == ALPHA_AS_GREY) ? 0xff : 0;
         }
     }
-    
+
     // Decode 2-bit color table indices
     for( mi::Uint32 y = 0; y < BLOCK_PIXEL_DIM; ++y) {
-        mi::Uint8 t = block[y + 4];
+        const mi::Uint8 t = block[y + 4];
         for( mi::Uint32 x = 0; x < BLOCK_PIXEL_DIM; ++x) {
             mi::Uint32 index = (t >> (x * 2)) & 0x03;
             memcpy( pixels + x * m_target_component_count, color[index], m_target_component_count);
@@ -202,11 +203,11 @@ void Dxt_decompressor::decompress_dxtc1( const mi::Uint8* block, mi::Uint8* pixe
 ///
 /// A DXTC3 block consists of an alpha sub-block and a color sub-block.
 /// The alpha sub-block has direct 4-bit alpha data.
-void Dxt_decompressor::decompress_dxtc3( const mi::Uint8* block, mi::Uint8* pixels)
+void Dxt_decompressor::decompress_dxtc3( const mi::Uint8* const block, mi::Uint8* pixels)
 {
     assert( block);
     assert( pixels);
-    
+
     if( color_enabled())
         decode_colors( block + 8, pixels);
 
@@ -214,8 +215,8 @@ void Dxt_decompressor::decompress_dxtc3( const mi::Uint8* block, mi::Uint8* pixe
         for( mi::Uint32 y = 0; y < BLOCK_PIXEL_DIM; ++y) {
             for( mi::Uint32 x = 0; x < BLOCK_PIXEL_DIM; ++x) {
 
-                mi::Uint32 index = y * BLOCK_PIXEL_DIM + x;
-                
+                const mi::Uint32 index = y * BLOCK_PIXEL_DIM + x;
+
                 mi::Uint8 alpha = block[index >> 1];
                 alpha = (index % 2 == 0) ? (alpha & 0x0f) : (alpha >> 4);
                 alpha = 17 * alpha; // spread from 0..15 to 0..255
@@ -236,11 +237,11 @@ void Dxt_decompressor::decompress_dxtc3( const mi::Uint8* block, mi::Uint8* pixe
 ///
 /// A DXTC5 block consists of an alpha sub-block and a color sub-block.
 /// The alpha sub-block has indirect 3-bit alpha data and 2 reference alpha values.
-void Dxt_decompressor::decompress_dxtc5( const mi::Uint8* block, mi::Uint8* pixels)
+void Dxt_decompressor::decompress_dxtc5( const mi::Uint8* const block, mi::Uint8* const pixels)
 {
     assert( block);
     assert( pixels);
-    
+
     if(( m_target_component_count == 4 && alpha_enabled()) || m_mode == ALPHA_AS_GREY) {
 
         // First 16 bit of block represent the alpha table.
@@ -279,9 +280,9 @@ void Dxt_decompressor::decompress_dxtc5( const mi::Uint8* block, mi::Uint8* pixe
         for( mi::Uint32 y = 0; y < BLOCK_PIXEL_DIM; ++y) {
             for( mi::Uint32 x = 0; x < BLOCK_PIXEL_DIM; ++x) {
 
-                mi::Uint32 index = y * BLOCK_PIXEL_DIM + x;
-                mi::Uint8 index_alpha = static_cast<mi::Uint8>( alpha_bits >> (index * 3)) & 0x07;
-                mi::Uint8 value = alpha[index_alpha];
+                const mi::Uint32 index = y * BLOCK_PIXEL_DIM + x;
+                const mi::Uint8 index_alpha = static_cast<mi::Uint8>( alpha_bits >> (index * 3)) & 0x07;
+                const mi::Uint8 value = alpha[index_alpha];
 
                 if( m_mode == ALPHA_AS_GREY)
                     memset( pixels2 + x * m_target_component_count, value, 3);
@@ -292,7 +293,7 @@ void Dxt_decompressor::decompress_dxtc5( const mi::Uint8* block, mi::Uint8* pixe
             }
             pixels2 += m_target_width;
         }
-    }    
+    }
 
     if( color_enabled())
         decode_colors( block + 8, pixels);

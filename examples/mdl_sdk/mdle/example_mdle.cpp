@@ -93,7 +93,7 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
         {
             // specify the material/function that will become the "main" of the MDLE
             mi::base::Handle<mi::IString> prototype(data->get_value<mi::IString>("prototype_name"));
-            prototype->set_c_str("mdl::nvidia::sdk_examples::tutorials::example_mod_rough");
+            prototype->set_c_str("mdl::nvidia::sdk_examples::tutorials::example_mod_rough(color,float)");
         }
 
         {
@@ -186,7 +186,7 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
 
             // the main material of an MDLE module is always called "main"
             std::string main_db_name(mdle_db_name->get_c_str());
-            main_db_name += "::main";
+            main_db_name += "::main(color,float)";
 
             std::cerr << "MDLE main DB name: " << main_db_name << std::endl;
 
@@ -316,12 +316,15 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
                 mi::examples::io::get_working_directory() + "/" + mdle_file_name2;
 
             // comparing an MDLE with itself should work
-            mi::Sint32 res = mdle_api->compare_mdle(mdle_path_a.c_str(), mdle_path_a.c_str(), NULL);
+            mi::Sint32 res = mdle_api->compare_mdle(
+                mdle_path_a.c_str(), mdle_path_a.c_str(), context.get());
+            check_success(print_messages(context.get()));
             std::cerr << "Comparing " << mdle_file_name << " with " << mdle_file_name
                       << " resulted in: " << std::to_string(res) << std::endl;
 
             // this will fail
-            res = mdle_api->compare_mdle(mdle_path_a.c_str(), mdle_path_b.c_str(), NULL);
+            res = mdle_api->compare_mdle(mdle_path_a.c_str(), mdle_path_b.c_str(), context.get());
+            check_success(print_messages(context.get()));
             std::cerr << "Comparing " << mdle_file_name << " with " << mdle_file_name2
                 << " resulted in: " << std::to_string(res) << std::endl;
         }

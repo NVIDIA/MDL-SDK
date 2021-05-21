@@ -148,6 +148,8 @@ public:
         P_TIME         = 0x0004, ///< human-readable timestamp
         P_TIME_SECONDS = 0x0080, ///< timestamp in seconds with milliseconds resolution
         P_HOST_THREAD  = 0x0001, ///< ID of the host and thread that generate the log message
+        P_CUDA_DEVICE  = 0x0002, ///< CUDA device ID, if relevant
+        P_TAGS         = 0x0008, ///< tags in Message_details
         P_HOST_NAME    = 0x0100, ///< name of the host that generates the log message
         P_MODULE       = 0x0010, ///< module that generates the log message
         P_CATEGORY     = 0x0020, ///< category of the log message

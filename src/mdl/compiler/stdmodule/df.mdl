@@ -25,9 +25,9 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
-mdl 1.6;
+mdl 1.7;
 
-using ::anno import hard_range;
+using ::anno import hard_range, soft_range;
 using ::state import texture_tangent_u, normal, transform_vector, coordinate_space;
 import ::math::PI;
 
@@ -197,7 +197,15 @@ export bsdf sheen_bsdf(
     color tint              = color(1.0),
     color multiscatter_tint = color(0.0),
     uniform string handle   = ""
-)  [[ intrinsic(), since(1,6) ]];
+) [[ intrinsic(), since(1,6), removed(1,7) ]];
+
+export bsdf sheen_bsdf(
+    float roughness                      [[ hard_range(0.0, +1.0/0.0) ]],
+    color tint              = color(1.0),
+    color multiscatter_tint = color(0.0),
+    bsdf multiscatter       = diffuse_reflection_bsdf(),
+    uniform string handle   = ""
+) [[ intrinsic(), since(1,7) ]];
 
 export edf diffuse_edf (
     uniform string handle = ""
@@ -249,7 +257,7 @@ export vdf anisotropic_vdf (
     uniform string handle  = ""
 ) [[ intrinsic() ]];
 
-// recoloring of bsdf and edf
+// recoloring of bsdf, edf, and vdf
 export bsdf tint(color tint, bsdf base) [[ intrinsic() ]];
 
 export bsdf tint(
@@ -258,7 +266,17 @@ export bsdf tint(
     bsdf  base
 )  [[ intrinsic(), since(1,6) ]];
 
-export edf tint(uniform color tint, edf base) [[ intrinsic() ]];
+export edf tint(
+    uniform color tint,
+    edf base) [[ intrinsic(), removed(1,7) ]];
+
+export edf tint(
+    color tint,
+    edf base) [[ intrinsic(), since(1,7) ]];
+
+export vdf tint(
+    color tint,
+    vdf   base) [[ intrinsic(), since(1,7) ]];
 
 export hair_bsdf tint(color tint, hair_bsdf base) [[ intrinsic(), since(1,6) ]];
 
@@ -273,29 +291,36 @@ export bsdf directional_factor(
     bsdf   base         = bsdf()
 ) [[ intrinsic() ]];
 
+export edf directional_factor(
+    color  normal_tint  = color(1.0),
+    color  grazing_tint = color(1.0),
+    float  exponent     = 5.0,
+    edf    base         = edf()
+) [[ intrinsic(), since(1,7) ]];
+
 // component structs for mixers
 export struct bsdf_component {
-    float weight    = 0.0 [[ hard_range(0.0, 1.0) ]];
+    float weight    = 0.0 [[ hard_range(0.0, +1.0/0.0), soft_range(0.0, 1.0) ]];
     bsdf  component = bsdf();
 };
 
 export struct edf_component {
-    uniform float weight = 0.0 [[ hard_range(0.0, 1.0) ]];
+    float weight = 0.0 [[ hard_range(0.0, +1.0/0.0), soft_range(0.0, 1.0) ]];
     edf  component = edf();
 };
 
 export struct vdf_component {
-    float weight    = 0.0 [[ hard_range(0.0, 1.0) ]];
+    float weight    = 0.0 [[ hard_range(0.0, +1.0/0.0), soft_range(0.0, 1.0) ]];
     vdf  component = vdf();
 };
 
 // mixing of xdf
 export bsdf normalized_mix( bsdf_component[<N>] components) [[ intrinsic() ]];
-export vdf  normalized_mix( vdf_component[<N>]  components) [[ intrinsic() ]];
 export edf  normalized_mix( edf_component[<N>]  components) [[ intrinsic() ]];
+export vdf  normalized_mix( vdf_component[<N>]  components) [[ intrinsic() ]];
 export bsdf clamped_mix(    bsdf_component[<N>] components) [[ intrinsic() ]];
-export vdf  clamped_mix(    vdf_component[<N>]  components) [[ intrinsic() ]];
 export edf  clamped_mix(    edf_component[<N>]  components) [[ intrinsic() ]];
+export vdf  clamped_mix(    vdf_component[<N>]  components) [[ intrinsic() ]];
 
 // layering of bsdf
 export bsdf weighted_layer(
@@ -353,19 +378,28 @@ export struct color_bsdf_component  [[ since(1,4) ]] {
 };
 
 export struct color_edf_component  [[ since(1,4) ]] {
-    uniform color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
+    color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
     edf component = edf();
+};
+
+export struct color_vdf_component  [[ since(1,7) ]] {
+    uniform color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
+    vdf component = vdf();
 };
 
 export bsdf color_normalized_mix(
     color_bsdf_component[<N>] components) [[ intrinsic(), since(1,4) ]];
 export edf  color_normalized_mix(
     color_edf_component[<N>]  components) [[ intrinsic(), since(1,4) ]];
+export vdf  color_normalized_mix(
+    color_vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
 
 export bsdf color_clamped_mix(
     color_bsdf_component[<N>] components) [[ intrinsic(), since(1,4) ]];
 export edf  color_clamped_mix(
     color_edf_component[<N>]  components) [[ intrinsic(), since(1,4) ]];
+export vdf  color_clamped_mix(
+    color_vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
 
 // layering of bsdf
 export bsdf color_weighted_layer(
@@ -431,3 +465,17 @@ export hair_bsdf chiang_hair_bsdf(
     float   ior = 1.55,
     uniform string handle = ""
 ) [[ intrinsic(), since(1,5) ]];
+
+export bsdf unbounded_mix(
+    bsdf_component[<N>] components) [[ intrinsic(), since(1,7) ]];
+export edf unbounded_mix(
+    edf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
+export vdf unbounded_mix(
+    vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
+
+export bsdf color_unbounded_mix(
+    color_bsdf_component[<N>] components) [[ intrinsic(), since(1,7) ]];
+export edf color_unbounded_mix(
+    color_edf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];
+export vdf color_unbounded_mix(
+    color_vdf_component[<N>]  components) [[ intrinsic(), since(1,7) ]];

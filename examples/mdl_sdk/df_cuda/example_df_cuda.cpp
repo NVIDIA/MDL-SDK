@@ -326,7 +326,7 @@ static void create_environment(
     const cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float4>();
     check_cuda_success(cudaMallocArray(env_tex_data, &channel_desc, rx, ry));
 
-    mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile());
     const float *pixels = static_cast<const float *>(tile->get_data());
 
     check_cuda_success(cudaMemcpy2DToArray(
@@ -429,17 +429,11 @@ static void save_result(
 {
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
         image_api->create_canvas("Rgb_fp", width, height));
-    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
     float3 *data = static_cast<float3 *>(tile->get_data());
     check_cuda_success(cuMemcpyDtoH(data, cuda_buffer, width * height * sizeof(float3)));
 
-    // assuming EXR and HDR are the only linear color space formats we are using
-    // other formats are stored in sRGB (approximated by gamma 2.2)
-    if (!mi::examples::strings::ends_with(filename, ".exr") &&
-        !mi::examples::strings::ends_with(filename, ".hdr"))
-            image_api->adjust_gamma(canvas.get(), 2.2f);
-
-    mdl_impexp_api->export_canvas(filename.c_str(), canvas.get());
+    mdl_impexp_api->export_canvas(filename.c_str(), canvas.get(), 100u, true);
 }
 
 // Application options
@@ -792,7 +786,7 @@ public:
     // Get the length of the longest string in the string constant table.
     size_t get_max_length() const { return m_max_len; }
 
-    // Get the string for a given ID, or nullptr if this ID does not exists.
+    // Get the string for a given ID, or nullptr if this ID does not exist.
     const char *get_string(unsigned id) {
         if (id == 0 || id - 1 >= m_strings.size())
             return nullptr;
@@ -1901,11 +1895,14 @@ Df_cuda_material create_cuda_material(
 
         mat.thin_walled.x = static_cast<unsigned int>(target_code_index);
         mat.thin_walled.y = static_cast<unsigned int>(descs[5].function_index);
+
+        mat.cutout_opacity.x = static_cast<unsigned int>(target_code_index);
+        mat.cutout_opacity.y = static_cast<unsigned int>(descs[6].function_index);
     }
     else
     {
         mat.bsdf.x = static_cast<unsigned int>(target_code_index);
-        mat.bsdf.y = static_cast<unsigned int>(descs[6].function_index);
+        mat.bsdf.y = static_cast<unsigned int>(descs[7].function_index);
         mat.contains_hair_bsdf = 1;
     }
 
@@ -2219,6 +2216,8 @@ int MAIN_UTF8(int argc, char* argv[])
             descs.push_back(
                 mi::neuraylib::Target_function_description("thin_walled"));
             descs.push_back(
+                mi::neuraylib::Target_function_description("geometry.cutout_opacity"));
+            descs.push_back(
                 mi::neuraylib::Target_function_description("hair"));
 
             // Generate code for all materials
@@ -2263,11 +2262,11 @@ int MAIN_UTF8(int argc, char* argv[])
                         if (!mi::examples::strings::starts_with(material_qualified_name, pattern))
                             continue;
 
-                        std::cout << "Adding material \"" << material_qualified_name  << std::endl;
+                        std::cout << "Adding material \"" << material_qualified_name << "\"" << std::endl;
 
                         // Add functions of the material to the link unit
                         check_success(mc.add_material(
-                            module_qualified_name, mat_def->get_mdl_simple_name(),
+                            module_qualified_name, material_db_name,
                             descs.data(), descs.size(),
                             options.use_class_compilation));
 
@@ -2281,12 +2280,27 @@ int MAIN_UTF8(int argc, char* argv[])
                         used_material_names.push_back(material_qualified_name);
                     }
                 } else {
-                    std::string material_qualified_name = module_qualified_name + "::" + material_simple_name;
-                    std::cout << "Adding material \"" << material_qualified_name << std::endl;
+                    // Load the module
+                    std::string module_db_name = mc.load_module(module_qualified_name);
+                    mi::base::Handle<const mi::neuraylib::IModule> module(
+                        transaction->access<mi::neuraylib::IModule>(module_db_name.c_str()));
+                    if (!module)
+                        exit_failure("Failed to access the loaded module.");
+
+                    // Construct the material name
+                    std::string material_db_name
+                        = module_db_name + "::" + material_simple_name;
+                    material_db_name = mi::examples::mdl::add_missing_material_signature(
+                        module.get(), material_db_name);
+                    if (material_db_name.empty())
+                        exit_failure("Failed to find the material %s in the module %s.",
+                            material_simple_name.c_str(), module_qualified_name.c_str());
+
+                    std::cout << "Adding material \"" << material_db_name << "\"" << std::endl;
 
                     // Add functions of the material to the link unit
                     check_success(mc.add_material(
-                        module_qualified_name, material_simple_name,
+                        module_qualified_name, material_db_name,
                         descs.data(), descs.size(),
                         options.use_class_compilation));
 
@@ -2297,7 +2311,7 @@ int MAIN_UTF8(int argc, char* argv[])
                     material_bundle.push_back(create_cuda_material(
                         0, material_bundle.size(), descs,
                         contains_hair_bsdf(compiled_material.get())));
-                    used_material_names.push_back(material_qualified_name);
+                    used_material_names.push_back(material_db_name);
                 }
             }
 

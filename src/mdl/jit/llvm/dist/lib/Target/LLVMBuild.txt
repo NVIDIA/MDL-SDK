@@ -19,6 +19,7 @@
 ; will typically require only insertion of a line.
 [common]
 subdirectories =
+ AArch64
  NVPTX
  X86
 

@@ -765,29 +765,31 @@ DAG_node const *DAG_node_factory_impl::build_texture_ternary(
 DAG_node const *DAG_node_factory_impl::do_avoid_non_const_gamma(
     IType_texture const *tex_type,
     DAG_constant const  *url,
-    DAG_node const      *gamma)
+    DAG_node const      *gamma,
+    DAG_constant const *selector)
 {
 
     // there are only 3 possible gamma values. Transform this into
     // gamma = gamma_default ?
-    //   T(..., gamma_default) :
-    //   (gamma = gamma_linear ? T(..., gamma_linear) : T(..., gamma_srgb)
+    //   T(..., gamma_default, ...) :
+    //   (gamma = gamma_linear ? T(..., gamma_linear, ...) : T(..., gamma_srgb, ...)
 
     IType_enum const *e_tp = cast<IType_enum>(gamma->get_type());
     MDL_ASSERT(e_tp->get_predefined_id() == IType_enum::EID_TEX_GAMMA_MODE);
 
-    IValue_string const *v_string = cast<IValue_string>(url->get_value());
+    IValue_string const *v_url      = cast<IValue_string>(url->get_value());
+    IValue_string const *v_selector = cast<IValue_string>(selector->get_value());
 
     IValue_texture const *v_tex_default = m_value_factory.create_texture(
-        tex_type, v_string->get_value(), IValue_texture::gamma_default, 0, 0);
+        tex_type, v_url->get_value(), IValue_texture::gamma_default, v_selector->get_value(), 0, 0);
     DAG_node const    *c_tex_default    = create_constant(v_tex_default);
 
     IValue_texture const *v_tex_linear = m_value_factory.create_texture(
-        tex_type, v_string->get_value(), IValue_texture::gamma_linear, 0, 0);
+        tex_type, v_url->get_value(), IValue_texture::gamma_linear, v_selector->get_value(), 0, 0);
     DAG_node const    *c_tex_linear    = create_constant(v_tex_linear);
 
     IValue_texture const *v_tex_srgb = m_value_factory.create_texture(
-        tex_type, v_string->get_value(), IValue_texture::gamma_srgb, 0, 0);
+        tex_type, v_url->get_value(), IValue_texture::gamma_srgb, v_selector->get_value(), 0, 0);
     DAG_node const    *c_tex_srgb  = create_constant(v_tex_srgb);
 
     IValue_enum const *v_default = m_value_factory.create_enum(e_tp, 0);
@@ -900,20 +902,84 @@ DAG_node const *DAG_node_factory_impl::create_call(
                     name,
                     IDefinition::DS_ELEM_CONSTRUCTOR,
                     n_call_args,
-                    7,
+                    dimension_of(n_call_args),
+                    ret_type);
+            }
+            if (num_call_args == 3 && is_material_volume_type(ret_type)) {
+                DAG_call::Call_argument n_call_args[4];
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "material_volume$1.6(vdf,color,color)") == 0);
+
+                IValue_float const *zero = m_value_factory.create_float(0.0f);
+
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+
+                n_call_args[3].param_name = "emission_intensity";
+                n_call_args[3].arg =
+                    create_constant(m_value_factory.create_rgb_color(zero, zero, zero));
+
+                // map to material_volume 1.7 constructor
+                name = "material_volume(vdf,color,color,color)";
+                return create_call(
+                    name,
+                    IDefinition::DS_ELEM_CONSTRUCTOR,
+                    n_call_args,
+                    dimension_of(n_call_args),
                     ret_type);
             }
             break;
     case IDefinition::DS_TEXTURE_CONSTRUCTOR:
-        if (m_avoid_non_const_gamma && num_call_args == 2) {
-            DAG_node const *url   = call_args[0].arg;
-            DAG_node const *gamma = call_args[1].arg;
+        {
+            IType_texture const  *tex_type = cast<IType_texture>(ret_type);
+            IType_texture::Shape shape     = tex_type->get_shape();
 
-            if (is<DAG_constant>(url) && !is<DAG_constant>(gamma)) {
-                return do_avoid_non_const_gamma(
-                    as<IType_texture>(ret_type),
-                    cast<DAG_constant>(url),
-                    gamma);
+            DAG_call::Call_argument n_call_args[3];
+            DAG_node const *call = NULL;
+
+            if (shape == IType_texture::TS_2D || shape == IType_texture::TS_3D) {
+                if (num_call_args == 2) {
+                    // pre MDl 1.7 constructor, add selector
+
+                    n_call_args[0] = call_args[0];
+                    n_call_args[1] = call_args[1];
+                    n_call_args[2].param_name = "selector";
+                    n_call_args[2].arg =
+                        create_constant(m_value_factory.create_string(""));
+
+                    // map to texture 1.7 constructor
+                    name = shape == IType_texture::TS_2D ?
+                        "texture_2d(string,::tex::gamma_mode,string)" :
+                        "texture_3d(string,::tex::gamma_mode,string)";
+
+                    call = create_call(
+                        name,
+                        IDefinition::DS_ELEM_CONSTRUCTOR,
+                        n_call_args,
+                        dimension_of(n_call_args),
+                        ret_type);
+                    call_args     = n_call_args;
+                    num_call_args = 3;
+                }
+            }
+            if (m_avoid_non_const_gamma && num_call_args == 3) {
+                DAG_node const *url      = call_args[0].arg;
+                DAG_node const *gamma    = call_args[1].arg;
+                DAG_node const *selector = call_args[2].arg;
+
+                if (is<DAG_constant>(url) && !is<DAG_constant>(gamma) && is<DAG_constant>(selector)) {
+                    return do_avoid_non_const_gamma(
+                        as<IType_texture>(ret_type),
+                        cast<DAG_constant>(url),
+                        gamma,
+                        cast<DAG_constant>(selector));
+                }
+            }
+            if (call != NULL) {
+                return call;
             }
         }
         break;
@@ -950,7 +1016,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
             MDL_ASSERT(
                 strcmp(name, "::df::measured_edf$1.0(light_profile,bool,float3x3,string)") == 0);
             name = "::df::measured_edf(light_profile,float,bool,float3x3,float3,string)";
-            return create_call(name, sema, n_call_args, 6, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         } else if (num_call_args == 5) {
             // this transformation will reference state::texture_tangent_u(), state must
             // be imported
@@ -984,7 +1050,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
                     name,
                     "::df::measured_edf$1.1(light_profile,float,bool,float3x3,string)") == 0);
             name = "::df::measured_edf(light_profile,float,bool,float3x3,float3,string)";
-            return create_call(name, sema, n_call_args, 6, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:
@@ -1011,7 +1077,11 @@ DAG_node const *DAG_node_factory_impl::create_call(
 
             name = "::df::color_fresnel_layer(color,color,bsdf,bsdf,float3)";
             return create_call(
-                name, IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER, n_call_args, 5, ret_type);
+                name,
+                IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER,
+                n_call_args,
+                dimension_of(n_call_args),
+                ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_SPOT_EDF:
@@ -1030,7 +1100,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
 
             MDL_ASSERT(strcmp(name, "::df::spot_edf$1.0(float,bool,float3x3,string)") == 0);
             name = "::df::spot_edf(float,float,bool,float3x3,string)";
-            return create_call(name, sema, n_call_args, 5, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
@@ -1056,7 +1126,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
             name =
                 "::df::simple_glossy_bsdf"
                 "(float,float,color,color,float3,::df::scatter_mode,string)";
-            return create_call(name, sema, n_call_args, 7, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF:
@@ -1081,7 +1151,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
             name =
                 "::df::backscattering_glossy_reflection_bsdf"
                 "(float,float,color,color,float3,string)";
-            return create_call(name, sema, n_call_args, 6, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
@@ -1107,7 +1177,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
             name =
                 "::df::microfacet_beckmann_smith_bsdf"
                 "(float,float,color,color,float3,::df::scatter_mode,string)";
-            return create_call(name, sema, n_call_args, 7, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
@@ -1133,7 +1203,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
             name =
                 "::df::microfacet_ggx_smith_bsdf"
                 "(float,float,color,color,float3,::df::scatter_mode,string)";
-            return create_call(name, sema, n_call_args, 7, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:
@@ -1159,7 +1229,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
             name =
                 "::df::microfacet_beckmann_vcavities_bsdf"
                 "(float,float,color,color,float3,::df::scatter_mode,string)";
-            return create_call(name, sema, n_call_args, 7, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF:
@@ -1185,7 +1255,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
              name =
                  "::df::microfacet_ggx_vcavities_bsdf"
                  "(float,float,color,color,float3,::df::scatter_mode,string)";
-             return create_call(name, sema, n_call_args, 7, ret_type);
+             return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
          }
          break;
     case IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF:
@@ -1210,10 +1280,37 @@ DAG_node const *DAG_node_factory_impl::create_call(
             name =
                 "::df::ward_geisler_moroder_bsdf"
                 "(float,float,color,color,float3,string)";
-            return create_call(name, sema, n_call_args, 6, ret_type);
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
         }
         break;
-     case IDefinition::DS_INTRINSIC_STATE_METERS_PER_SCENE_UNIT:
+    case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        if (num_call_args == 4) {
+            // MDL 1.6 -> 1.7: insert multiscatter parameter
+            DAG_call::Call_argument n_call_args[5];
+
+            // insert the multiscatter parameter
+            n_call_args[0] = call_args[0];
+            n_call_args[1] = call_args[1];
+            n_call_args[2] = call_args[2];
+            n_call_args[3].param_name = "multiscatter";
+            n_call_args[3].arg = create_diffuse_reflection_bsdf(ret_type);
+            n_call_args[4] = call_args[3];
+
+            MDL_ASSERT(strcmp(name, "::df::sheen_bsdf$1.6(float,color,color,string)") == 0);
+            name = "::df::sheen_bsdf(float,color,color,bsdf,string)";
+            return create_call(name, sema, n_call_args, dimension_of(n_call_args), ret_type);
+        }
+        break;
+    case IDefinition::DS_INTRINSIC_DF_TINT:
+        if (num_call_args == 2) {
+            if (strcmp(name, "::df::tint$1.6(color,edf)") == 0) {
+                // the first parameter was changed from uniform to varying color
+                name = "::df::tint(color,edf)";
+                return create_call(name, sema, call_args, num_call_args, ret_type);
+            }
+        }
+        break;
+    case IDefinition::DS_INTRINSIC_STATE_METERS_PER_SCENE_UNIT:
         if (m_enable_scene_conv_fold) {
             return create_constant(
                 m_value_factory.create_float(m_mdl_meters_per_scene_unit));
@@ -1253,108 +1350,615 @@ DAG_node const *DAG_node_factory_impl::create_call(
         }
         break;
     case IDefinition::DS_INTRINSIC_TEX_WIDTH:
-        if (num_call_args == 1 && is_tex_2d(call_args[0].arg->get_type())) {
-            DAG_call::Call_argument n_call_args[2];
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 1) {
+                DAG_call::Call_argument n_call_args[3];
 
-            // MDL 1.3 -> 1.4: insert the uv_tile parameter
-            n_call_args[0] = call_args[0];
-            n_call_args[1].param_name = "uv_tile";
-            n_call_args[1].arg        = create_constant(create_int2_zero(m_value_factory));
+                // MDL 1.3 -> 1.7: insert the uv_tile, frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1].param_name = "uv_tile";
+                n_call_args[1].arg        = create_constant(create_int2_zero(m_value_factory));
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
 
-            MDL_ASSERT(strcmp(name, "::tex::width$1.3(texture_2d)") == 0);
-            name = "::tex::width(texture_2d,int2)";
-            return create_call(name, sema, n_call_args, 2, ret_type);
+                MDL_ASSERT(strcmp(name, "::tex::width$1.3(texture_2d)") == 0);
+                name = "::tex::width(texture_2d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            } else if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[3];
+
+                // MDL 1.6 -> 1.7: insert the frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::width$1.6(texture_2d,int2)") == 0);
+                name = "::tex::width(texture_2d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 1) {
+                DAG_call::Call_argument n_call_args[2];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1].param_name = "frame";
+                n_call_args[1].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::width$1.6(texture_3d)") == 0);
+                name = "::tex::width(texture_3d,float)";
+                return create_call(name, sema, n_call_args, 2, ret_type);
+            }
         }
         break;
     case IDefinition::DS_INTRINSIC_TEX_HEIGHT:
-        if (num_call_args == 1 && is_tex_2d(call_args[0].arg->get_type())) {
-            DAG_call::Call_argument n_call_args[2];
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 1) {
+                DAG_call::Call_argument n_call_args[3];
 
-            // MDL 1.3 -> 1.4: insert the uv_tile parameter
-            n_call_args[0] = call_args[0];
-            n_call_args[1].param_name = "uv_tile";
-            n_call_args[1].arg        = create_constant(create_int2_zero(m_value_factory));
+                // MDL 1.3 -> 1.7: insert the uv_tile, frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1].param_name = "uv_tile";
+                n_call_args[1].arg = create_constant(create_int2_zero(m_value_factory));
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
 
-            MDL_ASSERT(strcmp(name, "::tex::height$1.3(texture_2d)") == 0);
-            name = "::tex::height(texture_2d,int2)";
-            return create_call(name, sema, n_call_args, 2, ret_type);
+                MDL_ASSERT(strcmp(name, "::tex::height$1.3(texture_2d)") == 0);
+                name = "::tex::height(texture_2d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            } else if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[3];
+
+                // MDL 1.6 -> 1.7: insert the frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::height$1.6(texture_2d,int2)") == 0);
+                name = "::tex::height(texture_2d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 1) {
+                DAG_call::Call_argument n_call_args[2];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1].param_name = "frame";
+                n_call_args[1].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::height$1.6(texture_3d)") == 0);
+                name = "::tex::height(texture_3d,float)";
+                return create_call(name, sema, n_call_args, 2, ret_type);
+            }
         }
         break;
+    case IDefinition::DS_INTRINSIC_TEX_DEPTH:
+        if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 1) {
+                DAG_call::Call_argument n_call_args[2];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1].param_name = "frame";
+                n_call_args[1].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::depth$1.6(texture_3d)") == 0);
+                name = "::tex::depth(texture_3d,float)";
+                return create_call(name, sema, n_call_args, 2, ret_type);
+            }
+        }
+        break;
+
+    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 6) {
+                DAG_call::Call_argument n_call_args[7];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6].param_name = "frame";
+                n_call_args[6].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float$1.6("
+                        "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 7, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 8) {
+                DAG_call::Call_argument n_call_args[9];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6] = call_args[6];
+                n_call_args[7] = call_args[7];
+                n_call_args[8].param_name = "frame";
+                n_call_args[8].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float$1.6("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 9, ret_type);
+            }
+        }
+        break;
+    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 6) {
+                DAG_call::Call_argument n_call_args[7];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6].param_name = "frame";
+                n_call_args[6].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float2$1.6("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float2("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 7, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 8) {
+                DAG_call::Call_argument n_call_args[9];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6] = call_args[6];
+                n_call_args[7] = call_args[7];
+                n_call_args[8].param_name = "frame";
+                n_call_args[8].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float2$1.6("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float2("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 9, ret_type);
+            }
+        }
+        break;
+    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 6) {
+                DAG_call::Call_argument n_call_args[7];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6].param_name = "frame";
+                n_call_args[6].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float3$1.6("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float3("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 7, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 8) {
+                DAG_call::Call_argument n_call_args[9];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6] = call_args[6];
+                n_call_args[7] = call_args[7];
+                n_call_args[8].param_name = "frame";
+                n_call_args[8].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float3$1.6("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float3("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 9, ret_type);
+            }
+        }
+        break;
+    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 6) {
+                DAG_call::Call_argument n_call_args[7];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6].param_name = "frame";
+                n_call_args[6].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float4$1.6("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float4("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 7, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 8) {
+                DAG_call::Call_argument n_call_args[9];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6] = call_args[6];
+                n_call_args[7] = call_args[7];
+                n_call_args[8].param_name = "frame";
+                n_call_args[8].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_float4$1.6("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_float4("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 9, ret_type);
+            }
+        }
+        break;
+    case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 6) {
+                DAG_call::Call_argument n_call_args[7];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6].param_name = "frame";
+                n_call_args[6].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_color$1.6("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_color("
+                    "texture_2d,float2,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 7, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 8) {
+                DAG_call::Call_argument n_call_args[9];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3] = call_args[3];
+                n_call_args[4] = call_args[4];
+                n_call_args[5] = call_args[5];
+                n_call_args[6] = call_args[6];
+                n_call_args[7] = call_args[7];
+                n_call_args[8].param_name = "frame";
+                n_call_args[8].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(
+                    name,
+                    "::tex::lookup_color$1.6("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2)")
+                    == 0);
+                name = "::tex::lookup_color("
+                        "texture_3d,float3,"
+                        "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,"
+                        "float2,float2,float2,float)";
+                return create_call(name, sema, n_call_args, 9, ret_type);
+            }
+        }
+        break;
+
     case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
-        if (num_call_args == 2 && is_tex_2d(call_args[0].arg->get_type())) {
-            DAG_call::Call_argument n_call_args[3];
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[4];
 
-            // MDL 1.3 -> 1.4: insert the uv_tile parameter
-            n_call_args[0] = call_args[0];
-            n_call_args[1] = call_args[1];
-            n_call_args[2].param_name = "uv_tile";
-            n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                // MDL 1.3 -> 1.7: insert the uv_tile, frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "uv_tile";
+                n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
 
-            MDL_ASSERT(strcmp(name, "::tex::texel_float$1.3(texture_2d,int2)") == 0);
-            name = "::tex::texel_float(texture_2d,int2,int2)";
-            return create_call(name, sema, n_call_args, 3, ret_type);
+                MDL_ASSERT(strcmp(name, "::tex::texel_float$1.3(texture_2d,int2)") == 0);
+                name = "::tex::texel_float(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            } else if (num_call_args == 3) {
+                DAG_call::Call_argument n_call_args[4];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float$1.6(texture_2d,int2,int2)") == 0);
+                name = "::tex::texel_float(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[3];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float$1.6(texture_3d,int2)") == 0);
+                name = "::tex::texel_float(texture_3d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            }
         }
         break;
     case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
-        if (num_call_args == 2 && is_tex_2d(call_args[0].arg->get_type())) {
-            DAG_call::Call_argument n_call_args[3];
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[4];
 
-            // MDL 1.3 -> 1.4: insert the uv_tile parameter
-            n_call_args[0] = call_args[0];
-            n_call_args[1] = call_args[1];
-            n_call_args[2].param_name = "uv_tile";
-            n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                // MDL 1.3 -> 1.7: insert the uv_tile, frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "uv_tile";
+                n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
 
-            MDL_ASSERT(strcmp(name, "::tex::texel_float2$1.3(texture_2d,int2)") == 0);
-            name = "::tex::texel_float2(texture_2d,int2,int2)";
-            return create_call(name, sema, n_call_args, 3, ret_type);
+                MDL_ASSERT(strcmp(name, "::tex::texel_float2$1.3(texture_2d,int2)") == 0);
+                name = "::tex::texel_float2(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            } else if (num_call_args == 3) {
+                DAG_call::Call_argument n_call_args[4];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float2$1.6(texture_2d,int2,int2)") == 0);
+                name = "::tex::texel_float2(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[3];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float2$1.6(texture_3d,int2)") == 0);
+                name = "::tex::texel_float2(texture_3d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            }
         }
         break;
     case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
-        if (num_call_args == 2 && is_tex_2d(call_args[0].arg->get_type())) {
-            DAG_call::Call_argument n_call_args[3];
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[4];
 
-            // MDL 1.3 -> 1.4: insert the uv_tile parameter
-            n_call_args[0] = call_args[0];
-            n_call_args[1] = call_args[1];
-            n_call_args[2].param_name = "uv_tile";
-            n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                // MDL 1.3 -> 1.7: insert the uv_tile, frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "uv_tile";
+                n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
 
-            MDL_ASSERT(strcmp(name, "::tex::texel_float3$1.3(texture_2d,int2)") == 0);
-            name = "::tex::texel_float3(texture_2d,int2,int2)";
-            return create_call(name, sema, n_call_args, 3, ret_type);
+                MDL_ASSERT(strcmp(name, "::tex::texel_float3$1.3(texture_2d,int2)") == 0);
+                name = "::tex::texel_float3(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            } else if (num_call_args == 3) {
+                DAG_call::Call_argument n_call_args[4];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float3$1.6(texture_2d,int2,int2)") == 0);
+                name = "::tex::texel_float3(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[3];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float3$1.6(texture_3d,int2)") == 0);
+                name = "::tex::texel_float3(texture_3d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            }
         }
         break;
     case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
-        if (num_call_args == 2 && is_tex_2d(call_args[0].arg->get_type())) {
-            DAG_call::Call_argument n_call_args[3];
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[4];
 
-            // MDL 1.3 -> 1.4: insert the uv_tile parameter
-            n_call_args[0] = call_args[0];
-            n_call_args[1] = call_args[1];
-            n_call_args[2].param_name = "uv_tile";
-            n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                // MDL 1.3 -> 1.7: insert the uv_tile, frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "uv_tile";
+                n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
 
-            MDL_ASSERT(strcmp(name, "::tex::texel_float4$1.3(texture_2d,int2)") == 0);
-            name = "::tex::texel_float4(texture_2d,int2,int2)";
-            return create_call(name, sema, n_call_args, 3, ret_type);
+                MDL_ASSERT(strcmp(name, "::tex::texel_float4$1.3(texture_2d,int2)") == 0);
+                name = "::tex::texel_float4(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            } else if (num_call_args == 3) {
+                DAG_call::Call_argument n_call_args[4];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float4$1.6(texture_2d,int2,int2)") == 0);
+                name = "::tex::texel_float4(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[3];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_float4$1.6(texture_3d,int2)") == 0);
+                name = "::tex::texel_float4(texture_3d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            }
         }
         break;
     case IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
-        if (num_call_args == 2 && is_tex_2d(call_args[0].arg->get_type())) {
-            DAG_call::Call_argument n_call_args[3];
+        if (is_tex_2d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[4];
 
-            // MDL 1.3 -> 1.4: insert the uv_tile parameter
-            n_call_args[0] = call_args[0];
-            n_call_args[1] = call_args[1];
-            n_call_args[2].param_name = "uv_tile";
-            n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                // MDL 1.3 -> 1.7: insert the uv_tile, frame parameters
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "uv_tile";
+                n_call_args[2].arg = create_constant(create_int2_zero(m_value_factory));
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
 
-            MDL_ASSERT(strcmp(name, "::tex::texel_color$1.3(texture_2d,int2)") == 0);
-            name = "::tex::texel_color(texture_2d,int2,int2)";
-            return create_call(name, sema, n_call_args, 3, ret_type);
+                MDL_ASSERT(strcmp(name, "::tex::texel_color$1.3(texture_2d,int2)") == 0);
+                name = "::tex::texel_color(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            } else if (num_call_args == 3) {
+                DAG_call::Call_argument n_call_args[4];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2] = call_args[2];
+                n_call_args[3].param_name = "frame";
+                n_call_args[3].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_color$1.6(texture_2d,int2,int2)") == 0);
+                name = "::tex::texel_color(texture_2d,int2,int2,float)";
+                return create_call(name, sema, n_call_args, 4, ret_type);
+            }
+        } else if (is_tex_3d(call_args[0].arg->get_type())) {
+            if (num_call_args == 2) {
+                DAG_call::Call_argument n_call_args[3];
+
+                // MDL 1.6 -> 1.7: insert the frame parameter
+                n_call_args[0] = call_args[0];
+                n_call_args[1] = call_args[1];
+                n_call_args[2].param_name = "frame";
+                n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
+
+                MDL_ASSERT(strcmp(name, "::tex::texel_color$1.6(texture_3d,int2)") == 0);
+                name = "::tex::texel_color(texture_3d,int2,float)";
+                return create_call(name, sema, n_call_args, 3, ret_type);
+            }
         }
         break;
+
     default:
         break;
     }
@@ -1540,6 +2144,8 @@ DAG_node const *DAG_node_factory_impl::create_call(
 
         case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX:
+        case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
+        case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
             if (num_call_args == 1) {
                 DAG_node const *components = call_args[0].arg;
                 char const     *p_name     = call_args[0].param_name;
@@ -1811,10 +2417,6 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 if (is<IValue_invalid_ref>(r)) {
                     IValue const *v = m_value_factory.create_bool(false);
                     return create_constant(v);
-                } else {
-                    IValue const *res = evaluate_intrinsic_function(sema, &r, 1);
-                    if (res != NULL)
-                        return create_constant(res);
                 }
             }
             break;
@@ -1839,35 +2441,106 @@ DAG_node const *DAG_node_factory_impl::create_call(
             {
                 IValue const *a = cast<DAG_constant>(call_args[0].arg)->get_value();
                 IValue const *b = cast<DAG_constant>(call_args[1].arg)->get_value();
-                
+
                 if (equal_coordinate_space(a, b, m_internal_space)) {
                     return call_args[2].arg;
                 }
             }
             break;
-        default:
+        // math special cases
+        case IDefinition::DS_INTRINSIC_MATH_AVERAGE:
+            MDL_ASSERT(num_call_args == 1);
             {
-                // known, maybe from math
-                VLA<IValue const *> arguments(get_allocator(), num_call_args);
+                IType const *arg_tp = call_args[0].arg->get_type()->skip_type_alias();
 
-                int i;
-                for (i = 0; i < num_call_args; ++i) {
-                    DAG_node const *arg = call_args[i].arg;
-
-                    if (!is<DAG_constant>(arg))
-                        break;
-                    arguments[i] = cast<DAG_constant>(arg)->get_value();
-                }
-
-                if (i >= num_call_args) {
-                    IValue const *res =
-                        evaluate_intrinsic_function(sema, arguments.data(), num_call_args);
-
-                    if (res != NULL)
-                        return create_constant(res);
+                if (is<IType_atomic>(arg_tp)) {
+                    // average(a) = a for a \in atomic
+                    return call_args[0].arg;
                 }
             }
             break;
+        case IDefinition::DS_INTRINSIC_MATH_CLAMP:
+            MDL_ASSERT(num_call_args == 3);
+            if (call_args[1].arg == call_args[2].arg) {
+                // clamp(x, min, min) => min if x is finite
+                if (m_unsafe_math_opt || is_finite(call_args[0].arg)) {
+                    return call_args[1].arg;
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_MATH_DISTANCE:
+            MDL_ASSERT(num_call_args == 2);
+            if (call_args[0].arg == call_args[1].arg) {
+                // distance(x, x) => 0 if x is finite
+                if (m_unsafe_math_opt || is_finite(call_args[0].arg)) {
+                    return call_args[0].arg;
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_MATH_LERP:
+            MDL_ASSERT(num_call_args == 3);
+            if (call_args[0].arg == call_args[1].arg) {
+                // lerp(a, a, w) => a
+                return call_args[0].arg;
+            }
+            if (DAG_constant const *w = as<DAG_constant>(call_args[2].arg)) {
+                IValue const *vw = w->get_value();
+
+                if (vw->is_zero()) {
+                    // lerp(a, b, 0) => a if b is finite
+                    if (m_unsafe_math_opt || is_finite(call_args[1].arg)) {
+                        return call_args[0].arg;
+                    }
+                }
+                if (vw->is_one()) {
+                    // lerp(a, b, 1) => b if a is finite
+                    if (m_unsafe_math_opt || is_finite(call_args[0].arg)) {
+                        return call_args[1].arg;
+                    }
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_MATH_POW:
+            MDL_ASSERT(num_call_args == 2);
+            if (DAG_constant const *b = as<DAG_constant>(call_args[1].arg)) {
+                IValue const *vb = b->get_value();
+
+                if (vb->is_zero()) {
+                    // pow(a, 0) => 1 if a is finite
+                    if (m_unsafe_math_opt || is_finite(call_args[0].arg)) {
+                        // FIXME: return ret_type(1) here
+                    }
+                }
+                if (vb->is_one()) {
+                    // pow(a, 1) => a
+                    return call_args[0].arg;
+                }
+            }
+            break;
+        default:
+            break;
+        }
+
+        if (sema != IDefinition::DS_UNKNOWN) {
+            // known semantic, try constant folding
+            VLA<IValue const *> arguments(get_allocator(), num_call_args);
+
+            int i;
+            for (i = 0; i < num_call_args; ++i) {
+                DAG_node const *arg = call_args[i].arg;
+
+                if (!is<DAG_constant>(arg))
+                    break;
+                arguments[i] = cast<DAG_constant>(arg)->get_value();
+            }
+
+            if (i >= num_call_args) {
+                IValue const *res =
+                    evaluate_intrinsic_function(sema, arguments.data(), num_call_args);
+
+                if (res != NULL)
+                    return create_constant(res);
+            }
         }
     }
 
@@ -2170,15 +2843,6 @@ IValue const *DAG_node_factory_impl::convert(
     return NULL;
 }
 
-/// Check if the given compound type has hidden fields.
-static bool have_hidden_fields(IType_compound const *c_type) {
-    if (IType_struct const *s_type = as<IType_struct>(c_type)) {
-        // currently, only the material emission type has hidden fields
-        return s_type->get_predefined_id() == IType_struct::SID_MATERIAL_EMISSION;
-    }
-    return false;
-}
-
 // Evaluate a constructor call.
 IValue const *DAG_node_factory_impl::evaluate_constructor(
     IValue_factory         &value_factory,
@@ -2228,8 +2892,12 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
                     // for enum types, the default is always the first one
                     values[i] = value_factory.create_enum(e_type, 0);
                 } else {
-                    failed = true;
-                    break;
+                    IValue const *v = value_factory.create_zero(f_type);
+                    if (is<IValue_bad>(v)) {
+                        failed = true;
+                        break;
+                    }
+                    values[i] = v;
                 }
             }
 
@@ -2296,7 +2964,8 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
     case IDefinition::DS_TEXTURE_CONSTRUCTOR:
         // this constructor creates a texture
         {
-            MDL_ASSERT(arguments.size() == 2);
+            size_t n_args = arguments.size();
+            MDL_ASSERT(n_args == 2 || n_args == 3);
 
             IType_texture const  *tex_type = cast<IType_texture>(ret_type);
 
@@ -2307,6 +2976,7 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
                 tex_type,
                 sval->get_value(),
                 IValue_texture::gamma_mode(gamma->get_value()),
+                n_args == 3 ? cast<IValue_string>(arguments[2])->get_value() : "",
                 /*value_tag=*/0,
                 /*value_version=*/0);
         }
@@ -2774,6 +3444,30 @@ DAG_node_factory_impl::create_operator_call(
     }
 }
 
+// Create a call to df::diffuse_reflection_bsdf() with default values.
+DAG_node const *DAG_node_factory_impl::create_diffuse_reflection_bsdf(
+    IType const                   *ret_type)
+{
+    IValue_float const *one  = m_value_factory.create_float(1.0f);
+    IValue_float const *zero = m_value_factory.create_float(0.0f);
+
+    DAG_call::Call_argument args[3];
+
+    args[0].param_name = "tint";
+    args[0].arg        = create_constant(m_value_factory.create_rgb_color(one, one, one));
+    args[1].param_name = "roughness";
+    args[1].arg        = create_constant(zero);
+    args[2].param_name = "handle";
+    args[2].arg        = create_constant(m_value_factory.create_string(""));
+
+    return create_call(
+        "::df::diffuse_reflection_bsdf(color,float,string)",
+        IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
+        args,
+        dimension_of(args),
+        ret_type);
+}
+
 // Converts a constant into a elemental constructor.
 DAG_call const *DAG_node_factory_impl::value_to_constructor(
     DAG_constant const *c)
@@ -3119,7 +3813,7 @@ DAG_node_factory_impl::create_constructor_call(
                 }
             }
         } else if (sema == IDefinition::DS_ELEM_CONSTRUCTOR) {
-            DAG_node const *x;
+            DAG_node const *x       = NULL;
             bool           all_same = false;
 
             if (is<IType_vector>(ret_type->skip_type_alias())) {

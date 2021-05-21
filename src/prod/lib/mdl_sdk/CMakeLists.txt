@@ -104,5 +104,15 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_NO_WHOLE_ARCHIVE}
     )
 
-# add tests if available
+# -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
+# -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "lib"
+    )
+
+# -------------------------------------------------------------------------------------------------
+# Add tests if available
+# -------------------------------------------------------------------------------------------------
 add_tests(POST)

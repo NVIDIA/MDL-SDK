@@ -29,6 +29,8 @@
 #ifndef IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_FUNCTION_DEFINITION_H
 #define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_FUNCTION_DEFINITION_H
 
+#include <tuple>
+
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_mdl.h>
@@ -82,9 +84,12 @@ public:
     ///                               reload.
     /// \param module                 The MDL module of this function definition.
     /// \param code_dag               The DAG representation of the MDL module.
+    /// \param is_material            Indicates whether this is a material or a function. Note that
+    ///                               the elemental constructor and copy constructor for material
+    ///                               are functions, even though their return type is "material".
     /// \param function_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
-    /// \param module_name            The fully-qualified MDL module name.
+    /// \param module_mdl_name        The MDL module name.
     /// \param load_resources         True, if resources are supposed to be loaded into the DB
     ///                               (if referenced in the parameter defaults).
     Mdl_function_definition(
@@ -93,9 +98,10 @@ public:
         Mdl_ident function_ident,
         const mi::mdl::IModule* module,
         const mi::mdl::IGenerated_code_dag* code_dag,
+        bool is_material,
         mi::Size function_index,
         const char* module_filename,
-        const char* module_name,
+        const char* module_mdl_name,
         bool load_resources);
 
     Mdl_function_definition& operator=( const Mdl_function_definition&) = delete;
@@ -119,9 +125,11 @@ public:
 
     mi::neuraylib::IFunction_definition::Semantics get_semantic() const;
 
-    bool is_exported() const;
+    bool is_exported() const { return m_is_exported; }
 
-    bool is_uniform() const;
+    bool is_uniform() const { return m_is_uniform; }
+
+    bool is_material() const { return m_is_material; }
 
     const IType* get_return_type() const;
 
@@ -155,7 +163,7 @@ public:
 
     const char* get_temporary_name( DB::Transaction* transaction, mi::Size index) const;
 
-    const char* get_thumbnail() const;
+    std::string get_thumbnail() const;
 
     Mdl_function_call* create_function_call(
        DB::Transaction* transaction,
@@ -164,17 +172,18 @@ public:
 
     // internal methods
 
-    /// Internal variant of #create_function_call().
-    ///
-    /// See #create_array_constructor_call_internal() for array constructors,
-    /// #create_cast_call_internal for cast operators, and
-    /// #create_ternary_operator_call_internal for ternary operators.
-    ///
-    /// \param allow_ek_parameter If set to \c true, expressions of type EK_PARAMETER are also
-    ///                           permitted as arguments. This flag may only be set by the MDL
-    ///                           integration itself, not by external callers.
-    /// \param immutable          If set to \c true, the created function call is flagged as
-    ///                           immutable.
+    /// The API method mi::neuraylib::IExpression_factory::create_direct_call() uses this method to
+    /// do the actual work, and finally calls MDL::Ixpression_factory::create_direct_call() to
+    /// create the actual instance.
+    IExpression_direct_call* create_direct_call(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        mi::Sint32* errors = nullptr) const;
+
+    /// \name Methods used to implement create_function_call()
+    //@{
+
+    /// Implements #create_function_call() for the general case.
     Mdl_function_call* create_function_call_internal(
        DB::Transaction* transaction,
        const IExpression_list* arguments,
@@ -182,55 +191,84 @@ public:
        bool immutable,
        mi::Sint32* errors = nullptr) const;
 
-    /// Internal variant of #create_function_call(), special case for cast operators
-    ///
-    /// \param immutable          If set to \c true, the created function call is flagged as
-    ///                           immutable.
-    Mdl_function_call* create_cast_call_internal(
+    /// Implements #create_function_call() for the array constructor.
+    Mdl_function_call* create_array_constructor_call_internal(
+       DB::Transaction* transaction,
+       const IExpression_list* arguments,
+       bool allow_ek_parameter,
+       bool immutable,
+       mi::Sint32* errors = nullptr) const;
+
+    /// Implements #create_function_call() for the array index operator.
+    Mdl_function_call* create_array_index_operator_call_internal(
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool immutable,
         mi::Sint32* errors = nullptr) const;
 
-    /// Internal variant of #create_function_call(), special case for ternary operators
-    ///
-    /// \param immutable          If set to \c true, the created function call is flagged as
-    ///                           immutable.
-    Mdl_function_call* create_ternary_operator_call_internal(
-        DB::Transaction* transaction,
-        const IExpression_list* arguments,
-        bool immutable,
-        mi::Sint32* errors = nullptr) const;
-
-    /// Internal variant of #create_function_call(), special case for index operators
-    ///
-    /// \param immutable          If set to \c true, the created function call is flagged as
-    ///                           immutable.
-    Mdl_function_call*create_index_operator_call_internal(
-        DB::Transaction* transaction,
-        const IExpression_list* arguments,
-        bool immutable,
-        mi::Sint32* errors = nullptr) const;
-
-    /// Internal variant of #create_function_call(), special case for array length operators
-    ///
-    /// \param immutable          If set to \c true, the created function call is flagged as
-    ///                           immutable.
+    /// Implements #create_function_call() for the array length operator.
     Mdl_function_call* create_array_length_operator_call_internal(
         DB::Transaction* transaction,
         const IExpression_list* arguments,
         bool immutable,
         mi::Sint32* errors = nullptr) const;
 
-    /// Internal variant of #create_function_call(), special case for array constructors
-    ///
-    /// \param immutable          If set to \c true, the created function call is flagged as
-    ///                           immutable.
-    Mdl_function_call* create_array_constructor_call_internal(
+    /// Implements #create_function_call() for the ternary operator.
+    Mdl_function_call* create_ternary_operator_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool immutable,
+        mi::Sint32* errors = nullptr) const;
+
+    /// Implements #create_function_call() for the cast operator.
+    Mdl_function_call* create_cast_operator_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool immutable,
+        mi::Sint32* errors = nullptr) const;
+
+    //@}
+
+    /// \name Methods used to implement create_direct_call()
+    //@{
+
+    /// Implements #create_direct_call() for the general case.
+    IExpression_direct_call* create_direct_call_internal(
        DB::Transaction* transaction,
        const IExpression_list* arguments,
-       bool immutable,
        mi::Sint32* errors = nullptr) const;
+
+    /// Implements #create_direct_call() for the array constructor.
+    IExpression_direct_call* create_array_constructor_direct_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        mi::Sint32* errors = nullptr) const;
+
+    /// Implements #create_direct_call() for the array index operator.
+    IExpression_direct_call* create_array_index_operator_direct_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        mi::Sint32* errors = nullptr) const;
+
+    /// Implements #create_direct_call() for the array length operator.
+    IExpression_direct_call* create_array_length_operator_direct_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        mi::Sint32* errors = nullptr) const;
+
+    /// Implements #create_direct_call() for the ternary operator.
+    IExpression_direct_call* create_ternary_operator_direct_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        mi::Sint32* errors = nullptr) const;
+
+    /// Implements #create_direct_call() for the cast operator.
+    IExpression_direct_call* create_cast_operator_direct_call_internal(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        mi::Sint32* errors = nullptr) const;
+
+    //@}
 
     /// Returns the MDL semantic of this definition.
     mi::mdl::IDefinition::Semantics get_mdl_semantic() const;
@@ -321,26 +359,85 @@ private:
     /// Does not create a valid instance, to be used by the deserializer only.
     Mdl_function_definition();
 
-private:
+    /// \name Code shared between #create_function_call() and #create_direct_call().
+    ///
+    /// Fills in defaults if necessary, and insert casts if enabled and necessary.
+    //@{
+
+    /// Checks the arguments for call creation for the general case.
+    IExpression_list* check_and_prepare_arguments(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool allow_ek_parameter,
+        bool allow_ek_direct_call,
+        bool create_direct_calls,
+        bool copy_immutable_calls,
+        mi::Sint32* errors) const;
+
+    /// Checks the arguments for call creation for the array constructor operator.
+    std::tuple<IExpression_list*,IType_list*,const IType*>
+    check_and_prepare_arguments_array_constructor_operator(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool allow_ek_parameter,
+        bool allow_ek_direct_call,
+        bool create_direct_calls,
+        bool copy_immutable_calls,
+        mi::Sint32* errors) const;
+
+    /// Checks the arguments for call creation for the array index operator.
+    std::tuple<IExpression_list*,IType_list*,const IType*>
+    check_and_prepare_arguments_array_index_operator(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool copy_immutable_calls,
+        mi::Sint32* errors) const;
+
+    /// Checks the arguments for call creation for the array length operator.
+    std::tuple<IExpression_list*,IType_list*,const IType*>
+    check_and_prepare_arguments_array_length_operator(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool copy_immutable_calls,
+        mi::Sint32* errors) const;
+
+    /// Checks the arguments for call creation for the ternary operator.
+    std::tuple<IExpression_list*,IType_list*,const IType*>
+    check_and_prepare_arguments_ternary_operator(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool copy_immutable_calls,
+        mi::Sint32* errors) const;
+
+    /// Checks the arguments for call creation for the cast operator.
+    std::tuple<IExpression_list*,IType_list*,const IType*>
+    check_and_prepare_arguments_cast_operator(
+        DB::Transaction* transaction,
+        const IExpression_list* arguments,
+        bool copy_immutable_calls,
+        mi::Sint32* errors) const;
+
+    //@}
 
     mi::base::Handle<IType_factory> m_tf;         ///< The type factory.
     mi::base::Handle<IValue_factory> m_vf;        ///< The value factory.
     mi::base::Handle<IExpression_factory> m_ef;   ///< The expression factory.
 
+    std::string m_module_filename;                ///< The filename of the corr. module (or empty).
     std::string m_module_mdl_name;                ///< The MDL name of the corresponding module.
     std::string m_module_db_name;                 ///< The DB name of the corresponding module.
     DB::Tag m_function_tag;                       ///< The tag of this function definition.
     Mdl_ident m_function_ident;                   ///< The identifier of this function definition.
     mi::mdl::IDefinition::Semantics m_mdl_semantic;  ///< The MDL semantic.
     mi::neuraylib::IFunction_definition::Semantics m_semantic;  ///< The semantic.
-    std::string m_name;                           ///< The MDL name of this function definition.
-    std::string m_simple_name;                    ///< The simple MDL name of this function definition.
+    std::string m_mdl_name;                       ///< The MDL name of this function definition.
+    std::string m_simple_name;                    ///< The simple MDL name of this fct. definition.
     std::string m_db_name;                        ///< The DB name of this function definition.
     std::string m_original_name;                  ///< The original MDL function name (or empty).
-    mutable std::string m_thumbnail;              ///< The thumbnail image for this definition.
-    DB::Tag m_prototype_tag;                      ///< The prototype of this fct. def. (or inv. tag).
+    DB::Tag m_prototype_tag;                      ///< The prototype of this fct. def. (or invalid).
     bool m_is_exported;                           ///< The export flag.
     bool m_is_uniform;                            ///< The uniform flag.
+    bool m_is_material;                           ///< Material or function
     mi::mdl::IMDL::MDL_version m_since_version;   ///< The version when this def. was added.
     mi::mdl::IMDL::MDL_version m_removed_version; ///< The version when this def. was removed.
 
@@ -352,7 +449,7 @@ private:
     mi::base::Handle<IAnnotation_list> m_parameter_annotations;
     mi::base::Handle<IAnnotation_block> m_return_annotations;
     mi::base::Handle<IExpression_list> m_enable_if_conditions;
-    std::vector< std::vector<mi::Sint32> > m_enable_if_users;
+    std::vector<std::vector<mi::Size> > m_enable_if_users;
 
     mi::base::Uuid m_function_hash;               ///< The function hash if any.
 };

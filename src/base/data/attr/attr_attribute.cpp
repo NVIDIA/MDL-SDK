@@ -378,9 +378,9 @@ const SERIAL::Serializable* Attribute::serialize(
     serializer->write((Uint32)m_attachments.size());
     for (Uint i = 0; i < m_attachments.size(); ++i) {
         const Attachment& attachment = m_attachments[i];
-        serializer->write(attachment.m_member_name);
+        SERIAL::write(serializer,attachment.m_member_name);
         serializer->write(attachment.m_target);
-        serializer->write(attachment.m_target_name);
+        SERIAL::write(serializer,attachment.m_target_name);
         serializer->write(attachment.m_is_interface);
     }
 
@@ -402,9 +402,9 @@ const SERIAL::Serializable * Attribute::serialize_no_values(
     serializer->write((Uint32)m_attachments.size());
     for (Uint i = 0; i < m_attachments.size(); ++i) {
         const Attachment& attachment = m_attachments[i];
-        serializer->write(attachment.m_member_name);
+        SERIAL::write(serializer,attachment.m_member_name);
         serializer->write(attachment.m_target);
-        serializer->write(attachment.m_target_name);
+        SERIAL::write(serializer,attachment.m_target_name);
         serializer->write(attachment.m_is_interface);
     }
 
@@ -443,9 +443,9 @@ SERIAL::Serializable* Attribute::deserialize(
     deser->read(&nr_of_attachments);
     for (Uint i = 0; i < nr_of_attachments; ++i) {
         Attachment attachment;
-        deser->read(&attachment.m_member_name);
+        SERIAL::read(deser,&attachment.m_member_name);
         deser->read(&attachment.m_target);
-        deser->read(&attachment.m_target_name);
+        SERIAL::read(deser,&attachment.m_target_name);
         deser->read(&attachment.m_is_interface);
         m_attachments.append(attachment);
     }

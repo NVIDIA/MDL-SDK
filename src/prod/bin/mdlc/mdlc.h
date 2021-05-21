@@ -52,6 +52,7 @@ class Mdlc
         TL_NONE,        ///< Don't output any target code.
         TL_MDL,         ///< MDL.
         TL_DAG,         ///< DAG
+        TL_DAGTM,       ///< DAG target model
         TL_GLSL,        ///< GLSL
         TL_HLSL,        ///< HLSL
         TL_JIT,         ///< Executable machine code

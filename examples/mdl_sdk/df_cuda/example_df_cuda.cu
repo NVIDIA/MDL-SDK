@@ -428,6 +428,7 @@ struct Ray_state
     float3 pos, pos_rx, pos_ry;
     float3 dir, dir_rx, dir_ry;
     bool inside;
+    bool inside_cutout;
     int intersection;
     uint32_t lpe_current_state;
     auxiliary_data* aux;
@@ -885,14 +886,43 @@ __device__ inline bool trace_scene(
     // initialize the state
     as_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
 
+    // handle cutouts be treating the opacity as chance to hit the surface
+    // if we don't hit it, the ray will continue with the same direction
+    func_idx = get_mdl_function_index(material.cutout_opacity);
+    const float x_anyhit = curand_uniform(&rand_state);
+    if (is_valid(func_idx))
+    {
+        float opacity;
+        as_expression(func_idx)(&opacity, &state, &mdl_resources.data, NULL, arg_block);
+        if (x_anyhit > opacity)
+        {
+            // this example does not fully support cutouts
+            // a ray that is reflected on the inside is not doing a next event estimation
+            // therefore the back-face looks black if seen through a cutout
+            // using a second flag `inside_cutout` avoids this, but there is still no
+            // shadow test for the next event estimation
+
+            // decrease to see the environment though front and back face cutouts
+            ray_state.intersection--;
+
+            // change the side
+            ray_state.inside_cutout = !ray_state.inside_cutout;
+
+            // avoid self-intersections
+            ray_state.pos += hit.normal * (ray_state.inside_cutout ? -1.0f : 1.0f) * 0.001f;
+            return true;
+        }
+    }
+
+
     // for evaluating parts of the BSDF individually, e.g. for implementing LPEs
     // the MDL SDK provides several options to pass out the BSDF, EDF, and auxiliary data
     #if DF_HANDLE_SLOTS == DF_HSM_POINTER
         // application provided memory
-        // the data structs will get only a pointer to a buffer, along with size and offset 
+        // the data structs will get only a pointer to a buffer, along with size and offset
         const unsigned df_eval_slots = 4;       // number of handles (parts) that can be evaluated
-                                                // at once. 4 is an arbitrary choice. However, it 
-                                                // has to match eval_data.handle_count and 
+                                                // at once. 4 is an arbitrary choice. However, it
+                                                // has to match eval_data.handle_count and
                                                 // aux_data.handle_count)
 
         float3 result_buffer_0[df_eval_slots];  // used for bsdf_diffuse, edf, and albedo
@@ -912,10 +942,10 @@ __device__ inline bool trace_scene(
     if (ray_state.intersection > 0)
     {
         func_idx = get_mdl_function_index(material.volume_absorption);
-        if (is_valid(func_idx)) {
+        if (is_valid(func_idx))
+        {
             float3 abs_coeff;
-            as_expression(func_idx)(
-                &abs_coeff, &state, &mdl_resources.data, NULL, arg_block);
+            as_expression(func_idx)(&abs_coeff, &state, &mdl_resources.data, NULL, arg_block);
 
             ray_state.weight.x *= abs_coeff.x > 0.0f ? expf(-abs_coeff.x * hit.distance) : 1.0f;
             ray_state.weight.y *= abs_coeff.y > 0.0f ? expf(-abs_coeff.y * hit.distance) : 1.0f;
@@ -1349,6 +1379,7 @@ __device__ inline render_result render_scene(
     ray_state.dir_ry = normalize(
         params.cam_dir * params.cam_focal + params.cam_right * r    + params.cam_up * aspect * u_ry);
     ray_state.inside = false;
+    ray_state.inside_cutout = false;
     ray_state.lpe_current_state = 1; // already at the camera so state 0 to 1 is free as long as
                                      // there is only one camera
     ray_state.aux = &res.aux;

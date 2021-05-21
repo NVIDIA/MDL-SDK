@@ -134,6 +134,9 @@ public:
     /// \see \ref mi_neuray_mdl_arrays
     bool is_array_constructor() const;
 
+    /// Indicates whether the argument editor acts on a material instance.
+    bool is_material() const;
+
     /// Returns the return type.
     ///
     /// \return         The return type in case of function calls, otherwise \c NULL.
@@ -651,6 +654,15 @@ inline bool Argument_editor::is_array_constructor() const
 
     } else
         return false;
+}
+
+inline bool Argument_editor::is_material() const
+{
+    if( !m_access)
+        return false;
+
+    base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
+    return mi.is_valid_interface();
 }
 
 inline Size Argument_editor::get_parameter_count() const

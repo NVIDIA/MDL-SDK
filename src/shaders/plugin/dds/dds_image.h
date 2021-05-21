@@ -70,29 +70,28 @@ public:
     ///
     /// \param reader                 The reader to load the DDS header from.
     /// \param header[out]            The header information is stored here.
+    /// \param header_dx10[out]       The DX10 header information is stored here.
+    /// \param is_header_dx10[out]    Indicates whether a DX10 header is present and \p header_dx10
+    ///                               is valid.
     /// \param pixel_type[out]        The pixel type (decoded from the header) is stored here.
     /// \param compress_format[out]   The compression format (dec. from the header) is stored here.
-    /// \param for_hw                 Indicates whether the image is intended to be used with
-    ///                               hardware (only needed to decide whether the format is
-    ///                               supported or not).
+    ///                               Only valid for non-DX10 headers.
     /// \return                       \c true if the file format can be read, \c false otherwise.
     static bool load_header(
         mi::neuraylib::IReader* reader,
         Header& header,
+        Header_dx10& header_dx10,
+        bool& is_header_dx10,
         IMAGE::Pixel_type& pixel_type,
-        Dds_compress_fmt& compress_format,
-        bool for_hw = false);
+        Dds_compress_fmt& compress_format);
 
     /// Loads a DDS image.
     ///
     /// Calls clear() first. The image becomes valid after loading (unless there is failure).
     ///
     /// \param reader            The reader to load the DDS header from.
-    /// \param for_hw            Indicates whether the image is intended to be used with hardware.
     /// \return                  \c true if the file format can be read, \c false otherwise.
-    bool load(
-        mi::neuraylib::IReader* reader,
-        bool for_hw = false);
+    bool load( mi::neuraylib::IReader* reader);
 
     /// Saves a DDS image.
     ///
@@ -101,8 +100,7 @@ public:
     ///
     /// \param writer            The writer to write the DDS image to.
     /// \return                  \c true if the image can be saved, \c false otherwise.
-    bool save(
-        mi::neuraylib::IWriter* writer);
+    bool save( mi::neuraylib::IWriter* writer);
 
     /// Indicates whether the image is valid.
     bool is_valid() const { return m_valid; }
@@ -146,6 +144,20 @@ public:
     mi::Uint32 get_depth() const  { return m_valid ? m_texture.get_surface( 0).get_depth()  : 0; }
 
 private:
+
+    /// Loads only the DX10 header of a DDS image.
+    ///
+    /// Assumes that the reader is at the correct position (just after the non-DX10 header).
+    ///
+    /// \param reader                 The reader to load the DDS header from.
+    /// \param header_dx10[out]       The DX10 header information is stored here.
+    /// \param pixel_type[out]        The pixel type (decoded from the header) is stored here.
+    /// \return                       \c true if the file format can be read, \c false otherwise.
+    static bool load_header_dx10(
+        mi::neuraylib::IReader* reader,
+        Header_dx10& header_dx10,
+        IMAGE::Pixel_type& pixel_type);
+
 
     /// Returns the size of an surface with the given width and height and depth 1.
     ///
@@ -206,3 +218,4 @@ private:
 } // namespace MI
 
 #endif // IO_IMAGE_DDS_DDS_IMAGE_H
+

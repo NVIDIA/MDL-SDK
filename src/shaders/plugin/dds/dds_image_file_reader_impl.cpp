@@ -50,7 +50,8 @@ Image_file_reader_impl::Image_file_reader_impl( mi::neuraylib::IReader* reader)
     m_reader->retain();
 
     Dds_compress_fmt compress_format = DXTC_none; // avoid warning
-    m_image.load_header( m_reader, m_header, m_pixel_type, compress_format);
+    m_image.load_header(
+        m_reader, m_header, m_header_dx10, m_is_header_dx10, m_pixel_type, compress_format);
 }
 
 Image_file_reader_impl::~Image_file_reader_impl()

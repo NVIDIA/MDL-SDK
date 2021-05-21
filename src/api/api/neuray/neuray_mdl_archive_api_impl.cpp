@@ -45,7 +45,6 @@
 
 #include <sstream>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/shared_ptr.hpp>
 #include <base/system/main/i_module_id.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/log/i_log_assert.h>
@@ -95,15 +94,12 @@ mi::Sint32 Mdl_archive_api_impl::create_archive(
     boost::replace_all( package_name, ".", "::");
 
     // convert manifest_fields into manifest_entries
-    mi::Size manifest_entries_count = manifest_fields ? manifest_fields->get_length() : 0;
-    typedef boost::shared_ptr<mi::mdl::IArchive_tool::Key_value_entry[]>
-        Manifest_entries_shared_ptr;
-    Manifest_entries_shared_ptr manifest_entries;
+    const mi::Size manifest_entries_count = manifest_fields ? manifest_fields->get_length() : 0;
+    std::vector<mi::mdl::IArchive_tool::Key_value_entry> manifest_entries;
 
     if( manifest_entries_count != 0) {
 
-        manifest_entries = Manifest_entries_shared_ptr(
-            new mi::mdl::IArchive_tool::Key_value_entry[manifest_entries_count]);
+        manifest_entries.resize(manifest_entries_count);
 
         for( mi::Size i = 0; i < manifest_entries_count; ++i) {
 
@@ -135,11 +131,11 @@ mi::Sint32 Mdl_archive_api_impl::create_archive(
             directory,
             package_name.c_str(),
             output_directory.c_str(),
-            manifest_entries_count > 0 ? manifest_entries.get() : nullptr,
+            manifest_entries_count > 0 ? manifest_entries.data() : nullptr,
             manifest_entries_count));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ nullptr);
+    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
     if( messages.get_error_message_count() > 0)
         return -4;
 
@@ -159,7 +155,7 @@ mi::Sint32 Mdl_archive_api_impl::extract_archive( const char* archive, const cha
     archive_tool->extract_archive( archive, directory);
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ nullptr);
+    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
     if( messages.get_error_message_count() > 0)
         return -2;
 
@@ -177,7 +173,7 @@ const mi::neuraylib::IManifest* Mdl_archive_api_impl::get_manifest( const char* 
         archive_tool->get_manifest( archive));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ nullptr);
+    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
     if( !manifest || messages.get_error_message_count() > 0)
         return nullptr;
 
@@ -195,7 +191,7 @@ mi::neuraylib::IReader* Mdl_archive_api_impl::get_file( const char* archive, con
         archive_tool->get_file_content( archive, filename));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages( messages, /*out_messages*/ nullptr);
+    MDL::convert_and_log_messages( messages, /*out_messages*/ nullptr);
     if( !file || messages.get_error_message_count() > 0)
         return nullptr;
 
@@ -222,7 +218,7 @@ mi::neuraylib::IReader* Mdl_archive_api_impl::get_file(const char* filename)
         archive_tool->get_file_content(fn.substr(0, p + 4).c_str(), fn.substr(p + 5).c_str()));
 
     const mi::mdl::Messages& messages = archive_tool->access_messages();
-    MDL::report_messages(messages, /*out_messages*/ nullptr);
+    MDL::convert_and_log_messages(messages, /*out_messages*/ nullptr);
     if (!file || messages.get_error_message_count() > 0)
         return nullptr;
 
@@ -478,6 +474,7 @@ const char* Manifest_impl::convert_mdl_version( mi::mdl::IMDL::MDL_version versi
         case mi::mdl::IMDL::MDL_VERSION_1_5: return "1.5";
         case mi::mdl::IMDL::MDL_VERSION_1_6: return "1.6";
         case mi::mdl::IMDL::MDL_VERSION_1_7: return "1.7";
+        case mi::mdl::IMDL::MDL_VERSION_1_8: return "1.8";
     }
 
     ASSERT( M_NEURAY_API, false);

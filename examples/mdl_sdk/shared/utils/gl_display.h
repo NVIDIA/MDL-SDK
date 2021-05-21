@@ -453,17 +453,18 @@ namespace mi { namespace examples { namespace mdl
 
         bool update()
         {
-            static std::chrono::high_resolution_clock::time_point last;
+            static std::chrono::steady_clock::time_point last;
 
             if (m_update_args.frame_number == 0)
             {
-                last = std::chrono::high_resolution_clock::now();
+                last = std::chrono::steady_clock::now();
                 m_update_args.elapsed_time_in_seconds = 0.0f;
             }
             else
             {
-                auto now = std::chrono::high_resolution_clock::now();
-                m_update_args.elapsed_time_in_seconds = (now - last).count() * 1e-9;
+                auto now = std::chrono::steady_clock::now();
+                m_update_args.elapsed_time_in_seconds =
+                    std::chrono::duration<double>(now - last).count();
                 last = now;
             }
             m_update_args.frame_number++;
@@ -491,7 +492,34 @@ namespace mi { namespace examples { namespace mdl
         }
 
         // get the windows main UI instance
-        mi::examples::gui::Root* get_gui() { return m_gui; }
+        GLFWwindow* get_window() const { return m_window; }
+        mi::examples::gui::Root* get_gui() const { return m_gui; }
+
+        // window's keyboard/mouse call backs
+        void set_window_user_pointer(void* user_ptr)
+        {
+          glfwSetWindowUserPointer(m_window, user_ptr);
+        }
+
+        GLFWkeyfun set_key_callback(GLFWkeyfun handle_key)
+        {
+          return glfwSetKeyCallback(m_window, handle_key);
+        }
+
+        GLFWscrollfun set_scroll_callback(GLFWscrollfun handle_scroll)
+        {
+          return glfwSetScrollCallback(m_window, handle_scroll);
+        }
+
+        GLFWcursorposfun set_cursor_pos_callback(GLFWcursorposfun handle_mouse_pos)
+        {
+          return glfwSetCursorPosCallback(m_window, handle_mouse_pos);
+        }
+
+        GLFWmousebuttonfun set_mouse_button_callback(GLFWmousebuttonfun handle_mouse_button)
+        {
+          return glfwSetMouseButtonCallback(m_window, handle_mouse_button);
+        }
 
     private:
         GLFWwindow* m_window;

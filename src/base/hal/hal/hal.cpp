@@ -190,15 +190,15 @@ std::string get_tmpdir()
         return env;
     return std::string("/tmp");
 #else
-    const DWORD bufsize = 4096;
+    const DWORD bufsize = MAX_PATH+1;
     char buf[bufsize];
-    DWORD len = ::GetTempPath(bufsize, buf);
+    const DWORD len = ::GetTempPath(bufsize, buf);
 
-    if (len <= 0 || len > bufsize)
+    if (len == 0 || len > bufsize)
         return std::string(".");
 
     // remove trailing '\' since _stat() gets confused
-    std::string dir(buf, (buf[len-1] == '\\' || buf[len-1] == '/')? len-1 : len);
+    const std::string dir(buf, (buf[len-1] == '\\' || buf[len-1] == '/')? len-1 : len);
 
     return Ospath::convert_to_forward_slashes(dir);
 #endif

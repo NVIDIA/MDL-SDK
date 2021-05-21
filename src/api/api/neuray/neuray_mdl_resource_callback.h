@@ -43,11 +43,11 @@
 #include <boost/core/noncopyable.hpp>
 #include <base/data/db/i_db_tag.h>
 
-namespace mi { 
-    namespace neuraylib { 
+namespace mi {
+    namespace neuraylib {
         class IExport_result_ext;
         class IBuffer;
-    } 
+    }
 }
 
 namespace MI {
@@ -98,19 +98,19 @@ public:
 private:
     /// Returns the file path for a texture.
     const char* handle_texture(
-        DB::Tag tag, 
+        DB::Tag tag,
         bool supports_strict_relative_path,
         BufferCallback* buffer_callback);
 
     /// Returns the file path for a light profile.
     const char* handle_light_profile(
-        DB::Tag tag, 
+        DB::Tag tag,
         bool supports_strict_relative_path,
         BufferCallback* buffer_callback);
 
     /// Returns the file path for a BSDF measurement.
     const char* handle_bsdf_measurement(
-        DB::Tag tag, 
+        DB::Tag tag,
         bool supports_strict_relative_path,
         BufferCallback* buffer_callback);
 
@@ -125,7 +125,7 @@ private:
     /// In case of an uvtile/udim-sequence, the filenames follow the convention
     /// given in \p uvtile_marker.
     std::string export_canvases(
-        const DBIMAGE::Image* image, 
+        const DBIMAGE::Image* image,
         const char* uvtile_marker,
         BufferCallback* buffer_callback);
 
@@ -199,7 +199,7 @@ private:
 
     /// Flag that indicates whether resources are bundled with the exported MDL module.
     bool m_bundle_resources;
-    
+
     /// Flag that indicates whether IValue_resource data should be returned as is (unless
     /// m_bundle_resources is set).
     bool m_keep_original_file_paths;

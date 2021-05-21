@@ -53,7 +53,9 @@ Code_checker::Code_checker(
 void Code_checker::check_factory(Value_factory const *factory)
 {
     if (m_verbose) {
-        m_printer->print("Checking value factory:\n");
+        if (m_printer.is_valid_interface()) {
+            m_printer->print("Checking value factory:\n");
+        }
     }
 
     Value_factory::const_value_iterator it(factory->values_begin());
@@ -78,11 +80,13 @@ void Code_checker::check_value(IValue const *v)
         char buffer[32];
         snprintf(buffer, sizeof(buffer), "0x%p", v);
 
-        m_printer->print("Checking value ");
-        m_printer->print(buffer);
-        m_printer->print(" ");
-        m_printer->print(v);
-        m_printer->print("\n");
+        if (m_printer.is_valid_interface()) {
+            m_printer->print("Checking value ");
+            m_printer->print(buffer);
+            m_printer->print(" ");
+            m_printer->print(v);
+            m_printer->print("\n");
+        }
     }
 
     IType const *v_type = v->get_type();
@@ -169,14 +173,16 @@ void Code_checker::check_type(IType const *type)
     }
 
     if (m_verbose) {
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "0x%p", type);
+        if (m_printer.is_valid_interface()) {
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "0x%p", type);
 
-        m_printer->print("Checking type ");
-        m_printer->print(buffer);
-        m_printer->print(" ");
-        m_printer->print(type);
-        m_printer->print("\n");
+            m_printer->print("Checking type ");
+            m_printer->print(buffer);
+            m_printer->print(" ");
+            m_printer->print(type);
+            m_printer->print("\n");
+        }
     }
 
     switch (type->get_kind()) {
@@ -217,8 +223,8 @@ void Code_checker::check_type(IType const *type)
     case IType::TK_BSDF_MEASUREMENT:
     case IType::TK_ERROR:
         break;
-    case IType::TK_INCOMPLETE:
-        MDL_ASSERT(!"incomplete type occured unexpected");
+    case IType::TK_AUTO:
+        MDL_ASSERT(!"auto type occured unexpected");
         break;
     default:
         report("Type has a wrong kind");
@@ -230,9 +236,11 @@ void Code_checker::check_type(IType const *type)
 void Code_checker::report(char const *msg)
 {
     ++m_error_count;
-    m_printer->print("Error check: ");
-    m_printer->print(msg);
-    m_printer->print("\n");
+    if (m_printer.is_valid_interface()) {
+        m_printer->print("Error check: ");
+        m_printer->print(msg);
+        m_printer->print("\n");
+    }
 }
 
 // ------------------------ module checker ------------------------
@@ -246,37 +254,143 @@ Module_checker::Module_checker(
 }
 
 // Check a module.
-bool Module_checker::check(MDL const *compiler, Module const *module, bool verbose)
+bool Module_checker::check(
+    IMDL const    *imdl,
+    IModule const *imodule,
+    bool          verbose)
 {
-    mi::base::Handle<IOutput_stream> os_stderr(compiler->create_std_stream(IMDL::OS_STDERR));
-    IPrinter *printer = compiler->create_printer(os_stderr.get());
-    printer->enable_color(true);
+    MDL const    *compiler = impl_cast<MDL>(imdl);
+    Module const *module   = impl_cast<Module>(imodule);
 
-    Module_checker checker(verbose, printer);
+    if (verbose && compiler != NULL) {
+        mi::base::Handle<IOutput_stream> os_stderr(compiler->create_std_stream(IMDL::OS_STDERR));
+        IPrinter *printer = compiler->create_printer(os_stderr.get());
+        printer->enable_color(true);
 
-    if (verbose) {
+        Module_checker checker(verbose, printer);
+
         printer->print("Checking ");
         printer->print(module->get_name());
         printer->print("\n");
-    }
 
-    checker.check_factory(module->get_value_factory());
+        checker.check_factory(module->get_value_factory());
 
-    if (checker.get_error_count() != 0) {
-        if (verbose) {
+        if (checker.get_error_count() != 0) {
             printer->print("Checking ");
             printer->print(module->get_name());
             printer->print(" FAILED!\n\n");
+            return false;
         }
-        return false;
-    }
 
-    if (verbose) {
         printer->print("Checking ");
         printer->print(module->get_name());
         printer->print(" OK!\n\n");
+        return true;
+    } else {
+        Module_checker checker(false, NULL);
+        checker.check_factory(module->get_value_factory());
+        return checker.get_error_count() == 0;
     }
-    return true;
+}
+
+// Checker.
+bool Tree_checker::check(
+    IMDL const    *imdl,
+    IModule const *imodule,
+    bool          verbose)
+{
+    MDL const    *compiler = impl_cast<MDL>(imdl);
+    Module const *module   = impl_cast<Module>(imodule);
+
+    if (verbose && compiler != NULL) {
+        mi::base::Handle<IOutput_stream> os_stderr(compiler->create_std_stream(IMDL::OS_STDERR));
+        IPrinter *printer = compiler->create_printer(os_stderr.get());
+        printer->enable_color(true);
+
+        Tree_checker checker(compiler->get_allocator(), printer, verbose);
+
+        printer->print("Checking ");
+        printer->print(module->get_name());
+        printer->print(" for TREE property\n");
+
+        checker.visit(module);
+
+        if (checker.get_error_count() != 0) {
+            printer->print("Checking ");
+            printer->print(module->get_name());
+            printer->print(" FAILED!\n\n");
+            return false;
+        }
+
+        printer->print("Checking ");
+        printer->print(module->get_name());
+        printer->print(" OK!\n\n");
+        return true;
+    } else {
+        Tree_checker checker(module->get_allocator(), NULL, false);
+        checker.visit(module);
+
+        return checker.get_error_count() == 0;
+    }
+}
+
+// Constructor.
+Tree_checker::Tree_checker(
+    IAllocator *alloc,
+    IPrinter   *printer,
+    bool       verbose)
+: Code_checker(verbose, printer)
+, m_ast_set(0, Ptr_set::hasher(), Ptr_set::key_equal(), alloc)
+{
+}
+
+void Tree_checker::post_visit(ISimple_name *sname)
+{
+    if (!m_ast_set.insert(sname).second) {
+        // found a reuse, this IS BAD
+        report("AST contains a simple name reuse");
+    }
+}
+
+void Tree_checker::post_visit(IQualified_name *qname)
+{
+    if (!m_ast_set.insert(qname).second) {
+        // found a reuse, this IS BAD
+        report("AST contains a qualified name reuse");
+    }
+}
+
+void Tree_checker::post_visit(IType_name *tname)
+{
+    if (!m_ast_set.insert(tname).second) {
+        // found a reuse, this IS BAD
+        report("AST contains a type name reuse");
+    }
+}
+
+IExpression *Tree_checker::post_visit(IExpression *expr)
+{
+    if (!m_ast_set.insert(expr).second) {
+        // found a reuse, this IS BAD
+        report("AST contains an expression reuse");
+    }
+    return expr;
+}
+
+void Tree_checker::post_visit(IStatement *stmt)
+{
+    if (!m_ast_set.insert(stmt).second) {
+        // found a reuse, this IS BAD
+        report("AST contains a statement reuse");
+    }
+}
+
+void Tree_checker::post_visit(IDeclaration *decl)
+{
+    if (!m_ast_set.insert(decl).second) {
+        // found a reuse, this IS BAD
+        report("AST contains a declaration reuse");
+    }
 }
 
 }  // mdl

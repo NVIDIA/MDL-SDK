@@ -35,6 +35,8 @@
 #include "pch.h"
 
 #include "neuray_plugin_configuration_impl.h"
+#include <api/api/mdl/mdl_neuray_impl.h>
+#include "neuray_plugin_api_impl.h"
 
 
 #include <vector>
@@ -53,6 +55,10 @@ Plugin_configuration_impl::Plugin_configuration_impl( mi::neuraylib::INeuray* ne
 {
     m_plug_module.set();
 
+    MDL::Neuray_impl* neuray_impl = static_cast<MDL::Neuray_impl*>( neuray);
+    mi::base::Handle<mi::neuraylib::IPlugin_api> plugin_api(
+        neuray_impl->get_plugin_api());
+    m_plug_module->set_plugin_api( plugin_api.get());
 }
 
 Plugin_configuration_impl::~Plugin_configuration_impl()

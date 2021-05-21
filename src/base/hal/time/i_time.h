@@ -150,8 +150,8 @@ Time get_time();
 /// \return Time since 1970 in seconds
 Time get_wallclock_time();
 
-/// Suspend current thread for the given time interval
-/// Uses high resolution sleep functions (Unix: ::usleep(), Windows: ::Sleep())
+/// Suspend current thread for at least the given time interval
+/// Uses high resolution sleep functions (Unix: ::usleep(), Windows: ::Sleep(), the latter must rely on timeBeginPeriod(1) being set by the app)
 void sleep (
      const Time interval);		// sleep time in seconds
 

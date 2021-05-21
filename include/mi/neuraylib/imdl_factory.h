@@ -32,16 +32,19 @@
 #define MI_NEURAYLIB_IMDL_FACTORY_H
 
 #include <mi/base/interface_declare.h>
-#include <mi/neuraylib/itype.h>
+#include <mi/neuraylib/iexpression.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
 class IArray;
+class IString;
 
 namespace neuraylib {
 
 class IExpression_factory;
 class IMdl_execution_context;
+class IMdl_module_builder;
 class IMdl_module_transformer;
 class ITransaction;
 class IType_factory;
@@ -71,74 +74,8 @@ public:
     /// Returns an MDL expression factory for the given transaction.
     virtual IExpression_factory* create_expression_factory( ITransaction* transaction) = 0;
 
-    /// Creates a new MDL module containing variants.
-    ///
-    /// A variant is basically a clone of another material or function definition (the prototype)
-    /// with different defaults.
-    //
-    /// \param transaction     The transaction to be used.
-    /// \param module_name     The fully-qualified MDL name of the new module (including package
-    ///                        names, starts with "::").
-    /// \param variant_data    A static or dynamic array of structures of type \c Variant_data. Such
-    ///                        a structure has the following members:
-    ///                        - const char* \b variant_name \n
-    ///                          The name of the variant (non-qualified, without module prefix). The
-    ///                          DB name of the variant is created by prefixing this name with the
-    ///                          DB name of the new module plus "::".
-    ///                        - const char* \b prototype_name \n
-    ///                          The DB name of the prototype for this variant.
-    ///                        - #mi::neuraylib::IExpression_list* \b defaults \n
-    ///                          The variant implicitly uses the defaults of the prototype. This
-    ///                          member allows to set explicit defaults for the prototype including
-    ///                          adding defaults for parameters of the prototype without default.
-    ///                          The type of an argument in the expression list must match the type
-    ///                          of the corresponding parameter of the prototype. \n
-    ///                          Note that the expressions in \p defaults are copied. This copy
-    ///                          operation is a shallow copy, e.g., DB elements referenced in call
-    ///                          expressions are \em not copied. \n
-    ///                          \c NULL is a valid value which is handled like an empty expression
-    ///                          list.
-    ///                        - #mi::neuraylib::IAnnotation_block* \b annotations \n
-    ///                          The variant does not inherit any annotations from the prototype.
-    ///                          This member allows to specify annotations for the variant, i.e.,
-    ///                          for the material or function declaration itself (but not for its
-    ///                          arguments). \n
-    ///                          Note that the annotations are copied. This copy operation is a
-    ///                          shallow copy. \n
-    ///                          \c NULL is a valid value which is handled like an
-    ///                          empty annotation block.
-    /// \return
-    ///                        -   1: Success (module exists already, creation was skipped).
-    ///                        -   0: Success (module was actually created with the variants as its
-    ///                               only material or function definitions).
-    ///                        -  -1: The module name \p module_name is invalid.
-    ///                        -  -2: Failed to compile the module \p module_name.
-    ///                        -  -3: The DB name for an imported module is already in use but is
-    ///                               not an MDL module, or the DB name for a definition in this
-    ///                               module is already in use.
-    ///                        -  -4: Initialization of an imported module failed.
-    ///                        -  -5: \p transaction, \p module_name or \p variant_data are invalid,
-    ///                               \p variant_data is empty, or a struct member for the prototype
-    ///                               name, defaults, or annotations has an incorrect type.
-    ///                        -  -6: A default for a non-existing parameter was provided.
-    ///                        -  -7: The type of a default does not have the correct type.
-    ///                        -  -8: Unspecified error.
-    ///                        -  -9: One of the annotation arguments is wrong (wrong argument name,
-    ///                               not a constant expression, or the argument type does not match
-    ///                               the parameter type).
-    ///                        - -10: One of the annotations does not exist or it has a currently
-    ///                               unsupported parameter type like deferred-sized arrays.
-    virtual Sint32 create_variants(
-        ITransaction* transaction, const char* module_name, const IArray* variant_data) = 0;
-
-    virtual Sint32 create_materials(
-        ITransaction* transaction, const char* module_name, const IArray* material_data) = 0;
-
-    virtual Sint32 create_materials(
-        ITransaction* transaction,
-        const char* module_name,
-        const IArray* mdl_data,
-        IMdl_execution_context* context) = 0;
+    /// Creates an execution context.
+    virtual IMdl_execution_context* create_execution_context() = 0;
 
     /// Creates a value referencing a texture identified by an MDL file path.
     ///
@@ -217,44 +154,32 @@ public:
     ///                      failure.
     virtual IValue_bsdf_measurement* create_bsdf_measurement(
         ITransaction* transaction, const char* file_path, bool shared, Sint32* errors = 0) = 0;
-    
-    /// Creates an execution context.
-    virtual IMdl_execution_context* create_execution_context() = 0;
 
-    /// Returns the DB name for the MDL name of an MDL module.
+    /// Creates a module builder for a given module.
     ///
-    /// For example, given \c "::state", the method returns \c "mdl::state".
-    ///
-    /// \note This method does not check for existence of the corresponding DB element, nor does it
-    ///       check that the input is a valid MDL module name.
-    ///
-    /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
-    ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
-    ///       the mapping might change in the future.
-    ///
-    /// \param mdl_name      The fully-qualified MDL name of the MDL module (including package
-    ///                      names, starting with "::") or an MDLE filepath (absolute or relative
-    ///                      to the current working directory).
-    /// \return              The DB name of that module, or \c NULL if \p mdl_name is invalid.
-    virtual const IString* get_db_module_name( const char* mdl_name) = 0;
+    /// \param transaction          The transaction to be used.
+    /// \param module_name          The DB name of the MDL module to build. If there is no such
+    ///                             module, then an empty module with this name and \p
+    ///                             min_module_version is created. Otherwise, the existing module
+    ///                             is edited. Builtin modules or MDLE modules cannot be built or
+    ///                             edited.
+    /// \param min_module_version   The initial MDL version of the new module. Ignored if the
+    ///                             module exists already.
+    /// \param max_module_version   The maximal desired MDL version of the module. If higher than
+    ///                             the current MDL version of the module, then the module builder
+    ///                             will upgrade the MDL version as necessary to handle requests
+    ///                             requiring newer features.
+    /// \param context              An execution context which can be queried for detailed error
+    ///                             messages after the operation has finished. Can be \c NULL.
+    /// \return                     The module builder for the given module, or \c NULL in
+    ///                             case of errors.
+    virtual IMdl_module_builder* create_module_builder(
+        ITransaction* transaction,
+        const char* module_name,
+        Mdl_version min_module_version,
+        Mdl_version max_module_version,
+        IMdl_execution_context* context) = 0;
 
-    /// Returns the DB name for the MDL name of an MDL material or function definition.
-    ///
-    /// For example, given \c "::state::normal()", the method returns \c "mdl::state::normal()".
-    ///
-    /// \note This method does not check for existence of the corresponding DB element, nor does it
-    ///       check that the input is a valid MDL material or definition name.
-    ///
-    /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
-    ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
-    ///       the mapping might change in the future.
-    ///
-    /// \param mdl_name      The fully-qualified MDL name of the MDL material or function definition
-    ///                      (starts with the fully-qualified MDL name of the coresponding module).
-    /// \return              The DB name of that material or function definition, or \c NULL if
-    ///                      \p mdl_name is invalid.
-    virtual const IString* get_db_definition_name( const char* mdl_name) = 0;
-    
     /// Creates a module transformer for a given module.
     ///
     /// \param transaction   The transaction to be used.
@@ -266,6 +191,161 @@ public:
     ///                      errors.
     virtual IMdl_module_transformer* create_module_transformer(
         ITransaction* transaction, const char* module_name, IMdl_execution_context* context) = 0;
+
+    /// Returns the DB name for the MDL name of a module (or file path for MDLE modules).
+    ///
+    /// For example, given \c "::state", the method returns \c "mdl::state".
+    ///
+    /// \note This method does not check for existence of the corresponding DB element, nor does it
+    ///       check that the input is a valid module name.
+    ///
+    /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
+    ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
+    ///       the mapping might change in the future.
+    ///
+    /// \param mdl_name      The MDL name of the module (non-MDLE and MDLE module), or the file path
+    ///                      of an MDLE module.
+    /// \return              The DB name of that module, or \c NULL if \p mdl_name is invalid.
+    virtual const IString* get_db_module_name( const char* mdl_name) = 0;
+
+    /// Returns the DB name for the MDL name of an material or function definition.
+    ///
+    /// For example, given \c "::state::normal()", the method returns \c "mdl::state::normal()".
+    ///
+    /// \note This method does not check for existence of the corresponding DB element, nor does it
+    ///       check that the input is a valid material or definition name.
+    ///
+    /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
+    ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
+    ///       the mapping might change in the future.
+    ///
+    /// \param mdl_name      The MDL name of the material or function definition.
+    /// \return              The DB name of that material or function definition, or \c NULL if
+    ///                      \p mdl_name is invalid.
+    virtual const IString* get_db_definition_name( const char* mdl_name) = 0;
+
+    /// Analyzes whether an expression graph violates the uniform constraints.
+    ///
+    /// \note This method can be used to check already created graphs, but it can also be used to
+    ///       check whether a hypothetical connection would observe the uniform constraints: First,
+    ///       invoke the method with the root of the existing graph, \p root_uniform set to \c
+    ///       false (at least for materials), and \p query_expr set to the graph node to be
+    ///       replaced. If the call returns with \p query_result set to \c false (and no errors in
+    ///       the context), then any (valid) subgraph can be connected. Otherwise, invoke the
+    ///       method again with the root of the to-be-connected subgraph, \p root_uniform set to \c
+    ///       true, and \p query_expr set to \c NULL. If there are no errors, then the subgraph
+    ///       can be connected.
+    ///
+    /// \note Make sure that \p query_expr (if not \c NULL) can be reached from \p root_name,
+    ///       otherwise \p query_result is always \c false. In particular, arguments passed during
+    ///       call creation (or later for argument changes) are cloned, and the expression that is
+    ///       part of the graph is different from the one that was used to construct the graph
+    ///       (equal, but not identical).
+    ///
+    /// \param transaction             The transaction to be used.
+    /// \param root_name               DB name of the root node of the graph (material instance or
+    ///                                function call).
+    /// \param root_uniform            Indicates whether the root node should be uniform.
+    /// \param query_expr              A node of the call graph for which the uniform property is
+    ///                                to be queried. This expression is \em only used to identify
+    ///                                the corresponding node in the graph, i.e., it even makes
+    ///                                sense to pass constant expressions (which by themselves are
+    ///                                always uniform) to determine whether a to-be-connected call
+    ///                                expression has to be uniform. Can be \c NULL.
+    /// \param[out] query_result       Indicates whether \p query_expr needs to be uniform (or
+    ///                                \c false if \p query_expr is \c NULL, or in case of errors).
+    /// \param[out] error_path         A path to a node of the graph that violates the uniform
+    ///                                constraints, or the empty string if there is no such node
+    ///                                (or in case of errors). Such violations are also reported
+    ///                                via \p context. Can be \c NULL.
+    /// \param context                 The execution context can be used to pass options and to
+    ///                                retrieve error and/or warning messages. Can be \c NULL.
+    virtual void analyze_uniform(
+        ITransaction* transaction,
+        const char* root_name,
+        bool root_uniform,
+        const IExpression* query_expr,
+        bool& query_result,
+        IString* error_path,
+        IMdl_execution_context* context) const = 0;
+
+    /// Decodes a DB or MDL name.
+    ///
+    /// \param name   The encoded DB or MDL name to be decoded.
+    /// \return       The decoded DB or MDL name, or \c NULL if \p name is \c NULL. Returns the
+    ///               input string if encoded names are disabled.
+    ///
+    /// \note This method should only be used for display purposes. Do \em not use the returned
+    ///       name to identify functions or materials since this representation is ambiguous. For
+    ///       modules, it is possible to re-encode their name without loss of information, see
+    ///       #encode_module_name(). This is \em not possible for names of function or material
+    ///       definitions.
+    ///
+    /// \note This method does not require the corresponding module to be loaded. The method does
+    ///       not check whether the given name is valid, nor whether it is defined in the
+    ///       corresponding module.
+    virtual const IString* decode_name( const char* name) = 0;
+
+    /// Encodes a DB or MDL module name.
+    ///
+    /// \param name    The decoded DB or MDL module name to be encoded.
+    /// \return        The encoded DB or MDL module name, or \c NULL if \p name is \c NULL. Returns
+    ///                the input string if encoded names are disabled.
+    ///
+    /// \note This method does not require the corresponding module to be loaded. The method does
+    ///       not check whether the given name is valid.
+    ///
+    /// \see #mi::neuraylib::IMdl_factory::encode_function_definition_name(),
+    ///      #mi::neuraylib::IMdl_factory::encode_type_name()
+    virtual const IString* encode_module_name( const char* name) = 0;
+
+    /// Encodes a DB or MDL function or material definition name.
+    ///
+    /// \param name             The decoded DB or MDL name of a function or material definition
+    ///                         \em without signature.
+    /// \param parameter_types  A static or dynamic array with elements of type #mi::IString
+    ///                         representing decoded positional parameter type names. The value
+    ///                         \c NULL can be used for functions or materials without parameters
+    ///                         (treated like an empty array).
+    /// \return                 The encoded function or material definition name, or \c NULL if
+    ///                         \p name or one of the array elements is \c NULL. If encoded names
+    ///                         are disabled, then the individual components of the name are joined
+    ///                         by parentheses and commas without further encoding.
+    ///
+    /// \note This method does not require the corresponding module to be loaded. The method does
+    ///       not check whether the given name is valid, nor whether it is defined in the
+    ///       corresponding module.
+    ///
+    /// \see #mi::neuraylib::IMdl_factory::encode_module_name(),
+    ///      #mi::neuraylib::IMdl_factory::encode_type_name()
+    virtual const IString* encode_function_definition_name(
+        const char* name, const IArray* parameter_types) const = 0;
+
+    /// Encodes an MDL type name.
+    ///
+    /// \param name             The decoded MDL name of a type.
+    /// \return                 The encoded MDL name of the type, or \c NULL if \p name is \c NULL.
+    ///                         Returns the input string if encoded names are disabled
+    ///
+    /// \note This method does not require the corresponding module to be loaded. The method does
+    ///       not check whether the given name is valid, nor whether it is defined in the
+    ///       corresponding module.
+    ///
+    /// \see #mi::neuraylib::IMdl_factory::encode_function_definition_name(),
+    ///      #mi::neuraylib::IMdl_factory::encode_module_name()
+    virtual const IString* encode_type_name( const char* name) const = 0;
+
+    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_12_0(create_variants)(
+        ITransaction* transaction, const char* module_name, const IArray* variant_data) = 0;
+
+    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_12_0(create_materials)(
+        ITransaction* transaction, const char* module_name, const IArray* material_data) = 0;
+
+    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_12_0(create_materials)(
+        ITransaction* transaction,
+        const char* module_name,
+        const IArray* mdl_data,
+        IMdl_execution_context* context) = 0;
 };
 
 /// Options for repairing material instances and function calls.

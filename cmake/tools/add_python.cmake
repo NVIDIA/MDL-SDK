@@ -32,8 +32,16 @@
     # - TARGET_ADD_TOOL_DEPENDENCY_TOOL
 # -------------------------------------------------------------------------------------------------
 
+# use the python binray of the dev package if available
+if(NOT python_PATH AND MDL_DEPENDENCY_PYTHON_DEV_EXE)
+    set(python_PATH ${MDL_DEPENDENCY_PYTHON_DEV_EXE} CACHE FILEPATH "Path of the Python 2.7+ binary." FORCE)
+endif()
+
 # use a default fallback
-find_program(python_PATH python)
+if(NOT python_PATH)
+    find_program(python_PATH python)
+endif()
+
 if(NOT python_PATH)
     MESSAGE(FATAL_ERROR "The tool dependency \"${TARGET_ADD_TOOL_DEPENDENCY_TOOL}\" for target \"${TARGET_ADD_TOOL_DEPENDENCY_TARGET}\" could not be resolved.")
 endif()

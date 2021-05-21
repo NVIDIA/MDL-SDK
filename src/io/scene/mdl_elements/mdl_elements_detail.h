@@ -41,8 +41,11 @@
 #include <mi/mdl/mdl_streams.h>
 #include <mi/neuraylib/ireader.h>
 
+#include <condition_variable>
+#include <mutex>
 #include <string>
-#include <boost/unordered_map.hpp>
+#include <unordered_map>
+#include <vector>
 
 #include <base/data/db/i_db_tag.h>
 #include <io/image/image/i_image.h>
@@ -88,18 +91,22 @@ std::string lookup_thumbnail(
 /// intended to be used for MDL resources in defaults/material bodies, not for regular arguments.
 /// The found resources are always shared.
 ///
-/// \param transaction          The DB transaction to use.
-/// \param value                The MDL resource to convert into a tag.
-/// \param module_filename      Absolute filename of the MDL module (using OS-specific separators),
-///                             or \c NULL for string-based modules.
-/// \param module_name          The fully-qualified MDL module name, or \c NULL for import of
-///                             resources (absolute file paths only) without module context.
-/// \return                     The tag for the MDL resource (invalid in case of failures).
+/// \param transaction             The DB transaction to use.
+/// \param value                   The MDL resource to convert into a tag.
+/// \param module_filename         Absolute filename of the MDL module (using OS-specific
+///                                separators), or \c NULL for string-based modules.
+/// \param module_name             The MDL module name, or \c NULL for import of resources (absolute
+///                                file paths only) without module context.
+/// \param callbacks_under_mutex   Indicates whether the application supports callbacks under a
+///                                mutex. If not, a temporary copy of the data is created (in case
+///                                of canvases or streams).
+/// \return                        The tag for the MDL resource (invalid in case of failures).
 DB::Tag mdl_resource_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_resource* value,
     const char* module_filename,
-    const char* module_name);
+    const char* module_name,
+    bool callbacks_under_mutex);
 
 /// Returns the DB tag corresponding to an MDL texture.
 ///
@@ -108,7 +115,8 @@ DB::Tag mdl_texture_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_texture* value,
     const char* module_filename,
-    const char* module_name);
+    const char* module_name,
+    bool callbacks_under_mutex);
 
 /// Returns the DB tag corresponding to an MDL texture.
 ///
@@ -118,8 +126,20 @@ DB::Tag mdl_texture_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
+    bool callbacks_under_mutex,
     bool shared,
     mi::Float32 gamma);
+
+/// Returns the DB tag corresponding to an MDL volume texture.
+///
+/// \see #mdl_resource_to_tag()
+DB::Tag mdl_volume_texture_to_tag(
+    DB::Transaction* transaction,
+    const char* file_path,
+    const char* module_filename,
+    const char* module_name,
+    const char* selector,
+    bool shared);
 
 /// Returns the DB tag corresponding to an MDL light profile.
 ///
@@ -322,14 +342,14 @@ struct Equal_ptr
 /// Helper class for parameter type binding and checking.
 class Type_binder
 {
-    typedef boost::unordered_map<
+    typedef std::unordered_map<
         const mi::mdl::IType_array*,
         const mi::mdl::IType_array*,
         const Hash_ptr<mi::mdl::IType_array>,
         const Equal_ptr<mi::mdl::IType_array>
     > Bind_type_map;
 
-    typedef boost::unordered_map<
+    typedef std::unordered_map<
         const mi::mdl::IType_array_size*,
         int,
         const Hash_ptr<mi::mdl::IType_array_size>,
@@ -598,6 +618,94 @@ private:
     std::string m_file_format;
     bool m_is_container;
 };
+
+/// An implementation of mi::mdl::IMDL_resource_set that copies all data of its constructor argument.
+///
+/// Can be used to enforce reading all data from \c other once upfront in situations where later
+/// calls are not feasible.
+///
+/// This also includes creating an instance of Local_mdl_resource_reader for all readers.
+class Local_mdl_resource_set
+  : public mi::base::Interface_implement<mi::mdl::IMDL_resource_set>
+{
+public:
+    Local_mdl_resource_set( mi::mdl::IMDL_resource_set* other);
+
+    const char* get_mdl_url_mask() const;
+
+    const char* get_filename_mask() const;
+
+    size_t get_count() const { return m_uv_tiles.size(); }
+
+    const char* get_mdl_url( size_t i) const;
+
+    const char* get_filename( size_t i) const;
+
+    bool get_udim_mapping( size_t i, int& u, int& v) const;
+
+    mi::mdl::IMDL_resource_reader* open_reader( size_t i) const;
+
+    mi::mdl::UDIM_mode get_udim_mode() const { return m_udim_mode; };
+
+    bool get_resource_hash( size_t i, unsigned char hash[16]) const;
+
+private:
+    std::string m_mdl_url_mask;
+    std::string m_filename_mask;
+    mi::mdl::UDIM_mode m_udim_mode;
+
+    struct Uv_tile {
+        std::string m_mdl_url;
+        std::string m_filename;
+        bool m_uv_success;
+        int m_u;
+        int m_v;
+        mi::base::Handle<mi::mdl::IMDL_resource_reader> m_reader;
+        bool m_hash_valid;
+        unsigned char m_hash[16];
+    };
+
+    std::vector<Uv_tile> m_uv_tiles;
+};
+
+/// An implementation of mi::mdl::IMDL_resource_reader that copies all data of its constructor
+/// argument.
+///
+/// Can be used to enforce reading all data from \c other once upfront in situations where later
+/// calls are not feasible.
+///
+/// The entire reader content will be read upfront and stored in a local memory buffer.
+class Local_mdl_resource_reader
+  : public mi::base::Interface_implement<mi::mdl::IMDL_resource_reader>
+{
+public:
+    Local_mdl_resource_reader( mi::mdl::IMDL_resource_reader* other);
+
+    mi::Uint64 read( void* ptr, mi::Uint64 size);
+
+    mi::Uint64 tell() { return m_position; }
+
+    bool seek( mi::Sint64 offset, mi::mdl::IMDL_resource_reader::Position origin);
+
+    const char* get_filename() const;
+
+    const char* get_mdl_url() const;
+
+    bool get_resource_hash( unsigned char hash[16]);
+
+private:
+    mi::Uint64 m_size;
+    mi::Uint64 m_position;
+    std::string m_filename;
+    std::string m_mdl_url;
+    bool m_hash_valid;
+    unsigned char m_hash[16];
+    std::vector<char> m_data;
+};
+
+// We require a mutex per transaction. However, that is difficult to implement and we use a global
+// lock instead.
+extern std::mutex g_transaction_mutex;
 
 } // namespace DETAIL
 

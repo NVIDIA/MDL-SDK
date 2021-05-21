@@ -72,6 +72,15 @@ public:
     ///       (see #get_function_definition()).
     virtual const char* get_mdl_function_definition() const = 0;
 
+    /// Indicates whether the call represents a material instance.
+    ///
+    /// If materials-are-functions is enabled, then this method returns \c true iff
+    /// #mi::neuraylib::IFunction_call::get_interface<mi::neuraylib::IMaterial_instance>()
+    /// succeeds. Otherwise, this method always returns \c false.
+    ///
+    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions().
+    virtual bool is_material() const = 0;
+
     /// Indicates whether this call is an instance of the array constructor.
     ///
     /// \see \ref mi_neuray_mdl_arrays
@@ -191,10 +200,10 @@ public:
     ///
     /// \param context  Execution context that can be queried for error messages
     ///                 after the operation has finished. Can be \c NULL.
-    /// \return 
+    /// \return
     ///      - \c true:  The instance is valid.
     ///      - \c false: The instance is invalid.
-    virtual bool is_valid(IMdl_execution_context* context) const = 0;
+    virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     /// Attempts to repair an invalid function call.
     ///
@@ -204,9 +213,7 @@ public:
     /// \return
     ///     -   0:   Success.
     ///     -  -1:   Repair failed. Check the \c context for details.
-    virtual Sint32 repair(
-        Uint32 flags,
-        IMdl_execution_context* context) = 0;
+    virtual Sint32 repair( Uint32 flags, IMdl_execution_context* context) = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

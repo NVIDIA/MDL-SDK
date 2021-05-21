@@ -28,23 +28,19 @@
 
 # check if CUDA is available
 # Note, this enables CUDA for all projects (only of concern for Visual Studio)
-if(NOT MDL_ENABLE_CUDA_EXAMPLES)
-    message(WARNING "Examples that require CUDA are disabled. Enable the option 'MDL_ENABLE_CUDA_EXAMPLES' to re-enable them.")
-else()
+if(MDL_ENABLE_CUDA_EXAMPLES)
+
     # use the c++ compiler as host compiler (setting this does not work with apple clang 9.x)
     if(NOT MACOSX)
         set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE STRING "")
     endif()
 
     # try to enable cuda, can fail even though the compiler is found (see error message of second call)
-    message(STATUS "If you don't want or can't to use CUDA based examples, please disable 'MDL_ENABLE_CUDA_EXAMPLES'.")
     enable_language(CUDA OPTIONAL)
     if(NOT EXISTS ${CMAKE_CUDA_COMPILER})
-        set(MDL_ENABLE_CUDA_EXAMPLES OFF CACHE BOOL "Enable examples that require CUDA." FORCE)
-        message(STATUS "Failed enable CUDA.")
-        message(STATUS "The option 'MDL_ENABLE_CUDA_EXAMPLES' is now disabled. Run cmake/configure again to continue without CUDA.")
-        message(STATUS "Please install the CUDA SDK and then enable 'MDL_ENABLE_CUDA_EXAMPLES' to check for CUDA again.")
+        message(warning "Failed enable CUDA. Please install the CUDA SDK or disable 'MDL_ENABLE_CUDA_EXAMPLES'.")
         enable_language(CUDA) # call again to get an error
+        return()
     endif()
 
     # Note, that the nvcc needs to support the host compiler (see <CUDA_PATH>/include/crt/host_config.h)
@@ -58,7 +54,8 @@ endif()
 
 function(FIND_CUDA_EXT)
 
-    if(NOT MDL_ENABLE_CUDA_EXAMPLES)
+    if(NOT CMAKE_CUDA_COMPILER)
+        message(FATAL_ERROR "Failed enable CUDA. Please install the CUDA SDK or disable 'MDL_ENABLE_CUDA_EXAMPLES'.")
         return()
     endif()
     

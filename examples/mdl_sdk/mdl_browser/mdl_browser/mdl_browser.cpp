@@ -70,11 +70,11 @@ int run_demo_qt_application(Mdl_qt_plugin_interface* plugin,
     plugin->set_context(&engine, &plugin_context);
 
     // setup callbacks to get the result (not required)
-    plugin_context.get_mdl_browser_callbacks()->on_accepted = [&](const std::string& s)
+    plugin_context.get_mdl_browser_callbacks()->on_accepted = [](const char* value)
     {
-        std::cout << "[info] Selection: " << s.c_str() << "\n";
+        std::cout << "[info] Selection: " << value << "\n";
     };
-    plugin_context.get_mdl_browser_callbacks()->on_rejected = [&]()
+    plugin_context.get_mdl_browser_callbacks()->on_rejected = []()
     {
         std::cout << "[info] Selection: nothing\n";
     };

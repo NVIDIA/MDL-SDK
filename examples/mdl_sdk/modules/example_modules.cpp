@@ -35,9 +35,10 @@
 
 #include "example_shared.h"
 
-const char* material_definition_name = "mdl::nvidia::sdk_examples::tutorials::example_material";
-const char* function_definition_name =
-    "mdl::nvidia::sdk_examples::tutorials::example_function(color,float)";
+const char* material_definition_name
+    = "mdl::nvidia::sdk_examples::tutorials::example_material(color,float)";
+const char* function_definition_name
+    = "mdl::nvidia::sdk_examples::tutorials::example_function(color,float)";
 
 // Utility function to dump the parameters of a material or function definition.
 template <class T>

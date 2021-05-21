@@ -53,6 +53,7 @@ namespace llvm {
 namespace mi {
 namespace mdl {
 
+class IModule_cache;
 class LLVM_code_generator;
 
 using MDL_JIT_module_key = uint64_t;
@@ -348,25 +349,31 @@ public:
     /// Compile a whole MDL module into LLVM-IR.
     ///
     /// \param module             The MDL module to generate code from.
+    /// \param module_cache       The module cache if any.
     /// \param options            The backend options.
     void compile_module_to_llvm(
         mi::mdl::IModule const *module,
+        IModule_cache          *module_cache,
         Options_impl const     &options);
 
     /// Compile a whole MDL module into PTX.
     ///
     /// \param module             The MDL module to generate code from.
+    /// \param module_cache       The module cache if any.
     /// \param options            The backend options.
     void compile_module_to_ptx(
         mi::mdl::IModule const *module,
+        IModule_cache          *module_cache,
         Options_impl const     &options);
 
     /// Compile a whole MDL module into HLSL.
     ///
     /// \param module             The MDL module to generate code from.
+    /// \param module_cache       The module cache if any.
     /// \param options            The backend options.
     void compile_module_to_hlsl(
         mi::mdl::IModule const *module,
+        IModule_cache          *module_cache,
         Options_impl const     &options);
 
     /// Retrieve the LLVM context of this jitted code.

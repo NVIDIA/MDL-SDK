@@ -87,7 +87,7 @@ public:
     ///          unknown     otherwise (might depend on parameters)
     Result analyze(bool skip_cutout)
     {
-        if (skip_cutout == false) {
+        if (!skip_cutout) {
             IValue_float const *f_value = get_cutout_opacity();
             if (f_value == NULL) {
                 // cannot analyze
@@ -347,6 +347,8 @@ private:
         case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
+        case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
+        case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
             return analyze_bsdf_mixer(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
@@ -457,6 +459,11 @@ private:
 IGenerated_code_dag::IMaterial_instance::Opacity
 Generated_code_dag::Material_instance::get_opacity() const
 {
+    if (m_properties & IP_TARGET_MATERIAL_MODEL) {
+        // currently we do not support opacity analysis in target material model mode
+        return OPACITY_UNKNOWN;
+    }
+
     DAG_call const *expr = get_constructor();
 
     return Opacity_analyzer(get_allocator(), expr).analyze(/*skip_cutout=*/false);
@@ -466,6 +473,11 @@ Generated_code_dag::Material_instance::get_opacity() const
 IGenerated_code_dag::IMaterial_instance::Opacity
 Generated_code_dag::Material_instance::get_surface_opacity() const
 {
+    if (m_properties & IP_TARGET_MATERIAL_MODEL) {
+        // currently we do not support opacity analysis in target material model mode
+        return OPACITY_UNKNOWN;
+    }
+
     DAG_call const *expr = get_constructor();
 
     return Opacity_analyzer(get_allocator(), expr).analyze(/*skip_cutout=*/true);
@@ -474,6 +486,11 @@ Generated_code_dag::Material_instance::get_surface_opacity() const
 // Returns the cutout opacity of this instance if it is constant.
 IValue_float const *Generated_code_dag::Material_instance::get_cutout_opacity() const
 {
+    if (m_properties & IP_TARGET_MATERIAL_MODEL) {
+        // currently we do not support opacity analysis in target material model mode
+        return NULL;
+    }
+
     DAG_call const *expr = get_constructor();
 
     return Opacity_analyzer(get_allocator(), expr).get_cutout_opacity();

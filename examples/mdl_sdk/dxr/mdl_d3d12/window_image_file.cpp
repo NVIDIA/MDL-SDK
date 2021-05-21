@@ -121,7 +121,7 @@ int Window_image_file::show(int nCmdShow)
         static_cast<mi::Uint32>(m_back_buffer->get_width()),
         static_cast<mi::Uint32>(m_back_buffer->get_height())));
 
-    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
 
     // download texture and save to output file
     if (m_back_buffer->download(tile->get_data()))

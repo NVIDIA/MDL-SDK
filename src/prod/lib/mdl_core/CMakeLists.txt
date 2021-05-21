@@ -75,3 +75,11 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         llvm
         ${LINKER_NO_WHOLE_ARCHIVE}
     )
+
+# -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
+# -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "lib"
+    )

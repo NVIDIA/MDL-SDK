@@ -140,6 +140,7 @@ public:
     /// \param sp_lock            the lock for search path access
     /// \param msgs               compiler messages to append
     /// \param front_path         if non-NULL, search this MDL path first
+    /// \param vroot              if non-NULL, the virtual package root
     File_resolver(
         MDL const                                &compiler,
         IModule_cache                            *module_cache,
@@ -147,7 +148,8 @@ public:
         mi::base::Handle<IMDL_search_path> const &search_path,
         mi::base::Lock                           &sp_lock,
         Messages_impl                            &msgs,
-        char const                               *front_path);
+        char const                               *front_path,
+        char const                               *vroot);
 
 private:
     /// Creates a new error.
@@ -216,7 +218,9 @@ private:
 
     /// Returns the nesting level of a module, i.e., the number of "::" substrings in the
     /// fully-qualified module name minus 1.
-    static size_t get_module_nesting_level(char const *module_name);
+    ///
+    /// \param module_name  an absolute name of a module
+    size_t get_module_nesting_level(char const *module_name) const;
 
     /// Checks that \p file_path contains no "." or ".." directory names.
     ///
@@ -474,6 +478,9 @@ private:
 
     /// If non-NULL, search this MDL path first.
     char const *m_front_path;
+
+    /// If non-NULL, this is the virtual root package.
+    char const *m_virtual_root_package;
 
     /// The entity we are trying to resolve.
     char const *m_resolve_entity;

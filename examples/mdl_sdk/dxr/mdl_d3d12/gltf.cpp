@@ -584,7 +584,7 @@ void add_clear_coat(
 
 bool Loader_gltf::load(const std::string& file_name, const Scene_options& options)
 {
-    m_scene = {};
+    m_scene = Scene();
     m_scene.root.kind = Node::Kind::Empty;
     m_scene.root.index = static_cast<size_t>(-1);
 

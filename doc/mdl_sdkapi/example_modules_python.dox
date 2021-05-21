@@ -1,0 +1,153 @@
+/******************************************************************************
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_modules_python Example for MDL Modules
+
+<div align="right">
+    [\link mi_neuray_example_start_shutdown_python Previous\endlink]
+    [\link mi_neuray_bindings_python Up\endlink]
+</div>
+
+This example loads an MDL module and inspects it contents.
+
+\section example_modules_python_new New Topics
+
+  - Configuration of \neurayProductName
+  - Loading of MDL modules
+  - Enumerating the contents of MDL modules
+  - Inspecting the parameters of material and function definitions
+
+
+\section example_modules_python_descr Detailed Description
+
+
+<dl>
+    <dt><b>
+        Configuration of \neurayProductName
+    </b></dt>
+    <dd><br>
+        In order to allow the \neurayProductName to locate MDL modules and its resources
+        in the file system it is necessary to configure the MDL module search path.
+        This is done by calling #mi::neuraylib::IMdl_configuration::add_mdl_path().
+        There are more options to control the behavior of the SDK globally, 
+        like \c materials_are_functions, which is enabled by default.
+
+        \code
+# get the component using a context manager
+with neuray.get_api_component(pymdlsdk.IMdl_configuration) as cfg:
+    cfg.add_mdl_path('/home/user/mdl')
+
+    # unify the handling of materials and functions
+    cfg.set_materials_are_functions(True)
+        \endcode
+
+        Our example module \c \::nvidia::sdk_examples::tutorials makes use of textures. 
+        The support for image formats in the \neurayProductName is provided by image plugins, which
+        have to be loaded explicitly via #mi::neuraylib::IPlugin_configuration::load_plugin_library().
+
+        The Python bindings provide a helper function for loading plugins as well.
+        The file extension can be omitted to platform dependent code.
+
+        \code
+# Load the 'nv_freeimage' plug-in
+if not pymdlsdk.load_plugin(neuray, 'nv_freeimage'):
+    raise Exception('Failed to load the \'nv_freeimage\' plugin.')
+        \endcode
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Loading of MDL modules
+    </b></dt>
+    <dd><br>
+        MDL modules are loaded with the method #mi::neuraylib::IMdl_impexp_api::load_module(). Note
+        that this method expects the module name, not the name of the file containing the module. To
+        find the corresponding file it is necessary to configure the module search path as described
+        above.
+
+        To load a module the \c IMdl_impexp_api component is acquired first.
+        It is good practice to also create an optional context in order to get detailed log 
+        messages.
+        \code
+with neuray.get_api_component(pymdlsdk.IMdl_impexp_api) as imp_exp, \
+    neuray.get_api_component(pymdlsdk.IMdl_factory) as mdl_factory, \
+    mdl_factory.create_execution_context() as context:
+
+    res = imp_exp.load_module(transaction, module_mdl_name, context)
+        \endcode
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Enumerating the contents of MDL modules
+    </b></dt>
+    <dd><br>
+        The #mi::neuraylib::IModule interface offers various methods related to metadata, like
+        the name of the module, or the name of the file it was loaded from. 
+        Furthermore, it offers methods to enumerate the material and function definitions contained in the module. 
+        It also allows to enumerate all modules that have been (directly) imported by that module. 
+        Imported modules will be automatically loaded (if not already loaded before).
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Inspecting the parameters of material and function definitions
+    </b></dt>
+    <dd><br>
+        MDL materials and functions (as found in a \c .mdl file) are represented in the
+        \neurayApiName by the interfaces #mi::neuraylib::IMaterial_definition and
+        #mi::neuraylib::IFunction_definition. Similar to the module interface these interfaces
+        offer various methods related to metadata, like the name of the definition, or the name of
+        the containing module. Important methods are those that provide details about the
+        parameters, like their names, types, and the values of defaults (if present).
+
+        In this example we simply print the parameter information for a selected material and the 
+        exported elements of the parenting module.
+
+        To read information about a module that has been loaded before it has to accessed using a transaction.
+        \code
+with transaction.access_as(pymdlsdk.IModule, module_db_name) as module:
+    if not module.is_valid_interface():
+        return
+    print("MDL Qualified Name: %s" % module.get_mdl_name())
+    print("MDL Simple Name: %s" % module.get_mdl_simple_name())
+        \endcode
+
+        Compared to the native API, there are two access functions.
+        The `access_as` used above returns an object of a given type, in this case \c IModule.
+        The `access` functions returns a generic interface and the type has to be queried manually.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+<b>Source Code Location:</b><br>
+  <tt>examples/mdl_python/modules/example_modules.py</tt>
+
+<div align="right">
+    [\link mi_neuray_example_start_shutdown_python Previous\endlink]
+    [\link mi_neuray_bindings_python Up\endlink]
+</div>
+
+*/

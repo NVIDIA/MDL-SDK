@@ -52,6 +52,8 @@ public:
     Mdl_annotation_definition_proxy();
 
     /// Constructor.
+    ///
+    /// \param module_name   The MDL module name.
     Mdl_annotation_definition_proxy( const char* module_name);
 
     /// Copy constructor.
@@ -59,7 +61,7 @@ public:
 
     Mdl_annotation_definition_proxy& operator=( const Mdl_annotation_definition_proxy&) = delete;
 
-    // methods corresponding to mi::neuraylib::IMaterial_instance
+    // own methods
 
     const char* get_db_module_name() const { return m_module_db_name.c_str(); }
 

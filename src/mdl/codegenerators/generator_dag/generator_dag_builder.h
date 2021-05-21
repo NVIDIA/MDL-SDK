@@ -83,8 +83,9 @@ private:
             builder.get_allocator())
         , m_in_same_function(in_same_function)
         {
-            if (!m_in_same_function)
+            if (!m_in_same_function) {
                 builder.m_accesible_parameters.swap(m_old_accesible_parameters);
+            }
 
             // remember current state of the environment map
             m_old_tmp_value_map = builder.m_tmp_value_map;
@@ -95,8 +96,7 @@ private:
         {
             if (!m_in_same_function) {
                 m_builder.m_accesible_parameters.swap(m_old_accesible_parameters);
-            }
-            else {
+            } else {
                 // update the environment map
                 for (Definition_temporary_map::iterator it = m_old_tmp_value_map.begin(),
                     end = m_old_tmp_value_map.end(); it != end; ++it)
@@ -148,6 +148,13 @@ public:
     ///
     /// \return The old setting.
     bool forbid_local_function_calls(bool flag);
+
+    /// Enable/disable the target material model compilation mode.
+    ///
+    /// \param flag  True if target material compilation mode should be enabled
+    ///
+    /// \return The old setting.
+    bool enable_target_material_compilation_mode(bool flag);
 
 
     /// Check if the given type is a user defined type.
@@ -240,7 +247,7 @@ public:
     /// \param expr         The MDL expression to convert.
     /// \returns            The DAG IR node representing the MDL expression.
     ///
-    DAG_node const *exp_to_dag(
+    DAG_node const *expr_to_dag(
         IExpression const *expr);
 
     /// Convert an MDL annotation to a DAG IR node.
@@ -315,15 +322,15 @@ public:
     /// Returns true if a conditional operator on *df types was created.
     bool cond_df_created() const { return m_conditional_df_created; }
 
-private:
-    /// Get the allocator.
-    IAllocator *get_allocator() const { return m_alloc; }
-
     /// Push a module on the module stack.
     void push_module(IModule const *mod);
 
     /// Pop a module from the module stack.
     void pop_module();
+
+private:
+    /// Get the allocator.
+    IAllocator *get_allocator() const { return m_alloc; }
 
     /// Get the definition of the parameter of a function/material at index.
     ///
@@ -541,6 +548,9 @@ private:
 
     /// If true, a conditional operator on *df types was created.
     bool m_conditional_df_created;
+
+    /// if true we are in target model mode.
+    bool m_target_material_model_mode;
 };
 
 /// RAII helper class to handle the module stack.
@@ -579,6 +589,35 @@ public:
 
     /// Destructor.
     ~Forbid_local_functions_scope() { m_builder.forbid_local_function_calls(m_old); }
+
+private:
+    /// The builder to manipulate.
+    DAG_builder &m_builder;
+
+    /// The old value of the flag.
+    bool        m_old;
+};
+
+/// RAII Helper class to handle the "target material model mode" flag.
+class Target_material_model_mode_scope {
+public:
+    /// Constructor.
+    ///
+    /// \param builder  the DAG builder to manipulate
+    /// \param flag     True target material model compilation mode is used, False otherwise
+    Target_material_model_mode_scope(
+        DAG_builder &builder,
+        bool        flag)
+    : m_builder(builder)
+    {
+        m_old = builder.enable_target_material_compilation_mode(flag);
+    }
+
+    /// Destructor.
+    ~Target_material_model_mode_scope()
+    {
+        m_builder.enable_target_material_compilation_mode(m_old);
+    }
 
 private:
     /// The builder to manipulate.

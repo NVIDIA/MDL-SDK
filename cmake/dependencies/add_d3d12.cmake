@@ -48,6 +48,7 @@ else()
         PRIVATE
             ${MDL_DEPENDENCY_D3D12_INCLUDE}
             ${MDL_DEPENDENCY_DXGI_INCLUDE}
+            ${MDL_DEPENDENCY_WINRT_INCLUDE}
         )
 
     # static library

@@ -35,7 +35,6 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
-#include <mi/neuraylib/imodule.h>
 
 namespace mi {
 
@@ -55,7 +54,7 @@ class IMdl_execution_context;
 /// #create_function_call() method allows to create function calls based on this function
 /// definition.
 ///
-/// \note See \ref mi_neuray_mdl_template_like_functions_definitions for function definitions
+/// \note See \ref mi_neuray_mdl_template_like_function_definitions for function definitions
 ///       with special semantics.
 ///
 /// \see #mi::neuraylib::IFunction_call, #mi::neuraylib::IModule,
@@ -150,8 +149,8 @@ public:
 
         // ::math module intrinsics
         DS_INTRINSIC_MATH_FIRST = 0x0300,
-        DS_INTRINSIC_MATH_ABS                     ///< The %math::abs() intrinsic function.
-            = DS_INTRINSIC_MATH_FIRST,
+        /// The %math::abs() intrinsic function.
+        DS_INTRINSIC_MATH_ABS = DS_INTRINSIC_MATH_FIRST,
         DS_INTRINSIC_MATH_ACOS,                   ///< The %math::acos() intrinsic function.
         DS_INTRINSIC_MATH_ALL,                    ///< The %math::all() intrinsic function.
         DS_INTRINSIC_MATH_ANY,                    ///< The %math::any() intrinsic function.
@@ -211,14 +210,21 @@ public:
 
         /// The %math::emission_color() intrinsic function.
         DS_INTRINSIC_MATH_EMISSION_COLOR,
+        DS_INTRINSIC_MATH_COSH,                   ///< The %math::cosh() intrinsic function.
+        DS_INTRINSIC_MATH_SINH,                   ///< The %math::sinh() intrinsic function.
+        DS_INTRINSIC_MATH_TANH,                   ///< The %math::tanh() intrinsic function.
+        DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT,      ///< The %math::int_bits_to_float() intrinsic
+                                                  ///  function.
+        DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT,      ///< The %math::float_bits_to_int() intrinsic
+                                                  ///  function.
         DS_INTRINSIC_MATH_DX,                     ///< The %math::DX() intrinsic function.
         DS_INTRINSIC_MATH_DY,                     ///< The %math::DY() intrinsic function.
         DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
 
         // ::state module intrinsics
         DS_INTRINSIC_STATE_FIRST = 0x0400,
-        DS_INTRINSIC_STATE_POSITION               ///< The %state::position() function.
-            = DS_INTRINSIC_STATE_FIRST,
+        /// The %state::position() function.
+        DS_INTRINSIC_STATE_POSITION = DS_INTRINSIC_STATE_FIRST,
         DS_INTRINSIC_STATE_NORMAL,                ///< The %state::normal() function.
         DS_INTRINSIC_STATE_GEOMETRY_NORMAL,       ///< The %state::geometry_normal() function.
         DS_INTRINSIC_STATE_MOTION,                ///< The %state::motion() function.
@@ -247,8 +253,9 @@ public:
 
         // ::tex module intrinsics
         DS_INTRINSIC_TEX_FIRST = 0x0500,
-        DS_INTRINSIC_TEX_WIDTH                    ///< The tex::width() function.
-            = DS_INTRINSIC_TEX_FIRST,
+
+        /// The tex::width() function.
+        DS_INTRINSIC_TEX_WIDTH = DS_INTRINSIC_TEX_FIRST,
         DS_INTRINSIC_TEX_HEIGHT,                  ///< The tex::height() function.
         DS_INTRINSIC_TEX_DEPTH,                   ///< The tex::depth() function.
         DS_INTRINSIC_TEX_LOOKUP_FLOAT,            ///< The tex::lookup_float() function.
@@ -262,13 +269,19 @@ public:
         DS_INTRINSIC_TEX_TEXEL_FLOAT4,            ///< The tex::texel_float4() function.
         DS_INTRINSIC_TEX_TEXEL_COLOR,             ///< The tex::texel_color() function.
         DS_INTRINSIC_TEX_TEXTURE_ISVALID,         ///< The tex::texture_isvalid() function.
-        DS_INTRINSIC_TEX_LAST = DS_INTRINSIC_TEX_TEXTURE_ISVALID,
+        DS_INTRINSIC_TEX_WIDTH_OFFSET,            ///< The tex::width_offset() function.
+        DS_INTRINSIC_TEX_HEIGHT_OFFSET,           ///< The tex::height_offset() function.
+        DS_INTRINSIC_TEX_DEPTH_OFFSET,            ///< The tex::depth_offset() function.
+        DS_INTRINSIC_TEX_FIRST_FRAME,             ///< The tex::first_frame() function.
+        DS_INTRINSIC_TEX_LAST_FRAME,              ///< The tex::last_frame() function.
+        DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE,    ///< The tex::grid_to_object_space() function.
+        DS_INTRINSIC_TEX_LAST = DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE,
 
         // ::df module intrinsics
         DS_INTRINSIC_DF_FIRST = 0x0600,
 
-        DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF   ///< The df::diffuse_reflection_bsdf() function.
-            = DS_INTRINSIC_DF_FIRST,
+        /// The df::diffuse_reflection_bsdf() function.
+        DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = DS_INTRINSIC_DF_FIRST,
         DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF,///< The df::diffuse_transmission_bsdf() function.
         DS_INTRINSIC_DF_SPECULAR_BSDF,            ///< The df::specular_bsdf() function.
         DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF,       ///< The df::simple_glossy_bsdf() function.
@@ -317,14 +330,15 @@ public:
         DS_INTRINSIC_DF_MEASURED_FACTOR,          ///< The df::measured_factor() function.
         DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,         ///< The df::chiang_hair_bsdf() function.
         DS_INTRINSIC_DF_SHEEN_BSDF,               ///< The df::sheen_bsdf() function.
-        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_CHIANG_HAIR_BSDF,
+        DS_INTRINSIC_DF_UNBOUNDED_MIX,            ///< The df::unbounded_mix() function.
+        DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,      ///< The df::color_unbounded() function.
+        DS_INTRINSIC_DF_LAST = DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX,
 
 
         // ::scene module intrinsics
         DS_INTRINSIC_SCENE_FIRST = 0x0800,
 
-        DS_INTRINSIC_SCENE_DATA_ISVALID
-            = DS_INTRINSIC_SCENE_FIRST,
+        DS_INTRINSIC_SCENE_DATA_ISVALID = DS_INTRINSIC_SCENE_FIRST,
         DS_INTRINSIC_SCENE_DATA_LOOKUP_INT,             ///< scene::data_lookup_int()
         DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2,            ///< scene::data_lookup_int2()
         DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3,            ///< scene::data_lookup_int3()
@@ -348,8 +362,8 @@ public:
         // ::debug module intrinsics
         DS_INTRINSIC_DEBUG_FIRST = 0x0900,
 
-        DS_INTRINSIC_DEBUG_BREAKPOINT             ///< The debug::breakpoint() function.
-            = DS_INTRINSIC_DEBUG_FIRST,
+        /// The debug::breakpoint() function.
+        DS_INTRINSIC_DEBUG_BREAKPOINT = DS_INTRINSIC_DEBUG_FIRST,
         DS_INTRINSIC_DEBUG_ASSERT,                ///< The debug::assert() function.
         DS_INTRINSIC_DEBUG_PRINT,                 ///< The debug::print() function.
         DS_INTRINSIC_DEBUG_LAST = DS_INTRINSIC_DEBUG_PRINT,
@@ -379,7 +393,6 @@ public:
     ///
     /// \return         The MDL name of the function definition.
     virtual const char* get_mdl_name() const = 0;
-
 
     /// Returns the MDL name of the module containing this function definition.
     virtual const char* get_mdl_module_name() const = 0;
@@ -437,6 +450,15 @@ public:
     ///       uniform, also function definitions that are not explicitly marked either uniform or
     ///       varying and that have been analyzed by the MDL compiler to be uniform.
     virtual bool is_uniform() const = 0;
+
+    /// Indicates whether the definition represents a material.
+    ///
+    /// If materials-are-functions is enabled, then this method returns \c true iff
+    /// #mi::neuraylib::IFunction_definition::get_interface<mi::neuraylib::IMaterial_definition>()
+    /// succeeds. Otherwise, this method always returns \c false.
+    ///
+    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions().
+    virtual bool is_material() const = 0;
 
     /// Returns the return type.
     ///
@@ -503,7 +525,7 @@ public:
     /// \param index    The index of the parameter.
     /// \return         The number of other parameters whose enable_if condition depends on this
     ///                 parameter argument.
-    virtual Size get_enable_if_users(Size index) const = 0;
+    virtual Size get_enable_if_users( Size index) const = 0;
 
     /// Returns the index of a parameter whose enable_if condition might depend on the
     /// argument of the given parameter.
@@ -512,7 +534,7 @@ public:
     /// \param u_index  The index of the enable_if user.
     /// \return         The index of a parameter whose enable_if condition depends on this
     ///                 parameter argument, or ~0 if indexes are out of range.
-    virtual Size get_enable_if_user(Size index, Size u_index) const = 0;
+    virtual Size get_enable_if_user( Size index, Size u_index) const = 0;
 
     /// Returns the annotations of the function definition itself, or \c NULL if there are no such
     /// annotations.
@@ -549,42 +571,7 @@ public:
     ///                 after the operation has finished. Can be \c NULL.
     /// \return     - \c true   The definition is valid.
     ///             - \c false  The definition is invalid.
-    virtual bool is_valid(IMdl_execution_context* context) const = 0;
-
-    /// Creates a new function call.
-    ///
-    /// \param arguments    The arguments of the created function call. \n
-    ///                     Arguments for parameters without default are mandatory, otherwise
-    ///                     optional. The type of an argument must match the corresponding parameter
-    ///                     type. Any argument missing in \p arguments will be set to the default of
-    ///                     the corresponding parameter. \n
-    ///                     Note that the expressions in \p arguments are copied. This copy
-    ///                     operation is a deep copy, e.g., DB elements referenced in call
-    ///                     expressions are also copied. \n
-    ///                     \c NULL is a valid argument which is handled like an empty expression
-    ///                     list.
-    /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                     written. The error codes have the following meaning:
-    ///                     -  0: Success.
-    ///                     - -1: An argument for a non-existing parameter was provided in
-    ///                           \p arguments.
-    ///                     - -2: The type of an argument in \p arguments does not have the correct
-    ///                           type, see #get_parameter_types().
-    ///                     - -3: A parameter that has no default was not provided with an argument
-    ///                           value.
-    ///                     - -4: The definition can not be instantiated because it is not exported.
-    ///                     - -5: A parameter type is uniform, but the corresponding argument has a
-    ///                           varying return type.
-    ///                     - -6: An argument expression is not a constant nor a call.
-    ///                     - -8: One of the parameter types is uniform, but the corresponding
-    ///                           argument or default is a call expression and the return type of
-    ///                           the called function definition is effectively varying since the
-    ///                           function definition itself is varying.
-    ///                     - -9: The function definition is invalid due to a module reload, see
-    ///                           #is_valid() for diagnostics.
-    /// \return             The created function call, or \c NULL in case of errors.
-    virtual IFunction_call* create_function_call(
-        const IExpression_list* arguments, Sint32* errors = 0) const = 0;
+    virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     /// Returns the direct call expression that represents the body of the function (if possible).
     ///
@@ -642,6 +629,41 @@ public:
         ptr_iexpression->release();
         return ptr_T;
     }
+
+    /// Creates a new function call.
+    ///
+    /// \param arguments    The arguments of the created function call. \n
+    ///                     Arguments for parameters without default are mandatory, otherwise
+    ///                     optional. The type of an argument must match the corresponding parameter
+    ///                     type. Any argument missing in \p arguments will be set to the default of
+    ///                     the corresponding parameter. \n
+    ///                     Note that the expressions in \p arguments are copied. This copy
+    ///                     operation is a deep copy, e.g., DB elements referenced in call
+    ///                     expressions are also copied. \n
+    ///                     \c NULL is a valid argument which is handled like an empty expression
+    ///                     list.
+    /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                     written. The error codes have the following meaning:
+    ///                     -  0: Success.
+    ///                     - -1: An argument for a non-existing parameter was provided in
+    ///                           \p arguments.
+    ///                     - -2: The type of an argument in \p arguments does not have the correct
+    ///                           type, see #get_parameter_types().
+    ///                     - -3: A parameter that has no default was not provided with an argument
+    ///                           value.
+    ///                     - -4: The definition can not be instantiated because it is not exported.
+    ///                     - -5: A parameter type is uniform, but the corresponding argument has a
+    ///                           varying return type.
+    ///                     - -6: An argument expression is not a constant nor a call.
+    ///                     - -8: One of the parameter types is uniform, but the corresponding
+    ///                           argument or default is a call expression and the return type of
+    ///                           the called function definition is effectively varying since the
+    ///                           function definition itself is varying.
+    ///                     - -9: The function definition is invalid due to a module reload, see
+    ///                           #is_valid() for diagnostics.
+    /// \return             The created function call, or \c NULL in case of errors.
+    virtual IFunction_call* create_function_call(
+        const IExpression_list* arguments, Sint32* errors = 0) const = 0;
 };
 
 mi_static_assert(sizeof(IFunction_definition::Semantics) == sizeof(Uint32));

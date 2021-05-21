@@ -302,6 +302,17 @@
  */
 #define UDEFARG(type, name, arr, expr)
 #endif
+#ifndef CDEFARG
+ /**
+ * Defines a function or method uniform argument with an default expression that must be a literal.
+ *
+ * @param type  the type of the argument
+ * @param name  the name of the argument
+ * @param arr   ARR if this is an array of type, else empty
+ * @param expr  the default expression
+ */
+#define CDEFARG(type, name, arr, expr)
+#endif
 #ifndef EXPR_LITERAL
 /**
  * Defines a literal expression.
@@ -1362,12 +1373,19 @@ BUILTIN_TYPE_BEGIN(texture_2d, 0)
     CONSTRUCTOR(IMPLICIT, texture_2d, ARG0(), DS_INVALID_REF_CONSTRUCTOR, 0)
     // copy constructor
     CONSTRUCTOR(IMPLICIT, texture_2d, ARG1(UARG(texture_2d, value,)), DS_COPY_CONSTRUCTOR, 0)
-    // resource constructor
+    // resource constructor until MDL 1.6
     CONSTRUCTOR(EXPLICIT, texture_2d,
         ARG2(
             UARG(string, name,),
             UDEFARG(tex_gamma_mode, gamma,, EXPR_TEX_ENUM(gamma_default))),
-        DS_TEXTURE_CONSTRUCTOR, 0)
+        DS_TEXTURE_CONSTRUCTOR, REMOVED_1_7)
+    // resource constructor from MDL 1.7
+    CONSTRUCTOR(EXPLICIT, texture_2d,
+        ARG3(
+            UARG(string, name,),
+            UDEFARG(tex_gamma_mode, gamma,, EXPR_TEX_ENUM(gamma_default)),
+            CDEFARG(string, selector,, EXPR_LITERAL(""))),
+        DS_TEXTURE_CONSTRUCTOR, SINCE_1_7)
 BUILTIN_TYPE_END(texture_2d)
 
 BUILTIN_TYPE_BEGIN(texture_3d, 0)
@@ -1375,12 +1393,19 @@ BUILTIN_TYPE_BEGIN(texture_3d, 0)
     CONSTRUCTOR(IMPLICIT, texture_3d, ARG0(), DS_INVALID_REF_CONSTRUCTOR, 0)
     // copy constructor
     CONSTRUCTOR(IMPLICIT, texture_3d, ARG1(UARG(texture_3d, value,)), DS_COPY_CONSTRUCTOR, 0)
-    // resource constructor
+    // resource constructor until MDL 1.6
     CONSTRUCTOR(EXPLICIT, texture_3d,
         ARG2(
             UARG(string, name,),
             UDEFARG(tex_gamma_mode, gamma,, EXPR_TEX_ENUM(gamma_default))),
-        DS_TEXTURE_CONSTRUCTOR, 0)
+        DS_TEXTURE_CONSTRUCTOR, REMOVED_1_7)
+    // resource constructor since MDL 1.7
+    CONSTRUCTOR(EXPLICIT, texture_3d,
+        ARG3(
+            UARG(string, name,),
+            UDEFARG(tex_gamma_mode, gamma,, EXPR_TEX_ENUM(gamma_default)),
+            CDEFARG(string, selector, , EXPR_LITERAL(""))),
+        DS_TEXTURE_CONSTRUCTOR, SINCE_1_7)
 BUILTIN_TYPE_END(texture_3d)
 
 BUILTIN_TYPE_BEGIN(texture_cube, 0)
@@ -1470,14 +1495,24 @@ BUILTIN_TYPE_BEGIN(material_volume, 0)
     FIELD(material_volume,, vdf,   scattering,             0) // = vdf();
     FIELD(material_volume,, color, absorption_coefficient, 0) // = 0.0;
     FIELD(material_volume,, color, scattering_coefficient, 0) // = 0.0;
+    FIELD(material_volume,, color, emission_intensity,     SINCE_1_7) // = 0.0
 
-    // default constructor
+    // default constructor for MDL 1.0
     CONSTRUCTOR(IMPLICIT, material_volume,
         ARG3(
             DEFARG(vdf,   scattering,,             EXPR_CONSTRUCTOR(vdf)),
             DEFARG(color, absorption_coefficient,, EXPR_COLOR_LITERAL(0.0f)),
             DEFARG(color, scattering_coefficient,, EXPR_COLOR_LITERAL(0.0f))
-        ), DS_ELEM_CONSTRUCTOR, 0)
+        ), DS_ELEM_CONSTRUCTOR, REMOVED_1_7)
+
+    // default constructor for MDL 1.7
+    CONSTRUCTOR(IMPLICIT, material_volume,
+        ARG4(
+            DEFARG(vdf,   scattering,,             EXPR_CONSTRUCTOR(vdf)),
+            DEFARG(color, absorption_coefficient,, EXPR_COLOR_LITERAL(0.0f)),
+            DEFARG(color, scattering_coefficient,, EXPR_COLOR_LITERAL(0.0f)),
+            DEFARG(color, emission_intensity,,     EXPR_COLOR_LITERAL(0.0f))
+        ), DS_ELEM_CONSTRUCTOR, SINCE_1_7)
     // copy constructor
     CONSTRUCTOR(IMPLICIT, material_volume,
         ARG1(
@@ -1606,6 +1641,14 @@ EQ_OPERATORS(ARG2(ARG(double3x4, x,),  ARG(double3x4, y,)), 0)
 EQ_OPERATORS(ARG2(ARG(double4x2, x,),  ARG(double4x2, y,)), 0)
 EQ_OPERATORS(ARG2(ARG(double4x3, x,),  ARG(double4x3, y,)), 0)
 EQ_OPERATORS(ARG2(ARG(double4x4, x,),  ARG(double4x4, y,)), 0)
+
+EQ_OPERATORS(ARG2(ARG(texture_2d,   x,),  ARG(texture_2d,   y,)), SINCE_1_7)
+EQ_OPERATORS(ARG2(ARG(texture_3d,   x,),  ARG(texture_3d,   y,)), SINCE_1_7)
+EQ_OPERATORS(ARG2(ARG(texture_cube, x,),  ARG(texture_cube, y,)), SINCE_1_7)
+EQ_OPERATORS(ARG2(ARG(texture_ptex, x,),  ARG(texture_ptex, y,)), SINCE_1_7)
+
+EQ_OPERATORS(ARG2(ARG(light_profile,    x, ), ARG(light_profile,    y, )), SINCE_1_7)
+EQ_OPERATORS(ARG2(ARG(bsdf_measurement, x, ), ARG(bsdf_measurement, y, )), SINCE_1_7)
 
 // operator<, operator<=, opertator>, operator>=
 REL_OPERATORS(ARG2(ARG(int, x,),     ARG(int, y,)), 0)
@@ -1849,6 +1892,16 @@ ASSIGN_OPERATOR(double4x4,  ARG2(ARG(double4x4, x,),  ARG(double4x4, y,)), 0)
 
 ASSIGN_OPERATOR(color,      ARG2(ARG(color, x,),      ARG(color, y,)), 0)
 ASSIGN_OPERATOR(string,     ARG2(ARG(string, x,),     ARG(string, y,)), 0)
+
+ASSIGN_OPERATOR(texture_2d,   ARG2(ARG(texture_2d,   x, ), ARG(texture_2d,   y, )), SINCE_1_7)
+ASSIGN_OPERATOR(texture_3d,   ARG2(ARG(texture_3d,   x, ), ARG(texture_3d,   y, )), SINCE_1_7)
+ASSIGN_OPERATOR(texture_cube, ARG2(ARG(texture_cube, x, ), ARG(texture_cube, y, )), SINCE_1_7)
+ASSIGN_OPERATOR(texture_ptex, ARG2(ARG(texture_ptex, x, ), ARG(texture_ptex, y, )), SINCE_1_7)
+
+ASSIGN_OPERATOR(light_profile,
+    ARG2(ARG(light_profile,    x, ), ARG(light_profile,    y, )), SINCE_1_7)
+ASSIGN_OPERATOR(bsdf_measurement,
+    ARG2(ARG(bsdf_measurement, x, ), ARG(bsdf_measurement, y, )), SINCE_1_7)
 
 // unary operator+ and operator-
 UNARY_OPERATORS(int,     ARG1(ARG(int,     x,)), 0)
@@ -2290,6 +2343,7 @@ OPERATOR(double4x4, OK_DIVIDE_ASSIGN, ARG2(ARG(double4x4, x,), ARG(double, y,)),
 #undef ARG2
 #undef ARG1
 #undef ARG0
+#undef CDEFARG
 #undef UDEFARG
 #undef DEFARG
 #undef UARG

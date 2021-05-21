@@ -50,7 +50,6 @@ Tile_impl<T>::Tile_impl( mi::Uint32 width, mi::Uint32 height)
 
     m_width = width;
     m_height = height;
-    typedef typename Pixel_type_traits<T>::Base_type Base_type;
     m_data.resize(static_cast<mi::Size>( m_width) * m_height * s_components_per_pixel);
 }
 
@@ -514,7 +513,7 @@ template class Tile_impl<PT_COLOR>;
 mi::neuraylib::ITile* create_tile( Pixel_type pixel_type, mi::Uint32 width, mi::Uint32 height)
 {
     switch( pixel_type) {
-        case PT_UNDEF:     ASSERT( M_IMAGE, false); return 0;
+        case PT_UNDEF:     ASSERT( M_IMAGE, false); return nullptr;
         case PT_SINT8:     return new Tile_impl<PT_SINT8    >( width, height);
         case PT_SINT32:    return new Tile_impl<PT_SINT32   >( width, height);
         case PT_FLOAT32:   return new Tile_impl<PT_FLOAT32  >( width, height);
@@ -529,7 +528,7 @@ mi::neuraylib::ITile* create_tile( Pixel_type pixel_type, mi::Uint32 width, mi::
         case PT_RGBA_16:   return new Tile_impl<PT_RGBA_16  >( width, height);
         case PT_RGB_FP:    return new Tile_impl<PT_RGB_FP   >( width, height);
         case PT_COLOR:     return new Tile_impl<PT_COLOR    >( width, height);
-        default:           ASSERT( M_IMAGE, false); return 0;
+        default:           ASSERT( M_IMAGE, false); return nullptr;
     }
 }
 

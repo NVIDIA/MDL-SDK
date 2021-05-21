@@ -74,11 +74,8 @@ public:
     /// Constructor.
     ///
     /// \param alloc    an allocator for temporary memory
-    /// \param as_tree  if true, walk the DAG as a Tree, NOT as a DAG, i.e. a node that has several
-    ///                 users will be visited more than one.
     explicit DAG_ir_walker(
-        IAllocator *alloc,
-        bool       as_tree);
+        IAllocator *alloc);
 
     /// Walk the IR nodes of a material, including temporaries.
     ///
@@ -145,39 +142,70 @@ private:
 private:
     /// The allocator.
     IAllocator *m_alloc;
-
-    /// If true, walk as a Tree.
-    bool m_as_tree;
 };
 
 /// Helper class: hashes a DAG.
-class Dag_hasher : public IDAG_ir_visitor
+class Dag_hasher
 {
 public:
     /// Constructor.
     ///
+    /// \param alloc   the allocator to be used
     /// \param hasher  the stream hasher to feed
-    explicit Dag_hasher(MD5_hasher &hasher);
+    explicit Dag_hasher(
+        IAllocator *alloc,
+        MD5_hasher &hasher);
 
-    /// Post-visit a Constant.
-    void visit(DAG_constant *cnst) MDL_FINAL;
+    /// Hash the IR nodes of an instance.
+    ///
+    /// \param instance   the instance that will be visited
+    void hash_instance(
+        Generated_code_dag::Material_instance const *instance);
 
-    /// Post-visit a variable (temporary).
-    void visit(DAG_temporary *tmp) MDL_FINAL;
+    /// Hash the IR nodes of an instance material slot.
+    ///
+    /// \param instance   the instance that will be visited
+    /// \param slot       the material slot
+    void hash_instance_slot(
+        Generated_code_dag::Material_instance       *instance,
+        Generated_code_dag::Material_instance::Slot slot);
 
-    /// Post-visit a call.
-    void visit(DAG_call *call) MDL_FINAL;
-
-    /// Post-visit a Parameter.
-    void visit(DAG_parameter *param) MDL_FINAL;
-
-    /// Post-visit a Temporary.
-    void visit(int index, DAG_node *init) MDL_FINAL;
+    /// Hash a DAG IR staring at a given node.
+    ///
+    /// \param node  the root node
+    void hash_dag(
+        DAG_node const *node);
 
     /// Hash a parameter.
-    void hash_parameter(char const *name, IType const *type);
+    ///
+    /// \param name  the name of the parameter
+    /// \param type  the type of the parameter
+    void hash_parameter(
+        char const  *name,
+        IType const *type);
 
 private:
+    /// Hash a DAG IR staring at a given node.
+    ///
+    /// \param node  the root node
+    void do_hash_dag(
+        DAG_node const *node);
+
+    /// Hash a Constant.
+    void hash_constant(DAG_constant const *cnst);
+
+    /// Hash a temporary.
+    void hash_temporary(DAG_temporary const *tmp);
+
+    /// Hash a call.
+    void hash_call(DAG_call const *call);
+
+    /// Hash a parameter.
+    void hash_parameter(DAG_parameter const *param);
+
+    /// Hash a node visited a second time.
+    void hash_hit(size_t node_id);
+
     /// Hash a type.
     void hash(IType const *tp);
 
@@ -185,6 +213,17 @@ private:
     void hash(IValue const *v);
 
 private:
+    /// The allocator.
+    IAllocator *m_alloc;
+
+    /// The node counter.
+    size_t m_node_counter;
+
+    typedef ptr_hash_map<DAG_node const, size_t>::Type Visited_node_map;
+
+    /// The node to node-ID map.
+    Visited_node_map m_marker;
+
     /// The hasher used.
     MD5_hasher &m_hasher;
 };

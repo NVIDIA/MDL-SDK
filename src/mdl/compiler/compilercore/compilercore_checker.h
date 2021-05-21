@@ -31,15 +31,16 @@
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_printers.h>
+#include "compilercore_allocator.h"
 #include "compilercore_visitor.h"
 
 namespace mi {
 namespace mdl {
 
-class Module;
+class IModule;
 class Value_factory;
 class IType;
-class MDL;
+class IMDL;
 class Generated_code_dag;
 
 /// Base class for code checkers.
@@ -100,7 +101,10 @@ public:
     /// \param verbose   if true, write a verbose output the stderr
     ///
     /// \return true on success
-    static bool check(MDL const *compiler, Module const *module, bool verbose);
+    static bool check(
+        IMDL const    *compiler,
+        IModule const *module,
+        bool          verbose);
 
 private:
     /// Constructor.
@@ -108,8 +112,52 @@ private:
     /// \param verbose  if true, write a verbose output to stderr
     /// \param printer  the printer for writing error messages, takes ownership
     explicit Module_checker(bool verbose, IPrinter *printer);
+};
+
+/// Helper class to check that our input is really a Tree, and not a DAG.
+/// Note: technically, it is safe to share constants ans any sub-ASTs that do NOT
+// contain definitions, but this is much harder to detect, so for now we check that the
+// complete AST is a Tree.
+class Tree_checker : public Code_checker, private Module_visitor {
+public:
+    /// Checker.
+    ///
+    /// \param compiler  the MDL compiler (that owns the module)
+    /// \param module    the module to check
+    /// \param verbose   if true, write a verbose output the stderr
+    ///
+    /// \return true on success
+    static bool check(
+        IMDL const    *compiler,
+        IModule const *module,
+        bool          verbose);
 
 private:
+    /// Constructor.
+    ///
+    /// \param alloc   the allocator
+    Tree_checker(
+        IAllocator *alloc,
+        IPrinter   *printer,
+        bool       verbose);
+
+private:
+    void post_visit(ISimple_name *sname) MDL_FINAL;
+
+    void post_visit(IQualified_name *qname) MDL_FINAL;
+
+    void post_visit(IType_name *tname) MDL_FINAL;
+
+    IExpression *post_visit(IExpression *expr) MDL_FINAL;
+
+    void post_visit(IStatement *stmt) MDL_FINAL;
+
+    void post_visit(IDeclaration *decl) MDL_FINAL;
+
+private:
+    typedef ptr_hash_set<void const>::Type Ptr_set;
+
+    Ptr_set m_ast_set;
 };
 
 }  // mdl

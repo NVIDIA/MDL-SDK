@@ -40,6 +40,15 @@
 # up till then we add a build dependency here
 # add includes link dependencies
 
+# set the platform name
+if(${MI_PLATFORM_NAME} MATCHES "linux-aarch64")
+    set(_LLVM_PLATFORM_NAME_LOWER_CASE "aarch64")
+    set(_LLVM_PLATFORM_NAME_MIXED_CASE "AArch64")
+else()
+    set(_LLVM_PLATFORM_NAME_LOWER_CASE "x86")
+    set(_LLVM_PLATFORM_NAME_MIXED_CASE "X86")
+endif()
+
 # list of llvm Libraries we need
 set(_LLVM_LIB_NAMES 
     LLVMLinker
@@ -54,18 +63,18 @@ set(_LLVM_LIB_NAMES
     LLVMDebugInfoDWARF
     LLVMDebugInfoPDB
     LLVMOption
-    LLVMX86Disassembler
-    LLVMX86AsmParser
-    LLVMX86CodeGen
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Disassembler
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmParser
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}CodeGen
     LLVMGlobalISel
     LLVMSelectionDAG
     LLVMAsmPrinter
     LLVMDebugInfoCodeView
-    LLVMX86Desc
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Desc
     LLVMDemangle
-    LLVMX86Info
-    LLVMX86AsmPrinter
-    LLVMX86Utils
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Info
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmPrinter
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Utils
     LLVMIRReader
     LLVMBitReader
     LLVMAsmParser

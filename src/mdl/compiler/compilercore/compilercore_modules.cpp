@@ -295,6 +295,7 @@ void Module::get_version(IMDL::MDL_version version, int &major, int &minor)
     case IMDL::MDL_VERSION_1_5:     major = 1; minor = 5; return;
     case IMDL::MDL_VERSION_1_6:     major = 1; minor = 6; return;
     case IMDL::MDL_VERSION_1_7:     major = 1; minor = 7; return;
+    case IMDL::MDL_VERSION_1_8:     major = 1; minor = 8; return;
     }
     MDL_ASSERT(!"MDL version not known");
     major = 0;
@@ -450,19 +451,42 @@ void Module::add_declaration(IDeclaration const *decl)
     m_is_analyzed = m_is_valid = false;
 }
 
-/// Add an import at the end of all other imports or namespace aliases.
+// Add an import at the end of all other imports or namespace aliases.
 void Module::add_import(char const *name)
 {
     IQualified_name     *qname              = qname_from_cstring(name);
-    IDeclaration_import *import_declaration = m_decl_factory.create_import(0);
+    IDeclaration_import *import_declaration = m_decl_factory.create_import();
     import_declaration->add_name(qname);
 
+    // add it ad the end of aliases and imports, if any
     Declaration_vector::iterator it(m_declarations.begin()), end(m_declarations.end());
     while (it != end &&
         ((*it)->get_kind() == IDeclaration::DK_IMPORT ||
          (*it)->get_kind() == IDeclaration::DK_NAMESPACE_ALIAS))
         ++it;
     m_declarations.insert(it, import_declaration);
+
+    // module is modified and must be re-analyzed
+    m_is_analyzed = m_is_valid = false;
+}
+
+// Add a namespace alias at the end of all other namespace aliases.
+void Module::add_namespace_alias(
+    char const *alias_name,
+    char const *namespace_name)
+{
+    ISymbol const   *symbol          = m_name_factory.create_symbol(alias_name);
+    ISimple_name    *salias_name     = m_name_factory.create_simple_name(symbol);
+    IQualified_name *qnamespace_name = qname_from_cstring(namespace_name);
+    IDeclaration_namespace_alias *alias_declaration
+        = m_decl_factory.create_namespace_alias(salias_name, qnamespace_name);
+
+    // add it at the end of aliases, if any
+    Declaration_vector::iterator it(m_declarations.begin()), end(m_declarations.end());
+    while (it != end &&
+        (*it)->get_kind() == IDeclaration::DK_NAMESPACE_ALIAS)
+        ++it;
+    m_declarations.insert(it, alias_declaration);
 
     // module is modified and must be re-analyzed
     m_is_analyzed = m_is_valid = false;
@@ -842,37 +866,43 @@ bool Module::restore_import_entries(IModule_cache *cache) const
     return result;
 }
 
-/// Lookup a type given by its symbol.
+/// Lookup a type given by its (type) symbol.
+///
+/// \param def_tab  the definition table of the owner module
+/// \param tf       the type factory of the owner module
+/// \param sym      the (type) symbol
+/// \param scoped   true, iff this is a scoped type name (aka a absolute user type symbol)
 static IType const *lookup_type(
     Definition_table const &def_tab,
-    vector<ISymbol const *>::Type const &syms)
+    Type_factory const     &tf,
+    ISymbol const          *sym,
+    bool                   scoped)
 {
     Definition const *def   = NULL;
     Scope const      *scope = def_tab.get_global_scope();
 
-    size_t l = syms.size();
-    if (l > 1) {
-        // name spaces
-        for (size_t i = 0; i < l - 1; ++i) {
-            scope = scope->find_named_subscope(syms[i]);
-            if (scope == NULL) {
-                return NULL;
-            }
-        }
-        def = scope->find_definition_in_scope(syms[l - 1]);
+    if (scoped) {
+        // should be an imported user type
+        return tf.find_imported_user_type(sym);
     } else {
         // could be a global name like "int", search also in parent
-        def = scope->find_def_in_scope_or_parent(syms[0]);
-    }
-
-    if (def != NULL) {
-        if (def->get_kind() == Definition::DK_TYPE) {
-            return def->get_type();
+        if ((def = scope->find_def_in_scope_or_parent(sym))) {
+            if (def->get_kind() == Definition::DK_TYPE) {
+                return def->get_type();
+            }
         }
     }
     return NULL;
 }
 
+/// Parse a the signature parameter string.
+///
+/// \param[\in]  owner                 the owner module of the signature
+/// \param[\in]  param_type_names      already splitted parameter types
+/// \param[\in]  num_param_type_names  number of parameters
+/// \param[\out] arg_types             parsed types (of the owner module)
+///
+/// \return true of success
 static bool parse_parameter_signature(
     Module const                *owner,
     char const * const          param_type_names[],
@@ -889,7 +919,6 @@ static bool parse_parameter_signature(
     size_t                 l        = strlen(absname);
 
     for (size_t i = 0; i < num_param_type_names; ++i) {
-
         char const *start = &param_type_names[i][0];
         char const *end   = start + strlen(param_type_names[i]);
 
@@ -899,18 +928,22 @@ static bool parse_parameter_signature(
         if (has_brackets) {
             right_bracket = end-1;
             left_bracket  = right_bracket;
-            while(left_bracket != start && left_bracket[0] != '[')
+            while(left_bracket != start && left_bracket[0] != '[') {
                 --left_bracket;
-            if (left_bracket == start)
+            }
+            if (left_bracket == start) {
                 return false;
+            }
         }
 
         // short-cut: if we see here the "module name", skip it:
         // this is because user defined types uses always the full name in DAG signatures ...
-        if (strncmp(absname, start, l) == 0 && start[l] == ':' && start[l + 1] == ':')
+        if (strncmp(absname, start, l) == 0 && start[l] == ':' && start[l + 1] == ':') {
             start += l + 2;
+        }
 
-        vector<ISymbol const *>::Type syms(alloc);
+        string absname(alloc);
+        bool scoped = false;
 
         if (start[0] == ':' && start[1] == ':') {
             do {
@@ -919,46 +952,62 @@ static bool parse_parameter_signature(
                 char const *p = start;
 
                 ++p;
-                while (p[0] != '\0' && p[0] != ':' && p != left_bracket && p != end)
+                while (p[0] != '\0' && p[0] != ':' && p != left_bracket && p != end) {
                     ++p;
+                }
 
                 string name(start, p, alloc);
                 start = p;
 
-                ISymbol const *sym = st.lookup_symbol(name.c_str());
-                if (sym == NULL)
-                    return false;
-                syms.push_back(sym);
+                if (!absname.empty()) {
+                    absname.append("::");
+                    scoped = true;
+                }
+                absname += name;
             } while (start[0] == ':' && start[1] == ':');
         } else {
             char const *p = start;
 
             // IDENT = LETTER { LETTER | DIGIT | '_' } .
-            if (!isalpha(p[0]))
+            if (!isalpha(p[0])) {
                 return false;
+            }
             ++p;
-            while (isalnum(p[0]) || p[0] == '_')
+            while (isalnum(p[0]) || p[0] == '_') {
                 ++p;
+            }
 
             string name(start, p, alloc);
             start = p;
 
-            ISymbol const *sym = st.lookup_symbol(name.c_str());
-            if (sym == NULL)
-                return false;
-
-            syms.push_back(sym);
+            if (!absname.empty()) {
+                absname.append("::");
+                scoped = true;
+            }
+            absname += name;
         }
         SKIP_SPACE;
 
-        if (has_brackets && start != left_bracket)
+        if (has_brackets && start != left_bracket) {
             return false;
-        if (!has_brackets && start != end)
+        }
+        if (!has_brackets && start != end) {
             return false;
+        }
 
-        IType const *type = lookup_type(def_tab, syms);
-        if (type == NULL)
+        if (scoped) {
+            absname = "::" + absname;
+        }
+
+        ISymbol const *sym = st.lookup_symbol(absname.c_str());
+        if (sym == NULL) {
             return false;
+        }
+
+        IType const *type = lookup_type(def_tab, tf, sym, scoped);
+        if (type == NULL) {
+            return false;
+        }
 
         if (!has_brackets) {
             arg_types.push_back(type);
@@ -987,7 +1036,7 @@ static bool parse_parameter_signature(
                 case '9': size += 9; break;
                 }
                 ++start;
-            }  while (isdigit(start[0]));
+            } while (isdigit(start[0]));
 
             IType const *a_type = tf.find_array(type, size);
             if (a_type == NULL) {
@@ -1009,10 +1058,7 @@ static bool parse_parameter_signature(
                 }
             }
             type = a_type;
-
-
         } else {
-
             // deferred sized array
             if (start == right_bracket) {
                 // accept T[] as deferred sized array
@@ -1033,13 +1079,13 @@ static bool parse_parameter_signature(
         }
 
         SKIP_SPACE;
-        if (start != right_bracket)
+        if (start != right_bracket) {
             return false;
+        }
 
         // found one
         arg_types.push_back(type);
    }
-
    return true;
 }
 
@@ -2097,7 +2143,7 @@ IValue const *Module::create_default_value(
 
 restart:
     switch (type->get_kind()) {
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
     case IType::TK_FUNCTION:
         return factory->create_bad();
@@ -2187,7 +2233,7 @@ restart:
 
     switch (type->get_kind()) {
     case IType::TK_ALIAS:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
     case IType::TK_ARRAY:
     case IType::TK_LIGHT_PROFILE:
@@ -2602,7 +2648,8 @@ static IDefinition const *find_matching_def(
     Scope const       *search_scope,
     ISymbol const     *sym,
     Signature_matcher &matcher,
-    bool              only_exported)
+    bool              only_exported,
+    bool              find_function)
 {
     Definition const *def = search_scope->find_definition_in_scope(sym);
     if (def == NULL)
@@ -2620,10 +2667,16 @@ static IDefinition const *find_matching_def(
 
     for (Definition const *cdef = def; cdef != NULL; cdef = cdef->get_prev_def()) {
         Definition::Kind kind = cdef->get_kind();
-        if (kind != IDefinition::DK_FUNCTION && kind != IDefinition::DK_CONSTRUCTOR &&
-            kind != IDefinition::DK_OPERATOR)
+        if (find_function && kind != IDefinition::DK_FUNCTION &&
+            kind != IDefinition::DK_CONSTRUCTOR && kind != IDefinition::DK_OPERATOR)
         {
             // neither a function nor a constructor nor an operator
+            continue;
+        }
+
+        if (!find_function && kind != IDefinition::DK_ANNOTATION)
+        {
+            // not an annotation
             continue;
         }
 
@@ -2642,22 +2695,23 @@ static IDefinition const *find_matching_def(
     return NULL;
 }
 
-static bool is_latin_alpha(char c) {
+static bool is_latin_alpha(unsigned char c) {
     return c >= 0 && c < 0x80 && isalpha(c);
 }
 
-static bool is_latin_alnum(char c) {
+static bool is_latin_alnum(unsigned char c) {
     return c >= 0 && c < 0x80 && isalnum(c);
 }
 
-static bool is_latin_digit(char c) {
+static bool is_latin_digit(unsigned char c) {
     return c >= 0 && c < 0x80 && isdigit(c);
 }
 
 // Find the definition of a signature.
 IDefinition const *Module::find_signature(
     char const *signature,
-    bool       only_exported) const
+    bool       only_exported,
+    bool       find_function) const
 {
     // skip module name if the signature starts with it
     size_t l = strlen(m_absname);
@@ -2671,7 +2725,7 @@ IDefinition const *Module::find_signature(
     bool is_operator = false;
 
     // a valid entity name is LETTER(_|LETTER|DIGIT)+($DIGIT+.DIGIT+)?
-    char c = *p;
+    unsigned char c = *p;
     if (is_latin_alpha(c)) {
         do {
             ++p;
@@ -2849,11 +2903,12 @@ IDefinition const *Module::find_signature(
     Scope const *search_scope =
         is_builtins() ? m_def_tab.get_predef_scope() : m_def_tab.get_global_scope();
 
-    IDefinition const *def = find_matching_def(search_scope, sym, matcher, only_exported);
+    IDefinition const *def =
+        find_matching_def(search_scope, sym, matcher, only_exported, find_function);
     if (def != NULL)
         return def;
     if (second_sym != NULL)
-        def = find_matching_def(search_scope, second_sym, matcher, only_exported);
+        def = find_matching_def(search_scope, second_sym, matcher, only_exported, find_function);
     return def;
 }
 
@@ -3277,7 +3332,7 @@ public:
         case IType::TK_VDF:
         case IType::TK_TEXTURE:
         case IType::TK_BSDF_MEASUREMENT:
-        case IType::TK_INCOMPLETE:
+        case IType::TK_AUTO:
         case IType::TK_COLOR:
         case IType::TK_ERROR:
             // atomic types
@@ -3758,9 +3813,10 @@ void Module::serialize_ast(Module_serializer &serializer) const
 // Deserialize the AST of this module.
 void Module::deserialize_ast(Module_deserializer &deserializer)
 {
-    Tag_t t;
-
-    t = deserializer.read_section_tag();
+#ifdef ENABLE_ASSERT
+    Tag_t t =
+#endif
+    deserializer.read_section_tag();
     MDL_ASSERT(t == Serializer::ST_AST);
 
     DOUT(("AST\n"));
@@ -4078,6 +4134,136 @@ int Module::promote_call_arguments(
             return param_index + 1;
         }
     }
+    if (rules & PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY) {
+        if (param_index == 2) {
+            // MDL 1.6 -> 1.7: add default emission_intensity
+            ISymbol const *s = m_name_factory.create_symbol("color");
+            ISimple_name const *sn = m_name_factory.create_simple_name(s);
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn);
+            IType_name *tn = m_name_factory.create_type_name(qn);
+            IExpression_reference *color_ref = m_expr_factory.create_reference(tn);
+            IExpression_call *color_call = m_expr_factory.create_call(color_ref);
+
+            color_call->add_argument(m_expr_factory.create_positional_argument(
+                m_expr_factory.create_literal(m_value_factory.create_float(0.0f))));
+
+            IArgument const *a = call->get_argument(2);
+            IArgument const *narg = NULL;
+            if (a->get_kind() == IArgument::AK_POSITIONAL) {
+                narg = m_expr_factory.create_positional_argument(color_call);
+            } else {
+                ISymbol const      *sh = m_name_factory.create_symbol("emission_intensity");
+                ISimple_name const *sn_hair = m_name_factory.create_simple_name(sh);
+                narg = m_expr_factory.create_named_argument(sn_hair, color_call);
+            }
+            call->add_argument(narg);
+
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_SHEEN_ADD_MULTISCATTER) {
+        if (param_index == 2) {
+            // MDL 1.6 -> 1.7: Add diffuse_reflection_bsdf() as 4. parameter
+            ISymbol const *s = m_name_factory.create_symbol("diffuse_reflection_bsdf");
+            ISimple_name const *sn = m_name_factory.create_simple_name(s);
+            IQualified_name *qn = m_name_factory.create_qualified_name();
+            qn->add_component(sn);
+            IType_name *tn = m_name_factory.create_type_name(qn);
+            IExpression_reference *bsdf_ref = m_expr_factory.create_reference(tn);
+            IExpression_call *bsdf_call = m_expr_factory.create_call(bsdf_ref);
+
+            IArgument const *a = call->get_argument(2);
+            IArgument const *narg = NULL;
+            if (a->get_kind() == IArgument::AK_POSITIONAL) {
+                narg = m_expr_factory.create_positional_argument(bsdf_call);
+            } else {
+                ISymbol const      *sh = m_name_factory.create_symbol("multiscatter");
+                ISimple_name const *sn_multiscatter = m_name_factory.create_simple_name(sh);
+                narg = m_expr_factory.create_named_argument(sn_multiscatter, bsdf_call);
+            }
+            call->add_argument(narg);
+
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_WIDTH_HEIGHT_2D_ADD_FRAME) {
+        if (param_index == 2) {
+            // add 0.0 as 3. argument
+            IValue_float const *v = m_value_factory.create_float(0.0f);
+            IExpression const  *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_WIDTH_HEIGHT_3D_ADD_FRAME) {
+        if (param_index == 1) {
+            // add 0.0 as 2. argument
+            IValue_float const *v = m_value_factory.create_float(0.0f);
+            IExpression const *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_LOOKUP_2D_ADD_FRAME) {
+        if (param_index == 6) {
+            // add 0.0 as 7. argument
+            IValue_float const *v = m_value_factory.create_float(0.0f);
+            IExpression const *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_LOOKUP_3D_ADD_FRAME) {
+        if (param_index == 8) {
+            // add 0.0 as 9. argument
+            IValue_float const *v = m_value_factory.create_float(0.0f);
+            IExpression const *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_TEXEL_2D_ADD_FRAME) {
+        if (param_index == 3) {
+            // add 0.0 as 4. argument
+            IValue_float const *v = m_value_factory.create_float(0.0f);
+            IExpression const *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_TEXEL_3D_ADD_FRAME) {
+        if (param_index == 2) {
+            // add 0.0 as 3. argument
+            IValue_float const *v = m_value_factory.create_float(0.0f);
+            IExpression const *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
+    if (rules & PR_TEXTURE_ADD_SELECTOR) {
+        if (param_index == 2) {
+            // add "" as 3. argument
+            IValue_string const *v = m_value_factory.create_string("");
+            IExpression const   *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
     return param_index;
 }
 
@@ -4257,7 +4443,7 @@ static IType_name *construct_type_name(
     switch (type->get_kind()) {
     case IType::TK_ALIAS:
     case IType::TK_FUNCTION:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         // should not happen
         MDL_ASSERT(!"unexpected type kind");
@@ -4437,10 +4623,13 @@ static IType_name const *promote_name(
         if (strcmp(sym->get_name(), "material$1.4") == 0) {
             if (mod_major > 1 || (mod_major == 1 && mod_minor > 4)) {
                 rules = Module::PR_MATERIAL_ADD_HAIR;
-                n = "material";
-            } else {
-                n = "material";
             }
+            n = "material";
+        } else if (strcmp(sym->get_name(), "material_volume$1.6") == 0) {
+            if (mod_major > 1 || (mod_major == 1 && mod_minor > 6)) {
+                rules = Module::PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY;
+            }
+            n = "material_volume";
         } else {
             return tn;
         }

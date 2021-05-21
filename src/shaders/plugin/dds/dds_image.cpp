@@ -30,13 +30,19 @@
 
 #include "dds_image.h"
 #include "dds_half_to_float.h"
+#include "dds_utilities.h"
 
+#include <mi/base/ilogger.h>
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/iwriter.h>
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
+#include <string>
+
 #include <io/image/image/i_image_utilities.h>
+
 
 namespace MI {
 
@@ -81,23 +87,30 @@ void Image::clear()
 bool Image::load_header(
     mi::neuraylib::IReader* reader,
     Header& header,
+    Header_dx10& header_dx10,
+    bool& is_header_dx10,
     IMAGE::Pixel_type& pixel_type,
-    Dds_compress_fmt& compress_format,
-    bool for_hw)
+    Dds_compress_fmt& compress_format)
 {
+    is_header_dx10 = false;
+
     if( !reader)
         return false;
 
     // Check the magic string
     char buffer[4];
     mi::Sint64 bytes_read = reader->read( buffer, 4);
-    if( bytes_read != 4 || strncmp( buffer, "DDS ", 4) != 0)
+    if( bytes_read != 4 || strncmp( buffer, "DDS ", 4) != 0) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "Invalid DDS magic string.");
         return false;
+    }
 
     // Read the DDS header
     bytes_read = reader->read( reinterpret_cast<char*>( &header), sizeof( Header));
-    if( bytes_read != sizeof( Header))
+    if( bytes_read != sizeof( Header)) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "DDS header too short.");
         return false;
+    }
 
     // Fix the DDS header
 
@@ -114,13 +127,24 @@ bool Image::load_header(
         header.m_depth = ((header.m_caps2 & cubemap_flags) == cubemap_flags) ? 6 : 1;
     }
 
-    // For volume texture with more than one miplevel skip higher miplevels. The problem is that in
-    // DDS the depth of volume texture is halved in each miplevel, but it is constant in neuray
+    // For volume textures with more than one miplevel skip higher miplevels. The problem is that in
+    // DDS the depth of volume textures is halved in each miplevel, but it is constant in neuray
     // (only width and height are halved).
     if( header.m_depth > 1 && (header.m_caps2 & DDSF_CUBEMAP) == 0 && header.m_mipmap_count > 1)
         header.m_mipmap_count = 1;
 
     compress_format = DXTC_none;
+
+#define DDS_UNSUPPORTED(format) \
+    case DDSF_##format: \
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "Unsupported DDS subformat " #format "."); \
+        return false;
+
+#define DDS_EXPERIMENTAL(format, our_format) \
+    case DDSF_##format: \
+        log( mi::base::MESSAGE_SEVERITY_WARNING, "Experimental DDS subformat " #format "."); \
+        pixel_type = our_format; \
+        return true;
 
     // Check the pixel format
     if( header.m_ddspf.m_flags & DDSF_FOURCC) {
@@ -140,10 +164,9 @@ bool Image::load_header(
                 return true;                  // to float first.
 
             // Unsupported floating point formats
-            case DDSF_R16F:
-            case DDSF_G16R16F:
-            case DDSF_G32R32F:
-                return false;
+            DDS_UNSUPPORTED( R16F);
+            DDS_UNSUPPORTED( G16R16F);
+            DDS_UNSUPPORTED( G32R32F);
 
             // Supported compressed formats
             case FOURCC_DXT1:
@@ -159,8 +182,22 @@ bool Image::load_header(
                 pixel_type = IMAGE::PT_RGBA;
                 return true;
 
-            // Unsupported compressed formats
+            // DX10 header
+            case FOURCC_DX10: {
+                is_header_dx10 = true;
+                return load_header_dx10( reader, header_dx10, pixel_type);
+            }
+
+
+            // Other unsupported formats
             default:
+                std::string message = "Unsupported DDS subformat with four CC code '";
+                message += static_cast<char>( (header.m_ddspf.m_four_cc      ) & 0xff);
+                message += static_cast<char>( (header.m_ddspf.m_four_cc >>  8) & 0xff);
+                message += static_cast<char>( (header.m_ddspf.m_four_cc >> 16) & 0xff);
+                message += static_cast<char>( (header.m_ddspf.m_four_cc >> 24) & 0xff);
+                message += "'.";
+                log( mi::base::MESSAGE_SEVERITY_ERROR, message.c_str());
                 return false;
          }
     }
@@ -169,43 +206,37 @@ bool Image::load_header(
     // If you find a file that triggers the "true" cases in the switch statement, let me know.
     switch( header.m_ddspf.m_flags) {
 
-        // Supported unsigned byte formats
-        case DDSF_R8G8B8:
-            assert( !"Support for this pixel format is experimental."); //-V547 PVS
-            pixel_type = IMAGE::PT_RGB;
-            return true;
-        case DDSF_X8R8G8B8:
-        case DDSF_A8R8G8B8:
-        case DDSF_X8B8G8R8:
-        case DDSF_A8B8G8R8:
-            assert( !"Support for this pixel format is experimental."); //-V547 PVS
-            pixel_type = IMAGE::PT_RGBA;
-            return true;
-        case DDSF_A8:
-        case DDSF_L8:
-            assert( !"Support for this pixel format is experimental."); //-V547 PVS
-            pixel_type = IMAGE::PT_SINT8;
-            return true;
+        // Supported unsigned byte formats (experimental)
+        DDS_EXPERIMENTAL( R8G8B8,   IMAGE::PT_RGB);
+        DDS_EXPERIMENTAL( X8R8G8B8, IMAGE::PT_RGBA);
+        DDS_EXPERIMENTAL( A8R8G8B8, IMAGE::PT_RGBA);
+        DDS_EXPERIMENTAL( X8B8G8R8, IMAGE::PT_RGBA)
+        DDS_EXPERIMENTAL( A8B8G8R8, IMAGE::PT_RGBA);
+        DDS_EXPERIMENTAL( A8,       IMAGE::PT_SINT8);
+        DDS_EXPERIMENTAL( L8,       IMAGE::PT_SINT8);
 
         // Unsupported unsigned byte formats
-        case DDSF_A16B16G16R16:
-        case DDSF_L16:
-        case DDSF_R5G6B5:
-        case DDSF_X1R5G5B5:
-        case DDSF_A1R5G5B5:
-        case DDSF_A4R4G4B4:
-        case DDSF_R3G3B2:
-        case DDSF_A8R3G3B2:
-        case DDSF_X4R4G4B4:
-        case DDSF_A2B10G10R10:
-        case DDSF_G16R16:
-        case DDSF_A2R10G10B10:
-        case DDSF_A8P8:
-        case DDSF_P8:
-        case DDSF_A8L8:
-        case DDSF_A4L4:
+        DDS_UNSUPPORTED( A16B16G16R16);
+        DDS_UNSUPPORTED( L16);
+        DDS_UNSUPPORTED( R5G6B5);
+        DDS_UNSUPPORTED( X1R5G5B5);
+        DDS_UNSUPPORTED( A1R5G5B5);
+        DDS_UNSUPPORTED( A4R4G4B4);
+        DDS_UNSUPPORTED( R3G3B2);
+        DDS_UNSUPPORTED( A8R3G3B2);
+        DDS_UNSUPPORTED( X4R4G4B4);
+        DDS_UNSUPPORTED( A2B10G10R10);
+        DDS_UNSUPPORTED( G16R16);
+        DDS_UNSUPPORTED( A2R10G10B10);
+        DDS_UNSUPPORTED( A8P8);
+        DDS_UNSUPPORTED( P8);
+        DDS_UNSUPPORTED( A8L8);
+        DDS_UNSUPPORTED( A4L4);
             return false;
     }
+
+#undef DDS_UNSUPPORTED
+#undef DDS_EXPERIMENTAL
 
     // Standard RGBA color formats
     if( header.m_ddspf.m_flags == DDSF_RGBA && header.m_ddspf.m_rgb_bit_count == 32) {
@@ -231,15 +262,43 @@ bool Image::load_header(
     return false;
 }
 
-bool Image::load( mi::neuraylib::IReader* reader, bool for_hw)
+bool Image::load_header_dx10(
+    mi::neuraylib::IReader* reader,
+    Header_dx10& header_dx10,
+    IMAGE::Pixel_type& pixel_type)
+{
+    if( !reader)
+        return false;
+
+    // Read the DDS DX10 header
+    mi::Sint64 bytes_read = reader->read(
+        reinterpret_cast<char*>( &header_dx10), sizeof( Header_dx10));
+    if( bytes_read != sizeof( Header_dx10)) {
+        log( mi::base::MESSAGE_SEVERITY_ERROR, "DDS DX10 header too short.");
+        return false;
+    }
+
+
+    std::string message = "Unsupported DDS subformat "
+        + get_dxgi_format_string( header_dx10.m_dxgi_format) + ".";
+    log( mi::base::MESSAGE_SEVERITY_ERROR, message.c_str());
+    return false;
+
+}
+
+bool Image::load( mi::neuraylib::IReader* reader)
 {
     clear();
 
     Header header;
-    if( !load_header( reader, header, m_pixel_type, m_compress_format, for_hw))
+    Header_dx10 header_dx10;
+    bool is_header_dx10;
+
+    if( !load_header( reader, header, header_dx10, is_header_dx10, m_pixel_type, m_compress_format))
         return false;
 
-    // Set the texture type
+
+    // Set the texture type (needed for is_cubemap()).
     m_texture_type = TEXTURE_FLAT;
     if( header.m_caps2 & (DDSF_CUBEMAP | DDSF_CUBEMAP_ALL_FACES))
         m_texture_type = TEXTURE_CUBEMAP;
@@ -347,6 +406,7 @@ bool Image::load( mi::neuraylib::IReader* reader, bool for_hw)
 
     return true;
 }
+
 
 bool Image::save( mi::neuraylib::IWriter* writer)
 {
@@ -743,3 +803,4 @@ void Image::expand_half( std::vector<mi::Uint8>& buffer)
 } // namespace DDS
 
 } // namespace MI
+

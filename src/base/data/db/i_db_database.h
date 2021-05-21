@@ -40,7 +40,6 @@
 #include "i_db_transaction.h"
 
 #include <base/hal/time/i_time.h>
-#include <boost/bind.hpp>
 #include <boost/function.hpp>
 #include <mi/base/interface_declare.h>
 
@@ -195,8 +194,10 @@ class Database
     /// Close the database
     virtual void close() = 0;
 
-    /// Do a synchronous garbage collection sweep
-    virtual void garbage_collection() = 0;
+    /// Do a synchronous garbage collection sweep.
+    ///
+    /// \param priority   The priority (0/1/2 for low/medium/high priority).
+    virtual void garbage_collection( int priority) = 0;
 
     /// The database always contains a global scope. The global scope is the root of a tree of
     /// scopes. This function is used to get the global scope so that child scopes can be created

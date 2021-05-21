@@ -479,14 +479,24 @@ namespace
         // first try, the build folder relative to this example
         std::string mdl_browser_path = mi::examples::strings::replace(
             mi::examples::io::get_executable_folder(),
-            "/mdl_sdk/dxr/", "/mdl_sdk/mdl_browser/mdl_browser/") + "/mdl_browser.exe";
+            "/mdl_sdk/dxr", "/mdl_sdk/mdl_browser/mdl_browser") + "/mdl_browser.exe";
         if (mi::examples::io::file_exists(mdl_browser_path))
         {
             __mdl_browser_available_path = mdl_browser_path;
             return true;
         }
 
-        // second try, the current executable directory
+        // second try, the build folder relative to this example for the cmake install structure
+        mdl_browser_path = mi::examples::strings::replace(
+            mi::examples::io::get_executable_folder(),
+            "/mdl_sdk/dxr", "/mdl_sdk/mdl_browser") + "/mdl_browser.exe";
+        if (mi::examples::io::file_exists(mdl_browser_path))
+        {
+            __mdl_browser_available_path = mdl_browser_path;
+            return true;
+        }
+
+        // third try, the current executable directory
         mdl_browser_path = mi::examples::io::get_executable_folder() + "/mdl_browser.exe";
         if (mi::examples::io::file_exists(mdl_browser_path))
         {
@@ -520,12 +530,12 @@ namespace
         cmd += " --no_qt_mode"; // dxr is not a qt application
 
         // run the browser
-        std::vector<char> buffer(128);
+        std::vector<char> buffer(2048);
         std::string result;
         std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(cmd.c_str(), "r"), _pclose);
         bool was_open = false;
         while (pipe && fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-            result += buffer.data();
+            result = buffer.data();
             was_open = true;
         }
         if (!was_open) {

@@ -60,10 +60,11 @@ namespace neuraylib {
 ///     // Query defined locale
 ///     locale = i18n_configuration->get_locale();
 ///
-///     // Query sytem defined locale
+///     // Query system defined locale
 ///     locale = i18n_configuration->get_system_locale();
 ///
-///     // Use sytem defined locale
+///     // Use system defined locale
+///     // NOTE: The system locale used internally is truncated to two-letters to follow ISO 639-1
 ///     i18n_configuration->set_locale(i18n_configuration->get_system_keyword());
 ///
 ///     // Disable any translation
@@ -80,7 +81,7 @@ public:
     /// Specifies which locale to use to translate annotations.
     ///
     /// This interface can be used to set the locale to use for translation,
-    /// overwite the system locale or disable any translation. By default, the locale
+    /// overwrite the system locale or disable any translation. By default, the locale
     /// defined by the system is used.
     ///
     /// This function can only be called before \neurayProductName has been started.

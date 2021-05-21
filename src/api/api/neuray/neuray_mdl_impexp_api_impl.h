@@ -80,7 +80,7 @@ public:
 
     mi::Sint32 load_module(
         mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
+        const char* argument,
         mi::neuraylib::IMdl_execution_context* context) final;
 
     mi::Sint32 load_module_from_string(
@@ -104,7 +104,8 @@ public:
     mi::Sint32 export_canvas(
         const char* filename,
         const mi::neuraylib::ICanvas* canvas,
-        mi::Uint32 quality) const final;
+        mi::Uint32 quality,
+        bool force_default_gamma) const final;
 
     mi::Sint32 export_lightprofile(
         const char* filename,
@@ -121,6 +122,34 @@ public:
 
     const mi::IString* uvtile_string_to_marker(
         const char* str, const char* marker) const final;
+
+    const mi::IString* get_mdl_module_name(
+        const char* filename, mi::neuraylib::IMdl_impexp_api::Search_option option) const final;
+
+    const mi::neuraylib::ISerialized_function_name* serialize_function_name(
+        const char* definition_name,
+        const mi::neuraylib::IType_list* argument_types,
+        const mi::neuraylib::IType* return_type,
+        mi::neuraylib::IMdle_serialization_callback* mdle_callback,
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    const mi::neuraylib::IDeserialized_function_name* deserialize_function_name(
+        mi::neuraylib::ITransaction* transaction,
+        const char* function_name,
+        mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    const mi::neuraylib::IDeserialized_function_name* deserialize_function_name(
+        mi::neuraylib::ITransaction* transaction,
+        const char* module_name,
+        const char* function_name_without_module_name,
+        mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    const mi::neuraylib::IDeserialized_module_name* deserialize_module_name(
+        const char* module_name,
+        mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+        mi::neuraylib::IMdl_execution_context* context) const final;
 
     // internal methods
 

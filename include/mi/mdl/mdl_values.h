@@ -587,6 +587,9 @@ public:
     /// Get the gamma mode.
     virtual gamma_mode get_gamma_mode() const = 0;
 
+    /// Get the channel selector value of this texture.
+    virtual char const *get_selector() const = 0;
+
     /// Get the BSDF data kind for BSDF data textures.
     virtual Bsdf_data_kind get_bsdf_data_kind() const = 0;
 };
@@ -844,12 +847,14 @@ public:
     /// \param type            The type of the texture.
     /// \param value           The string value of the texture, NULL is not allowed.
     /// \param gamma           The gamma override value of the texture.
+    /// \param selector        The channel selector of the texture, NULL is not allowed.
     /// \param tag_value       The tag value of the texture.
     /// \param tag_version     The version of the tag value.
     virtual IValue_texture const *create_texture(
         IType_texture const            *type,
-        const char                     *value,
+        char const                     *value,
         IValue_texture::gamma_mode     gamma,
+        char const                     *selector,
         int                            tag_value,
         unsigned                       tag_version) = 0;
 

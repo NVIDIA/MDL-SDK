@@ -464,6 +464,17 @@ public:
     /// The annotation "origin(string)" holds the original full qualified name.
     IModule const *inline_imports(IModule const *module) MDL_FINAL;
 
+    /// Inline all imports of a module, creating a new one.
+    ///
+    /// \param module       the module
+    ///
+    /// This function inlines ALL except standard library imports and produces a new module.
+    /// The imported functions, materials, and types are renamed and only exported if visible
+    /// in the interface.
+    ///
+    /// The annotation "origin(string)" holds the original full qualified name.
+    IModule *inline_imports(IModule *module) MDL_FINAL;
+
     /// Inline all MDLE imports of a module, creating a new one.
     ///
     /// \param module       the module
@@ -474,6 +485,17 @@ public:
     ///
     /// The annotation "origin(string)" holds the original full qualified name.
     IModule const *inline_mdle(IModule const *module) MDL_FINAL;
+
+    /// Inline all MDLE imports of a module, creating a new one.
+    ///
+    /// \param module       the module
+    ///
+    /// This function inlines ALL MDLE imports and produces a new module.
+    /// The imported functions, materials, and types are renamed and only exported if visible
+    /// in the interface.
+    ///
+    /// The annotation "origin(string)" holds the original full qualified name.
+    IModule *inline_mdle(IModule *module) MDL_FINAL;
 
     /// Access messages of the last operation.
     Messages const &access_messages() const MDL_FINAL;
@@ -510,7 +532,7 @@ protected:
     /// \param module       the module
     /// \param inline_mdle  true, if only MDLE definitions should be inlined
     /// \return the inlined module or NULL in case of failure.
-    IModule const *inline_module(IModule const *imodule, bool inline_mdle);
+    IModule *inline_module(IModule const *imodule, bool inline_mdle);
 
 private:
     /// The MDL compiler.

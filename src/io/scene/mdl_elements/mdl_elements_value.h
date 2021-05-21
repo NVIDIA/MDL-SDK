@@ -51,8 +51,8 @@ template <class V, class T>
 class Value_base : public mi::base::Interface_implement<V>
 {
 public:
-    typedef V Value;
-    typedef T Type;
+    using Value = V;
+    using Type  = T;
     typedef Value_base<V, T> Base;
 
     Value_base( const T* type) : m_type( type, mi::base::DUP_INTERFACE) { }
@@ -194,7 +194,7 @@ private:
 };
 
 
-class Value_vector : public Value_base<IValue_vector, IType_vector>
+class Value_vector final : public Value_base<IValue_vector, IType_vector>
 {
 public:
     Value_vector( const Type* type, const IValue_factory* value_factory);
@@ -216,7 +216,7 @@ private:
 };
 
 
-class Value_matrix : public Value_base<IValue_matrix, IType_matrix>
+class Value_matrix final : public Value_base<IValue_matrix, IType_matrix>
 {
 public:
     Value_matrix( const Type* type, const IValue_factory* value_factory);
@@ -238,7 +238,7 @@ private:
 };
 
 
-class Value_color : public Value_base<IValue_color, IType_color>
+class Value_color final : public Value_base<IValue_color, IType_color>
 {
 public:
     Value_color(
@@ -329,7 +329,7 @@ public:
         const Type* type,
         DB::Tag value,
         const char* unresolved_mdl_url,
-        const char *owner_module,
+        const char* owner_module,
         mi::Float32 gamma)
         : Base( type)
         , m_value( value)
@@ -352,7 +352,7 @@ public:
 
     void set_owner_module(const char* module) { if (module) m_owner_module = module; }
 
-    void set_gamma(Float32 gamma) { m_gamma = gamma; }
+    void set_gamma( Float32 gamma) { m_gamma = gamma; }
 
     mi::Float32 get_gamma() const { return m_gamma; }
 
@@ -376,7 +376,7 @@ public:
         const Type* type,
         DB::Tag value,
         const char* unresolved_mdl_url,
-        const char *owner_module)
+        const char* owner_module)
         : Base(type)
         , m_value(value)
         , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
@@ -416,7 +416,7 @@ public:
         const Type* type,
         DB::Tag value,
         const char* unresolved_mdl_url,
-        const char *owner_module)
+        const char* owner_module)
         : Base(type)
         , m_value(value)
         , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
@@ -485,10 +485,10 @@ private:
     typedef std::map<std::string, mi::Size> Name_index_map;
     Name_index_map m_name_index;
 
-    typedef std::vector<std::string> Index_name_vector;
+    using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
 
-    typedef std::vector<mi::base::Handle<const IValue> > Values_vector;
+    using Values_vector = std::vector<mi::base::Handle<const IValue> >;
     Values_vector m_values;
 };
 
@@ -533,23 +533,23 @@ public:
     IValue_texture* create_texture(
         const IType_texture* type,
         DB::Tag value,
-        const char *unresolved_mdl_url,
-        const char *owner_module,
+        const char* unresolved_mdl_url,
+        const char* owner_module,
         mi::Float32 gamma) const;
 
     IValue_light_profile* create_light_profile( DB::Tag value) const;
 
     IValue_light_profile* create_light_profile(
         DB::Tag value,
-        const char *unresolved_mdl_url,
-        const char *owner_module) const;
+        const char* unresolved_mdl_url,
+        const char* owner_module) const;
 
     IValue_bsdf_measurement* create_bsdf_measurement( DB::Tag value) const;
 
     IValue_bsdf_measurement* create_bsdf_measurement(
         DB::Tag value,
-        const char *unresolved_mdl_url,
-        const char *owner_module) const;
+        const char* unresolved_mdl_url,
+        const char* owner_module) const;
 
     IValue_invalid_df* create_invalid_df( const IType_reference* type) const;
 

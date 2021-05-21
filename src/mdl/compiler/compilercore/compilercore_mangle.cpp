@@ -85,8 +85,9 @@ public:
         char const *s, size_t len)
     {
         for (size_t i = 0; i < len; ++i) {
-            if (!is_basic(s[i]))
+            if (!is_basic(s[i])) {
                 return true;
+            }
         }
         return false;
     }
@@ -184,8 +185,9 @@ private:
         /* of integer as a code point, so we need to convert the size_t to  */
         /* a punycode_uint, which could overflow.                           */
 
-        if (input.length() > maxint)
+        if (input.length() > maxint) {
             return punycode_overflow;
+        }
         input_length = (unsigned)input.length();
 
         /* Initialize the state: */
@@ -200,8 +202,9 @@ private:
 
         for (j = 0; j < input_length; ++j) {
             if (is_basic(input[j])) {
-                if (max_out - out < 2)
+                if (max_out - out < 2) {
                     return punycode_big_output;
+                }
                 output.append((char)input[j]);
                 ++out;
             }
@@ -230,35 +233,40 @@ private:
             for (m = maxint, j = 0; j < input_length; ++j) {
                 /* if (basic(input[j])) continue; */
                 /* (not needed for Punycode) */
-                if (input[j] >= n && input[j] < m)
+                if (input[j] >= n && input[j] < m) {
                     m = input[j];
+                }
             }
 
             /* Increase delta enough to advance the decoder's    */
             /* <n,i> state to <m,0>, but guard against overflow: */
 
-            if (m - n > (maxint - delta) / (h + 1))
+            if (m - n > (maxint - delta) / (h + 1)) {
                 return punycode_overflow;
+            }
             delta += (m - n) * (h + 1);
             n = m;
 
             for (j = 0; j < input_length; ++j) {
                 /* Punycode does not need to check whether input[j] is basic: */
                 if (input[j] < n /* || basic(input[j]) */) {
-                    if (++delta == 0)
+                    if (++delta == 0) {
                         return punycode_overflow;
+                    }
                 }
 
                 if (input[j] == n) {
                     /* Represent delta as a generalized variable-length integer: */
 
                     for (q = delta, k = base; ; k += base) {
-                        if (out >= max_out)
+                        if (out >= max_out) {
                             return punycode_big_output;
+                        }
                         t = k <= bias /* + tmin */ ? tmin :     /* +tmin not needed */
                             k >= bias + tmax ? tmax : k - bias;
-                        if (q < t)
+                        if (q < t) {
                             break;
+                        }
                         output.append(encode_digit(t + (q - t) % (base - t)));
                         ++out;
                         q = (q - t) / (base - t);
@@ -298,16 +306,20 @@ private:
         /* points before the last delimiter, or 0 if there is none, then    */
         /* copy the first b code points to the output.                      */
 
-        for (b = j = 0; j < input_length; ++j)
-            if (is_delim(input[j]))
+        for (b = j = 0; j < input_length; ++j) {
+            if (is_delim(input[j])) {
                 b = j;
+            }
+        }
 
-        if (b > max_out)
+        if (b > max_out) {
             return punycode_big_output;
+        }
 
         for (j = 0; j < b; ++j) {
-            if (!is_basic(input[j]))
+            if (!is_basic(input[j])) {
                 return punycode_bad_input;
+            }
             output.append(unsigned(input[j]));
             ++out;
         }
@@ -326,20 +338,25 @@ private:
             /* value at the end to obtain delta.                         */
 
             for (oldi = i, w = 1, k = base; ; k += base) {
-                if (in >= input_length)
+                if (in >= input_length) {
                     return punycode_bad_input;
+                }
                 digit = decode_digit(input[in++]);
-                if (digit >= base)
+                if (digit >= base) {
                     return punycode_bad_input;
-                if (digit > (maxint - i) / w)
+                }
+                if (digit > (maxint - i) / w) {
                     return punycode_overflow;
+                }
                 i += digit * w;
                 t = k <= bias /* + tmin */ ? tmin :     /* +tmin not needed */
                     k >= bias + tmax ? tmax : k - bias;
-                if (digit < t)
+                if (digit < t) {
                     break;
-                if (w > maxint / (base - t))
+                }
+                if (w > maxint / (base - t)) {
                     return punycode_overflow;
+                }
                 w *= (base - t);
             }
 
@@ -348,8 +365,9 @@ private:
             /* i was supposed to wrap around from out+1 to 0,   */
             /* incrementing n each time, so we'll fix that now: */
 
-            if (i / (out + 1) > maxint - n)
+            if (i / (out + 1) > maxint - n) {
                 return punycode_overflow;
+            }
             n += i / (out + 1);
             i %= (out + 1);
 
@@ -357,12 +375,14 @@ private:
 
             /* not needed for Punycode: */
             /* if (basic(n)) return punycode_bad_input; */
-            if (out >= max_out)
+            if (out >= max_out) {
                 return punycode_big_output;
+            }
 
             /* cannot overflow because out <= old value of *output_length */
-            if (out + 1 > output.size())
+            if (out + 1 > output.size()) {
                 output.resize(out + 1);
+            }
             memmove(&output[i + 1], &output[i], (out - i) * sizeof(output[0]));
             output[i++] = n;
         }
@@ -408,9 +428,9 @@ bool MDL_name_mangler::mangle(
     //            ::= <special-name>
     IType const *type = def->get_type();
 
-    if (is<IType_function>(type))
+    if (is<IType_function>(type)) {
         return mangle_function_decl(prefix, def, NULL);
-
+    }
     m_out.append("_Z");
     mangle_name(prefix, def->get_symbol()->get_name(), NULL);
     return true;
@@ -424,8 +444,9 @@ bool MDL_name_mangler::mangle(
     // <mangled-name> ::= _Z <encoding>
     //            ::= <data name>
     //            ::= <special-name>
-    if (!inst.is_instantiated())
+    if (!inst.is_instantiated()) {
         return mangle_function_decl(prefix, inst.get_def(), NULL);
+    }
     return mangle_function_decl(prefix, inst.get_def(), &inst);
 }
 
@@ -492,15 +513,18 @@ void MDL_name_mangler::mangle_name(
     //  <unscoped-name> ::= <unqualified-name>
     //                  ::= St <unqualified-name>   # ::std::
     if (prefix != NULL) {
-        if (prefix[0] == ':' && prefix[1] == ':')
+        if (prefix[0] == ':' && prefix[1] == ':') {
             prefix += 2;
-        if (prefix[0] == '\0')
+        }
+        if (prefix[0] == '\0') {
             prefix = NULL;
+        }
     }
-    if (prefix == NULL)
+    if (prefix == NULL) {
         mangle_unqualified_name(name, inst);
-    else
+    } else {
         mangle_nested_name(prefix, name, inst);
+    }
 }
 
 void MDL_name_mangler::mangle_type_name(ISymbol const *sym)
@@ -521,8 +545,9 @@ void MDL_name_mangler::mangle_unqualified_name(
     //                     ::= <source-name>
     mangle_source_name(name);
 
-    if (inst != NULL)
+    if (inst != NULL) {
         mangle_template_argument_list(*inst);
+    }
 }
 
 // <operator-name> ::= cv <type>	# (cast)
@@ -569,19 +594,22 @@ void MDL_name_mangler::mangle_prefix(char const *prefix)
     //           ::= <template-param>
     //           ::= # empty
     //           ::= <substitution>
-    if (prefix == NULL)
+    if (prefix == NULL) {
         return;
+    }
 
     // skip leading "::"
-    if (prefix[0] == ':' && prefix[1] == ':')
+    if (prefix[0] == ':' && prefix[1] == ':') {
         prefix += 2;
+    }
 
     // handle mdl paths
     for (;prefix[0] != '\0';) {
         size_t l = 0;
         for (; prefix[l] != '\0'; ++l) {
-            if (prefix[l] == ':' && prefix[l + 1] == ':')
+            if (prefix[l] == ':' && prefix[l + 1] == ':') {
                 break;
+            }
         }
 
         char buf[16];
@@ -599,8 +627,9 @@ void MDL_name_mangler::mangle_prefix(char const *prefix)
         }
 
         prefix += l;
-        if (prefix[0] == ':' && prefix[1] == ':')
+        if (prefix[0] == ':' && prefix[1] == ':') {
             prefix += 2;
+        }
     }
 }
 
@@ -671,8 +700,9 @@ void MDL_name_mangler::mangle_type_qualifiers(IType::Modifiers mod) {
             mangle_source_name("uniform");
         }
     }
-    if (mod & IType::MK_CONST)
+    if (mod & IType::MK_CONST) {
         m_out.append(1, 'K');
+    }
 }
 
 void MDL_name_mangler::mangle_type(IType const *type)
@@ -684,21 +714,21 @@ void MDL_name_mangler::mangle_type(IType const *type)
     mangle_type_qualifiers(mod);
 
     //         ::= <class-enum-type>
-    if (IType_struct const *s_tp = as<IType_struct>(type))
+    if (IType_struct const *s_tp = as<IType_struct>(type)) {
         mangle_type(s_tp);
     //         ::= <class-enum-type>
-    else if (IType_enum const *e_tp = as<IType_enum>(type))
+    } else if (IType_enum const *e_tp = as<IType_enum>(type)) {
         mangle_type(e_tp);
     //         ::= <builtin-type>
-    else if (IType_atomic const *a_tp = as<IType_atomic>(type))
+    } else if (IType_atomic const *a_tp = as<IType_atomic>(type)) {
         mangle_type(a_tp);
     //         ::= <function-type>
-    else if (IType_function const *f_tp = as<IType_function>(type))
+    } else if (IType_function const *f_tp = as<IType_function>(type)) {
         mangle_type(f_tp);
     //         ::= <array-type>
-    else if (IType_array const *a_tp = as<IType_array>(type))
+    } else if (IType_array const *a_tp = as<IType_array>(type)) {
         mangle_type(a_tp);
-    else if (is<IType_string>(type))
+    } else if (is<IType_string>(type)) {
         m_out.append("PKc"); // encode as char const *
     //         ::= <pointer-to-member-type>
     //         ::= <template-param>
@@ -710,16 +740,17 @@ void MDL_name_mangler::mangle_type(IType const *type)
     //         ::= C <type>   # complex pair (C 2000)
     //         ::= G <type>   # imaginary (C 2000)
     //         ::= U <source-name> <type>     # vendor extended type qualifier
-    else if (IType_vector const *v_tp = as<IType_vector>(type))
+    } else if (IType_vector const *v_tp = as<IType_vector>(type)) {
         mangle_type(v_tp);
-    else if (IType_matrix const *m_tp = as<IType_matrix>(type))
+    } else if (IType_matrix const *m_tp = as<IType_matrix>(type)) {
         mangle_type(m_tp);
-    else if (IType_reference const *r_tp = as<IType_reference>(type))
+    } else if (IType_reference const *r_tp = as<IType_reference>(type)) {
         mangle_type(r_tp);
-    else if (IType_color const *c_tp = as<IType_color>(type))
+    } else if (IType_color const *c_tp = as<IType_color>(type)) {
         mangle_type(c_tp);
-    else
+    } else {
         MDL_ASSERT(!"Cannot mangle unknown type");
+    }
 }
 
 void MDL_name_mangler::mangle_type(IType_atomic const *type)
@@ -925,7 +956,6 @@ void MDL_name_mangler::mangle_type(IType_matrix const *type)
     }
     buffer[sizeof(buffer) - 1] = '\0';
     mangle_source_name(buffer);
-
 }
 
 void MDL_name_mangler::mangle_type(IType_color const *type)
@@ -1055,8 +1085,9 @@ bool MDL_name_mangler::demangle_name(char const *&strptr, char const *endptr, st
 {
     char *num_end = NULL;
     unsigned long len = strtoul(strptr, &num_end, 10);
-    if (num_end == NULL || strptr == num_end || num_end + len > endptr)
+    if (num_end == NULL || strptr == num_end || num_end + len > endptr) {
         return false;
+    }
 
     bool is_punycode = *strptr == '0';
     if (is_punycode) {
@@ -1084,11 +1115,13 @@ unsigned long MDL_name_mangler::parse_sequence_id(char const *&strptr, char cons
 
     char *num_end = NULL;
     unsigned long seqid = strtoul(strptr, &num_end, 36) + 1;
-    if (num_end == NULL || num_end == strptr || strptr >= endptr)
+    if (num_end == NULL || num_end == strptr || strptr >= endptr) {
         return ~0;
+    }
     strptr = num_end;
-    if (*strptr != '_')
+    if (*strptr != '_') {
         return ~0;
+    }
     ++strptr;
     return seqid;
 }
@@ -1096,8 +1129,9 @@ unsigned long MDL_name_mangler::parse_sequence_id(char const *&strptr, char cons
 // Demangle a C++ name to an MDL function name for use with resolvers.
 bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
 {
-    if (len < 3 || mangled_name[0] != '_' || mangled_name[1] != 'Z')
+    if (len < 3 || mangled_name[0] != '_' || mangled_name[1] != 'Z') {
         return false;
+    }
 
     char const *ptr = mangled_name + 2;
     char const *endptr = mangled_name + len;
@@ -1111,21 +1145,25 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
         ++ptr;
 
         // skip any const modifier
-        if (*ptr == 'K')
+        if (*ptr == 'K') {
             ++ptr;
+        }
 
         string name("::", m_alloc);
         while (ptr < endptr) {
-            if (!demangle_name(ptr, endptr, name))
+            if (!demangle_name(ptr, endptr, name)) {
                 return false;
+            }
 
             // unexpected end of string?
-            if (ptr >= endptr)
+            if (ptr >= endptr) {
                 return false;
+            }
 
             // end of qualified name?
-            if (*ptr == 'E')
+            if (*ptr == 'E') {
                 break;
+            }
 
             // note: the fully-qualified function name is not added to the substitution table,
             //       so only add the current name prefix, if the end has not been reached
@@ -1137,19 +1175,18 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
         ++ptr;  // skip 'E'
         m_out += name;
     } else {
-        if (!demangle_name(ptr, endptr, m_out))
+        if (!demangle_name(ptr, endptr, m_out)) {
             return false;
+        }
     }
 
     // for functions, handle parameter types
-    if (ptr < endptr)
-    {
+    if (ptr < endptr) {
         m_out += '(';
-        if (*ptr != 'v')  // not a void function?
-        {
+        if (*ptr != 'v') {
+            // not a void function?
             bool first = true;
-            while (ptr < endptr)
-            {
+            while (ptr < endptr) {
                 // we need to skip pointer parameters which have been added
                 // to map array returns
                 bool skip_parameter = false;
@@ -1158,15 +1195,16 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                 char const *qualifier_start = ptr;
                 int num_qualifiers = 0;
                 int skip_from_qualifier = 0x7fffffff;
-                while (ptr < endptr && (*ptr == 'R' || *ptr == 'K' || *ptr == 'P') || *ptr == 'U') {
+                while (ptr < endptr && (*ptr == 'R' || *ptr == 'K' || *ptr == 'P' || *ptr == 'U')) {
                     if (*ptr == 'P') {
                         skip_parameter = true;
                         skip_from_qualifier = num_qualifiers;
                     } else if (*ptr == 'U') {
                         ++ptr;
                         string qualifier(m_alloc);
-                        if (!demangle_name(ptr, endptr, qualifier))
+                        if (!demangle_name(ptr, endptr, qualifier)) {
                             return false;
+                        }
                         m_out += qualifier;
                         m_out += ' ';
                         --ptr;
@@ -1176,15 +1214,15 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                 }
 
                 // unexpected end of string?
-                if (ptr >= endptr)
+                if (ptr >= endptr) {
                     return false;
+                }
 
                 string name(m_alloc);
                 char const *add_subst = NULL;
                 bool add_self_subst = false;
 
-                switch (*ptr)
-                {
+                switch (*ptr) {
                 // handle builtin type
                 #define CASE_BUILTIN(ch, type_name)  \
                     case ch:                         \
@@ -1202,41 +1240,44 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
 
                 case '0': case '1': case '2': case '3': case '4':
                 case '5': case '6': case '7': case '8': case '9':
-                {
-                    // Plain name with size
-                    if (!demangle_name(ptr, endptr, name))
-                        return false;
+                    {
+                        // Plain name with size
+                        if (!demangle_name(ptr, endptr, name))
+                            return false;
 
-                    add_subst = Arena_strdup(arena, name.c_str());
-                    add_self_subst = true;
+                        add_subst = Arena_strdup(arena, name.c_str());
+                        add_self_subst = true;
+                    }
                     break;
-                }
 
                 case 'N':
-                {
                     ++ptr;
 
                     // check for a leading substitution
                     if (*ptr == 'S') {
                         ++ptr;
                         unsigned long seqid = parse_sequence_id(ptr, endptr);
-                        if (seqid == ~0 || seqid >= substitutions.size())
+                        if (seqid == ~0 || seqid >= substitutions.size()) {
                             return false;
+                        }
                         name += substitutions[seqid];
                     }
                     name += "::";
 
                     while (ptr < endptr) {
-                        if (!demangle_name(ptr, endptr, name))
+                        if (!demangle_name(ptr, endptr, name)) {
                             return false;
+                        }
 
                         // unexpected end of string?
-                        if (ptr >= endptr)
+                        if (ptr >= endptr) {
                             return false;
+                        }
 
                         // end of qualified name?
-                        if (*ptr == 'E')
+                        if (*ptr == 'E') {
                             break;
+                        }
 
                         substitutions.push_back(Arena_strdup(arena, name.c_str()));
                         subst_skips.push_back(false);
@@ -1248,10 +1289,8 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                     add_subst = Arena_strdup(arena, name.c_str());
                     add_self_subst = true;
                     break;
-                }
 
                 case 'c':
-                {
                     ++ptr;
 
                     // map "char const *" to string
@@ -1266,26 +1305,24 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                         skip_parameter = false;
                         break;
                     }
-
                     return false;
-                }
 
                 case 'S':
-                {
                     // substitution
-                    ++ptr;
-                    unsigned long seqid = parse_sequence_id(ptr, endptr);
-                    if (seqid == ~0 || seqid >= substitutions.size())
-                        return false;
+                    {
+                        ++ptr;
+                        unsigned long seqid = parse_sequence_id(ptr, endptr);
+                        if (seqid == ~0 || seqid >= substitutions.size()) {
+                            return false;
+                        }
 
-                    name = substitutions[seqid];
-                    add_subst = substitutions[seqid];
-                    skip_parameter |= subst_skips[seqid];
+                        name = substitutions[seqid];
+                        add_subst = substitutions[seqid];
+                        skip_parameter |= subst_skips[seqid];
+                    }
                     break;
-                }
 
                 case 'D':
-                {
                     ++ptr;
 
                     // GNU extension: vector types:
@@ -1303,11 +1340,13 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
 
                         // make sure the dimension is a number
                         strtoul(ptr, &num_end, 10);
-                        if (num_end == NULL || num_end == ptr || num_end >= endptr)
+                        if (num_end == NULL || num_end == ptr || num_end >= endptr) {
                             return false;
+                        }
                         ptr = num_end;
-                        if (*ptr != '_')
+                        if (*ptr != '_') {
                             return false;
+                        }
                         ++ptr;
 
                         switch (*ptr) {
@@ -1324,17 +1363,15 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                         break;
                     }
                     return false;
-                }
 
                 case 'u':
-                {
                     ++ptr;
-                    if (!demangle_name(ptr, endptr, name))
+                    if (!demangle_name(ptr, endptr, name)) {
                         return false;
+                    }
                     add_subst = Arena_strdup(arena, name.c_str());
                     add_self_subst = true;
                     break;
-                }
 
                 default:
                     return false;
@@ -1342,8 +1379,11 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
 
                 // append name as parameter, if we shouldn't skip it
                 if (!skip_parameter) {
-                    if (first) first = false;
-                    else m_out += ',';
+                    if (first) {
+                        first = false;
+                    } else {
+                        m_out += ',';
+                    }
                     m_out += name;
                 }
 
@@ -1391,7 +1431,10 @@ bool DAG_mangler::need_signature_suffix(IDefinition const *def) const
 }
 
 // Convert a definition.
-string DAG_mangler::mangle(IDefinition const *idef, const char *module_name, bool with_signature_suffix)
+string DAG_mangler::mangle(
+    IDefinition const *idef,
+    char const        *module_name,
+    bool              with_signature_suffix)
 {
     Definition const *def = impl_cast<Definition>(idef);
 
@@ -1445,6 +1488,9 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name, boo
         case IMDL::MDL_VERSION_1_7:
             result += "$1.6";
             break;
+        case IMDL::MDL_VERSION_1_8:
+            result += "$1.7";
+            break;
         }
     }
 
@@ -1470,17 +1516,22 @@ string DAG_mangler::mangle(IDefinition const *idef, const char *module_name, boo
 }
 
 // Mangle a definition.
-string DAG_mangler::mangle(IDefinition const *def, IModule const *owner, bool with_signature_suffix)
+string DAG_mangler::mangle(
+    IDefinition const *def,
+    IModule const     *owner,
+    bool              with_signature_suffix)
 {
-    const char* module_name = NULL;
-    if (owner && !owner->is_builtins())
+    char const *module_name = NULL;
+    if (owner && !owner->is_builtins()) {
         module_name = owner->get_name();
-
+    }
     return mangle(def, module_name, with_signature_suffix);
 }
 
 // Mangle a type.
-string DAG_mangler::mangle(IType const *type, char const *module_name)
+string DAG_mangler::mangle(
+    IType const *type,
+    char const  *module_name)
 {
     string result(get_allocator());
 
@@ -1500,7 +1551,9 @@ string DAG_mangler::mangle(IType const *type, char const *module_name)
 }
 
 // Mangle a type.
-string DAG_mangler::mangle(IType const *type, IModule const *owner)
+string DAG_mangler::mangle(
+    IType const   *type,
+    IModule const *owner)
 {
     return mangle(type, owner->is_builtins() ? NULL : owner->get_name());
 }

@@ -40,14 +40,21 @@ public:
     static char ID;
 
 public:
+    /// Constructor.
     ControlledNodeSplittingPass();
-    bool runOnFunction(Function& function) final;
 
+    /// Run this pass on the given function.
+    ///
+    /// \param function  the LLVM function
+    bool runOnFunction(Function &function) final;
+
+    /// Get the name of the pass.
     StringRef getPassName() const final {
         return "Controlled Node Splitting";
     }
 };
 
+/// Create the "Controlled Node Splitting" pass.
 Pass *createControlledNodeSplittingPass();
 
 } // hlsl

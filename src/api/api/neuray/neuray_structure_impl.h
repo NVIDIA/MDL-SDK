@@ -148,10 +148,10 @@ private:
     /// The map of interface pointers.
     std::vector<mi::base::IInterface*> m_member;
 
-    /// The map thats maps keys to indices.
+    /// The map that maps keys to indices.
     std::map<std::string, mi::Size> m_key_to_index;
 
-    /// The map thats maps indices to keys.
+    /// The map that maps indices to keys.
     std::vector<std::string> m_index_to_key;
 
     /// The corresponding structure declaration.
@@ -258,10 +258,10 @@ private:
     /// The type name of the structure itself.
     std::string m_type_name;
 
-    /// The map thats maps keys to indices.
+    /// The map that maps keys to indices.
     std::map<std::string, mi::Size> m_key_to_index;
 
-    /// The map thats maps indices to keys.
+    /// The map that maps indices to keys.
     std::vector<std::string> m_index_to_key;
 
     /// The corresponding structure declaration.

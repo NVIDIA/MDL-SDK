@@ -44,10 +44,8 @@ namespace mdl {
 
 // Constructor.
 DAG_ir_walker::DAG_ir_walker(
-    IAllocator *alloc,
-    bool       as_tree)
+    IAllocator *alloc)
 : m_alloc(alloc)
-, m_as_tree(as_tree)
 {
 }
 
@@ -326,10 +324,9 @@ void DAG_ir_walker::do_walk_node(
     DAG_node         *node,
     IDAG_ir_visitor  *visitor)
 {
-    if (!m_as_tree) {
-        if (marker.find(node) != marker.end())
-            return;
-        marker.insert(node);
+    if (!marker.insert(node).second) {
+        // already visited
+        return;
     }
 
     switch (node->get_kind()) {
@@ -371,29 +368,225 @@ void DAG_ir_walker::do_walk_node(
 
 // Constructor.
 Dag_hasher::Dag_hasher(
+    IAllocator *alloc,
     MD5_hasher &hasher)
-: m_hasher(hasher)
+: m_alloc(alloc)
+, m_node_counter(0)
+, m_marker(0, Visited_node_map::hasher(), Visited_node_map::key_equal(), m_alloc)
+, m_hasher(hasher)
 {
 }
 
-// Post-visit a Constant.
-void Dag_hasher::visit(DAG_constant *cnst)
+// Hash the expressions of an instance.
+void Dag_hasher::hash_instance(
+    Generated_code_dag::Material_instance const *instance)
+{
+    do_hash_dag(instance->get_constructor());
+}
+
+// Hash the IR nodes of an instance material slot.
+void Dag_hasher::hash_instance_slot(
+    Generated_code_dag::Material_instance       *instance,
+    Generated_code_dag::Material_instance::Slot slot)
+{
+    struct Locator {
+        char const *first_name;
+        char const *second_name;
+        char const *third_name;
+    };
+
+    static Locator const locators[] = {
+        { "thin_walled", NULL,                     NULL },
+        { "surface",     "scattering",             NULL },
+        { "surface",     "emission",               "emission" },
+        { "surface",     "emission",               "intensity" },
+        { "backface",    "scattering",             NULL },
+        { "backface",    "emission",               "emission" },
+        { "backface",    "emission",               "intensity" },
+        { "ior",         NULL,                     NULL },
+        { "volume",      "scattering",             NULL },
+        { "volume",      "absorption_coefficient", NULL },
+        { "volume",      "scattering_coefficient", NULL },
+        { "geometry",    "displacement",           NULL },
+        { "geometry",    "cutout_opacity",         NULL },
+        { "geometry",    "normal",                 NULL },
+        { "hair",        NULL,                     NULL }
+    };
+
+    DAG_node const *node = NULL;
+    IValue const   *v    = NULL;
+
+    Locator const &locator = locators[slot];
+
+    DAG_call const *constr = instance->get_constructor();
+    for (int i = 0, n = constr->get_argument_count(); i < n; ++i) {
+        const char *pname = constr->get_parameter_name(i);
+        if (strcmp(pname, locator.first_name) == 0) {
+            // found the first component
+            DAG_node const *f_comp = constr->get_argument(i);
+
+            if (locator.second_name == NULL) {
+                // ready
+                node = f_comp;
+            } else {
+                // extract second
+                if (DAG_constant const *cnst = as<DAG_constant>(f_comp)) {
+                    // this component is folded into a constant
+                    IValue_struct const *strct = cast<IValue_struct>(cnst->get_value());
+                    v = strct->get_field(locator.second_name);
+
+                    if (locator.third_name != NULL) {
+                        // extract third
+                        IValue_struct const *s_strct = cast<IValue_struct>(v);
+                        v = s_strct->get_field(locator.third_name);
+                    }
+                } else {
+                    f_comp = skip_temporary(f_comp);
+                    if (is<DAG_parameter>(f_comp)) {
+                        // we cannot dive further, because we stopped at a parameter
+                        node = f_comp;
+                        break;
+                    }
+
+                    DAG_call const *call = cast<DAG_call>(f_comp);
+                    if (call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
+                        // not a constructor, we cannot dive further
+                        node = call;
+                        break;
+                    }
+
+                    // this component is the result of a constructor
+                    for (int i = 0, n = call->get_argument_count(); i < n; ++i) {
+                        const char *pname = call->get_parameter_name(i);
+                        if (strcmp(pname, locator.second_name) == 0) {
+                            // found the second component
+                            DAG_node const *s_comp = call->get_argument(i);
+
+                            if (locator.third_name == NULL) {
+                                // ready
+                                node = s_comp;
+                            } else {
+                                // extract third
+                                if (DAG_constant const *cnst = as<DAG_constant>(s_comp)) {
+                                    // this component is folded into a constant
+                                    IValue_struct const *strct =
+                                        cast<IValue_struct>(cnst->get_value());
+                                    v = strct->get_field(locator.third_name);
+                                } else {
+                                    s_comp = skip_temporary(s_comp);
+                                    if (is<DAG_parameter>(s_comp)) {
+                                        // we cannot dive further, because we stopped at a parameter
+                                        node = s_comp;
+                                        break;
+                                    }
+
+                                    DAG_call const *c_call = cast<DAG_call>(s_comp);
+                                    if (c_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR)
+                                    {
+                                        // not a constructor, we cannot dive further
+                                        node = c_call;
+                                        break;
+                                    }
+
+                                    // this component is the result of a constructor
+                                    for (int i = 0, n = c_call->get_argument_count(); i < n; ++i) {
+                                        const char *pname = c_call->get_parameter_name(i);
+                                        if (strcmp(pname, locator.third_name) == 0) {
+                                            // found the third component
+                                            DAG_node const *t_comp = c_call->get_argument(i);
+
+                                            node = t_comp;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+    }
+    MDL_ASSERT((node != NULL || v != NULL) && "material component could not be located");
+
+    if (v != NULL) {
+        // create a temporary Const node, so we can visit it.
+        node = instance->create_temp_constant(v);
+    }
+
+    m_node_counter = 0;
+    m_marker.clear();
+    do_hash_dag(node);
+}
+
+// Walk a DAG IR node.
+void Dag_hasher::hash_dag(
+    DAG_node const *node)
+{
+    // always restart
+    m_node_counter = 0;
+    m_marker.clear();
+
+    return do_hash_dag(node);
+}
+
+// Walk a DAG IR node.
+void Dag_hasher::do_hash_dag(
+    DAG_node const *node)
+{
+    Visited_node_map::iterator it = m_marker.find(node);
+    if (it != m_marker.end()) {
+        // already visited
+        return hash_hit(it->second);
+    }
+
+    // node found first time
+    m_marker[node] = m_node_counter++;
+
+    switch (node->get_kind()) {
+    case DAG_node::EK_CONSTANT:
+        return hash_constant(cast<DAG_constant>(node));
+    case DAG_node::EK_TEMPORARY:
+        {
+            DAG_temporary const *t = cast<DAG_temporary>(node);
+            hash_temporary(t);
+            return do_hash_dag(t->get_expr());
+        }
+    case DAG_node::EK_CALL:
+        {
+            DAG_call const *c = cast<DAG_call>(node);
+
+            for (int i = 0, n = c->get_argument_count(); i < n; ++i) {
+                DAG_node const *arg = c->get_argument(i);
+
+                do_hash_dag(arg);
+            }
+            return hash_call(c);
+        }
+    case DAG_node::EK_PARAMETER:
+        return hash_parameter(cast<DAG_parameter>(node));
+    }
+    MDL_ASSERT(!"Unsupported DAG node kind");
+}
+
+// Hash a Constant.
+void Dag_hasher::hash_constant(DAG_constant const *cnst)
 {
     m_hasher.update('C');
-    IValue const *v = cnst->get_value();
-
-    hash(v);
+    hash(cnst->get_value());
 }
 
-// Post-visit a variable (temporary).
-void Dag_hasher::visit(DAG_temporary *tmp)
+// Hash a temporary.
+void Dag_hasher::hash_temporary(DAG_temporary const *tmp)
 {
     m_hasher.update('T');
     m_hasher.update(tmp->get_index());
 }
 
-// Post-visit a call.
-void Dag_hasher::visit(DAG_call *call)
+// Hash a call.
+void Dag_hasher::hash_call(DAG_call const *call)
 {
     m_hasher.update('C');
     IDefinition::Semantics sema = call->get_semantic();
@@ -411,16 +604,18 @@ void Dag_hasher::visit(DAG_call *call)
     // all calls are ordered "by position"
 }
 
-// Post-visit a Parameter.
-void Dag_hasher::visit(DAG_parameter *param)
+// Hash a parameter.
+void Dag_hasher::hash_parameter(DAG_parameter const *param)
 {
     m_hasher.update('P');
     m_hasher.update(param->get_index());
 }
 
-// Post-visit a Temporary.
-void Dag_hasher::visit(int index, DAG_node *init)
+// Hash a node visited a second time.
+void Dag_hasher::hash_hit(size_t node_id)
 {
+    m_hasher.update('H');
+    m_hasher.update(mi::Uint64(node_id));
 }
 
 // Hash a parameter.
@@ -536,7 +731,7 @@ void Dag_hasher::hash(IType const *tp) {
         }
         break;
     case IType::TK_BSDF_MEASUREMENT:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         break;
     }

@@ -359,7 +359,7 @@ const mi::IString* Mdl_compiler_impl::deprecated_uvtile_marker_to_string(
 const mi::IString* Mdl_compiler_impl::deprecated_uvtile_string_to_marker(
     const char* str, const char* marker) const
 {
-   if( !str && !marker)
+   if( !str || !marker)
         return nullptr;
 
     const std::string& result = MDL::uvtile_string_to_marker( str, marker);

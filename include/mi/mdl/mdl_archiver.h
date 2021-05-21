@@ -218,7 +218,7 @@ public:
     ///       access functions, get_first_value() will return NULL here
     virtual IArchive_manifest_value const *get_first_value(size_t i) const = 0;
 
-    /// Possible erro codes.
+    /// Possible error codes.
     enum Error_code {
         ERR_OK,                ///< Value set successfully.
         ERR_NULL_ARG,          ///< An argument is NULL.
@@ -226,6 +226,7 @@ public:
         ERR_VERSION_FORMAT,    ///< The value must be in semantic version format.
         ERR_FORBIDDEN,         ///< This key cannot be changed.
         ERR_SINGLE,            ///< This key can only have a single value.
+        ERR_KEY_FORMAT,        ///< This key is not a valid identifier.
     };
 
     /// Add a key, value pair. Works for predefined and user keys.

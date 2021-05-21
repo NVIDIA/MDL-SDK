@@ -1,5 +1,261 @@
 Change Log
 ==========
+MDL SDK 2021.0 (344800.2052): 01 Jun 2021
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2021.0 (344800.2052) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.7 Language Specification
+
+    - OpenVDB has been added as supported 3D texture format.
+    - Minimum required versions have been added for OpenEXR, Ptex, and OpenVDB to conform to the
+      VFX Reference Platform CY2021.
+    - Supported texture selector string values have been added for each supported texture format.
+    - Texture sequences with a sequence marker have been added to the definition of texture file
+      paths.
+    - The `auto` placeholder type specifier has been added for variable declarations and function
+      return types.
+    - The `float` type is required to use a 32-bit representation following the IEEE 754 single
+      precision standard. Floating point operations for `float` and `double` may deviate but shall
+      not interrupt nor terminate processing.
+    - The `int` type is required to be a 32-bit signed integer in two's complement form with
+      wrap-around operations and without exceptions.
+    - The restrictions on the texture types, light profile data type, and measured BSDF data type
+      have been removed. They can now be used for local variable types, return types, field types
+      in user defined structures, and element type of arrays.
+    - A selector string parameter has been added to the `texture_2d` and `texture_3d` constructors
+      to support texture formats with multiple data sets and channels in a file. The `anno::usage`
+      standard annotation can be used on texture parameters to pre-select selector values in an
+      integration.
+    - The operators `=`, `==`, and `!=` have been added for the texture types, light profile data
+      type, and measured BSDF data type.
+    - Emission has been added to the volumetric material properties.
+    - The return type of a material definition can have an annotation.
+    - The description of various standard annotations, like `in_group` and `ui_order`, mention
+      their wider applicability to more elements in MDL.
+    - The `usage` standard annotation on materials is recommended to be used on the return type and
+      not the material definition to match the recommendation for function declarations.
+    - The hyperbolic trigonometric functions `cosh`, `sinh`, and `tanh` have been added to the
+      standard math library.
+    - The offset functions `width_offset`, `height_offset`, and `depth_offset` have been added to
+      give full access to OpenVDB bounding box information.
+    - The functions `first_frame` and `last_frame` have been added to give access to the texture
+      animation bounds.
+    - The transform function `grid_to_object_space` has been added to give access to OpenVDB
+      bounding box information in MDL object space.
+    - A `frame` parameter has been added to the `width`, `height`, `depth`, `width_offset`,
+     `height_offset`, `depth_offset`, and `grid_to_object_space` texture functions to select frames
+     in texture sequences.
+    - A `frame` parameter has been added to the `texture_2d` and `texture_3d` variants of the
+     `lookup_`*ltype* and `texel_`*ltype* family of texture function overloads to select
+     frames in texture sequences.
+    - The uniform modifier has been removed from the `tint` parameter of the EDF `tint` modifier.
+    - The VDF `tint` modifier has been added.
+    - An overloaded variant of the `directional_factor` modifier has been added for EDFs.
+    - The `sheen_bsdf` has been changed to a modifier by adding a BSDF `multiscatter` parameter.
+    - The uniform modifier has been removed from the `weight` field of the `edf_component` and
+      `color_edf_component` structures and the upper limit has been removed for the weight.
+    - The `color_vdf_component` structure and VDF overloads for the `color_normalized_mix` and
+      `color_clamped_mix` mixing distribution functions have been added.
+    - The mix distribution functions `unbounded_mix` and `color_unbounded_mix` have been added for
+      BSDF, EDF, and VDF.
+    - An Appendix F has been added defining MDL search path conventions.
+
+- General
+
+    - The MDL SDK now also supports the ARM platform on Linux (`aarch64-linux-gnu`).
+    - This release changes the naming convention used for the DB elements of modules, material
+      definitions, and function definitions. This is necessary to avoid problems that exist with
+      the old naming scheme when names contain certain meta-characters. See
+      `IMdl_configuration::set_encoded_names_enabled()` for details. This feature is enabled by
+      default.
+    - Added the new interface `IMdl_module_builder` which allows incremental building of new MDL
+      modules, as well as editing of existing MDL modules. This interface allows the definition of
+      new struct and enum types, and of new functions and materials (including variants). It also
+      supports references to previous entities from the same module, explicit control of frequency
+      modifiers for parameters, and parameters without defaults. An entity can also be removed from
+      a module (if that entity is unreferenced). The new interface can be obtained from
+      `IMdl_factory::create_module_builder()`. See also the new `create_module` example. The method
+      `IMdl_factory::create_variants()` is deprecated and still available if
+      `MI_NEURAYLIB_DEPRECATED_12_0` is defined.
+    - The API can be configured to treat materials as if they are simply functions with the return
+      type `material`. This means interfaces like `IFunction_definition` and `IFunction_call` can
+      also be used for materials. See `IMdl_configuration::set_materials_are_functions()` for
+      details. This feature is disabled by default. It will be enabled by default in a future
+      release.
+    - The new method `IMdl_factory::uniform_analysis()` allows to check the `uniform` property of
+      an expression graph.
+    - Improved performance for loading of MDL modules, in particular parallel loading of modules,
+      and reloading of modules.
+    - Added `force_default_gamma` parameter to `IMdl_impexp_api::export_canvas()` and
+      `IExport_api::export_canvas()` to perform an automatic gamma adjustment based on the pixel
+      type chosen for export.
+    - The implementation of `IFunction_definition::get_thumbnail()` and
+      `IMaterial_definition::get_thumbnail()` has been changed to compute the value lazily on
+      demand.
+    - The system locale used in methods of `IMdl_i18n_configuration` is restricted to two-letter
+      strings to follow ISO 639-1.
+    - Reduced lock scope during MDL module loading. This avoids callbacks to the entity resolver
+      and related interfaces while holding this lock.
+    - Added `get_mdl_parameter_type_name()`, `get_return_type()` and `get_semantic()` on
+      `IMaterial_definition` for consistency with function definition. Likewise, added
+      `get_return_type()` on `IMaterial_instance`.
+    - Added `IMdl_impexp_api::get_mdl_module_name()` to obtain the MDL module name for a module
+      identified by its file name.
+    - Added `IType_factory::clone()` for type lists.
+    - Made log messages from plugins available.
+    - Updated recommended version numbers and use C++ 17 to meet the requirements for the VFX
+      reference platform 2021.
+    - A Python binding for the MDL SDK has been added. This binding consists of a shared library
+      generated from the API headers using SWIG, and some additional helper functions for ease of
+      use. In addition, there is a stub Python module to make that shared library accessible from
+      Python code. See "Language Bindings" in the API reference for more information. Examples to
+      demonstrate working with the Python binding are included as well.
+    - In the API, the array constructor now uses --as all other function definitions-- named
+      arguments instead of positional arguments. The previously irrelevant parameter names are now
+      enforced to be "0", "1", and so on.
+    - Added support for the "target model" compilation mode.
+    - Added a context option `"remove_dead_parameters"` to control the removal of dead
+      parameter in instances of `ICompiled_materials`. Dead parameters only survive if this
+      options is set (enabled by default). Setting it to `false` produces a compatible argument
+      block layout independent of the target material mode.
+    - Reduced the verbosity of the `cmake` configuration output.
+
+- MDL Compiler and Backends
+
+    - Added support for MDL 1.7.
+    - The MDL compiler warns now if a literal value would loose precision in a implicit (or
+      explicit) conversion.
+    - Improved half vector computation for custom-curve/measured-curve layering: assume refraction
+      for non-thin-walled materials to loose less energy for non-physical glass materials
+      constructed from separate BRDF and BTDF.
+    - Protect custom-curve evaluations against cosines > 1 to avoid numerical corner cases.
+    - Fixed textures with different gamma modes being reported as one texture in `ITarget_code`,
+      when resource resolving was disabled.
+    - Restricted several annotations to real functions (i.e. not materials):
+      `intrinsic()`, `throws()`, `const_expr()`, `noinline()`.
+    - Slightly improved generated HLSL code: the HLSL optimizer can now fold constructions like
+      `vector3(a.x, a.y, a.z)` into `a`.
+    - Added support for backend option `use_renderer_adapt_normal` to HLSL backend.
+    - Improved speed of the DAG compiler computing material hashes.
+    - Added some mathematical identities for math functions in the DAG optimizer.
+    - Allowed annotation `ui_order()` on functions and materials.
+    - `IMdl_backend::translate_environment()` accepts now a function that returns a
+      `base::texture_return` layout-compatible type.
+    - MDL 1.7 support in libbsdf:
+      - Unbounded EDF mix.
+      - (Color-)unbounded mix for BSDFs.
+      - `df::sheen_bsdf`'s multiscatter parameter.
+      - `df::directional_factor` for EDFs.
+    - Avoid duplicate calls to common code for ternary BSDF operators and for distribution function
+      modifiers to reduce the code size for HLSL after compilation by the DirectXShaderCompiler
+      (libbsdf).
+
+- Image File Format Plugins
+
+    - The FreeImage plugin is now based on FreeImage trunk r1859 (fixes (at least) CVE-2019-12211
+      and CVE-2019-12212).
+    - Huge speedup for loading of progressive JPEGs if only the metadata is needed.
+    - Added error message with details if a DDS texture can not be loaded.
+    - The `dds` plugin has been enhanced to support more DDS subformats, in particular
+      BC4/5/6/7-compressed textures.
+
+- MDL SDK examples
+
+    - Dropped support for Kepler GPUs.
+    - Example Create Module
+        - New example to demonstrate the new interface `IMdl_module_builder`.
+    - Example DF Native
+        - New example to demonstrate the integration of a MDL into a renderer by using the native
+          (CPU) backend.
+    - Example Traversal
+        - Added MDL search path handling.
+
+**Fixed Bugs**
+
+- General
+
+    - Fixed `IFunction_definition::create_function_call()` for the special case of the array
+      constructor: This function uses positional arguments. Ensure that user-supplied argument
+      names are ignored, and instead "0", "1", and so on, are actually used.
+    - Fixed the methods `ILink_unit::add_material_path()`  and
+      `ILink_unit::add_material_df()` if the path involves a template-like function.
+    - Fixed checks for cycles in call graphs in
+      `IMaterial_instance::create_compiled_material()`.
+    - Fixed the warnings about removed support for deprecation macros in
+      `include/mi/neuraylib/version.h` to support MS Visual Studio.
+    - Removed bogus error message if comparison of MDLEs returns inequality.
+    - Fixed handling of resources in reloaded modules.
+    - Fixed module builder such that MDL file paths are used for resources, not plain OS file
+      names.
+    - Fixed wrong handling of encoded MDL names for user-defined type names and names with suffix
+      indicating older MDL versions.
+    - Improved documentation and examples to demonstrate how to set the gamma mode, in particular
+      when generating MDL source code via the module builder or when creating MDLEs.
+
+- MDL Compiler and Backends
+
+    - All error messages of recursively imported modules are now reported in the list of error
+      messages during compilation.
+    - The use of an imported user defined structure type with a nested structure type in an
+      exported function signature has been fixed.
+    - The check for incorrect varying function call attachments to uniform parameters has been
+      fixed in the MDL SDK API.
+    - The function `Mdl_compiled_material::depends_on_uniform_scenedata` has been fixed.
+    - The custom-curve and measured-curve layering has been improved for non-thin-walled
+      transmissive materials to reduce energy loss for some cases of modelling glass with these
+      components.
+    - The import of the `::std` module in modules of lower MDL version has been fixed.
+    - Avoid optimizations while adding to link units, making it impossible to select expression 
+      paths from certain distilled materials.
+    - Handle correctly auto-import of types that are used only inside struct types.
+    - In some rare cases array constructors of kind `T[](e_1, e_2, ...)` were handled incorrectly
+      when exported into an MDLE file. Fixed now.
+    - Fixed scope handling for declarations inside `then`/`else` and loop bodies.
+    - Disabled tangent approximation in `::base::transform_coordinate()` to fix a performance
+      regression.
+    - Fixed a potential crash when an array size constant is used in a body of a function that gets
+      inlined in the DAG representation.
+    - Fixed missing `enable_if` conditions inside material presets.
+    - Fixed auxiliary base normals (libbsdf).
+    - Fixed handling of first component in unbounded mixers (libbsdf).
+    - Reduced energy loss of `df::diffuse_transmission_bsdf` as lower layer of `df::fresnel_layer`,
+      `df::custom_curve_layer`, `df::measured_curve_layer` (libbsdf).
+    - Fixed incorrect contribution of `df::diffuse_transmission_bsdf` (for reflection directions)
+      and `df::diffuse_reflection_bsdf` (for transmission directions) for evaluation with bumped
+      normals (libbsdf).
+    - Ensure that resources cloned from another module due to a default argument are included into
+      this module's resource table.
+    - Fixed wrong function names generated for HLSL code (contained sometimes `'.'`).
+    - Fixed wrong return code when setting options for LLVM-based backends.
+    - Use non-refracted transmission directions for non-Fresnel curve layering (libbsdf). This
+      restores the behavior from 2020.1.2.
+    - Fixed a crash when importing a function with texture-typed default arguments.
+    - Fixed a crash when `df::tint(color,edf)` was used in some context.
+    - Fixed computation of derivation info for builtin functions that do not have a declaration.
+    - Fixed code generation not restoring import tables of modules.
+    - Fixed calculation of the lambda call result index in PTX backend.
+    - Fixed wrong `static` storage modifier for functions in HLSL.
+    - Fixed generated function names for HLSL, no more `"func0"` etc.
+    - Fixed rare code generation failure accessing the first member of a nested compound type
+      (HLSL).
+    - Fixed the pdf computation of all microfacet BSDFs in mode `df::scatter_reflect_transmit` to
+      contain the selection probability (libbsdf).
+    - Fixed a crash if a reserved keyword is used as a type name.
+    - Fixed inlining of functions when argument expressions referenced parameters of the caller.
+    - Improved error reporting on broken MDL archives and MDLEs.
+    - Check upon archive creation that user-provided manifest keys form a valid identifier.
+    - Fixed creation of annotations for function variants (sometimes a wrong module name was used.
+    - Fixed potential crash with re-exported `enable_if()` annotations.
+
+- MDL SDK examples
+
+    - Fixed compilation with VS 2019 and CUDA 11.
+
+
 MDL SDK 2020.1.2 (334300.5582): 12 Nov 2020
 -----------------------------------------------
 

@@ -2,7 +2,7 @@ Base version: LLVM 7.0.0 (2018-09-19)
 
 Changes:
  - remove "test" folder
- - remove all targets except NVPTX and X86:
+ - remove all targets except NVPTX, X86 and AArch64:
    - remove corresponding subfolders in lib/Target
    - remove entries in lib/Target/LLVMBuild.txt
    - remove entries CMake variables LLVM_ALL_TARGETS and LLVM_TARGETS_WITH_JIT in CMakeLists.txt
@@ -33,4 +33,4 @@ Changes:
  - disable multithreaded symbol lookup in ExecutionEngine/Orc/Core.cpp if std::call_once is disabled
  - set cmake policy CMP0075 to NEW in top-level CMakeLists.txt
  - added sm_80, sm_86, ptx64, and ptx65
-
+ - disabled -Wexcept-type for GCC in include/llvm/ADT/STLExtras.h and include/llvm/Support/Errno.h

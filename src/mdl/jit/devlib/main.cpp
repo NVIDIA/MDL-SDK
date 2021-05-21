@@ -170,8 +170,9 @@ public:
             }
         }
 
-        if (!changed)
+        if (!changed) {
             return false;
+        }
 
         // now delete
         for (llvm::Module::iterator it(M.begin()), end(M.end()); it != end;) {
@@ -180,7 +181,11 @@ public:
             ++it;
             if (!F->isIntrinsic() &&
                 !F->hasAddressTaken() &&
-                m_marker.find(F) == m_marker.end()) {
+                m_marker.find(F) == m_marker.end())
+            {
+                if (m_verbose) {
+                    printf("Removing %s\n", F->getName().str().c_str());
+                }
                 CG.removeFunctionFromModule(CG[F]);
 
                 // now delete F
@@ -216,7 +221,12 @@ public:
     /// Constructor.
     ///
     /// \param roots  the root set
-    DeleteUnused(String_set const &roots) : ModulePass(ID), m_roots(&roots) {}
+    DeleteUnused(String_set const &roots)
+    : ModulePass(ID)
+    , m_roots(&roots)
+    , m_verbose(false)
+    {
+    }
 
 public:
     static char ID; // Class identification, replacement for typeinfo
@@ -229,6 +239,9 @@ private:
 
     /// The marker set.
     Marker_set m_marker;
+
+    /// True, if verbose operation is enabled.
+    bool m_verbose;
 };
 
 /// Creates our pass.
@@ -338,6 +351,14 @@ void process(llvm::Module *module)
     roots.insert("__nv_fmax");
     roots.insert("__nv_rsqrtf");
     roots.insert("__nv_rsqrt");
+    roots.insert("__nv_sinhf");
+    roots.insert("__nv_sinh");
+    roots.insert("__nv_coshf");
+    roots.insert("__nv_cosh");
+    roots.insert("__nv_tanhf");
+    roots.insert("__nv_tanh");
+    roots.insert("__nv_int_as_float");
+    roots.insert("__nv_float_as_int");
 
     // fast-math variants
 //    roots.insert("__nv_fast_fdividef");

@@ -146,7 +146,7 @@ public:
         EK_CONSTANT,  ///< A constant.
         EK_TEMPORARY, ///< A temporary.
         EK_CALL,      ///< A call.
-        EK_PARAMETER  ///< A parameter. 
+        EK_PARAMETER  ///< A parameter.
     };
 
     /// Get the kind of this DAG IR node.
@@ -486,22 +486,25 @@ public:
             CLASS_COMPILATION    = 1 << 0,  ///< Do a class compilation.
             NO_ARGUMENT_INLINE   = 1 << 1,  ///< CLASS_COMPILATION: Do not inline any arguments.
             NO_RESOURCE_SHARING  = 1 << 2,  ///< CLASS_COMPILATION: Do not share resource arguments.
-            NO_STRING_PARAMS     = 1 << 3,  ///< CLASS_COMPILATION: Do not create string parameters.
-            NO_TERNARY_ON_DF     = 1 << 4,  ///< CLASS_COMPILATION: Do not allow ?: on df.
-            NO_BOOL_PARAMS       = 1 << 5,  ///< CLASS_COMPILATION: Do not create bool parameters.
-            NO_ENUM_PARAMS       = 1 << 6,  ///< CLASS_COMPILATION: Do not create enum parameters.
+            NO_TERNARY_ON_DF     = 1 << 3,  ///< CLASS_COMPILATION: Do not allow ?: on df.
+            NO_DEAD_PARAMS       = 1 << 4,  ///< CLASS_COMPILATION: Remove dead parameters.
+            NO_STRING_PARAMS     = 1 << 5,  ///< CLASS_COMPILATION: Do not create string parameters.
+            NO_BOOL_PARAMS       = 1 << 6,  ///< CLASS_COMPILATION: Do not create bool parameters.
+            NO_ENUM_PARAMS       = 1 << 7,  ///< CLASS_COMPILATION: Do not create enum parameters.
             /// CLASS_COMPILATION: Do not create a parameter for geometry.cutout_opacity if its
             /// value is constant 0.0f or 1.0f.
-            NO_TRIVIAL_CUTOUT_OPACITY = 1 << 7,
+            NO_TRIVIAL_CUTOUT_OPACITY = 1 <<  8,
             /// CLASS_COMPILATION: Do not create layering calls for transparent layers, i.e., with
             /// weight 0.0f.
-            NO_TRANSPARENT_LAYERS     = 1 << 8,
-            IGNORE_NOINLINE           = 1 << 9,  ///< Ignore anno::noinline() annotations.
+            NO_TRANSPARENT_LAYERS     = 1 <<  9,
+            IGNORE_NOINLINE           = 1 << 10, ///< Ignore anno::noinline() annotations.
+            TARGET_MATERIAL_MODEL     = 1 << 11, ///< Target material model mode.
 
             DEFAULT_CLASS_COMPILATION =  ///< Do class compilation with default flags.
                 CLASS_COMPILATION |
                 NO_ARGUMENT_INLINE |
-                NO_RESOURCE_SHARING
+                NO_RESOURCE_SHARING |
+                NO_DEAD_PARAMS
         };
 
         /// Material slots on which hashes are calculated.
@@ -533,14 +536,15 @@ public:
 
         /// Property flags of an instance.
         enum Property {
-            IP_DEPENDS_ON_TRANSFORM           = 0x01,   ///< depends on object transforms
-            IP_DEPENDS_ON_OBJECT_ID           = 0x02,   ///< depends of the object id
-            IP_DEPENDS_ON_GLOBAL_DISTRIBUTION = 0x04,   ///< depends on global distribution (edf)
-            IP_USES_TERNARY_OPERATOR          = 0x08,   ///< uses the ternary operator '?:'
-            IP_USES_TERNARY_OPERATOR_ON_DF    = 0x10,   ///< uses the ternary operator '?:' on *df
-            IP_CLASS_COMPILED                 = 0x20,   ///< was class compiled
-            IP_DISTILLED                      = 0x40,   ///< was created by the distiller
-            IP_DEPENDS_ON_UNIFORM_SCENE_DATA  = 0x80,   ///< depends on uniform scene data
+            IP_DEPENDS_ON_TRANSFORM           = 0x001,   ///< depends on object transforms
+            IP_DEPENDS_ON_OBJECT_ID           = 0x002,   ///< depends of the object id
+            IP_DEPENDS_ON_GLOBAL_DISTRIBUTION = 0x004,   ///< depends on global distribution (edf)
+            IP_USES_TERNARY_OPERATOR          = 0x008,   ///< uses the ternary operator '?:'
+            IP_USES_TERNARY_OPERATOR_ON_DF    = 0x010,   ///< uses the ternary operator '?:' on *df
+            IP_CLASS_COMPILED                 = 0x020,   ///< was class compiled
+            IP_DISTILLED                      = 0x040,   ///< was created by the distiller
+            IP_DEPENDS_ON_UNIFORM_SCENE_DATA  = 0x080,   ///< depends on uniform scene data
+            IP_TARGET_MATERIAL_MODEL          = 0x100,   ///< instance is in target material mode
         };
 
         /// Opacity of an instance.
@@ -935,6 +939,16 @@ public:
         size_t material_index,
         size_t parameter_index) const = 0;
 
+    /// Get the parameter type name of the parameter at parameter_index
+    /// of the material at material_index.
+    ///
+    /// \param material_index   The index of the material.
+    /// \param parameter_index  The index of the parameter.
+    /// \returns                The type name of the parameter.
+    virtual char const *get_material_parameter_type_name(
+        size_t material_index,
+        size_t parameter_index) const = 0;
+
     /// Get the parameter name of the parameter at parameter_index
     /// of the material at material_index.
     ///
@@ -1139,6 +1153,22 @@ public:
     virtual DAG_node const *get_material_parameter_default(
         size_t material_index,
         size_t parameter_index) const = 0;
+
+    /// Get the number of annotations of the material return type at material_index.
+    ///
+    /// \param material_index The index of the material.
+    /// \returns              The number of annotations.
+    virtual size_t get_material_return_annotation_count(
+        size_t material_index) const = 0;
+
+    /// Get the annotation at annotation_index of the material return type at material_index.
+    ///
+    /// \param material_index    The index of the material.
+    /// \param annotation_index  The index of the annotation.
+    /// \returns                 The annotation.
+    virtual DAG_node const *get_material_return_annotation(
+        size_t material_index,
+        size_t annotation_index) const = 0;
 
     /// Get the number of annotations of the parameter at parameter_index
     /// of the material at material_index.
@@ -1518,7 +1548,7 @@ template<typename T>
 T *as(DAG_node *type) {
     return (type->get_kind() == T::s_kind) ? static_cast<T *>(type) : NULL;
 }
- 
+
 /// Cast to subtype or return NULL if types do not match.
 template<typename T>
 T const *as(DAG_node const *type) {

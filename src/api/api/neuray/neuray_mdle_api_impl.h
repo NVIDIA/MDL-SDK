@@ -50,7 +50,7 @@ namespace mi {
         class IMDL;
         class IMDL_resource_reader;
     }
-    
+
     namespace neuraylib {
         class INeuray;
     }
@@ -73,7 +73,7 @@ public:
     explicit Mdle_resource_mapper(
         mi::mdl::IMDL* mdl,
         DB::Transaction* transaction,
-        MI::MDL::Execution_context* context);
+        MDL::Execution_context* context);
 
     /// Retrieve the "resource name" of an MDL resource value.
     ///
@@ -105,7 +105,7 @@ private:
         std::string mdle_file_name;
         std::string mdle_file_name_mask;
         std::string resolved_file_name;
-        mi::neuraylib::IBuffer* in_memory_buffer;
+        mi::base::Handle<mi::neuraylib::IBuffer> in_memory_buffer;
     };
 
     // Avoid file name collisions inside the MDLE.
@@ -113,8 +113,8 @@ private:
 
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
     mi::base::Handle<mi::mdl::IEntity_resolver> m_resolver;
-    MI::MDL::Execution_context* m_context;
-    
+    MDL::Execution_context* m_context;
+
     // Map from resolved name (result of Base::get_resource_name) to the resource name in the MDLE.
     std::unordered_map<std::string, std::string> m_resource_names_resolved2mdle;
 

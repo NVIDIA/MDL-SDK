@@ -90,7 +90,7 @@ static void do_serialize_data(
             for (Uint i = 0; i < size; i++) {
                 serializer->write((Uint)iterator.count());
                 serializer->write(iterator.data());
-                iterator++;
+                ++iterator;
             }
         } else if (it->get_typecode() == TYPE_STRUCT || it->get_typecode() == TYPE_ATTACHABLE) {
             size_t size = it->sizeof_elem();

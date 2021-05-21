@@ -77,7 +77,7 @@ namespace hair
         const float b = sin_theta_o * sin_theta_i * inv_v;
         return (v < 0.1f) 
             ? math::exp(hair_log_I0(a) - b - inv_v + 0.6931f + math::log(0.5f * inv_v))
-            : (math::exp(-b) * hair_I0(a) / (2.0f * v * sinh(inv_v)));
+            : (math::exp(-b) * hair_I0(a) / (2.0f * v * math::sinh(inv_v)));
     }
 
     BSDF_INLINE float hair_Phi(

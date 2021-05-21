@@ -64,7 +64,8 @@ public:
 
         // types
         SYM_TYPE_FIRST,
-        SYM_TYPE_BOOL = SYM_TYPE_FIRST,
+        SYM_TYPE_AUTO = SYM_TYPE_FIRST,
+        SYM_TYPE_BOOL,
         SYM_TYPE_BOOL2,
         SYM_TYPE_BOOL3,
         SYM_TYPE_BOOL4,
@@ -143,6 +144,7 @@ public:
         SYM_FIELD_ROUNDED_EDGES_RADIUS,
         SYM_FIELD_SCATTERING,
         SYM_FIELD_SCATTERING_COEFFICIENT,
+        SYM_FIELD_EMISSION_INTENSITY,
         SYM_FIELD_SURFACE,
         SYM_FIELD_THIN_WALLED,
         SYM_FIELD_VOLUME,
@@ -194,7 +196,8 @@ public:
         SYM_PARAM_COL3,
         SYM_PARAM_GAMMA,
         SYM_PARAM_BIG_N,
-        SYM_PARAM_LAST = SYM_PARAM_BIG_N,
+        SYM_PARAM_SELECTOR,
+        SYM_PARAM_LAST = SYM_PARAM_SELECTOR,
 
         // These two MUST be last in the given order.
         SYM_SHARED_NAME,   ///< the Id of ALL shared symbols (including fully qualified type names)

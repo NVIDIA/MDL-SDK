@@ -77,12 +77,19 @@ void Symbol_table::register_predefined(Factory_serializer &serializer) const
 {
     // register all predefined symbols. When this happens, the symbol
     // tag set must be empty, check that.
+#ifdef ENABLE_ASSERT
     Tag_t t, check = Tag_t(0);
 
 #define OPERATOR_SYM(sym_name, id, name) \
     t = serializer.register_symbol(&sym_name); ++check; MDL_ASSERT(t == check);
 #define PREDEF_SYM(sym_name, id, name) \
     t = serializer.register_symbol(&sym_name); ++check; MDL_ASSERT(t == check);
+#else
+#define OPERATOR_SYM(sym_name, id, name) \
+        serializer.register_symbol(&sym_name);
+#define PREDEF_SYM(sym_name, id, name) \
+        serializer.register_symbol(&sym_name);
+#endif
 #include "compilercore_predefined_symbols.h"
 }
 
@@ -378,9 +385,10 @@ void Symbol_table::deserialize(Factory_deserializer &deserializer)
 {
     register_predefined(deserializer);
 
-    Serializer::Serializer_tags t;
-
-    t = deserializer.read_section_tag();
+#ifdef ENABLE_ASSERT
+    Serializer::Serializer_tags t =
+#endif
+    deserializer.read_section_tag();
     MDL_ASSERT(t == Serializer::ST_SYMBOL_TABLE);
 
     // get the tag of this symbol table itself for its users

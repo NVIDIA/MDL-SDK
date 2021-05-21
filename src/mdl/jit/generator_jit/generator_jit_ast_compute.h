@@ -73,8 +73,9 @@ public:
     /// Returns nullptr, if the LLVM function is unknown.
     ASTFunction const *getASTFunction(Function *func) const {
         auto it = m_ast_function_map.find(func);
-        if (it == m_ast_function_map.end())
+        if (it == m_ast_function_map.end()) {
             return nullptr;
+        }
         return it->second;
     }
 
@@ -114,7 +115,7 @@ public:
 
 Pass *createLoopExitEnumerationPass();
 
-/// This pass converts switched to if cascades.
+/// This pass converts switches to if cascades.
 class UnswitchPass : public FunctionPass
 {
 public:
@@ -138,6 +139,7 @@ private:
 
 };
 
+/// Creates the "unswitch" pass.
 Pass *createUnswitchPass();
 
 } // hlsl;

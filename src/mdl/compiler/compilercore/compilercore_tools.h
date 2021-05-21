@@ -168,6 +168,11 @@ inline MDL *impl_cast(IMDL *t) {
 }
 
 template<>
+inline MDL const *impl_cast(IMDL const *t) {
+    return static_cast<MDL const *>(t);
+}
+
+template<>
 inline Type_factory *impl_cast(IType_factory *t) {
     return static_cast<Type_factory *>(t);
 }
@@ -205,6 +210,27 @@ static inline bool is_material_type_or_sub_type(IType const *type)
     return false;
 }
 
+/// Check if the given type is the material_volume type.
+///
+/// \param type  the type to check
+static inline bool is_material_volume_type(IType const *type)
+{
+    if (IType_struct const *s_type = as<IType_struct>(type))
+        return s_type->get_predefined_id() == IType_struct::SID_MATERIAL_VOLUME;
+    return false;
+}
+
+/// Check if the given compound type has hidden fields.
+static inline bool have_hidden_fields(IType_compound const *c_type) {
+    if (IType_struct const *s_type = as<IType_struct>(c_type)) {
+        // currently, only the material emission type has hidden fields
+        IType_struct::Predefined_id id = s_type->get_predefined_id();
+        return
+            id == IType_struct::SID_MATERIAL_EMISSION || id == IType_struct::SID_MATERIAL_VOLUME;
+    }
+    return false;
+}
+
 /// Checks if the given MDL type is a derivative type.
 ///
 /// \param type  the type to check
@@ -229,8 +255,20 @@ static inline IType const *get_deriv_base_type(IType const *deriv_type)
 /// \param type  the type to check
 static inline bool is_tex_2d(IType const *type)
 {
-    if (IType_texture const *tex_tp = as<IType_texture>(type))
+    if (IType_texture const *tex_tp = as<IType_texture>(type)) {
         return tex_tp->get_shape() == IType_texture::TS_2D;
+    }
+    return false;
+}
+
+/// Check if a given type is the texture_3d type.
+///
+/// \param type  the type to check
+static inline bool is_tex_3d(IType const *type)
+{
+    if (IType_texture const *tex_tp = as<IType_texture>(type)) {
+        return tex_tp->get_shape() == IType_texture::TS_3D;
+    }
     return false;
 }
 

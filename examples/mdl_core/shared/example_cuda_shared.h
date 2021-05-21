@@ -1909,10 +1909,12 @@ bool Material_ptx_compiler::add_material(
                 m_res_col.collect(dist_func.get());
                 collect_material_argument_resources(mat_instance.get(), root_lambda.get());
 
-                // Add the lambda function to the link unit
+                // Add the lambda function to the link unit. Note that it is save to pass
+                // no module cache here, as we do not use dropt_import_entries() in the Core API
                 size_t main_func_index;
                 if (!m_link_unit->add(
                     dist_func.get(),
+                    /*module_cache=*/NULL,
                     &m_module_manager,
                     &arg_block_index,
                     &main_func_index,
@@ -1965,9 +1967,11 @@ bool Material_ptx_compiler::add_material(
                 function_descriptions[i].distribution_kind =
                     mi::mdl::IGenerated_code_executable::DK_NONE;
 
-                // Add the lambda function to the link unit
+                // Add the lambda function to the link unit. Note that it is save to pass
+                // no module cache here, as we do not use dropt_import_entries() in the Core API
                 if (!m_link_unit->add(
                     lambda.get(),
+                    /*module_cache=*/NULL,
                     &m_module_manager,
                     mi::mdl::IGenerated_code_executable::FK_LAMBDA,
                     &arg_block_index,

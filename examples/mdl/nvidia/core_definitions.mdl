@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright 2020 NVIDIA Corporation. All rights reserved.
+ * Copyright 2021 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,8 +26,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-mdl 1.2;
-//    anno::version_number(0,1,12,0),
+// The "//group ... //endgroup" comments are used during the
+// procedural creation of this module's documentation.
+
+mdl 1.4;
 
 import ::df::*;
 import ::state::*;
@@ -35,15 +37,21 @@ import ::math::*;
 import ::base::*;
 import ::tex::*;
 import ::anno::*;
-
-
 export using ::base import texture_return;
 export using ::base import mono_mode;
 export using ::base import color_layer_mode;
+module [[
+	anno::version( 2, 0, 0),
+	anno::display_name("NVIDIA core definitions")
+]];
+
+
+//group Enumerations
 
 export enum material_type
 [[
-    anno::description("used to annotate materials as hint for grouping in the ui"),
+    anno::display_name("User interface group"),
+    anno::description("User interface grouping hint for materials"),
     anno::hidden()
 ]]
 {
@@ -59,7 +67,8 @@ export enum material_type
 
 export enum emission_type
 [[
-    anno::description("Used in light sources to define the emission mode"),
+    anno::display_name("Emission mode"),
+    anno::description("Emission mode definition for light sources"),
     anno::hidden()
 ]]
 {
@@ -75,12 +84,13 @@ export enum emission_type
 
 export enum cell_type
 [[
-    anno::description("used to define the behavior of Worley noise"),
+    anno::display_name("Worley noise cell type"),
+    anno::description("Behavior of the Worley noise cell"),
     anno::hidden()
 ]]
 {
     simple_cells = 0
-        [[ anno::description("Simple Cells") ]],
+        [[ anno::description("Simple cells") ]],
     crystal_cells = 1
         [[ anno::description("Crystal cells") ]],
     bordered_cells = 2
@@ -89,7 +99,8 @@ export enum cell_type
 
 export enum cell_base
 [[
-    anno::description("used to annotate materials as hint for grouping in the ui"),
+    anno::display_name("Worley noise cell shape"),
+    anno::description("Shape of the Worley noise cell"),
     anno::hidden()
 ]]
 {
@@ -113,33 +124,33 @@ uniform float4x4 rotation_translation_scale(
 ]]
 {
     float4x4 scale =
-        float4x4(scaling.x        , 0.               , 0.               , 0.,
-                 0.               , scaling.y        , 0.               , 0.,
-                 0.               , 0.               , scaling.z        , 0.,
-                 translation.x, translation.y, translation.z, 1.);
+        float4x4(scaling.x     , 0.            , 0.            , 0.,
+                 0.            , scaling.y     , 0.            , 0.,
+                 0.            , 0.            , scaling.z     , 0.,
+                 translation.x , translation.y , translation.z , 1.);
 
     float3 s = math::sin(rotation);
     float3 c = math::cos(rotation);
     float4x4 rotate =
-        float4x4(  c.y*c.z ,  -c.x*s.z + s.x*s.y*c.z ,  s.x*s.z + c.x*s.y*c.z , 0.0,
-                   c.y*s.z ,   c.x*c.z + s.x*s.y*s.z , -s.x*c.z + c.x*s.y*s.z , 0.0,
-                  -s.y     ,   s.x*c.y               ,  c.x*c.y               , 0.0,
-                   0.     ,   0                   ,  0                   , 1.);
+        float4x4(  c.y*c.z , -c.x*s.z + s.x*s.y*c.z ,  s.x*s.z + c.x*s.y*c.z , 0.0,
+                   c.y*s.z ,  c.x*c.z + s.x*s.y*s.z , -s.x*c.z + c.x*s.y*s.z , 0.0,
+                  -s.y     ,  s.x*c.y               ,  c.x*c.y               , 0.0,
+                   0.      ,  0.                    ,  0.                    , 1.);
 
     return   scale*rotate;
 }
 
+//endgroup
 
 export annotation suitable_as_light();
 export annotation type_of_material(material_type type);
-export annotation ui_position(int position);
 export annotation dimension(float dimension);
 export annotation dimension(float2 dimension);
 export annotation dimension(float3 dimension);
-export annotation typical_object_size(float size); //migt be deprecated soon
 
-const string COPYRIGHT = "Copyright 2020 NVIDIA Corporation. All rights reserved.";
+const string COPYRIGHT = "Copyright 2021 NVIDIA Corporation. All rights reserved.";
 
+//group Texturing functions
 
 export texture_return blend_colors(
     color color_1 = color(0.0)
@@ -153,27 +164,36 @@ export texture_return blend_colors(
     ]],
     float weight = 1.
     [[
-        anno::description("Defines strength of the effect. At weight of 0, only color 1 will be visible. At weight 1, the blend function will have full effect"),
+        anno::description("Defines strength of the effect. At weight 0, only color 1 will be visible. At weight 1, the blend function will have full effect."),
         anno::display_name("Blend weight")
-    ]]
+    ]],
+	uniform bool linear_blend = true
+	[[
+        anno::description("The blend opperation can either be applied in linear or gamma (2.2) color space"),
+        anno::display_name("Linear blend")
+	]]
 )
 [[
     anno::display_name("Blend colors"),
-    anno::description("Allows combining textures in varied ways"),
+    anno::description("Allows combining textures and colors in varied ways"),
+	anno::thumbnail(".thumbs/blend_colors.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
-    return base::blend_color_layers(
+	color c1 = linear_blend? color_1: math::pow(color_1,0.45);
+	color c2 = linear_blend? color_2: math::pow(color_2,0.45);
+	float w = linear_blend? weight: math::pow(weight,0.45);
+    texture_return r = base::blend_color_layers(
         layers: base::color_layer[](
             base::color_layer(
-                layer_color: color_2,
-                weight: weight,
+                layer_color: c2,
+                weight: w,
                 mode: mode
                 )),
-        base: color_1
+        base: c1
     );
+	return linear_blend? r: texture_return(math::pow(r.tint,2.2),math::pow(r.mono,2.2));
 }
 
 export texture_return file_texture(
@@ -181,54 +201,54 @@ export texture_return file_texture(
     [[
         anno::display_name("Bitmap file"),
         anno::in_group("Bitmap parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     uniform mono_mode mono_source = mono_average
     [[
         anno::display_name("Scalar mode"),
         anno::description("Defines how the texture applies to scalar parameters"),
         anno::in_group("Bitmap parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform float brightness = 1.
     [[
         anno::display_name("Brightness"),
         anno::in_group("Bitmap parameters"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform float contrast = 1.
     [[
         anno::display_name("Contrast"),
         anno::in_group("Bitmap parameters"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform float2 scaling = float2(1.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(8)
+        anno::ui_order(8)
     ]],
     uniform float2 translation = float2(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform float rotation = 0.
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform bool clip = false
     [[
-        anno::description("If set to true, texture will not repeat. Outside of the texture, color will be black and the scalar value will be 0"),
+        anno::description("If set to true, texture will not repeat. Outside of the texture, color will be black and the scalar value will be 0."),
         anno::display_name("Clip"),
         anno::in_group("Placement"),
-        ui_position(9)
+        anno::ui_order(9)
     ]],
     uniform int texture_space = 0
     [[
@@ -236,21 +256,21 @@ export texture_return file_texture(
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform bool invert = false
     [[
         anno::description("Invert image"),
         anno::display_name("Invert image"),
         anno::in_group("Bitmap parameters"),
-        ui_position(4)
+        anno::ui_order(4)
     ]]
 )
 [[
     anno::display_name("Bitmap texture"),
     anno::description("Allows texturing using image files of various file formats"),
+	anno::thumbnail(".thumbs/file_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -287,39 +307,124 @@ export texture_return file_texture(
     );
 }
 
+
+export float3 file_bump_texture(
+    uniform texture_2d texture
+    [[
+        anno::display_name("Bitmap file"),
+        anno::in_group("Bitmap parameters"),
+        anno::ui_order(1)
+    ]],
+    uniform mono_mode bump_source = mono_average
+    [[
+        anno::display_name("Bump mode"),
+        anno::description("Defines how the texture is evaluated to create the bumps"),
+        anno::in_group("Bitmap parameters"),
+        anno::ui_order(2)
+    ]],
+    uniform float2 scaling = float2(1.)
+    [[
+        anno::description("Controls the scale of the texture on the object"),
+        anno::display_name("Tiling"),
+        anno::in_group("Placement"),
+        anno::ui_order(8)
+    ]],
+    uniform float2 translation = float2(0.)
+    [[
+        anno::description("Controls position of the texture on the object"),
+        anno::display_name("Offset"),
+        anno::in_group("Placement"),
+        anno::ui_order(7)
+    ]],
+    uniform float rotation = 0.
+    [[
+        anno::description("Rotation angle of the texture in degrees"),
+        anno::display_name("Rotation"),
+        anno::in_group("Placement"),
+        anno::ui_order(6)
+    ]],
+    uniform bool clip = false
+    [[
+        anno::description("If set to true, texture will not repeat. Outside of the texture the surface will be flat."),
+        anno::display_name("Clip"),
+        anno::in_group("Placement"),
+        anno::ui_order(5)
+
+    ]],
+    uniform float factor = 1
+    [[
+        anno::display_name("Bump strength"),
+        anno::in_group("Bitmap parameters"),
+        anno::ui_order(3)
+    ]],
+    uniform int texture_space = 0
+    [[
+        anno::description("Selects a specific UV space"),
+        anno::display_name("UV space index"),
+        anno::hard_range(0,3),
+        anno::in_group("Placement"),
+        anno::ui_order(4)
+    ]]
+)
+[[
+    anno::display_name("Bitmap texture -- bump mapping"),
+    anno::description("Allows texturing using image files of various file formats"),
+	anno::thumbnail(".thumbs/file_bump_texture.png"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT)
+]]
+{
+    return base::file_bump_texture(
+        texture: texture,
+        bump_source: bump_source,
+        factor: factor,
+        uvw: base::transform_coordinate(
+            transform: rotation_translation_scale(
+                scaling: float3(scaling.x, scaling.y, 1.0),
+                rotation: float3(0.0, 0.0, rotation/180.*math::PI ),
+                translation: float3(translation.x, translation.y, 0.0)
+            ),
+            coordinate: base::coordinate_source(texture_space: texture_space)
+        ),
+        wrap_u: clip?tex::wrap_clamp:tex::wrap_repeat,
+        wrap_v: clip?tex::wrap_clamp:tex::wrap_repeat,
+        clip: clip
+    );
+}
+
 export texture_return perlin_noise_texture(
     color color1 = color(1.)
     [[
         anno::display_name("Color 1"),
         anno::in_group("Noise parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     color color2 = color(0.)
     [[
         anno::display_name("Color 2"),
         anno::in_group("Noise parameters"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform bool object_space = true
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space"),
         anno::in_group("Placement"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
-    uniform int noise_levels = 3.
+    uniform int noise_levels = 3
     [[
         anno::description("Higher amounts will add detail to the noise"),
         anno::display_name("Levels"),
         anno::hard_range(1,6),
         anno::in_group("Noise parameters"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform bool absolute_noise = false
     [[
         anno::display_name("Billowing appearance"),
-        anno::in_group("Noise parameters"),
-        ui_position(4)
+        anno::in_group("Noise parameters"), 
+        anno::ui_order(4)
     ]],
     uniform float noise_threshold_high = 1.
     [[
@@ -327,7 +432,7 @@ export texture_return perlin_noise_texture(
         anno::description("Lowering this value will create bigger areas uniformly colored with Color 1"),
         anno::display_name("Upper threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform float noise_threshold_low = 0.
     [[
@@ -335,43 +440,43 @@ export texture_return perlin_noise_texture(
         anno::description("Increasing this value will create bigger areas uniformly colored with Color 2"),
         anno::display_name("Lower threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(11)
+        anno::ui_order(11)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(10)
+        anno::ui_order(10)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(9)
+        anno::ui_order(9)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(8)
+        anno::ui_order(8)
     ]]
 )
 [[
     anno::display_name("Perlin noise texture"),
-    anno::description("Allow texturing with a random noise pattern"),
+    anno::description("Enable texturing with a random noise pattern"),
+	anno::thumbnail(".thumbs/perlin_noise_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -401,35 +506,35 @@ export float3 perlin_noise_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Noise parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     uniform float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(9)
+        anno::ui_order(9)
     ]],
-    uniform int noise_levels = 1.
+    uniform int noise_levels = 1
     [[
         anno::description("Higher amounts will add detail to the noise"),
         anno::display_name("Levels"),
         anno::hard_range(1,6),
         anno::in_group("Noise parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform bool object_space = true
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space"),
         anno::in_group("Placement"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform bool absolute_noise = false
     [[
         anno::display_name("Billowing appearance"),
         anno::in_group("Noise parameters"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform float noise_threshold_high = 1.
     [[
@@ -437,7 +542,7 @@ export float3 perlin_noise_bump_texture(
         anno::description("Lowering this value will create bigger areas uniformly colored with Color 1"),
         anno::display_name("Upper threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     uniform float noise_threshold_low = 0.
     [[
@@ -445,36 +550,36 @@ export float3 perlin_noise_bump_texture(
         anno::description("Increasing this value will create bigger areas uniformly colored with Color 2"),
         anno::display_name("Lower threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(8)
+        anno::ui_order(8)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(6)
+        anno::ui_order(6)
     ]]
 )
 [[
-    anno::display_name("Perlin noise texture"),
-    anno::description("Allows texturing a random noise pattern"),
+    anno::display_name("Perlin noise texture -- bump mapping"),
+    anno::description("Enable bump-map texturing with a random noise pattern"),
+	anno::thumbnail(".thumbs/perlin_noise_bump_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -502,42 +607,42 @@ export texture_return worley_noise_texture(
     [[
         anno::display_name("Color 1"),
         anno::in_group("Noise parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     color color2 = color(0.)
     [[
         anno::display_name("Color 2"),
         anno::in_group("Noise parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform bool object_space = true
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space") ,
         anno::in_group("Placement"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform cell_type mode = simple_cells
     [[
         anno::display_name("Cell type") ,
         anno::description("Cell pattern type"),
         anno::in_group("Noise parameters"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform cell_base metric = circular_cells
     [[
         anno::display_name("Cell shape") ,
         anno::description("The shape of the cell form"),
         anno::in_group("Noise parameters"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform float noise_threshold_high = 1.
     [[
@@ -545,7 +650,7 @@ export texture_return worley_noise_texture(
         anno::description("Lowering this value will create bigger areas uniformly colored with Color 1"),
         anno::display_name("Upper threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform float noise_threshold_low = 0.
     [[
@@ -553,34 +658,34 @@ export texture_return worley_noise_texture(
         anno::description("Increasing this value will create bigger areas uniformly colored with Color 2"),
         anno::display_name("Lower threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     uniform float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(10)
+        anno::ui_order(10)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(9)
+        anno::ui_order(9)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(8)
+        anno::ui_order(8)
     ]])
 [[
     anno::display_name("Cellular noise texture"),
     anno::description("Allow texturing with a cell forming pattern"),
+	anno::thumbnail(".thumbs/worley_noise_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -609,29 +714,29 @@ export float3 worley_noise_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Noise parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     uniform cell_base metric = circular_cells
     [[
         anno::display_name("Cell shape") ,
         anno::description("The shape of the cell form"),
         anno::in_group("Noise parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform bool object_space = true
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space"),
         anno::in_group("Placement"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform float noise_threshold_high = 1.
     [[
@@ -639,7 +744,7 @@ export float3 worley_noise_bump_texture(
         anno::description("Lowering this value will create bigger areas uniformly colored with Color 1"),
         anno::display_name("Upper threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform float noise_threshold_low = 0.
     [[
@@ -647,34 +752,34 @@ export float3 worley_noise_bump_texture(
         anno::description("Increasing this value will create bigger areas uniformly colored with Color 2"),
         anno::display_name("Lower threshold"),
         anno::in_group("Noise parameters"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(8)
+        anno::ui_order(8)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(6)
+        anno::ui_order(6)
     ]])
 [[
-    anno::display_name("Cellular noise texture"),
+    anno::display_name("Cellular noise texture -- bump mapping"),
     anno::description("Allow texturing with a cell forming pattern"),
+	anno::thumbnail(".thumbs/worley_noise_bump_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -701,107 +806,107 @@ export texture_return flow_noise_texture(
     [[
         anno::display_name("Color 1"),
         anno::in_group("Noise parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     color color2 = color(0.)
     [[
         anno::display_name("Color 2"),
         anno::in_group("Noise parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform bool object_space = false
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space"),
         anno::in_group("Placement"),
-        ui_position(10)
+        anno::ui_order(10)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(11)
+        anno::ui_order(11)
     ]],
-    uniform int noise_levels = 3.
+    uniform int noise_levels = 3
     [[
         anno::description("Higher amounts will add detail to the noise"),
         anno::display_name("Levels"),
         anno::hard_range(1,6),
         anno::in_group("Noise parameters"),
-        ui_position(3)
+        anno::ui_order(3)
 
     ]],
     uniform bool absolute_noise = false
     [[
         anno::display_name("Billowing appearance"),
         anno::in_group("Noise parameters"),
-        ui_position(4)
+        anno::ui_order(4)
 
     ]],
     uniform float phase = 0.0
     [[
         anno::display_name("Phase offset"),
-        anno::description("Controls the 3rd dimension of the function"),
+        anno::description("Controls the third dimension of the function"),
         anno::in_group("Noise parameters")
         ,
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform float level_gain = 0.5
     [[
         anno::display_name("Level intensity gain"),
-        anno::description("If multiple levels are used, \"level_gain\" specifies a weighting factor for subsequent levels"),
+        anno::description("If multiple levels are used, this parameter specifies a weighting factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform float level_scale = 2.0
     [[
         anno::display_name("Level scaling"),
-        anno::description("If multiple levels are used, \"level_scale\" specifies a global scaling factor for subsequent levels"),
+        anno::description("If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform float level_progressive_u_scale = 1.
     [[
         anno::display_name("Progressive u scale"),
-        anno::description("If multiple levels are used, \"level_progressive_u_scale\" specifies an additional scaling factor in the \"u\" direction"),
+        anno::description("If multiple levels are used, this parameter specifies an additional scaling factor in the \"u\" direction"),
         anno::in_group("Noise parameters"),
-        ui_position(8)
+        anno::ui_order(8)
     ]],
     uniform float level_progressive_v_motion = 0.
     [[
         anno::display_name("Progressive v offset"),
-        anno::description("If multiple levels are used, \"level_progressive_v_motion\" specifies an offset for subsequent levels in the \"v\" direction"),
+        anno::description("If multiple levels are used, this parameter specifies an offset for subsequent levels in the \"v\" direction"),
         anno::in_group("Noise parameters"),
-        ui_position(9)
+        anno::ui_order(9)
     ]],
     uniform float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(15)
+        anno::ui_order(15)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(14)
+        anno::ui_order(14)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(13)
+        anno::ui_order(13)
     ]])
 [[
     anno::display_name("Flow noise texture"),
     anno::description("Allow texturing with a 2D noise pattern suitable for waves"),
+	anno::thumbnail(".thumbs/flow_noise_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -833,98 +938,98 @@ export float3 flow_noise_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Noise parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     uniform float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(12)
+        anno::ui_order(12)
     ]],
-    uniform int noise_levels = 1.
+    uniform int noise_levels = 1
     [[
         anno::description("Higher amounts will add detail to the noise"),
         anno::display_name("Levels"),
         anno::hard_range(1,6),
         anno::in_group("Noise parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform bool object_space = false
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space"),
         anno::in_group("Placement"),
-        ui_position(8)
+        anno::ui_order(8)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(9)
+        anno::ui_order(9)
     ]],
     uniform bool absolute_noise = false
     [[
         anno::display_name("Billowing appearance"),
         anno::in_group("Noise parameters"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform float phase = 0.0
     [[
         anno::display_name("Phase offset"),
         anno::description("Controls the 3rd dimension of the function"),
         anno::in_group("Noise parameters"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform float level_gain = 0.5
     [[
         anno::display_name("Level intensity gain"),
-        anno::description("If multiple levels are used, \"level_gain\" specifies a weighting factor for subsequent levels"),
+        anno::description("If multiple levels are used, this parameter specifies a weighting factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     uniform float level_scale = 2.0
     [[
         anno::display_name("Level scaling"),
-        anno::description("If multiple levels are used, \"level_scale\" specifies a global scaling factor for subsequent levels"),
+        anno::description("If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform float level_progressive_u_scale = 1.
     [[
         anno::display_name("Progressive u scale"),
-        anno::description("If multiple levels are used, \"level_progressive_u_scale\" specifies an additional scaling factor in the \"u\" direction"),
+        anno::description("If multiple levels are used, this parameter specifies an additional scaling factor in the \"u\" direction"),
         anno::in_group("Noise parameters"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform float level_progressive_v_motion = 0.
     [[
         anno::display_name("Progressive v offset"),
-        anno::description("If multiple levels are used, \"level_progressive_v_motion\" specifies an offset for subsequent levels in the \"v\" direction"),
+        anno::description("If multiple levels are used, this parameter specifies an offset for subsequent levels in the \"v\" direction"),
         anno::in_group("Noise parameters"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(11)
+        anno::ui_order(11)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(10)
+        anno::ui_order(10)
     ]])
 [[
-    anno::display_name("Flow noise texture"),
+    anno::display_name("Flow noise texture -- bump mapping"),
     anno::description("Allow texturing with a 2D noise pattern suitable for waves"),
+	anno::thumbnail(".thumbs/flow_noise_bump_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -955,63 +1060,63 @@ export texture_return checker_texture(
     [[
         anno::display_name("Color 1"),
         anno::in_group("Checker parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     color color2 = color(0.)
     [[
         anno::display_name("Color 2"),
         anno::in_group("Checker parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform float3 scaling = float3(10.)
      [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform bool object_space = false
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space"),
         anno::in_group("Placement"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform float blur = 0
     [[
         anno::hard_range(0.0,1.0),
         anno::display_name("Blur"),
         anno::in_group("Checker parameters"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(4)
+        anno::ui_order(4)
     ]]
 )
 [[
-    anno::display_name("3d checker texture"),
+    anno::display_name("3D checker texture"),
     anno::description("Allows texturing a checkerboard pattern"),
+	anno::thumbnail(".thumbs/checker_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1037,57 +1142,57 @@ export float3 checker_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Checker parameters"),
-        ui_position(0)
+        anno::ui_order(0)
     ]],
     uniform float blur = 0
     [[
         anno::hard_range(0.0,1.0),
         anno::display_name("Blur"),
         anno::in_group("Checker parameters"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform bool object_space = false
     [[
-        anno::description("If off, UV space will be used. If on, 3d texturing in object space will apply. For applications that do not support object space, world space will be used"),
+        anno::description("If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used."),
         anno::display_name("Use object space"),
         anno::in_group("Placement"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     uniform int texture_space = 0
     [[
-        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space"),
+        anno::description("Only applies if \"Use object space\" is off. Selects a specific UV space."),
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(3)
+        anno::ui_order(3)
     ]]
 )
 [[
-    anno::display_name("3d checker texture"),
+    anno::display_name("3D checker texture -- bump mapping"),
     anno::description("Allows texturing a checkerboard pattern"),
+	anno::thumbnail(".thumbs/checker_bump_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1107,131 +1212,47 @@ export float3 checker_bump_texture(
     );
 }
 
-export float3 file_bump_texture(
-    uniform texture_2d texture
-    [[
-        anno::display_name("Bitmap file"),
-        anno::in_group("Bitmap parameters"),
-        ui_position(1)
-    ]],
-    uniform mono_mode bump_source = mono_average
-    [[
-        anno::display_name("Bump mode"),
-        anno::description("Defines how the texture is evaluated to create the bumps"),
-        anno::in_group("Bitmap parameters"),
-        ui_position(2)
-    ]],
-    uniform float2 scaling = float2(1.)
-    [[
-        anno::description("Controls the scale of the texture on the object"),
-        anno::display_name("Tiling"),
-        anno::in_group("Placement"),
-        ui_position(8)
-    ]],
-    uniform float2 translation = float2(0.)
-    [[
-        anno::description("Controls position of the texture on the object"),
-        anno::display_name("Offset"),
-        anno::in_group("Placement"),
-        ui_position(7)
-    ]],
-    uniform float rotation = 0.
-    [[
-        anno::description("Rotation angle of the texture in degrees"),
-        anno::display_name("Rotation"),
-        anno::in_group("Placement"),
-        ui_position(6)
-    ]],
-    uniform bool clip = false
-    [[
-        anno::description("If set to true, texture will not repeat. Outside of the texture the surface will be flat"),
-        anno::display_name("Clip"),
-        anno::in_group("Placement"),
-        ui_position(5)
-
-    ]],
-    uniform float factor = 1
-    [[
-        anno::display_name("Bump strength"),
-        anno::in_group("Bitmap parameters"),
-        ui_position(3)
-    ]],
-    uniform int texture_space = 0
-    [[
-        anno::description("Selects a specific UV space"),
-        anno::display_name("UV space index"),
-        anno::hard_range(0,3),
-        anno::in_group("Placement"),
-        ui_position(4)
-    ]]
-)
-[[
-    anno::display_name("Bitmap texture"),
-    anno::description("Allows texturing using image files of various file formats"),
-    anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
-    anno::copyright_notice(COPYRIGHT)
-]]
-{
-    return base::file_bump_texture(
-        texture: texture,
-        bump_source: bump_source,
-        factor: factor,
-        uvw: base::transform_coordinate(
-            transform: rotation_translation_scale(
-                scaling: float3(scaling.x, scaling.y, 1.0),
-                rotation: float3(0.0, 0.0, rotation/180.*math::PI ),
-                translation: float3(translation.x, translation.y, 0.0)
-            ),
-            coordinate: base::coordinate_source(texture_space: texture_space)
-        ),
-        wrap_u: clip?tex::wrap_clamp:tex::wrap_repeat,
-        wrap_v: clip?tex::wrap_clamp:tex::wrap_repeat,
-        clip: clip
-    );
-}
-
 export float3 normalmap_texture(
     uniform texture_2d texture
     [[
-        anno::display_name("Normalmap file"),
-        anno::in_group("Normalmap parameters"),
-        ui_position(1)
+        anno::display_name("Normal map file"),
+        anno::in_group("Normal map parameters"),
+        anno::ui_order(1)
     ]],
     uniform float2 scaling = float2(1.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform float2 translation = float2(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform float rotation = 0.
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     uniform bool clip = false
     [[
-        anno::description("If set to true, texture will not repeat. Outside of the texture the surface will be flat"),
+        anno::description("If set to true, texture will not repeat. Outside of the texture the surface will be flat."),
         anno::display_name("Clip"),
         anno::in_group("Placement"),
-        ui_position(4)
+        anno::ui_order(4)
 
     ]],
     uniform float factor = 1
     [[
         anno::display_name("Strength"),
-        anno::in_group("Normalmap parameters"),
-        ui_position(2)
+        anno::in_group("Normal map parameters"),
+        anno::ui_order(2)
     ]],
     uniform int texture_space = 0
     [[
@@ -1239,14 +1260,14 @@ export float3 normalmap_texture(
         anno::display_name("UV space index"),
         anno::hard_range(0,3),
         anno::in_group("Placement"),
-        ui_position(3)
+        anno::ui_order(3)
     ]]
 )
 [[
-    anno::display_name("Normalmap texture"),
+    anno::display_name("Normal map texture"),
     anno::description("Allows the use of tangent space normal maps"),
+	anno::thumbnail(".thumbs/normalmap_texture.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
@@ -1267,7 +1288,10 @@ export float3 normalmap_texture(
     );
 }
 
-//material section
+//endgroup
+
+//group Simple materials
+
 export material diffuse(
     color diffuse_color = color(.8)
     [[
@@ -1289,12 +1313,11 @@ export material diffuse(
 [[
     anno::display_name("Simple diffuse"),
     anno::description("A basic diffuse material"),
+	anno::thumbnail(".thumbs/diffuse.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(simple_material),
-    typical_object_size(1.0),
-   anno::key_words(string[]("generic"))
+    anno::key_words(string[]("generic"))
 ]]
  =  material(
     thin_walled: true,
@@ -1310,13 +1333,13 @@ export material diffuse(
     )
 );
 
-export material scratched_metal(
+export material scratched_metal_v2(
     color metal_color = color(.9)
     [[
         anno::display_name("Color"),
         anno::description("The color of the metal")
     ]],
-    float roughness = 0.05
+    float roughness = 0.2
     [[
         anno::display_name("Roughness"),
         anno::hard_range(0.0,1.),
@@ -1338,7 +1361,7 @@ export material scratched_metal(
     [[
         anno::display_name("Anisotropy rotation"),
         anno::hard_range(0.0,1.),
-        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees")
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees.")
     ]],
     float3 normal = state::normal()
     [[
@@ -1349,20 +1372,19 @@ export material scratched_metal(
 [[
     anno::display_name("Metal"),
     anno::description("A metallic material with stretched reflections"),
+	anno::thumbnail(".thumbs/scratched_metal.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","metal"))
 ]]
  = let{
     base::anisotropy_return anisotropy_values = base::anisotropy_conversion(
-        roughness: roughness,
+        roughness: roughness*roughness,
         anisotropy: anisotropy,
         anisotropy_rotation: anisotropy_rotation
     );
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
         tint: metal_color,
         roughness_u: anisotropy_values.roughness_u,
@@ -1388,194 +1410,71 @@ export material scratched_metal(
     )
 );
 
-//deprecated!!!!!!!!!!!!!!!!!!!
-export material metal(
-    color metal_color = color(.9)
-    [[
-        anno::display_name("Color"),
-        anno::description("The color of the metal")
-    ]],
-    float roughness = 0.05
-    [[
-        anno::display_name("Roughness"),
-        anno::hard_range(0.0,1.),
-        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
-    ]],
-    float glossy_weight = .9
-    [[
-        anno::display_name("Reflectivity"),
-        anno::hard_range(0.0,1.),
-        anno::description("Intensity of highlights and glossy reflections and highlights")
-    ]],
-    float3 normal = state::normal()
-    [[
-        anno::display_name("Bumps"),
-        anno::description("Attach bump or normal maps here")
-    ]]
-)
-[[
-    anno::display_name("Simple metal, deprecated"),
-    anno::description("A basic metallic material"),
-    anno::author("NVIDIA Corporation"),
-    anno::hidden(),
-    anno::copyright_notice(COPYRIGHT),
-    type_of_material(simple_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
-    anno::key_words(string[]("generic","metal"))
-]]
- = let{
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
-        mode: df::scatter_reflect,
-        tint: metal_color,
-        roughness_u: roughness
-    );
-} in material(
-    thin_walled: true,
-    surface: material_surface(
-        scattering: df::weighted_layer(
-            weight: 1.,
-            normal: normal,
-            layer: df::weighted_layer(
-                weight: glossy_weight,
-                layer: glossy_bsdf,
-                base: df::diffuse_reflection_bsdf(
-                    roughness: 0.0,
-                    tint: metal_color
-                ),
-                normal: normal
-            )
-        )
-    )
-);
-
-//deprecated!!!!!!!!!!!!!!!!!!!
-export material plastic(
-    color diffuse_color = color(.5)
-    [[
-        anno::display_name("Color"),
-        anno::description("The color of the material")
-    ]],
-    float roughness = 0.25
-    [[
-        anno::display_name("Roughness"),
-        anno::hard_range(0.0,1.),
-        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
-    ]],
-    uniform float ior = 1.4
-    [[
-        anno::display_name("IOR"),
-        anno::soft_range(1.0,4.0),
-        anno::description("Determines reflectivity")
-    ]],
-    float3 normal = state::normal()
-    [[
-        anno::display_name("Bumps"),
-        anno::description("Attach bump or normal maps here")
-    ]]
-)
-[[
-    anno::display_name("Simple plastic, deprecated"),
-    anno::description("A basic dielectric, works for everything opaque that is not metallic"),
-    anno::author("NVIDIA Corporation"),
-    anno::hidden(),
-    anno::copyright_notice(COPYRIGHT),
-    type_of_material(simple_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
-    anno::key_words(string[]("generic","dielectric","plastic","wood","stone"))
-]]
- = let{
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
-        mode: df::scatter_reflect,
-        tint: color(1.),
-        roughness_u: roughness
-    );
-} in material(
-    thin_walled: true,
-    surface: material_surface(
-        scattering: df::weighted_layer(
-            weight: 1.,
-            normal: normal,
-            layer: df::fresnel_layer(
-                ior: color(ior),
-                layer: glossy_bsdf,
-                base: df::diffuse_reflection_bsdf(
-                    roughness: 0.0,
-                    tint: diffuse_color
-                ),
-                normal: normal
-            )
-        )
-    )
-);
-
-export material scratched_plastic(
+export material scratched_plastic_v2(
     color diffuse_color = color(.5)
     [[
         anno::display_name("Color"),
         anno::description("The color of the material"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
-    float roughness = 0.05
+    float roughness = 0.2
     [[
         anno::display_name("Roughness"),
         anno::hard_range(0.0,1.),
         anno::description("Higher roughness values lead to bigger highlights and blurry reflections"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     float anisotropy = 0.0
     [[
         anno::display_name("Anisotropy"),
         anno::hard_range(0.0,1.),
         anno::description("Higher values will stretch the highlight"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     float anisotropy_rotation = 0.0
     [[
         anno::display_name("Anisotropy rotation"),
         anno::hard_range(0.0,1.),
-        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees"),
-        ui_position(5)
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees."),
+        anno::ui_order(5)
     ]],
     uniform float ior = 1.4
     [[
         anno::display_name("IOR"),
         anno::soft_range(1.0,4.0),
         anno::description("Determines reflectivity"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     float reflectivity = 1.
     [[
         anno::display_name("Reflection weight"),
         anno::hard_range(0.0,1.),
-        anno::description("Additional Reflectivity control"),
-        ui_position(3)
+        anno::description("Additional reflectivity control"),
+        anno::ui_order(3)
     ]],
     float3 normal = state::normal()
     [[
         anno::display_name("Bumps"),
         anno::description("Attach bump or normal maps here"),
-        ui_position(7)
+        anno::ui_order(7)
     ]]
 )
 [[
     anno::display_name("Plastic"),
-    anno::description("A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights"),
+    anno::description("A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights."),
+	anno::thumbnail(".thumbs/scratched_plastic.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","dielectric","plastic","wood","stone"))
 ]]
  = let{
     base::anisotropy_return anisotropy_values = base::anisotropy_conversion(
-        roughness: roughness,
+        roughness: roughness*roughness,
         anisotropy: anisotropy,
         anisotropy_rotation: anisotropy_rotation
     );
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
         tint: color(1.),
         roughness_u: anisotropy_values.roughness_u,
@@ -1589,7 +1488,7 @@ export material scratched_plastic(
             weight: 1.,
             normal: normal,
             layer: df::fresnel_layer(
-                ior: color(ior),
+                ior: ior,
                 weight: reflectivity,
                 layer: glossy_bsdf,
                 base: df::diffuse_reflection_bsdf(
@@ -1607,50 +1506,49 @@ export material retroreflective(
     [[
         anno::display_name("Color"),
         anno::description("The color of the material"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     color reflection_color = color(.8,.8,.03)
     [[
         anno::display_name("Reflection color"),
         anno::description("The color of the retroreflection"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     float roughness = 0.15
     [[
         anno::display_name("Roughness"),
         anno::hard_range(0.0,1.),
         anno::description("Higher roughness values lead to bigger highlights and blurry reflections"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     float normal_reflectivity = .05
     [[
         anno::display_name("Reflection weight facing"),
         anno::hard_range(0.0,1.),
         anno::description("Reflectivity control for geometry facing the viewer"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     float grazing_reflectivity = 1.
     [[
         anno::display_name("Reflection weight edge"),
         anno::hard_range(0.0,1.),
         anno::description("Reflectivity control for the reflectivity at geometry edges"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     float3 normal = state::normal()
     [[
         anno::display_name("Bumps"),
         anno::description("Attach bump or normal maps here"),
-        ui_position(7)
+        anno::ui_order(7)
     ]]
 )
 [[
     anno::display_name("Retroreflective"),
     anno::description("A material with a retroreflective component, works well for road signs and retroreflective stickers"),
+	anno::thumbnail(".thumbs/retroreflective.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","retroreflective","roadsign","stone"))
 ]]
  = let{
@@ -1678,13 +1576,13 @@ export material retroreflective(
     )
 );
 
-export material flex_material(
+export material flex_material_v2(
     color base_color = color(.5)
     [[
         anno::display_name("Base color"),
         anno::in_group("Base"),
         anno::description("The color of the material"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     float diffuse_roughness = 0.0
     [[
@@ -1692,14 +1590,14 @@ export material flex_material(
         anno::in_group("Base"),
         anno::hard_range(0.0,1.),
         anno::description("Higher roughness values lead to a more \"powdery\" look"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
-    uniform bool is_metal = false
+    float is_metal = 0.0
     [[
         anno::display_name("Metallic material"),
         anno::in_group("Base"),
-        anno::description("If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnel effect)"),
-        ui_position(3)
+        anno::description("If 1.0, reflection will be colored and independent of view direction. If 0.0, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnel effect)."),
+        anno::ui_order(3)
     ]],
     float reflectivity = 1.0
     [[
@@ -1707,15 +1605,15 @@ export material flex_material(
         anno::in_group("Base"),
         anno::hard_range(0.0,1.),
         anno::description("Controls the amount of reflection"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
-    float reflection_roughness = 0.1
+    float reflection_roughness = 0.3
     [[
         anno::display_name("Reflection roughness"),
         anno::in_group("Base"),
         anno::hard_range(0.0,1.),
         anno::description("Higher roughness values lead to more blurry reflections"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     float anisotropy = 0.0
     [[
@@ -1723,37 +1621,37 @@ export material flex_material(
         anno::in_group("Base"),
         anno::hard_range(0.0,1.),
         anno::description("Higher values will stretch the highlight"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     float anisotropy_rotation = 0.0
     [[
         anno::display_name("Anisotropy rotation"),
         anno::in_group("Base"),
         anno::hard_range(0.0,1.),
-        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees"),
-        ui_position(7)
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees."),
+        anno::ui_order(7)
     ]],
     float transparency = 0.0
     [[
         anno::display_name("Transmission weight"),
         anno::in_group("Transmission"),
         anno::hard_range(0.0,1.),
-        anno::description("Weights how much light passes through the object vs. its diffuse reflectivity"),
-        ui_position(12)
+        anno::description("Weights how much light passes through the object compared to its diffuse reflectivity"),
+        anno::ui_order(12)
     ]],
     color transmission_color = color(1.)
     [[
         anno::display_name("Transmission color"),
         anno::in_group("Transmission"),
-        anno::description("Color effect for transmission independent of thickness of the object. Think stained glass"),
-        ui_position(8)
+        anno::description("Color effect for transmission independent of thickness of the object, similar to stained glass"),
+        anno::ui_order(8)
     ]],
     uniform color volume_color = color(1.0)
     [[
         anno::display_name("Volume color"),
         anno::in_group("Transmission"),
-        anno::description("If the material is not \"Thin walled\", \"Volume color\" will be reached at \"Volume reference distance\"(m)"),
-        ui_position(9)
+        anno::description("If the material is not \"Thin walled\", \"Volume color\" will be reached at \"Volume reference distance\" (m)"),
+        anno::ui_order(9)
     ]],
     float transmission_roughness = 0.0
     [[
@@ -1761,66 +1659,65 @@ export material flex_material(
         anno::in_group("Transmission"),
         anno::hard_range(0.0,1.),
         anno::description("higher values lead to objects seen through the material to appear blurry"),
-        ui_position(11)
+        anno::ui_order(11)
     ]],
     uniform float base_thickness = 0.1
     [[
         anno::display_name("Volume reference distance"),
         anno::in_group("Transmission"),
         anno::soft_range(0.0,10.0),
-        anno::description("If the material is not \"Thin walled\", \"Volume color\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here"),
-        ui_position(10)
+        anno::description("If the material is not \"Thin walled\", \"Volume color\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here."),
+        anno::ui_order(10)
     ]],
     uniform float ior = 1.5
     [[
         anno::display_name("IOR"),
         anno::in_group("Global"),
         anno::soft_range(1.0,4.0),
-        anno::description("Determines refraction in the volume. It also influences the reflectivity for materials that are not metallic"),
-        ui_position(14)
+        anno::description("Determines refraction in the volume. It also influences the reflectivity for materials that are not metallic."),
+        anno::ui_order(14)
     ]],
     uniform bool thin_walled = false
     [[
         anno::display_name("Thin walled"),
         anno::in_group("Global"),
-        anno::description("Thin walled materials do not refract and do not have volume effects. Good for soap bubbles or window glass"),
-        ui_position(13)
+        anno::description("Thin walled materials do not refract and do not have volume effects. Good for soap bubbles or window glass."),
+        anno::ui_order(13)
     ]],
     float3 normal = state::normal()
     [[
         anno::display_name("Bumps"),
         anno::in_group("Global"),
         anno::description("Attach bump or normal maps here"),
-        ui_position(16)
+        anno::ui_order(16)
     ]],
     uniform float abbe_number = 0.0
     [[
         anno::in_group("Global"),
         anno::display_name("Abbe number"),
-        anno::description("Controls dispersion. 0 switches dispersion off, dispersive materials have Abbe numbers between 25 and 85"),
+        anno::description("Controls dispersion. A value of 0 switches dispersion off. Dispersive materials have Abbe numbers between 25 and 85."),
         anno::soft_range(0.0,100.0),
-        ui_position(15)
+        anno::ui_order(15)
     ]]
 )
 [[
     anno::display_name("Flexible material model"),
     anno::description("A complex material that can be configured to a wide variety of looks"),
+	anno::thumbnail(".thumbs/flex_material.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(complex_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","complex"))
 ]]
  = let{
     base::anisotropy_return anisotropy_values = base::anisotropy_conversion(
-        roughness: reflection_roughness,
+        roughness: reflection_roughness*reflection_roughness,
         anisotropy: anisotropy,
         anisotropy_rotation: anisotropy_rotation
     );
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
-        tint: is_metal? base_color: color(1.),
+        tint: color(1.),
         roughness_u: anisotropy_values.roughness_u,
         roughness_v: anisotropy_values.roughness_v,
         tangent_u: anisotropy_values.tangent_u
@@ -1829,10 +1726,10 @@ export material flex_material(
         tint: base_color,
         roughness: diffuse_roughness
     );
-    bsdf transmission_bsdf = df::simple_glossy_bsdf(
+    bsdf transmission_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_transmit,
         tint: transmission_color,
-        roughness_u: transmission_roughness
+        roughness_u: transmission_roughness*transmission_roughness
     );
     bsdf add_transparency = df::weighted_layer(
         weight: transparency,
@@ -1840,18 +1737,22 @@ export material flex_material(
         base: diffuse_bsdf,
         normal: normal
     );
-    bsdf add_reflection = is_metal? df::weighted_layer(
-        weight: reflectivity,
-        layer: glossy_bsdf,
-        base: add_transparency,
-        normal: normal
-    ): df::fresnel_layer(
-        ior: color(ior),
-        weight: reflectivity,
-        layer: glossy_bsdf,
-        base: add_transparency,
-        normal: normal
-    );
+    bsdf add_reflection = df::weighted_layer(
+		is_metal,
+		df::weighted_layer(
+			weight: reflectivity,
+			layer: df::directional_factor(base_color,color(1.0),5.,glossy_bsdf),
+			base: add_transparency,
+			normal: normal
+		),
+		df::fresnel_layer(
+			ior: ior,
+			weight: reflectivity,
+			layer: glossy_bsdf,
+			base: add_transparency,
+			normal: normal
+		)
+	);
     bsdf add_normal = df::weighted_layer(
         normal: normal,
         weight: 1.,
@@ -1868,7 +1769,7 @@ export material flex_material(
     )
 );
 
-export material thin_glass(
+export material thin_glass_v2(
     color glass_color = color(.95)
     [[
         anno::display_name("Transmission color"),
@@ -1895,20 +1796,19 @@ export material thin_glass(
 [[
     anno::display_name("Thin glass"),
     anno::description("A basic transmissive dielectric without refraction or volume"),
+	anno::thumbnail(".thumbs/thin_glass.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","dielectric","glass"))
 ]]
  = let{
-    bsdf glossy_reflection_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_reflection_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
         tint: color(1.),
-        roughness_u: roughness
+        roughness_u: roughness*roughness
     );
-    bsdf glossy_transmission_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_transmission_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_transmit,
         tint: glass_color,
         roughness_u: roughness
@@ -1917,7 +1817,7 @@ export material thin_glass(
     thin_walled: true,
     surface: material_surface(
         df::fresnel_layer(
-            ior: color(ior),
+            ior: ior,
             normal: normal,
             layer: glossy_reflection_bsdf,
             base: df::weighted_layer(
@@ -1929,7 +1829,7 @@ export material thin_glass(
     )
 );
 
-export material thin_translucent(
+export material thin_translucent_v2(
     color surface_color = color(.95)
     [[
         anno::display_name("Diffuse color"),
@@ -1967,18 +1867,17 @@ export material thin_translucent(
 [[
     anno::display_name("Thin translucent"),
     anno::description("A diffuse transmissive dielectric material"),
+	anno::thumbnail(".thumbs/thin_translucent.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("generic","dielectric","leaves","paper","sheets"))
 ]]
  = let{
-    bsdf glossy_reflection_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_reflection_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
         tint: color(1.),
-        roughness_u: roughness
+        roughness_u: roughness*roughness
     );
     bsdf transmission_bsdf = df::diffuse_transmission_bsdf(
         tint: translucent_color
@@ -1990,7 +1889,7 @@ export material thin_translucent(
     thin_walled: true,
     surface: material_surface(
         df::fresnel_layer(
-            ior: color(ior),
+            ior: ior,
             normal: normal,
             layer: glossy_reflection_bsdf,
             base: df::weighted_layer(
@@ -2007,75 +1906,74 @@ export material thin_translucent(
     )
 );
 
-export material thick_glass(
+export material thick_glass_v2(
     color transmission_color = color(1.0)
     [[
-        ui_position(1),
+        anno::ui_order(1),
         anno::display_name("Transmission color"),
-        anno::description("Colors the light entering the volume. Think stained glass")
+        anno::description("Colors the light entering the volume, similar to stained glass")
     ]],
     uniform color glass_color = color(.95)
     [[
-        ui_position(2),
+        anno::ui_order(2),
         anno::display_name("Volume color"),
         anno::description("The color of the glass body")
     ]],
     float roughness = 0.0
     [[
-        ui_position(4),
+        anno::ui_order(4),
         anno::display_name("Roughness"),
         anno::hard_range(0.0,1.),
         anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
     ]],
     uniform float ior = 1.4
     [[
-        ui_position(5),
+        anno::ui_order(5),
         anno::display_name("IOR"),
         anno::soft_range(1.0,4.0),
         anno::description("Determines reflectivity as well as amount of refraction")
     ]],
     uniform float base_thickness = .1
     [[
-        ui_position(3),
+        anno::ui_order(3),
         anno::display_name("Volume reference distance"),
         anno::soft_range(0.0,10.0),
-        anno::description("\"Volume color\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here")
+        anno::description("\"Volume color\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here.")
 
     ]],
     float3 normal = state::normal()
     [[
-        ui_position(7),
+        anno::ui_order(7),
         anno::display_name("Bumps"),
         anno::description("Attach bump or normal maps here")
     ]],
     uniform float abbe_number = 0.0
     [[
-        ui_position(6),
+        anno::ui_order(6),
         anno::display_name("Abbe number"),
-        anno::description("Controls dispersion. 0.0 switches dispersion off, dispersive materials have Abbe numbers between 25.0 and 85.0"),
+        anno::description("Controls dispersion. A value of 0 switches dispersion off. Dispersive materials have Abbe numbers between 25 and 85."),
         anno::soft_range(0.0,100.0)
     ]]
 )
 [[
     anno::display_name("Thick glass"),
     anno::description("A basic transmissive dielectric with refraction and coloring in the volume"),
+	anno::thumbnail(".thumbs/thick_glass.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
-    typical_object_size(1.0),
     type_of_material(simple_material),
     anno::key_words(string[]("generic","dielectric","glass"))
 ]]
  = let{
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
         tint: color(1.),
-        roughness_u: roughness
+        roughness_u: roughness*roughness
     );
-    bsdf glossy_bsdf_transmission = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf_transmission = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_transmit,
         tint: transmission_color,
-        roughness_u: roughness
+        roughness_u: roughness*roughness
     );
 } in material(
     thin_walled: false,
@@ -2086,7 +1984,7 @@ export material thick_glass(
             layer: df::fresnel_layer(
                 layer: glossy_bsdf,
                 base: glossy_bsdf_transmission,
-                ior: color(ior),
+                ior: ior,
                 normal: normal
             )
         )
@@ -2097,84 +1995,83 @@ export material thick_glass(
     ior: abbe_number == 0.0?color(ior):base::abbe_number_ior(ior, abbe_number)
 );
 
-export material thick_translucent(
+export material thick_translucent_v2(
     color transmission_color = color(.95)
     [[
         anno::display_name("Transmission color"),
         anno::description("The color of the material"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform color volume_color = color(.95)
     [[
         anno::display_name("Volume color"),
         anno::description("The color of the volume at \"Volume reference distance\""),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     uniform float volume_scattering = 0.5
     [[
         anno::display_name("Volume scattering"),
         anno::hard_range(0.0,.99999),
         anno::description("Amount of scattering for objects at \"Volume reference distance\""),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     float roughness = 0.0
     [[
         anno::display_name("Reflection roughness"),
         anno::hard_range(0.0,1.),
         anno::description("Higher roughness values lead to bigger highlights and blurry reflections"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     float reflectivity = 1.
     [[
         anno::display_name("Reflection weight"),
         anno::hard_range(0.0,1.),
         anno::description("Overall reflectivity of the material"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     uniform float base_thickness = .1
     [[
         anno::display_name("Volume reference distance"),
         anno::soft_range(0.0,10.0),
-        anno::description("\"Volume color\" and \"Volume scattering\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here"),
-        ui_position(4)
+        anno::description("\"Volume color\" and \"Volume scattering\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here."),
+        anno::ui_order(4)
 
     ]],
     float3 normal = state::normal()
     [[
         anno::display_name("Bumps"),
         anno::description("Attach bump or normal maps here"),
-        ui_position(9)
+        anno::ui_order(9)
     ]],
     uniform float ior = 1.4
     [[
         anno::display_name("IOR"),
         anno::soft_range(1.0,4.0),
         anno::description("Determines reflectivity as well as amount of refraction"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     uniform float abbe_number = 0.0
     [[
         anno::display_name("Abbe number"),
-        anno::description("Controls dispersion. 0 switches dispersion off, dispersive materials have Abbe numbers between 25 and 85"),
+        anno::description("Controls dispersion. A value of 0 switches dispersion off.  Dispersive materials have Abbe numbers between 25 and 85."),
         anno::soft_range(0.0,100.0),
-        ui_position(8)
+        anno::ui_order(8)
     ]]
 )
 [[
     anno::display_name("Thick translucent"),
     anno::description("A subsurface scattering material"),
+	anno::thumbnail(".thumbs/thick_translucent.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(simple_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("generic","dielectric","wax","milk"))
 ]]
  = let{
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
         tint: color(1.),
-        roughness_u: roughness
+        roughness_u: roughness*roughness
     );
     bsdf transmission_bsdf = df::specular_bsdf(
         mode: df::scatter_transmit,
@@ -2187,7 +2084,7 @@ export material thick_translucent(
         df::fresnel_layer(
             normal: normal,
             weight: reflectivity,
-            ior: color(ior),
+            ior: ior,
             layer: glossy_bsdf,
             base: df::weighted_layer(
                 normal: normal,
@@ -2205,12 +2102,12 @@ export material thick_translucent(
 
 
 export material blend(
-    material base = scratched_plastic()
+    material base = scratched_plastic_v2()
     [[
         anno::display_name("Base material"),
         anno::description("The material the blend is based on")
     ]],
-    material blend =  scratched_metal()
+    material blend =  scratched_metal_v2()
     [[
         anno::display_name("Blend Material"),
         anno::description("Surface properties to use for the blend")
@@ -2225,11 +2122,10 @@ export material blend(
 [[
     anno::display_name("Surface blender"),
     anno::description("Blend surface characteristics of 2 materials or mask them using a texture"),
+	anno::thumbnail(".thumbs/blend.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(combiner_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("combiner","generic"))
 ]]
  =  material(
@@ -2247,68 +2143,71 @@ export material blend(
     geometry: base.geometry
 );
 
-export material apply_clearcoat(
+//endgroup
+
+//group Modifier materials
+
+export material apply_clearcoat_v2(
     material base = diffuse(diffuse_color: color(0.))
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get a clear coating applied"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     uniform float ior = 1.6
     [[
         anno::display_name("IOR"),
         anno::soft_range(1.0,4.0),
         anno::description("Determines reflectivity of the clear coat"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
     float roughness = 0.0
     [[
         anno::display_name("Reflection roughness"),
         anno::hard_range(0.0,1.0),
         anno::description("Determines roughness of the clear coat"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     float visibility = 1.0
     [[
         anno::display_name("Coat visibility"),
         anno::hard_range(0.0,1.0),
         anno::description("Determines visibility of the clear coat"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     float3 normal = state::normal()
     [[
         anno::display_name("Bumps"),
         anno::description("Attach bump or normal maps here"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     color coat_filter_color = color(1.)
     [[
         anno::display_name("Coat filter color"),
         anno::description("For simulating coatings with colored resins that modulate the color of underlying layers"),
-        ui_position(2)
+        anno::ui_order(2)
     ]]
 )
 [[
     anno::display_name("Apply clear coating"),
     anno::description("Apply clear coat to an existing material"),
     anno::author("NVIDIA Corporation"),
+	anno::thumbnail(".thumbs/apply_clearcoat.png"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
 ]]
  = let{
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
-        roughness_u: roughness,
+        roughness_u: roughness*roughness,
         tint: color(1.)
     );
     color base_tint = blend_colors(color(1.), coat_filter_color, color_layer_blend, visibility).tint;
 } in material(
     surface: material_surface(
         scattering: df::fresnel_layer(
-            ior: color(ior),
+            ior: ior,
             normal: normal,
             weight: visibility,
             layer: glossy_bsdf,
@@ -2323,7 +2222,7 @@ export material apply_clearcoat(
 );
 
 export material apply_thinfilm(
-    material base = scratched_metal()
+    material base = scratched_metal_v2()
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get shows a thin film effect")
@@ -2343,11 +2242,10 @@ export material apply_thinfilm(
 [[
     anno::display_name("Apply thin film"),
     anno::description("Apply thin film to an existing material"),
+	anno::thumbnail(".thumbs/apply_thinfilm.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
 ]]
  =  material(
@@ -2365,54 +2263,53 @@ export material apply_thinfilm(
     geometry: base.geometry
 );
 
-export material apply_metalcoat(
+export material apply_metalcoat_v2(
     material base = diffuse(diffuse_color: color(0.))
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get a metallic coating applied"),
-        ui_position(1)
+        anno::ui_order(1)
     ]],
     color metal_color = color(.95)
     [[
         anno::display_name("Reflection color"),
-        anno::description("the color of the metal"),
-        ui_position(2)
+        anno::description("The color of the metal"),
+        anno::ui_order(2)
     ]],
     float visibility = .3
     [[
         anno::display_name("Reflection weight"),
         anno::hard_range(0.0,1.0),
-        anno::description("the opacity of the coat"),
-        ui_position(4)
+        anno::description("The opacity of the coat"),
+        anno::ui_order(4)
     ]],
     float roughness = 0.0
     [[
         anno::display_name("Reflection roughness"),
         anno::hard_range(0.0,1.0),
         anno::description("Determines roughness of the metal coat"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     float3 normal = state::normal()
     [[
         anno::display_name("Bumps"),
         anno::description("Attach bump or normal maps here"),
-        ui_position(5)
+        anno::ui_order(5)
     ]]
 )
 [[
     anno::display_name("Apply thin metal coating"),
     anno::description("Apply metal coat to an existing material"),
+	anno::thumbnail(".thumbs/apply_metalcoat.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
 ]]
  = let{
-    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+    bsdf glossy_bsdf = df::microfacet_ggx_smith_bsdf(
         mode: df::scatter_reflect,
-        roughness_u: roughness,
+        roughness_u: roughness*roughness,
         tint: metal_color
     );
 } in material(
@@ -2463,10 +2360,9 @@ export material apply_dustcover(
 [[
     anno::display_name("Apply a cover of dust"),
     anno::description("Apply a diffuse cover of dust or dirt"),
+	anno::thumbnail(".thumbs/apply_dustcover.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
-    typical_object_size(1.0),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic","coating"))
 ]]
@@ -2494,7 +2390,7 @@ export material apply_dustcover(
 );
 
 export material apply_colorfalloff_v2(
-    material base = scratched_metal(metal_color: color(1.))
+    material base = scratched_metal_v2(metal_color: color(1.))
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get a clear coating applied")
@@ -2528,11 +2424,10 @@ export material apply_colorfalloff_v2(
 [[
     anno::display_name("Apply a color falloff"),
     anno::description("Makes the color view dependent"),
+	anno::thumbnail(".thumbs/apply_colorfalloff.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
 ]]
  =  material(
@@ -2548,65 +2443,7 @@ export material apply_colorfalloff_v2(
     thin_walled: base.thin_walled,
     geometry: base.geometry
 );
-
-//deprecated!!!! the colors can currently not be colored in iray
-export material apply_colorfalloff(
-    material base = scratched_metal(metal_color: color(1.))
-    [[
-        anno::display_name("Base material"),
-        anno::description("The material that will get a clear coating applied")
-    ]],
-    color color_0 = color(1.,0.,0.)
-    [[
-        anno::display_name("Color 1"),
-        anno::description("the color of the dust")
-    ]],
-    color color_1 = color(0.,1.,0.)
-    [[
-        anno::display_name("Color 2"),
-        anno::description("the color of the dust")
-    ]],
-    color color_2 = color(0.,0.,1.)
-    [[
-        anno::display_name("Color 3"),
-        anno::description("the color of the dust")
-    ]],
-    color color_3 = color(1.,0.,0.)
-    [[
-        anno::display_name("Color 4"),
-        anno::description("the color of the dust")
-    ]],
-    color color_4 = color(0.,1.,0.)
-    [[
-        anno::display_name("Color 5"),
-        anno::description("the color of the dust")
-    ]]
-)
-[[
-    anno::display_name("Apply a color falloff, deprecated"),
-    anno::description("Makes the color view dependent"),
-    anno::author("NVIDIA Corporation"),
-    anno::copyright_notice(COPYRIGHT),
-    anno::hidden(),
-    anno::version_number(0,1,10,0),
-    type_of_material(modifier_material),
-    typical_object_size(1.0),
-    anno::key_words(string[]("modifier","generic","coating"))
-]]
- =  material(
-    surface: material_surface(
-        scattering: df::measured_curve_factor(
-            curve_values: color[](color_0,color_1,color_2,color_3,color_4),
-            base: base.surface.scattering
-        ),
-        emission: base.surface.emission
-    ),
-    volume: base.volume,
-    ior: base.ior,
-    thin_walled: base.thin_walled,
-    geometry: base.geometry
-);
-
+//JAN: TODO fix from here
 export material apply_metallicflakes(
     material base = diffuse(diffuse_color: color(0.))
     [[
@@ -2616,7 +2453,7 @@ export material apply_metallicflakes(
     color flake_color = color(.9,.7,.5)
     [[
         anno::display_name("Color"),
-        anno::description("The color of the Flakes")
+        anno::description("The color of the flakes")
     ]],
 
     float roughness = 0.0
@@ -2651,11 +2488,10 @@ export material apply_metallicflakes(
 [[
     anno::display_name("Apply flake coating"),
     anno::description("Apply layer of metallic flakes to an existing material"),
+	anno::thumbnail(".thumbs/apply_metallicflakes.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic","coating"))
 ]]
  = let{
@@ -2701,7 +2537,7 @@ export material flake_paint(
     color flake_color = color(.6,1,.1)
     [[
         anno::display_name("Flake color"),
-        anno::description("The color of the Flakes")
+        anno::description("The color of the flakes")
     ]],
     float roughness = 0.15
     [[
@@ -2753,11 +2589,10 @@ export material flake_paint(
 [[
     anno::display_name("Flaky paint"),
     anno::description("A multi layer paint material containing flakes"),
+	anno::thumbnail(".thumbs/flake_paint.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(complex_material),
-    typical_object_size(1.0),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("complex","carpaint"))
 ]]
  = let{
@@ -2781,7 +2616,7 @@ export material flake_paint(
 } in material(
     surface: material_surface(
         scattering: df::fresnel_layer(
-            ior: color(ior),
+            ior: ior,
             normal: coat_bump,
             layer: df::simple_glossy_bsdf(roughness_u: coat_roughness),
             base: df::weighted_layer(
@@ -2796,7 +2631,7 @@ export material flake_paint(
 );
 
 export material add_cutout(
-    material base = scratched_plastic()
+    material base = scratched_plastic_v2()
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get a cut-out")
@@ -2809,12 +2644,11 @@ export material add_cutout(
     ]]
 ) [[
     anno::display_name("Add cut-outs"),
-    anno::description("Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences"),
+    anno::description("Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences."),
+	anno::thumbnail(".thumbs/add_cutout.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
 ]] = material(
     surface: base.surface,
@@ -2833,60 +2667,59 @@ export material add_simple_sticker(
     [[
         anno::display_name("Sticker color"),
         anno::description("The color of the material"),
-        ui_position(2)
+        anno::ui_order(2)
     ]],
     float roughness = 0.05
     [[
         anno::display_name("Sticker roughness"),
         anno::hard_range(0.0,1.),
         anno::description("Higher roughness values lead to bigger highlights and blurry reflections"),
-        ui_position(3)
+        anno::ui_order(3)
     ]],
     uniform float ior = 1.4
     [[
         anno::display_name("Sticker IOR"),
         anno::soft_range(1.0,4.0),
         anno::description("Determines reflectivity"),
-        ui_position(6)
+        anno::ui_order(6)
     ]],
     float reflectivity = 1.
     [[
         anno::display_name("Sticker reflectivity"),
         anno::hard_range(0.0,1.),
         anno::description("Additional Reflectivity control"),
-        ui_position(4)
+        anno::ui_order(4)
     ]],
     float3 sticker_normal = state::normal()
     [[
         anno::display_name("Sticker bumps"),
         anno::description("Attach bump or normal maps here"),
-        ui_position(7)
+        anno::ui_order(7)
     ]],
     float sticker_mask = 0.0
     [[
         anno::display_name("Sticker mask"),
         anno::hard_range(0.0,1.0),
         anno::description("Determines extent of the sticker"),
-        ui_position(5)
+        anno::ui_order(5)
     ]],
-    material base = scratched_plastic()
+    material base = scratched_plastic_v2()
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get a sticker added"),
-        ui_position(1)
+        anno::ui_order(1)
     ]]
 ) [[
     anno::display_name("Add simple sticker"),
-    anno::description("A quick way for adding simple stickers to a material. The sticker is a simple dielectric and needs a mask to define its extent"),
+    anno::description("A quick way for adding simple stickers to a material. The sticker is a simple dielectric and needs a mask to define its extent."),
+	anno::thumbnail(".thumbs/add_simple_sticker.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
 ]] = let{
     material blend_material = blend(
-        blend: scratched_plastic(
+        blend: scratched_plastic_v2(
             diffuse_color: diffuse_color,
             roughness: roughness,
             ior: ior,
@@ -2908,7 +2741,7 @@ export material add_simple_sticker(
 );
 
 export material add_globalbump(
-    material base = scratched_plastic()
+    material base = scratched_plastic_v2()
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get a bump map")
@@ -2916,16 +2749,15 @@ export material add_globalbump(
     float3 normal = state::normal()
     [[
         anno::display_name("Bump"),
-        anno::description("An additional global bump map for the material. Local bump map of the base material is preserved")
+        anno::description("An additional global bump map for the material. Local bump map of the base material is preserved.")
     ]]
 ) [[
     anno::display_name("Add global bumpmap"),
-    anno::description("Adds global bumpmap to existing materials. Local bump map of the base material is preserved"),
+    anno::description("Adds global bumpmap to existing materials. Local bump map of the base material is preserved."),
+	anno::thumbnail(".thumbs/add_globalbump.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
 ]] = material(
     surface: base.surface,
@@ -2940,7 +2772,7 @@ export material add_globalbump(
 );
 
 export material add_displacement(
-    material base = scratched_plastic()
+    material base = scratched_plastic_v2()
     [[
         anno::display_name("Base material"),
         anno::description("The material that will get a bump map")
@@ -2948,7 +2780,7 @@ export material add_displacement(
     float displacement = 0.0
     [[
         anno::display_name("Displacement amount"),
-        anno::description("Attach displacement texture here. Note that the object needs to be set up correctly to have good displacement results")
+        anno::description("Attach displacement texture here. Note that the object needs to be set up correctly to have good displacement results.")
     ]],
     uniform float displacement_scale = 1.0
     [[
@@ -2958,11 +2790,10 @@ export material add_displacement(
 ) [[
     anno::display_name("Add displacement"),
     anno::description("Adds displacement to existing materials"),
+	anno::thumbnail(".thumbs/add_displacement.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     anno::key_words(string[]("modifier","generic"))
 ]] = material(
     surface: base.surface,
@@ -2985,7 +2816,7 @@ export material add_emission(
     color tint = color(1.)
     [[
         anno::display_name("Color"),
-        anno::description("The color of the Light")
+        anno::description("The color of the light")
     ]],
     uniform float intensity = 1000
     [[
@@ -3001,16 +2832,15 @@ export material add_emission(
     uniform emission_type unit = lumen_m2
     [[
         anno::display_name("Unit for emission"),
-        anno::description("The physical unit of Intensity")
+        anno::description("The physical unit of \"Intensity\"")
     ]]
 ) [[
     anno::display_name("Add emission"),
     anno::description("Adds emission to a material"),
+	anno::thumbnail(".thumbs/add_emission.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     suitable_as_light(),
     anno::key_words(string[]("modifier","generic"))
 ]] = 
@@ -3042,7 +2872,7 @@ export material add_thermal_emission(
     uniform float temperature = 6500.
     [[
         anno::display_name("Temperature"),
-        anno::description("The color temperature of the Light in Kelvin")
+        anno::description("The color temperature of the light in Kelvin")
     ]],
     uniform float intensity = 1000
     [[
@@ -3052,16 +2882,15 @@ export material add_thermal_emission(
     uniform emission_type unit = lumen_m2
     [[
         anno::display_name("Unit for emission"),
-        anno::description("The physical unit of Intensity")
+        anno::description("The physical unit of \"Intensity\"")
     ]]
 ) [[
     anno::display_name("Add thermal emission"),
     anno::description("Adds emission to a material, color is based on a \"color temperature\""),
+	anno::thumbnail(".thumbs/add_thermal_emission.png"),
     anno::author("NVIDIA Corporation"),
-    anno::version_number(0,1,10,0),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
-    typical_object_size(1.0),
     suitable_as_light(),
     anno::key_words(string[]("modifier","generic"))
 ]] = 
@@ -3086,11 +2915,15 @@ in material(
     geometry: base.geometry
 );
 
+//endgroup
+
+//group Emissive materials
+
 export material light_omni (
     color tint = color(1.)
     [[
         anno::display_name("Color"),
-        anno::description("The color of the Light")
+        anno::description("The color of the light")
     ]],
     uniform float intensity = 1000
     [[
@@ -3106,16 +2939,15 @@ export material light_omni (
     uniform emission_type unit = lumen_m2
     [[
         anno::display_name("Unit for emission"),
-        anno::description("The physical unit of Intensity")
+        anno::description("The physical unit of \"Intensity\"")
     ]]
 ) [[
     anno::display_name("Diffuse emission"),
     anno::description("Emissive material emitting in all directions"),
+	anno::thumbnail(".thumbs/light_omni.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("lightsource")),
-    typical_object_size(1.0),
     suitable_as_light()
 ]] = 
 let{
@@ -3135,7 +2967,7 @@ export material light_spot (
     color tint = color(1.)
     [[
         anno::display_name("Color"),
-        anno::description("The color of the Light")
+        anno::description("The color of the light")
     ]],
     uniform float intensity = 1000
     [[
@@ -3156,16 +2988,15 @@ export material light_spot (
     uniform emission_type unit = lumen_m2
     [[
         anno::display_name("Unit for emission"),
-        anno::description("The physical unit of Intensity")
+        anno::description("The physical unit of \"Intensity\"")
     ]]
 ) [[
     anno::display_name("Spotlight emission"),
     anno::description("Emissive material emitting focused in one direction"),
+	anno::thumbnail(".thumbs/light_spot.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("lightsource")),
-    typical_object_size(1.0),
     suitable_as_light()
 ]]  = 
 let{
@@ -3192,12 +3023,12 @@ export material light_ies (
     uniform light_profile profile
     [[
         anno::display_name("IES light profile data"),
-        anno::description("data to describe the distribution of the light")
+        anno::description("Data to describe the distribution of the light")
     ]],
     color tint = color(1.)
     [[
         anno::display_name("Color"),
-        anno::description("The color of the Light")
+        anno::description("The color of the light")
     ]],
     uniform float intensity = 1
     [[
@@ -3213,11 +3044,10 @@ export material light_ies (
 ) [[
     anno::display_name("IES file based emission"),
     anno::description("Emissive material emitting as described in an IES file"),
+	anno::thumbnail(".thumbs/light_ies.png"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-    anno::version_number(0,1,10,0),
     anno::key_words(string[]("lightsource")),
-    typical_object_size(1.0),
     suitable_as_light()
 ]]   = material (
     surface: material_surface (
@@ -3228,3 +3058,1033 @@ export material light_ies (
     )
 );
 
+//endgroup
+
+//group Deprecated materials
+
+//deprecated functionality===========================================================================================
+export annotation ui_position(int position);
+export annotation typical_object_size(float size); 
+export material metal(
+    color metal_color = color(.9)
+    [[
+        anno::display_name("Color"),
+        anno::description("The color of the metal")
+    ]],
+    float roughness = 0.05
+    [[
+        anno::display_name("Roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
+    ]],
+    float glossy_weight = .9
+    [[
+        anno::display_name("Reflectivity"),
+        anno::hard_range(0.0,1.),
+        anno::description("Intensity of highlights and glossy reflections and highlights")
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here")
+    ]]
+)
+[[
+    anno::display_name("Simple metal, deprecated"),
+    anno::description("A basic metallic material"),
+	anno::thumbnail(".thumbs/metal.png"),
+    anno::author("NVIDIA Corporation"),
+    anno::hidden(),
+	anno::deprecated("Use scratched_metal_v2"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","metal"))
+]]
+ = let{
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: metal_color,
+        roughness_u: roughness
+    );
+} in material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: 1.,
+            normal: normal,
+            layer: df::weighted_layer(
+                weight: glossy_weight,
+                layer: glossy_bsdf,
+                base: df::diffuse_reflection_bsdf(
+                    roughness: 0.0,
+                    tint: metal_color
+                ),
+                normal: normal
+            )
+        )
+    )
+);
+
+export material plastic(
+    color diffuse_color = color(.5)
+    [[
+        anno::display_name("Color"),
+        anno::description("The color of the material")
+    ]],
+    float roughness = 0.25
+    [[
+        anno::display_name("Roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
+    ]],
+    uniform float ior = 1.4
+    [[
+        anno::display_name("IOR"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines reflectivity")
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here")
+    ]]
+)
+[[
+    anno::display_name("Simple plastic, deprecated"),
+    anno::description("A basic dielectric, works for everything opaque that is not metallic"),
+	anno::thumbnail(".thumbs/plastic.png"),
+    anno::author("NVIDIA Corporation"),
+    anno::hidden(),
+	anno::deprecated("Use scratched_plastic_v2"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","dielectric","plastic","wood","stone"))
+]]
+ = let{
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: color(1.),
+        roughness_u: roughness
+    );
+} in material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: 1.,
+            normal: normal,
+            layer: df::fresnel_layer(
+                ior: ior,
+                layer: glossy_bsdf,
+                base: df::diffuse_reflection_bsdf(
+                    roughness: 0.0,
+                    tint: diffuse_color
+                ),
+                normal: normal
+            )
+        )
+    )
+);
+
+export material scratched_metal(
+    color metal_color = color(.9)
+    [[
+        anno::display_name("Color"),
+        anno::description("The color of the metal")
+    ]],
+    float roughness = 0.05
+    [[
+        anno::display_name("Roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
+    ]],
+    float glossy_weight = .9
+    [[
+        anno::display_name("Reflection weight"),
+        anno::hard_range(0.0,1.),
+        anno::description("Intensity of highlights and glossy reflections and highlights")
+    ]],
+    float anisotropy = 0.0
+    [[
+        anno::display_name("Anisotropy"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher values will stretch the highlight")
+    ]],
+    float anisotropy_rotation = 0.0
+    [[
+        anno::display_name("Anisotropy rotation"),
+        anno::hard_range(0.0,1.),
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees.")
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here")
+    ]]
+)
+[[
+    anno::display_name("Metal , deprecated"),
+    anno::description("A metallic material with stretched reflections"),
+	anno::thumbnail(".thumbs/scratched_metal.png"),
+    anno::hidden(),
+	anno::deprecated("Use scratched_metal_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","metal"))
+]]
+ = let{
+    base::anisotropy_return anisotropy_values = base::anisotropy_conversion(
+        roughness: roughness,
+        anisotropy: anisotropy,
+        anisotropy_rotation: anisotropy_rotation
+    );
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: metal_color,
+        roughness_u: anisotropy_values.roughness_u,
+        roughness_v: anisotropy_values.roughness_v,
+        tangent_u: anisotropy_values.tangent_u
+    );
+} in material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: 1.,
+            normal: normal,
+            layer: df::weighted_layer(
+                weight: glossy_weight,
+                layer: glossy_bsdf,
+                base: df::diffuse_reflection_bsdf(
+                    roughness: 0.0,
+                    tint: metal_color
+                ),
+                normal: normal
+            )
+        )
+    )
+);
+
+export material scratched_plastic(
+    color diffuse_color = color(.5)
+    [[
+        anno::display_name("Color"),
+        anno::description("The color of the material"),
+        anno::ui_order(1)
+    ]],
+    float roughness = 0.05
+    [[
+        anno::display_name("Roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections"),
+        anno::ui_order(2)
+    ]],
+    float anisotropy = 0.0
+    [[
+        anno::display_name("Anisotropy"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher values will stretch the highlight"),
+        anno::ui_order(4)
+    ]],
+    float anisotropy_rotation = 0.0
+    [[
+        anno::display_name("Anisotropy rotation"),
+        anno::hard_range(0.0,1.),
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees."),
+        anno::ui_order(5)
+    ]],
+    uniform float ior = 1.4
+    [[
+        anno::display_name("IOR"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines reflectivity"),
+        anno::ui_order(6)
+    ]],
+    float reflectivity = 1.
+    [[
+        anno::display_name("Reflection weight"),
+        anno::hard_range(0.0,1.),
+        anno::description("Additional Reflectivity control"),
+        anno::ui_order(3)
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here"),
+        anno::ui_order(7)
+    ]]
+)
+[[
+    anno::display_name("Plastic, deprecated"),
+    anno::description("A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights."),
+	anno::thumbnail(".thumbs/scratched_plastic.png"),
+    anno::hidden(),
+	anno::deprecated("Use scratched_plastic_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","dielectric","plastic","wood","stone"))
+]]
+ = let{
+    base::anisotropy_return anisotropy_values = base::anisotropy_conversion(
+        roughness: roughness,
+        anisotropy: anisotropy,
+        anisotropy_rotation: anisotropy_rotation
+    );
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: color(1.),
+        roughness_u: anisotropy_values.roughness_u,
+        roughness_v: anisotropy_values.roughness_v,
+        tangent_u: anisotropy_values.tangent_u
+    );
+} in material(
+    thin_walled: true,
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: 1.,
+            normal: normal,
+            layer: df::fresnel_layer(
+                ior: ior,
+                weight: reflectivity,
+                layer: glossy_bsdf,
+                base: df::diffuse_reflection_bsdf(
+                    roughness: 0.0,
+                    tint: diffuse_color
+                ),
+                normal: normal
+            )
+        )
+    )
+);
+
+export material apply_colorfalloff(
+    material base = scratched_metal(metal_color: color(1.))
+    [[
+        anno::display_name("Base material"),
+        anno::description("The material that will get a clear coating applied")
+    ]],
+    color color_0 = color(1.,0.,0.)
+    [[
+        anno::display_name("Color 1"),
+        anno::description("The color of the dust")
+    ]],
+    color color_1 = color(0.,1.,0.)
+    [[
+        anno::display_name("Color 2"),
+        anno::description("The color of the dust")
+    ]],
+    color color_2 = color(0.,0.,1.)
+    [[
+        anno::display_name("Color 3"),
+        anno::description("The color of the dust")
+    ]],
+    color color_3 = color(1.,0.,0.)
+    [[
+        anno::display_name("Color 4"),
+        anno::description("The color of the dust")
+    ]],
+    color color_4 = color(0.,1.,0.)
+    [[
+        anno::display_name("Color 5"),
+        anno::description("The color of the dust")
+    ]]
+)
+[[
+    anno::display_name("Apply a color falloff, deprecated"),
+    anno::description("Makes the color view dependent"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+	anno::thumbnail(".thumbs/apply_colorfalloff.png"),
+    anno::hidden(),
+	anno::deprecated("Use apply_colorfalloff_v2 instead"),
+    type_of_material(modifier_material),
+    anno::key_words(string[]("modifier","generic","coating"))
+]]
+ =  material(
+    surface: material_surface(
+        scattering: df::measured_curve_factor(
+            curve_values: color[](color_0,color_1,color_2,color_3,color_4),
+            base: base.surface.scattering
+        ),
+        emission: base.surface.emission
+    ),
+    volume: base.volume,
+    ior: base.ior,
+    thin_walled: base.thin_walled,
+    geometry: base.geometry
+);
+
+export material flex_material(
+    color base_color = color(.5)
+    [[
+        anno::display_name("Base color"),
+        anno::in_group("Base"),
+        anno::description("The color of the material"),
+        anno::ui_order(1)
+    ]],
+    float diffuse_roughness = 0.0
+    [[
+        anno::display_name("Diffuse roughness"),
+        anno::in_group("Base"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to a more \"powdery\" look"),
+        anno::ui_order(2)
+    ]],
+    uniform bool is_metal = false
+    [[
+        anno::display_name("Metallic material"),
+        anno::in_group("Base"),
+        anno::description("If true, reflection will be colored and independent of view direction. If false, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnel effect)."),
+        anno::ui_order(3)
+    ]],
+    float reflectivity = 1.0
+    [[
+        anno::display_name("Reflection weight"),
+        anno::in_group("Base"),
+        anno::hard_range(0.0,1.),
+        anno::description("Controls the amount of reflection"),
+        anno::ui_order(5)
+    ]],
+    float reflection_roughness = 0.1
+    [[
+        anno::display_name("Reflection roughness"),
+        anno::in_group("Base"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to more blurry reflections"),
+        anno::ui_order(4)
+    ]],
+    float anisotropy = 0.0
+    [[
+        anno::display_name("Reflection anisotropy"),
+        anno::in_group("Base"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher values will stretch the highlight"),
+        anno::ui_order(6)
+    ]],
+    float anisotropy_rotation = 0.0
+    [[
+        anno::display_name("Anisotropy rotation"),
+        anno::in_group("Base"),
+        anno::hard_range(0.0,1.),
+        anno::description("Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees."),
+        anno::ui_order(7)
+    ]],
+    float transparency = 0.0
+    [[
+        anno::display_name("Transmission weight"),
+        anno::in_group("Transmission"),
+        anno::hard_range(0.0,1.),
+        anno::description("Weights how much light passes through the object vs. its diffuse reflectivity"),
+        anno::ui_order(12)
+    ]],
+    color transmission_color = color(1.)
+    [[
+        anno::display_name("Transmission color"),
+        anno::in_group("Transmission"),
+        anno::description("Color effect for transmission independent of thickness of the object similar to stained glass"),
+        anno::ui_order(8)
+    ]],
+    uniform color volume_color = color(1.0)
+    [[
+        anno::display_name("Volume color"),
+        anno::in_group("Transmission"),
+        anno::description("If the material is not \"Thin walled\", \"Volume color\" will be reached at \"Volume reference distance\"(m)"),
+        anno::ui_order(9)
+    ]],
+    float transmission_roughness = 0.0
+    [[
+        anno::display_name("Transmission roughness"),
+        anno::in_group("Transmission"),
+        anno::hard_range(0.0,1.),
+        anno::description("higher values lead to objects seen through the material to appear blurry"),
+        anno::ui_order(11)
+    ]],
+    uniform float base_thickness = 0.1
+    [[
+        anno::display_name("Volume reference distance"),
+        anno::in_group("Transmission"),
+        anno::soft_range(0.0,10.0),
+        anno::description("If the material is not \"Thin walled\", \"Volume color\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here."),
+        anno::ui_order(10)
+    ]],
+    uniform float ior = 1.5
+    [[
+        anno::display_name("IOR"),
+        anno::in_group("Global"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines refraction in the volume. It also influences the reflectivity for materials that are not metallic."),
+        anno::ui_order(14)
+    ]],
+    uniform bool thin_walled = false
+    [[
+        anno::display_name("Thin walled"),
+        anno::in_group("Global"),
+        anno::description("Thin walled materials do not refract and do not have volume effects. Good for soap bubbles or window glass."),
+        anno::ui_order(13)
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::in_group("Global"),
+        anno::description("Attach bump or normal maps here"),
+        anno::ui_order(16)
+    ]],
+    uniform float abbe_number = 0.0
+    [[
+        anno::in_group("Global"),
+        anno::display_name("Abbe number"),
+        anno::description("Controls dispersion. A value of 0 switches dispersion off. Dispersive materials have Abbe numbers between 25 and 85."),
+        anno::soft_range(0.0,100.0),
+        anno::ui_order(15)
+    ]]
+)
+[[
+    anno::display_name("Flexible material model, deprecated"),
+    anno::description("A complex material that can be configured to a wide variety of looks"),
+	anno::thumbnail(".thumbs/flex_material.png"),
+    anno::hidden(),
+	anno::deprecated("Use flex_material_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(complex_material),
+    anno::key_words(string[]("generic","complex"))
+]]
+ = let{
+    base::anisotropy_return anisotropy_values = base::anisotropy_conversion(
+        roughness: reflection_roughness,
+        anisotropy: anisotropy,
+        anisotropy_rotation: anisotropy_rotation
+    );
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: is_metal? base_color: color(1.),
+        roughness_u: anisotropy_values.roughness_u,
+        roughness_v: anisotropy_values.roughness_v,
+        tangent_u: anisotropy_values.tangent_u
+    );
+    bsdf diffuse_bsdf = df::diffuse_reflection_bsdf(
+        tint: base_color,
+        roughness: diffuse_roughness
+    );
+    bsdf transmission_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_transmit,
+        tint: transmission_color,
+        roughness_u: transmission_roughness
+    );
+    bsdf add_transparency = df::weighted_layer(
+        weight: transparency,
+        layer: transmission_bsdf,
+        base: diffuse_bsdf,
+        normal: normal
+    );
+    bsdf add_reflection = is_metal? df::weighted_layer(
+        weight: reflectivity,
+        layer: glossy_bsdf,
+        base: add_transparency,
+        normal: normal
+    ): df::fresnel_layer(
+        ior: ior,
+        weight: reflectivity,
+        layer: glossy_bsdf,
+        base: add_transparency,
+        normal: normal
+    );
+    bsdf add_normal = df::weighted_layer(
+        normal: normal,
+        weight: 1.,
+        layer: add_reflection
+    );
+} in material(
+    thin_walled: thin_walled,
+    ior: abbe_number == 0.0?color(ior):base::abbe_number_ior(ior, abbe_number),
+    surface: material_surface(
+        scattering: add_normal
+    ),
+    volume: material_volume(
+        absorption_coefficient: (base_thickness <= 0)? color(0): math::log(volume_color) / -base_thickness
+    )
+);
+
+export material thin_glass(
+    color glass_color = color(.95)
+    [[
+        anno::display_name("Transmission color"),
+        anno::description("The color of the material")
+    ]],
+    float roughness = 0.0
+    [[
+        anno::display_name("Roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
+    ]],
+    uniform float ior = 1.4
+    [[
+        anno::display_name("IOR"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines reflectivity")
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here")
+    ]]
+)
+[[
+    anno::display_name("Thin glass, deprecated"),
+    anno::description("A basic transmissive dielectric without refraction or volume"),
+	anno::thumbnail(".thumbs/thin_glass.png"),
+    anno::hidden(),
+	anno::deprecated("Use thin_glass_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","dielectric","glass"))
+]]
+ = let{
+    bsdf glossy_reflection_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: color(1.),
+        roughness_u: roughness
+    );
+    bsdf glossy_transmission_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_transmit,
+        tint: glass_color,
+        roughness_u: roughness
+    );
+} in material(
+    thin_walled: true,
+    surface: material_surface(
+        df::fresnel_layer(
+            ior: ior,
+            normal: normal,
+            layer: glossy_reflection_bsdf,
+            base: df::weighted_layer(
+                layer: glossy_transmission_bsdf,
+                normal: normal,
+                weight: 1.
+            )
+        )
+    )
+);
+
+export material thin_translucent(
+    color surface_color = color(.95)
+    [[
+        anno::display_name("Diffuse color"),
+        anno::description("The color of the material")
+    ]],
+    color translucent_color = color(.95)
+    [[
+        anno::display_name("Translucence color"),
+        anno::description("The color of the volume of the material")
+    ]],
+    float translucency = 0.5
+    [[
+        anno::display_name("Translucence weight"),
+        anno::hard_range(0.0,1.),
+        anno::description("Fraction of the incoming light that should be visible on the backside")
+    ]],
+    float roughness = 0.0
+    [[
+        anno::display_name("Roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
+    ]],
+    uniform float ior = 1.4
+    [[
+        anno::display_name("IOR"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines reflectivity")
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here")
+    ]]
+)
+[[
+    anno::display_name("Thin translucent, deprecated"),
+    anno::description("A diffuse transmissive dielectric material"),
+	anno::thumbnail(".thumbs/thin_translucent.png"),
+    anno::hidden(),
+	anno::deprecated("Use thin_translucent_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","dielectric","leaves","paper","sheets"))
+]]
+ = let{
+    bsdf glossy_reflection_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: color(1.),
+        roughness_u: roughness
+    );
+    bsdf transmission_bsdf = df::diffuse_transmission_bsdf(
+        tint: translucent_color
+    );
+    bsdf base_bsdf = df::diffuse_reflection_bsdf(
+        tint: surface_color
+    );
+} in material(
+    thin_walled: true,
+    surface: material_surface(
+        df::fresnel_layer(
+            ior: ior,
+            normal: normal,
+            layer: glossy_reflection_bsdf,
+            base: df::weighted_layer(
+                weight: translucency,
+                normal: normal,
+                base: base_bsdf,
+                layer: df::weighted_layer(
+                    layer: transmission_bsdf,
+                    normal: normal,
+                    weight: 1.
+                )
+            )
+        )
+    )
+);
+
+export material thick_glass(
+    color transmission_color = color(1.0)
+    [[
+        anno::ui_order(1),
+        anno::display_name("Transmission color"),
+        anno::description("Colors the light entering the volume, similar to stained glass")
+    ]],
+    uniform color glass_color = color(.95)
+    [[
+        anno::ui_order(2),
+        anno::display_name("Volume color"),
+        anno::description("The color of the glass body")
+    ]],
+    float roughness = 0.0
+    [[
+        anno::ui_order(4),
+        anno::display_name("Roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections")
+    ]],
+    uniform float ior = 1.4
+    [[
+        anno::ui_order(5),
+        anno::display_name("IOR"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines reflectivity as well as amount of refraction")
+    ]],
+    uniform float base_thickness = .1
+    [[
+        anno::ui_order(3),
+        anno::display_name("Volume reference distance"),
+        anno::soft_range(0.0,10.0),
+        anno::description("\"Volume color\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here.")
+
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::ui_order(7),
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here")
+    ]],
+    uniform float abbe_number = 0.0
+    [[
+        anno::ui_order(6),
+        anno::display_name("Abbe number"),
+        anno::description("Controls dispersion. A value of 0 switches dispersion off.  Dispersive materials have Abbe numbers between 25 and 85."),
+        anno::soft_range(0.0,100.0)
+    ]]
+)
+[[
+    anno::display_name("Thick glass, deprecated"),
+    anno::description("A basic transmissive dielectric with refraction and coloring in the volume"),
+	anno::thumbnail(".thumbs/thick_glass.png"),
+    anno::hidden(),
+	anno::deprecated("Use thick_glass_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","dielectric","glass"))
+]]
+ = let{
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: color(1.),
+        roughness_u: roughness
+    );
+    bsdf glossy_bsdf_transmission = df::simple_glossy_bsdf(
+        mode: df::scatter_transmit,
+        tint: transmission_color,
+        roughness_u: roughness
+    );
+} in material(
+    thin_walled: false,
+    surface: material_surface(
+        df::weighted_layer(
+            normal: normal,
+            weight: 1.,
+            layer: df::fresnel_layer(
+                layer: glossy_bsdf,
+                base: glossy_bsdf_transmission,
+                ior: ior,
+                normal: normal
+            )
+        )
+    ),
+    volume: material_volume(
+        absorption_coefficient: (base_thickness <= 0)? color(0): math::log(glass_color) / -base_thickness
+    ),
+    ior: abbe_number == 0.0?color(ior):base::abbe_number_ior(ior, abbe_number)
+);
+
+export material thick_translucent(
+    color transmission_color = color(.95)
+    [[
+        anno::display_name("Transmission color"),
+        anno::description("The color of the material"),
+        anno::ui_order(1)
+    ]],
+    uniform color volume_color = color(.95)
+    [[
+        anno::display_name("Volume color"),
+        anno::description("The color of the volume at \"Volume reference distance\""),
+        anno::ui_order(2)
+    ]],
+    uniform float volume_scattering = 0.5
+    [[
+        anno::display_name("Volume scattering"),
+        anno::hard_range(0.0,.99999),
+        anno::description("Amount of scattering for objects at \"Volume reference distance\""),
+        anno::ui_order(3)
+    ]],
+    float roughness = 0.0
+    [[
+        anno::display_name("Reflection roughness"),
+        anno::hard_range(0.0,1.),
+        anno::description("Higher roughness values lead to bigger highlights and blurry reflections"),
+        anno::ui_order(5)
+    ]],
+    float reflectivity = 1.
+    [[
+        anno::display_name("Reflection weight"),
+        anno::hard_range(0.0,1.),
+        anno::description("Overall reflectivity of the material"),
+        anno::ui_order(6)
+    ]],
+    uniform float base_thickness = .1
+    [[
+        anno::display_name("Volume reference distance"),
+        anno::soft_range(0.0,10.0),
+        anno::description("\"Volume color\" and \"Volume scattering\" will be reached at this distance (m). Enter a typical thickness of objects made of this material here."),
+        anno::ui_order(4)
+
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here"),
+        anno::ui_order(9)
+    ]],
+    uniform float ior = 1.4
+    [[
+        anno::display_name("IOR"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines reflectivity as well as amount of refraction"),
+        anno::ui_order(7)
+    ]],
+    uniform float abbe_number = 0.0
+    [[
+        anno::display_name("Abbe number"),
+        anno::description("Controls dispersion. A value of 0 switches dispersion off.  Dispersive materials have Abbe numbers between 25 and 85."),
+        anno::soft_range(0.0,100.0),
+        anno::ui_order(8)
+    ]]
+)
+[[
+    anno::display_name("Thick translucent, deprecated"),
+    anno::description("A subsurface scattering material"),
+	anno::thumbnail(".thumbs/thick_translucent.png"),
+    anno::hidden(),
+	anno::deprecated("Use thick_translucent_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(simple_material),
+    anno::key_words(string[]("generic","dielectric","wax","milk"))
+]]
+ = let{
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        tint: color(1.),
+        roughness_u: roughness
+    );
+    bsdf transmission_bsdf = df::specular_bsdf(
+        mode: df::scatter_transmit,
+        tint: transmission_color
+    );
+
+} in material(
+    thin_walled: false,
+    surface: material_surface(
+        df::fresnel_layer(
+            normal: normal,
+            weight: reflectivity,
+            ior: ior,
+            layer: glossy_bsdf,
+            base: df::weighted_layer(
+                normal: normal,
+                weight: 1.,
+                layer: transmission_bsdf
+            )
+        )
+    ),
+    volume: material_volume(
+        scattering_coefficient: (base_thickness <= 0)? color(0): math::log(color(1.-volume_scattering)) / - base_thickness,
+        absorption_coefficient: (base_thickness <= 0)? color(0): math::log(volume_color) / -base_thickness
+    ),
+    ior: abbe_number == 0.0?color(ior):base::abbe_number_ior(ior, abbe_number)
+);
+
+export material apply_clearcoat(
+    material base = diffuse(diffuse_color: color(0.))
+    [[
+        anno::display_name("Base material"),
+        anno::description("The material that will get a clear coating applied"),
+        anno::ui_order(1)
+    ]],
+    uniform float ior = 1.6
+    [[
+        anno::display_name("IOR"),
+        anno::soft_range(1.0,4.0),
+        anno::description("Determines reflectivity of the clear coat"),
+        anno::ui_order(5)
+    ]],
+    float roughness = 0.0
+    [[
+        anno::display_name("Reflection roughness"),
+        anno::hard_range(0.0,1.0),
+        anno::description("Determines roughness of the clear coat"),
+        anno::ui_order(3)
+    ]],
+    float visibility = 1.0
+    [[
+        anno::display_name("Coat visibility"),
+        anno::hard_range(0.0,1.0),
+        anno::description("Determines visibility of the clear coat"),
+        anno::ui_order(4)
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here"),
+        anno::ui_order(6)
+    ]],
+    color coat_filter_color = color(1.)
+    [[
+        anno::display_name("Coat filter color"),
+        anno::description("For simulating coatings with colored resins that modulate the color of underlying layers"),
+        anno::ui_order(2)
+    ]]
+)
+[[
+    anno::display_name("Apply clear coating, deprecated"),
+    anno::description("Apply clear coat to an existing material"),
+    anno::author("NVIDIA Corporation"),
+	anno::thumbnail(".thumbs/apply_clearcoat.png"),
+    anno::hidden(),
+	anno::deprecated("Use apply_clearcoat_v2 instead"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(modifier_material),
+    anno::key_words(string[]("modifier","generic","coating"))
+]]
+ = let{
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        roughness_u: roughness,
+        tint: color(1.)
+    );
+    color base_tint = blend_colors(color(1.), coat_filter_color, color_layer_blend, visibility).tint;
+} in material(
+    surface: material_surface(
+        scattering: df::fresnel_layer(
+            ior: ior,
+            normal: normal,
+            weight: visibility,
+            layer: glossy_bsdf,
+            base: df::tint(tint: base_tint, base: base.surface.scattering)
+        ),
+        emission: base.surface.emission
+    ),
+    volume: base.volume,
+    ior: base.ior,
+    thin_walled: base.thin_walled,
+    geometry: base.geometry
+);
+
+export material apply_metalcoat(
+    material base = diffuse(diffuse_color: color(0.))
+    [[
+        anno::display_name("Base material"),
+        anno::description("The material that will get a metallic coating applied"),
+        anno::ui_order(1)
+    ]],
+    color metal_color = color(.95)
+    [[
+        anno::display_name("Reflection color"),
+        anno::description("The color of the metal"),
+        anno::ui_order(2)
+    ]],
+    float visibility = .3
+    [[
+        anno::display_name("Reflection weight"),
+        anno::hard_range(0.0,1.0),
+        anno::description("The opacity of the coat"),
+        anno::ui_order(4)
+    ]],
+    float roughness = 0.0
+    [[
+        anno::display_name("Reflection roughness"),
+        anno::hard_range(0.0,1.0),
+        anno::description("Determines roughness of the metal coat"),
+        anno::ui_order(3)
+    ]],
+    float3 normal = state::normal()
+    [[
+        anno::display_name("Bumps"),
+        anno::description("Attach bump or normal maps here"),
+        anno::ui_order(5)
+    ]]
+)
+[[
+    anno::display_name("Apply thin metal coating, deprecated"),
+    anno::description("Apply metal coat to an existing material"),
+	anno::thumbnail(".thumbs/apply_metalcoat.png"),
+    anno::hidden(),
+	anno::deprecated("Use apply_metalcoat_v2 instead"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT),
+    type_of_material(modifier_material),
+    anno::key_words(string[]("modifier","generic","coating"))
+]]
+ = let{
+    bsdf glossy_bsdf = df::simple_glossy_bsdf(
+        mode: df::scatter_reflect,
+        roughness_u: roughness,
+        tint: metal_color
+    );
+} in material(
+    surface: material_surface(
+        scattering: df::weighted_layer(
+            weight: visibility,
+            normal: normal,
+            layer: glossy_bsdf,
+            base: base.surface.scattering
+        ),
+        emission: base.surface.emission
+    ),
+    volume: base.volume,
+    ior: base.ior,
+    thin_walled: base.thin_walled,
+    geometry: base.geometry
+);
+
+//endgroup

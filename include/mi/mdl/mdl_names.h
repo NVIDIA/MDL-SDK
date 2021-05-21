@@ -176,6 +176,12 @@ public:
 
     /// Check if this is an incomplete array.
     virtual bool is_incomplete_array() const = 0;
+
+    /// Check if this is the "auto" type.
+    virtual bool is_auto_type() const = 0;
+
+    /// Mark this as the "auto" type.
+    virtual void set_auto_type() = 0;
 };
 
 /// A factory for creating MDL AST names.

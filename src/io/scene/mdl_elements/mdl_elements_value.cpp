@@ -442,7 +442,7 @@ mi::Size Value_struct::get_memory_consumption() const
 
 const char* Value_texture::get_file_path( DB::Transaction* transaction) const
 {
-    if (!m_value && !m_unresolved_mdl_url.empty())
+    if( !m_value && !m_unresolved_mdl_url.empty())
         return m_unresolved_mdl_url.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != TEXTURE::ID_TEXTURE)
@@ -482,7 +482,7 @@ mi::Size Value_light_profile::get_memory_consumption() const
 
 const char* Value_bsdf_measurement::get_file_path( DB::Transaction* transaction) const
 {
-    if (!m_value && !m_unresolved_mdl_url.empty())
+    if( !m_value && !m_unresolved_mdl_url.empty())
         return m_unresolved_mdl_url.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != BSDFM::ID_BSDF_MEASUREMENT)
@@ -672,14 +672,14 @@ IValue_texture* Value_factory::create_texture( const IType_texture* type, DB::Ta
 IValue_texture* Value_factory::create_texture(
     const IType_texture* type,
     DB::Tag value,
-    const char *unresolved_mdl_url,
-    const char *owner_module,
+    const char* unresolved_mdl_url,
+    const char* owner_module,
     mi::Float32 gamma) const
 {
-    if (!type)
+    if( !type)
         return nullptr;
 
-    Value_texture *tex = new Value_texture(type, value, unresolved_mdl_url, owner_module, gamma);
+    Value_texture *tex = new Value_texture( type, value, unresolved_mdl_url, owner_module, gamma);
     return tex;
 }
 
@@ -691,11 +691,11 @@ IValue_light_profile* Value_factory::create_light_profile( DB::Tag value) const
 
 IValue_light_profile* Value_factory::create_light_profile(
     DB::Tag value,
-    const char *unresolved_mdl_url,
-    const char *owner_module) const
+    const char* unresolved_mdl_url,
+    const char* owner_module) const
 {
-    mi::base::Handle<const IType_light_profile> type(m_type_factory->create_light_profile());
-    return new Value_light_profile(type.get(), value, unresolved_mdl_url, owner_module);
+    mi::base::Handle<const IType_light_profile> type( m_type_factory->create_light_profile());
+    return new Value_light_profile( type.get(), value, unresolved_mdl_url, owner_module);
 }
 
 IValue_bsdf_measurement* Value_factory::create_bsdf_measurement( DB::Tag value) const
@@ -706,11 +706,11 @@ IValue_bsdf_measurement* Value_factory::create_bsdf_measurement( DB::Tag value) 
 
 IValue_bsdf_measurement* Value_factory::create_bsdf_measurement(
     DB::Tag value,
-    const char *unresolved_mdl_url,
-    const char *owner_module) const
+    const char* unresolved_mdl_url,
+    const char* owner_module) const
 {
-    mi::base::Handle<const IType_bsdf_measurement> type(m_type_factory->create_bsdf_measurement());
-    return new Value_bsdf_measurement(type.get(), value, unresolved_mdl_url, owner_module);
+    mi::base::Handle<const IType_bsdf_measurement> type( m_type_factory->create_bsdf_measurement());
+    return new Value_bsdf_measurement( type.get(), value, unresolved_mdl_url, owner_module);
 }
 
 IValue_invalid_df* Value_factory::create_invalid_df( const IType_reference* type) const
@@ -1359,20 +1359,20 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
 {
     IValue::Kind kind = value->get_kind();
     mi::Uint32 kind_as_uint32 = kind;
-    serializer->write( kind_as_uint32);
+    SERIAL::write( serializer, kind_as_uint32);
 
     switch( kind) {
 
         case IValue::VK_BOOL: {
             mi::base::Handle<const IValue_bool> value_bool(
                 value->get_interface<IValue_bool>());
-            serializer->write( value_bool->get_value());
+            SERIAL::write( serializer, value_bool->get_value());
             return;
         }
         case IValue::VK_INT: {
             mi::base::Handle<const IValue_int> value_int(
                 value->get_interface<IValue_int>());
-            serializer->write( value_int->get_value());
+            SERIAL::write( serializer, value_int->get_value());
             return;
         }
         case IValue::VK_ENUM: {
@@ -1380,34 +1380,34 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             m_type_factory->serialize( serializer, type.get());
             mi::base::Handle<const IValue_enum> value_enum(
                 value->get_interface<IValue_enum>());
-            serializer->write( value_enum->get_index());
+            SERIAL::write( serializer, value_enum->get_index());
             return;
         }
         case IValue::VK_FLOAT: {
             mi::base::Handle<const IValue_float> value_float(
                 value->get_interface<IValue_float>());
-            serializer->write( value_float->get_value());
+            SERIAL::write( serializer, value_float->get_value());
             return;
         }
         case IValue::VK_DOUBLE: {
             mi::base::Handle<const IValue_double> value_double(
                 value->get_interface<IValue_double>());
-            serializer->write( value_double->get_value());
+            SERIAL::write( serializer, value_double->get_value());
             return;
         }
         case IValue::VK_STRING: {
             mi::base::Handle<const IValue_string_localized> value_string_localized(
                 value->get_interface<IValue_string_localized>());
             if ( value_string_localized) {
-                serializer->write( true);// this is a localized string
-                serializer->write( value_string_localized->get_value());
-                serializer->write( value_string_localized->get_original_value());
+                SERIAL::write( serializer, true);// this is a localized string
+                SERIAL::write( serializer, value_string_localized->get_value());
+                SERIAL::write( serializer, value_string_localized->get_original_value());
                 return;
             }
             mi::base::Handle<const IValue_string> value_string(
                 value->get_interface<IValue_string>());
-            serializer->write( false);// this is not a localized string
-            serializer->write( value_string->get_value());
+            SERIAL::write( serializer, false);// this is not a localized string
+            SERIAL::write( serializer, value_string->get_value());
             return;
         }
         case IValue::VK_VECTOR: {
@@ -1452,7 +1452,7 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             mi::base::Handle<const IValue_compound> value_compound(
                 value->get_interface<IValue_compound>());
             mi::Size n = value_compound->get_size();
-            serializer->write( n);
+            SERIAL::write( serializer, n);
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<const IValue> element( value_compound->get_value( i));
                 serialize( serializer, element.get());
@@ -1476,26 +1476,26 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             m_type_factory->serialize( serializer, type.get());
             mi::base::Handle<const IValue_texture> value_texture(
                 value->get_interface<IValue_texture>());
-            serializer->write( value_texture->get_value());
-            serializer->write(value_texture->get_unresolved_mdl_url());
-            serializer->write(value_texture->get_owner_module());
-            serializer->write(value_texture->get_gamma());
+            SERIAL::write( serializer, value_texture->get_value());
+            serializer->write( value_texture->get_unresolved_mdl_url());
+            serializer->write( value_texture->get_owner_module());
+            serializer->write( value_texture->get_gamma());
             return;
         }
         case IValue::VK_LIGHT_PROFILE: {
             mi::base::Handle<const IValue_light_profile> value_light_profile(
                 value->get_interface<IValue_light_profile>());
-            serializer->write( value_light_profile->get_value());
-            serializer->write(value_light_profile->get_unresolved_mdl_url());
-            serializer->write(value_light_profile->get_owner_module());
+            SERIAL::write( serializer, value_light_profile->get_value());
+            serializer->write( value_light_profile->get_unresolved_mdl_url());
+            serializer->write( value_light_profile->get_owner_module());
             return;
         }
         case IValue::VK_BSDF_MEASUREMENT: {
             mi::base::Handle<const IValue_bsdf_measurement> value_bsdf_measurement(
                 value->get_interface<IValue_bsdf_measurement>());
-            serializer->write( value_bsdf_measurement->get_value());
-            serializer->write(value_bsdf_measurement->get_unresolved_mdl_url());
-            serializer->write(value_bsdf_measurement->get_owner_module());
+            SERIAL::write( serializer, value_bsdf_measurement->get_value());
+            serializer->write( value_bsdf_measurement->get_unresolved_mdl_url());
+            serializer->write( value_bsdf_measurement->get_owner_module());
             return;
         }
         case IValue::VK_INVALID_DF: {
@@ -1513,46 +1513,46 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
 IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
 {
     mi::Uint32 kind_as_uint32;
-    deserializer->read( &kind_as_uint32);
+    SERIAL::read( deserializer, &kind_as_uint32);
     IValue::Kind kind = static_cast<IValue::Kind>( kind_as_uint32);
 
     switch( kind) {
 
         case IValue::VK_BOOL: {
             bool value;
-            deserializer->read( &value);
+            SERIAL::read( deserializer, &value);
             return create_bool( value);
         }
         case IValue::VK_INT: {
             mi::Sint32 value;
-            deserializer->read( &value);
+            SERIAL::read( deserializer, &value);
             return create_int( value);
         }
         case IValue::VK_ENUM: {
             mi::base::Handle<const IType_enum> type(
                 m_type_factory->deserialize<IType_enum>( deserializer));
             mi::Size index;
-            deserializer->read( &index);
+            SERIAL::read( deserializer, &index);
             return create_enum( type.get(), index);
         }
         case IValue::VK_FLOAT: {
             mi::Float32 value;
-            deserializer->read( &value);
+            SERIAL::read( deserializer, &value);
             return create_float( value);
         }
         case IValue::VK_DOUBLE: {
             mi::Float64 value;
-            deserializer->read( &value);
+            SERIAL::read( deserializer, &value);
             return create_double( value);
         }
         case IValue::VK_STRING: {
             bool localized;
-            deserializer->read( &localized);
+            SERIAL::read( deserializer, &localized);
             char* value;
-            deserializer->read(&value);
+            deserializer->read( &value);
             if( localized) {
                 char* value_original;
-                deserializer->read( &value_original);
+                SERIAL::read( deserializer, &value_original);
                 IValue_string* result = create_string_localized( value, value_original);
                 deserializer->release( value);
                 deserializer->release( value_original);
@@ -1600,7 +1600,7 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
                 m_type_factory->deserialize<IType_array>( deserializer));
             IValue_array* result = create_array( type.get());
             mi::Size n;
-            deserializer->read( &n);
+            SERIAL::read( deserializer, &n);
             result->set_size( n); //-V522 PVS
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<IValue> element( deserialize( deserializer));
@@ -1623,35 +1623,35 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             mi::base::Handle<const IType_texture> type(
                 m_type_factory->deserialize<IType_texture>( deserializer));
             DB::Tag value;
-            deserializer->read( &value);
+            SERIAL::read( deserializer, &value);
             std::string unresoved_resource_url;
-            deserializer->read( &unresoved_resource_url);
+            SERIAL::read( deserializer, &unresoved_resource_url);
             std::string owner_module;
-            deserializer->read( &owner_module);
+            SERIAL::read( deserializer, &owner_module);
             mi::Float32 gamma;
-            deserializer->read( &gamma);
+            SERIAL::read( deserializer, &gamma);
             IValue* result = create_texture(
                 type.get(),value, unresoved_resource_url.c_str(), owner_module.c_str(), gamma);
             return result;
         }
         case IValue::VK_LIGHT_PROFILE: {
             DB::Tag value;
-            deserializer->read( &value);
+            SERIAL::read( deserializer, &value);
             std::string unresoved_resource_url;
-            deserializer->read( &unresoved_resource_url);
+            SERIAL::read( deserializer, &unresoved_resource_url);
             std::string owner_module;
-            deserializer->read( &owner_module);
+            SERIAL::read( deserializer, &owner_module);
             IValue* result = create_light_profile(
                 value, unresoved_resource_url.c_str(), owner_module.c_str());
             return result;
         }
         case IValue::VK_BSDF_MEASUREMENT: {
             DB::Tag value;
-            deserializer->read( &value);
+            SERIAL::read( deserializer, &value);
             std::string unresoved_resource_url;
-            deserializer->read( &unresoved_resource_url);
+            SERIAL::read( deserializer, &unresoved_resource_url);
             std::string owner_module;
-            deserializer->read( &owner_module);
+            SERIAL::read( deserializer, &owner_module);
             IValue* result = create_bsdf_measurement(
                 value, unresoved_resource_url.c_str(), owner_module.c_str());
             return result;
@@ -1678,7 +1678,7 @@ void Value_factory::serialize_list(
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_values.size();
-    serializer->write( size);
+    SERIAL::write( serializer, size);
     for( mi::Size i = 0; i < size; ++i)
         serialize( serializer, list_impl->m_values[i].get());
 }
@@ -1691,7 +1691,7 @@ IValue_list* Value_factory::deserialize_list( SERIAL::Deserializer* deserializer
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;
-    deserializer->read( &size);
+    SERIAL::read( deserializer, &size);
     list_impl->m_values.resize( size);
     for( mi::Size i = 0; i < size; ++i)
         list_impl->m_values[i] = deserialize( deserializer);

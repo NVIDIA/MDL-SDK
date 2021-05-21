@@ -80,6 +80,7 @@ struct Df_cuda_material
         , emission_intensity(make_invalid())
         , volume_absorption(make_invalid())
         , thin_walled(make_invalid())
+        , cutout_opacity(make_invalid())
         , contains_hair_bsdf(0)
     {
     }
@@ -107,6 +108,9 @@ struct Df_cuda_material
 
     // pair of target_code_index and function_index for thin_walled
     uint2 thin_walled;
+
+    // pair of target_code_index and function_index for cutout_opacity
+    uint2 cutout_opacity;
 
     // maps 'material tags' to 'global tags' for the surface scattering distribution function
     unsigned int bsdf_mtag_to_gtag_map[MAX_DF_HANDLES];

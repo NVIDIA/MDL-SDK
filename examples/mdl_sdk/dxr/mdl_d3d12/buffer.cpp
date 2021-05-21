@@ -58,10 +58,12 @@ Buffer::Buffer(Base_application* app, size_t size_in_byte, std::string debug_nam
 
 
     // Create a committed resource for the GPU resource in a default heap.
+    upload_heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
+    upload_buffer_desc = CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte, D3D12_RESOURCE_FLAG_NONE);
     log_on_failure(m_app->get_device()->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        &upload_heap_properties,
         D3D12_HEAP_FLAG_NONE,
-        &CD3DX12_RESOURCE_DESC::Buffer(m_size_in_byte, D3D12_RESOURCE_FLAG_NONE),
+        &upload_buffer_desc,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
         nullptr,
         IID_PPV_ARGS(&m_resource)),
@@ -88,16 +90,16 @@ bool Buffer::set_data(const void* data, size_t size_in_byte)
 
 bool Buffer::upload(D3DCommandList* command_list)
 {
-    command_list->ResourceBarrier(
-        1, &CD3DX12_RESOURCE_BARRIER::Transition(m_resource.Get(),
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
+    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_resource.Get(),
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+    command_list->ResourceBarrier(1, &resource_barrier);
 
     // copy to actual resource
     command_list->CopyResource(m_resource.Get(), m_upload_resource.Get());
 
-    command_list->ResourceBarrier(
-        1, &CD3DX12_RESOURCE_BARRIER::Transition(m_resource.Get(),
-        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+    resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_resource.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    command_list->ResourceBarrier(1, &resource_barrier);
     return true;
 }
 

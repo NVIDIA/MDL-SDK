@@ -254,10 +254,11 @@ public:
     virtual void set_value( const char* value) = 0;
 };
 
-/// A value of type string which can be used to obtain the original, non-localized value of a localized string.
+/// A value of type string which can be used to obtain the original, non-localized value of a
+/// localized string.
 class IValue_string_localized : public
-    mi::base::Interface_declare<0x1fe80d3d, 0xe79e, 0x4bdb, 0xb6, 0x30, 0xe3, 0x36, 0x31, 0xa4, 0x1e, 0x39,
-    neuraylib::IValue_string>
+    mi::base::Interface_declare<0x1fe80d3d,0xe79e,0x4bdb,0xb6,0x30,0xe3,0x36,0x31,0xa4,0x1e,0x39,
+                                neuraylib::IValue_string>
 {
 public:
     /// Returns the original value of a localized string.

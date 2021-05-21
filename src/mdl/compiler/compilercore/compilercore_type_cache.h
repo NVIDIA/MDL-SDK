@@ -47,7 +47,7 @@ public:
 
     Type_cache(Type_factory &tf)
         : error_type(tf.create_error())
-        , incomplete_type(tf.create_incomplete())
+        , auto_type(tf.create_auto())
         , bool_type(tf.create_bool())
         , bool2_type(tf.create_vector(bool_type, 2))
         , bool3_type(tf.create_vector(bool_type, 3))
@@ -190,7 +190,7 @@ public:
 
 public:
     IType_error const            * const error_type;
-    IType_incomplete const       * const incomplete_type;
+    IType_auto const       * const auto_type;
     IType_bool const             * const bool_type;
     IType_vector const           * const bool2_type;
     IType_vector const           * const bool3_type;

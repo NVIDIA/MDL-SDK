@@ -114,6 +114,7 @@ PREDEF_SYM(sym_dot, SYM_DOT, ".")
 PREDEF_SYM(sym_dotdot, SYM_DOTDOT, "..")
 
 // type names
+PREDEF_SYM(sym_auto, SYM_TYPE_AUTO, "auto")
 PREDEF_SYM(sym_bool, SYM_TYPE_BOOL, "bool")
 PREDEF_SYM(sym_bool2, SYM_TYPE_BOOL2, "bool2")
 PREDEF_SYM(sym_bool3, SYM_TYPE_BOOL3, "bool3")
@@ -193,6 +194,8 @@ PREDEF_SYM(sym_field_rounded_edges_radius, SYM_FIELD_ROUNDED_EDGES_RADIUS, "roun
 PREDEF_SYM(sym_field_scattering, SYM_FIELD_SCATTERING, "scattering")
 PREDEF_SYM(sym_field_scaterring_coefficient,
     SYM_FIELD_SCATTERING_COEFFICIENT, "scattering_coefficient")
+PREDEF_SYM(sym_field_emission_intensity,
+    SYM_FIELD_EMISSION_INTENSITY, "emission_intensity")
 PREDEF_SYM(sym_field_surface, SYM_FIELD_SURFACE, "surface")
 PREDEF_SYM(sym_field_thin_walled, SYM_FIELD_THIN_WALLED, "thin_walled")
 PREDEF_SYM(sym_field_volume, SYM_FIELD_VOLUME, "volume")
@@ -239,6 +242,7 @@ PREDEF_SYM(sym_param_col1, SYM_PARAM_COL1, "col1")
 PREDEF_SYM(sym_param_col2, SYM_PARAM_COL2, "col2")
 PREDEF_SYM(sym_param_col3, SYM_PARAM_COL3, "col3")
 PREDEF_SYM(sym_param_gamma_mode, SYM_PARAM_GAMMA, "gamma")
+PREDEF_SYM(sym_param_selector, SYM_PARAM_SELECTOR, "selector")
 
 PREDEF_SYM(sym_param_big_n, SYM_PARAM_BIG_N, "N")
 

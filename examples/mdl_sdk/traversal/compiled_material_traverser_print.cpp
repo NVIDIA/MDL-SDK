@@ -51,8 +51,10 @@ static bool is_call_like_operator(mi::neuraylib::IFunction_definition::Semantics
 
 Compiled_material_traverser_print::Context::Context(
     mi::neuraylib::ITransaction* transaction, 
+    mi::neuraylib::IMdl_factory* mdl_factory,
     bool keep_structure)
     : m_transaction(transaction)
+    , m_mdl_factory(make_handle_dup(mdl_factory))
     , m_keep_compiled_material_structure(keep_structure)
 {
     reset();
@@ -79,6 +81,13 @@ void Compiled_material_traverser_print::Context::reset()
 }
 
 
+std::string Compiled_material_traverser_print::Context::decode_name(const std::string& name)
+{
+    mi::base::Handle<const mi::IString> decoded_name(m_mdl_factory->decode_name(name.c_str()));
+    return decoded_name->get_c_str();
+}
+
+
 std::string Compiled_material_traverser_print::print_mdl(
     const mi::neuraylib::ICompiled_material* material,
     Context& context,
@@ -93,7 +102,7 @@ std::string Compiled_material_traverser_print::print_mdl(
 
     // version string
     std::stringstream output;
-    output << "mdl 1.6;\n\n";
+    output << "mdl 1.7;\n\n";
 
     // add required includes
     size_t last_sep_pos = std::string::npos;
@@ -107,20 +116,20 @@ std::string Compiled_material_traverser_print::print_mdl(
         {
             last_module = it->substr(0, current_sep_pos);
             last_sep_pos = current_sep_pos;
-            output << "// import " << last_module << "::*;\n";
+            output << "// import " << context.decode_name(last_module) << "::*;\n";
             context.m_used_modules.insert(last_module);
         }
         if (current_sep_pos == 0) // show imports of the base namespace (just to list them up)
             output << "//* ";
 
-        output << "import " << it->c_str() << ";\n";
+        output << "import " << context.decode_name(it->c_str()) << ";\n";
     }
 
     // ... and other information not directly part of the compiled material.
     // Here, we assume that all used functions defined in the original module are exported, too.
     output << "// import original package\n";
-    output << "import " << original_module_name << "::*;\n\n";
-    output << "export material " << output_material_name << "";
+    output << "import " << context.decode_name(original_module_name) << "::*;\n\n";
+    output << "export material " << context.decode_name(output_material_name) << "";
 
     // append the result of the traversal
     output << context.m_print.str();
@@ -254,7 +263,7 @@ void Compiled_material_traverser_print::visit_begin(
                     get_semantic();
 
                 std::string module_name = func_def->get_mdl_module_name();
-                bool is_builtins = module_name.substr(0, 12) == "::<builtins>";
+                bool is_builtins = module_name.substr(0, 16) == "::%3Cbuiltins%3E";
 
                 std::string function_name;
                 if (is_builtins)

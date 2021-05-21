@@ -124,6 +124,9 @@ struct Lightprofile
         cudaTextureObject_t eval_data = 0,
         float               *cdf_data = nullptr)
     : angular_resolution(angular_resolution)
+    , inv_angular_resolution(make_float2(
+        1.0f / float(angular_resolution.x),
+        1.0f / float(angular_resolution.y)))
     , theta_phi_start(theta_phi_start)
     , theta_phi_delta(theta_phi_delta)
         , theta_phi_inv_delta(make_float2(0.0f, 0.0f))
@@ -137,6 +140,7 @@ struct Lightprofile
     }
 
     uint2           angular_resolution;     // angular resolution of the grid
+    float2          inv_angular_resolution; // inverse angular resolution of the grid
     float2          theta_phi_start;        // start of the grid
     float2          theta_phi_delta;        // angular step size
     float2          theta_phi_inv_delta;    // inverse step size
@@ -659,7 +663,7 @@ void Material_gpu_context::copy_canvas_to_cuda_array(
     cudaArray_t device_array,
     mi::neuraylib::ICanvas const *canvas)
 {
-    mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile());
     mi::Float32 const *data = static_cast<mi::Float32 const *>(tile->get_data());
     check_cuda_success(cudaMemcpy2DToArray(
         device_array, 0, 0, data,
@@ -752,7 +756,7 @@ bool Material_gpu_context::prepare_texture(
         // Copy the image data of all layers (the layers are not consecutive in memory)
         for (mi::Uint32 layer = 0; layer < tex_layers; ++layer) {
             mi::base::Handle<const mi::neuraylib::ITile> tile(
-                canvas->get_tile(0, 0, layer));
+                canvas->get_tile(layer));
             float const *data = static_cast<float const *>(tile->get_data());
 
             copy_params.srcPtr = make_cudaPitchedPtr(
@@ -1375,7 +1379,7 @@ public:
     // If class_compilation is true, the material will use class compilation.
     bool add_material_subexpr(
         const std::string& qualified_module_name,
-        const std::string& material_simple_name,
+        const std::string& material_db_name,
         const char* path,
         const char* fname,
         bool class_compilation=false);
@@ -1386,7 +1390,7 @@ public:
     // If class_compilation is true, the material will use class compilation.
     bool add_material_df(
         const std::string& qualified_module_name,
-        const std::string& material_simple_name,
+        const std::string& material_db_name,
         const char* path,
         const char* base_fname,
         bool class_compilation=false);
@@ -1400,7 +1404,7 @@ public:
     // e.g., the \c argument_block_index and the \c function_index.
     bool add_material(
         const std::string& qualified_module_name,
-        const std::string& material_simple_name,
+        const std::string& material_db_name,
         mi::neuraylib::Target_function_description* function_descriptions,
         mi::Size description_count,
         bool class_compilation);
@@ -1443,7 +1447,7 @@ private:
     // Creates an instance of the given material.
     mi::neuraylib::IMaterial_instance* create_material_instance(
         const std::string& qualified_module_name,
-        const std::string& material_simple_name);
+        const std::string& material_db_name);
 
     // Compiles the given material instance in the given compilation modes.
     mi::neuraylib::ICompiled_material* compile_material_instance(
@@ -1555,37 +1559,22 @@ std::string Material_compiler::load_module(const std::string& mdl_module_name)
 // Creates an instance of the given material.
 mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
     const std::string& qualified_module_name,
-    const std::string& material_simple_name)
+    const std::string& material_db_name)
 {
-    // Load mdl module.
-    m_mdl_impexp_api->load_module(
-        m_transaction.get(), qualified_module_name.c_str(), m_context.get());
-    if (!print_messages(m_context.get())) {
-        // module has errors
-        return nullptr;
-    }
-
-    // get db name
-    mi::base::Handle<const mi::IString> module_db_name(
-        m_mdl_factory->get_db_module_name(qualified_module_name.c_str()));
-
-    std::string material_db_name =
-        std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
-
     // Create a material instance from the material definition
     // with the default arguments.
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
         m_transaction->access<mi::neuraylib::IMaterial_definition>(
             material_db_name.c_str()));
     if (!material_definition) {
-        // material with given name does not exists
+        // material with given name does not exist
         print_message(
             mi::base::details::MESSAGE_SEVERITY_ERROR,
             mi::neuraylib::IMessage::MSG_COMPILER_DAG,
             (
                 "Material '" +
-                material_simple_name +
-                "' does not exists in '" +
+                material_db_name +
+                "' does not exist in '" +
                 qualified_module_name + "'").c_str());
         return nullptr;
     }
@@ -1640,7 +1629,7 @@ mi::base::Handle<const mi::neuraylib::ITarget_code> Material_compiler::generate_
 // fname is the function name in the generated code.
 bool Material_compiler::add_material_subexpr(
     const std::string& qualified_module_name,
-    const std::string& material_simple_name,
+    const std::string& material_db_name,
     const char* path,
     const char* fname,
     bool class_compilation)
@@ -1648,7 +1637,7 @@ bool Material_compiler::add_material_subexpr(
     mi::neuraylib::Target_function_description desc;
     desc.path = path;
     desc.base_fname = fname;
-    add_material(qualified_module_name, material_simple_name, &desc, 1, class_compilation);
+    add_material(qualified_module_name, material_db_name, &desc, 1, class_compilation);
     return desc.return_code == 0;
 }
 
@@ -1657,7 +1646,7 @@ bool Material_compiler::add_material_subexpr(
 // fname is the function name in the generated code.
 bool Material_compiler::add_material_df(
     const std::string& qualified_module_name,
-    const std::string& material_simple_name,
+    const std::string& material_db_name,
     const char* path,
     const char* base_fname,
     bool class_compilation)
@@ -1665,7 +1654,7 @@ bool Material_compiler::add_material_df(
     mi::neuraylib::Target_function_description desc;
     desc.path = path;
     desc.base_fname = base_fname;
-    add_material(qualified_module_name, material_simple_name, &desc, 1, class_compilation);
+    add_material(qualified_module_name, material_db_name, &desc, 1, class_compilation);
     return desc.return_code == 0;
 }
 
@@ -1678,7 +1667,7 @@ bool Material_compiler::add_material_df(
 // e.g., the \c argument_block_index and the \c function_index.
 bool Material_compiler::add_material(
     const std::string& qualified_module_name,
-    const std::string& material_simple_name,
+    const std::string& material_db_name,
     mi::neuraylib::Target_function_description* function_descriptions,
     mi::Size description_count,
     bool class_compilation)
@@ -1688,7 +1677,7 @@ bool Material_compiler::add_material(
 
     // Load the given module and create a material instance
     mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        create_material_instance(qualified_module_name, material_simple_name));
+        create_material_instance(qualified_module_name, material_db_name));
     if (!material_instance)
         return false;
 

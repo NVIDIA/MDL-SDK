@@ -171,8 +171,15 @@ COMPILER mdl
     // Skip a type.
     bool skip_type(Token *&x)
     {
-        if ((x->kind == _UNIFORM) || (x->kind == _VARYING))
+        if ((x->kind == _UNIFORM) || (x->kind == _VARYING)) {
             x = scanner->Peek();
+        }
+
+        if (x->kind == _AUTO) {
+            x = scanner->Peek();
+            return true;
+        }
+
         switch (x->kind) {
         case _SCOPE:
             x = scanner->Peek();
@@ -535,6 +542,12 @@ COMPILER mdl
         return type_name;
     }
 
+    // Create an "auto" typename
+    IType_name *auto_type(Token *tok)
+    {
+        return to_type(NULL, tok);
+    }
+
     // Create a reference from a type name.
     IExpression_reference const *to_reference(
         IType_name const *type_name,
@@ -665,6 +678,29 @@ COMPILER mdl
         }
         return type;
     }
+
+    /// RAII-like check.
+    class Checker_type {
+    public:
+        /// Constructor.
+        Checker_type(
+            Parser     &parser,
+            IType_name *&name)
+        : m_parser(parser)
+        , m_name(name)
+        {
+            name = ERR_TYPE;
+        }
+
+        /// Destructor.
+        ~Checker_type() {
+            m_name = m_parser.check_type(m_name);
+        }
+
+    private:
+        Parser     &m_parser;
+        IType_name *&m_name;
+    };
 
     // Check an expression.
     IExpression const *check_expr(IExpression const *expr) {
@@ -1210,6 +1246,8 @@ TOKENS
 
     HAIR_BSDF = "hair_bsdf" . // MDL 1.5+
 
+    AUTO = "auto" . // MDL 1.7+
+
 // The following token is not a reserved MDL keyword, but ensures that the R_RESERVED token
 // is defined. The reserved set is dynamic and set depending on the MDL version.
 
@@ -1543,7 +1581,10 @@ frequency_qualifier<Qualifier &qualifier,int &sl,int &sc>
     .
 
 relative_type<IType_name *prefix,IType_name *&name>
-    = "bool"                                (. name = to_type(prefix, t); .)
+    =
+    (. Checker_type checker(*this, name); .)
+
+    ( "bool"                                (. name = to_type(prefix, t); .)
     | "bool2"                               (. name = to_type(prefix, t); .)
     | "bool3"                               (. name = to_type(prefix, t); .)
     | "bool4"                               (. name = to_type(prefix, t); .)
@@ -1616,28 +1657,31 @@ relative_type<IType_name *prefix,IType_name *&name>
         [
             "::"                            (. IType_name *name_cont = ERR_TYPE; .)
             relative_type<name,name_cont>
-                                            (.  name = check_type(name_cont); .)
         ]
+    )
     .
 
 simple_type<IType_name *prefix,IType_name *&name>
     =
-                                            (. bool is_absolute = false; .)
+                                            (.
+                                               Checker_type checker(*this, name);
+                                               bool is_absolute = false;
+                                            .)
         [
             "::"
                                             (. is_absolute = true; .)
         ]
         relative_type<prefix,name>
                                             (.
-                                                name = check_type(name);
-                                                if (is_absolute)
+                                                if (is_absolute) {
                                                     name->set_absolute();
+                                                }
                                             .)
     .
 
 array_type<IType_name *&name>
-    =
-        simple_type<0,name>                         (. name = check_type(name); .)
+    =                                               (. Checker_type checker(*this, name); .)
+        simple_type<0,name>
         [                                           (. ISimple_name const *size_name = NULL; .)
             '['                                     (. name->set_incomplete_array(); .)
                 [                                   (. IExpression const *exp = NULL; .)
@@ -1656,11 +1700,17 @@ array_type<IType_name *&name>
 type<IType_name *&name>
     =
                                                     (.
+                                                        Checker_type checker(*this, name);
+
                                                         Qualifier qualifier = FQ_NONE;
                                                         int sl = 0, sc = 0;
                                                     .)
         [ frequency_qualifier<qualifier,sl,sc> ]
-        array_type<name>
+        (
+            array_type<name>
+        |
+            "auto"                                  (.  name = auto_type(t); .)
+        )
                                                     (.
                                                         name = check_type(name);
                                                         name->set_qualifier(qualifier);
@@ -2862,7 +2912,8 @@ primary_expression<IExpression const *&exp>
         simple_type<0,type_name>            (. bool is_array_con = false; .)
         [
           IF(is_array_constructor())
-            '[' ']'                         (. is_array_con = true; .)
+            '[' ']'                         (. type_name->set_incomplete_array();
+                                               is_array_con = true; .)
         ]                                                                           /// @break
                                             (. exp = to_reference(type_name, is_array_con); .)
     |

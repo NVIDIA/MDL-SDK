@@ -82,7 +82,7 @@ public:
     // Implementation of the virtual database interface
     void prepare_close();
     void close();
-    void garbage_collection();
+    void garbage_collection(int /*priority*/);
     DB::Scope* get_global_scope();
     DB::Scope* lookup_scope(DB::Scope_id id);
     DB::Scope* lookup_scope(const std::string& name);

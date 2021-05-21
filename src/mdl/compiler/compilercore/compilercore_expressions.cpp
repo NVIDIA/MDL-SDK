@@ -913,13 +913,19 @@ public:
                                     values[i] =
                                         module->get_value_factory()->create_enum(e_type, 0);
                                 } else {
-                                    failed = true;
-                                    break;
+                                    IValue const *v =
+                                        module->get_value_factory()->create_zero(f_type);
+                                    if (is<IValue_bad>(v)) {
+                                        failed = true;
+                                        break;
+                                    }
+                                    values[i] = v;
                                 }
                             }
 
-                            if (!failed)
+                            if (!failed) {
                                 return factory->create_compound(c_type, values.data(), n_fields);
+                            }
                         }
                         // cannot fold
                         break;
@@ -1042,15 +1048,40 @@ public:
                         IExpression const *expr1 = get_argument(1)->get_argument_expr();
                         IValue const      *val1  = expr1->fold(module, factory, handler);
 
-                        if (is<IValue_string>(val0) && is<IValue_enum>(val1)) {
-                            IValue_string const *sval  = cast<IValue_string>(val0);
-                            IValue_enum const   *gamma = cast<IValue_enum>(val1);
-                            return factory->create_texture(
-                                tex_type,
-                                sval->get_value(),
-                                IValue_texture::gamma_mode(gamma->get_value()),
-                                /*tag_value=*/0,
-                                /*tag_version=*/0);
+                        if (ftype->get_parameter_count() == 3) {
+                            // MDL 1.7+ constructor has selector argument
+                            IExpression const *expr2 = get_argument(2)->get_argument_expr();
+                            IValue const      *val2  = expr2->fold(module, factory, handler);
+
+                            if (is<IValue_string>(val0) &&
+                                is<IValue_enum>(val1) &&
+                                is<IValue_string>(val2))
+                            {
+                                IValue_string const *sval  = cast<IValue_string>(val0);
+                                IValue_enum const   *gamma = cast<IValue_enum>(val1);
+                                IValue_string const *sel   = cast<IValue_string>(val2);
+                                return factory->create_texture(
+                                    tex_type,
+                                    sval->get_value(),
+                                    IValue_texture::gamma_mode(gamma->get_value()),
+                                    sel->get_value(),
+                                    /*tag_value=*/0,
+                                    /*tag_version=*/0);
+                            }
+                        } else {
+                            // pre MDL 1.7
+                            if (is<IValue_string>(val0) && is<IValue_enum>(val1)) {
+                                IValue_string const *sval = cast<IValue_string>(val0);
+                                IValue_enum const *gamma = cast<IValue_enum>(val1);
+
+                                return factory->create_texture(
+                                    tex_type,
+                                    sval->get_value(),
+                                    IValue_texture::gamma_mode(gamma->get_value()),
+                                    /*selector=*/"",
+                                    /*tag_value=*/0,
+                                    /*tag_version=*/0);
+                            }
                         }
                     }
 
@@ -1120,15 +1151,6 @@ public:
     : Base(arena)
     , m_callee(callee)
     {
-    }
-
-    /// Check if the given compound type has hidden fields.
-    static bool have_hidden_fields(IType_compound const *c_type) {
-        if (IType_struct const *s_type = as<IType_struct>(c_type)) {
-            // currently, only the material emission type has hidden fields
-            return s_type->get_predefined_id() == IType_struct::SID_MATERIAL_EMISSION;
-        }
-        return false;
     }
 
 private:

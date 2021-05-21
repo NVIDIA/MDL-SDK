@@ -130,6 +130,9 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - bool \b backplate_mesh \n
 ///   Only effective if the backplate function or backplate color is set. The object is then
 ///   treated as a 3D-environment/backplate.
+/// - #mi::IRef \b backplate_mesh_function \n
+///   Reference to a texturing function (#mi::neuraylib::IFunction_call) that may be used to
+///   override the main camera backplate for a backplate mesh
 /// - bool \b movable \n
 ///   The object may be subject to frequent transformation changes. Render modes might take that
 ///   hint into account and use special data structures to speed up such transformation changes.
@@ -161,6 +164,9 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - bool \b shadow_terminator_offset \n
 ///   Controls the automatic shadow terminator handling.
 ///   See the [:ipmlink physically_plausible_scene_setup Tessellating curved surfaces] section for details.
+/// - #mi::Sint8 \b volume_priority \n
+///   A priority value that drives the decision which object's volumetric material properties take
+///   precedence in case of overlap. The default is 0, vacuum corresponds to -128.
 /// \par
 /// The following attribute is only meaningful for instances of #mi::neuraylib::ITriangle_mesh,
 /// #mi::neuraylib::IPolygon_mesh, #mi::neuraylib::ISubdivision_surface,

@@ -220,8 +220,8 @@ const mi::IArray* Module_impl::get_function_overloads(
         paramter_types_vector.push_back( element->get_c_str());
     }
 
-    const std::vector<std::string>& tmp =
-        get_db_element()->get_function_overloads_by_signature(
+    const std::vector<std::string>& tmp
+        = get_db_element()->get_function_overloads_by_signature(
             name, paramter_types_vector);
 
     mi::base::Handle<mi::IDynamic_array> result(
@@ -244,7 +244,7 @@ mi::Size Module_impl::get_resources_count() const
 
 const mi::neuraylib::IType_resource* Module_impl::get_resource_type(mi::Size index) const
 {
-    mi::base::Handle<const MI::MDL::IType_resource> int_resource_type(
+    mi::base::Handle<const MDL::IType_resource> int_resource_type(
         get_db_element()->get_resource_type(index));
 
     mi::base::Handle<Type_factory> tf(get_transaction()->get_type_factory());

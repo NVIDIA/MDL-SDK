@@ -84,8 +84,7 @@ void Serializer_marker_helper::update_checksum(const char* buffer, size_t size)
 
 void Serializer_marker_helper::set_extension_marker(Serializer* serializer)
 {
-    Uint32 marker = EXTENSION_MARKER;
-    serializer->write(marker);
+    SERIAL::write(serializer,(Uint32)EXTENSION_MARKER);
 }
 
 void Serializer_marker_helper::serialize_with_end_marker(Serializer* serializer,
@@ -95,11 +94,9 @@ void Serializer_marker_helper::serialize_with_end_marker(Serializer* serializer,
 
     serializable->serialize(serializer);
 
-    Uint32 marker = END_MARKER;
-    serializer->write(marker);
+    SERIAL::write(serializer,(Uint32)END_MARKER);
+    SERIAL::write(serializer,m_checksum.get());
 
-    mi::Uint32 crc = m_checksum.get();
-    serializer->write(crc);
     m_checksum.end();
 }
 
@@ -110,15 +107,14 @@ void Serializer_marker_helper::serialize_with_end_marker(mi::neuraylib::ISeriali
 
     serializable->serialize(serializer);
 
-    Uint32 marker = END_MARKER;
-    serializer->write(&marker);
+    SERIAL::write(serializer,(Uint32)END_MARKER);
+    SERIAL::write(serializer,m_checksum.get());
 
-    mi::Uint32 crc = m_checksum.get();
-    serializer->write(&crc);
     m_checksum.end();
 }
 
 /// Internal wrapper for treating IDeserializer and Deserializer objetcs the same.
+/// TODO remove
 class Deserializer_wrapper
 {
 public:

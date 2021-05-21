@@ -126,22 +126,23 @@ bool HLSLWriterPass::runOnModule(llvm::Module &M)
     // create definitions for all user defined functions, so we can create a call graph
     // on the fly
     for (llvm::Function &func : M.functions()) {
-        if (func.isDeclaration())
+        if (func.isDeclaration()) {
             continue;
-
+        }
         create_definition(&func);
     }
 
     for (llvm::Function &func : M.functions()) {
-        if (func.isDeclaration())
+        if (func.isDeclaration()) {
             continue;
-
+        }
         llvm::hlsl::ASTFunction const *ast_func = ast_compute_pass.getASTFunction(&func);
         translate_function(ast_func);
     }
 
     MDL_ASSERT(m_def_tab.get_curr_scope() == m_def_tab.get_global_scope() && "Scope error");
 
+    /// Helper class create HLSL AST declaration in post order from visiting a dependency graph.
     class Enter_func_decl : public DG_visitor {
     public:
         /// Pre-visit a node.
@@ -153,11 +154,14 @@ bool HLSLWriterPass::runOnModule(llvm::Module &M)
             hlsl::Definition  const *def  = node->get_definition();
             hlsl::Declaration       *decl = def->get_declaration();
 
-            if (decl != nullptr)
+            if (decl != nullptr) {
                 m_unit->add_decl(decl);
+            }
         }
 
         /// Constructor.
+        ///
+        /// \param unit  the HLSL compilation unit where deslaration will be added
         Enter_func_decl(hlsl::Compilation_unit *unit) : m_unit(unit) {}
 
     private:
@@ -258,8 +262,9 @@ hlsl::Def_function *HLSLWriterPass::create_definition(llvm::Function *func)
         hlsl::Type *param_type    = convert_type(arg_llvm_type);
 
         // skip void typed parameters
-        if (hlsl::is<hlsl::Type_void>(param_type))
+        if (hlsl::is<hlsl::Type_void>(param_type)) {
             continue;
+        }
 
         hlsl::Type_function::Parameter::Modifier param_mod = hlsl::Type_function::Parameter::PM_IN;
 
@@ -295,8 +300,9 @@ hlsl::Def_function *HLSLWriterPass::create_definition(llvm::Function *func)
 hlsl::Def_function *HLSLWriterPass::get_definition(llvm::Function *func)
 {
     Function_map::iterator it = m_llvm_function_map.find(func);
-    if (it != m_llvm_function_map.end())
+    if (it != m_llvm_function_map.end()) {
         return it->second;
+    }
     return nullptr;
 }
 
@@ -320,8 +326,9 @@ void HLSLWriterPass::translate_function(llvm::hlsl::ASTFunction const *ast_func)
     {
         // return type was converted into out parameter
         hlsl::Type_function::Parameter *param = func_type->get_parameter(0);
-        if (param->get_modifier() == hlsl::Type_function::Parameter::PM_OUT)
+        if (param->get_modifier() == hlsl::Type_function::Parameter::PM_OUT) {
             out_type = param->get_type();
+        }
     }
 
     // create a new node for this function and make it current
@@ -329,9 +336,6 @@ void HLSLWriterPass::translate_function(llvm::hlsl::ASTFunction const *ast_func)
 
     // create the declaration for the function
     hlsl::Type_name *ret_type_name = get_type_name(ret_type);
-
-    if (func->getLinkage() == llvm::GlobalValue::InternalLinkage)
-        ret_type_name->get_qualifier().set_storage_qualifier(hlsl::SQ_STATIC);
 
     hlsl::Name           *func_name = get_name(zero_loc, func_def->get_symbol());
     Declaration_function *decl_func = m_decl_factory.create_function(
@@ -467,12 +471,14 @@ hlsl::Stmt *HLSLWriterPass::translate_region(llvm::hlsl::Region const *region)
 static bool part_of_InsertValue_chain(llvm::Instruction &inst)
 {
     llvm::InsertValueInst *iv = llvm::dyn_cast<llvm::InsertValueInst>(&inst);
-    if (iv == nullptr)
+    if (iv == nullptr) {
         return false;
+    }
 
     for (llvm::Value *user : iv->users()) {
-        if (!llvm::isa<llvm::InsertValueInst>(user))
+        if (!llvm::isa<llvm::InsertValueInst>(user)) {
             return false;
+        }
     }
     return true;
 }
@@ -536,10 +542,12 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
         // don't generate statements for vector element access of already available values
         if (llvm::ExtractElementInst *extract = llvm::dyn_cast<llvm::ExtractElementInst>(&value)) {
             llvm::Value *v = extract->getVectorOperand();
-            if (has_local_var(v))
+            if (has_local_var(v)) {
                 continue;
-            if (gen_insts_set.count(v) != 0)
+            }
+            if (gen_insts_set.count(v) != 0) {
                 continue;
+            }
         }
 
         if (llvm::isa<llvm::AllocaInst>(value)) {
@@ -615,8 +623,9 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
 
             if (llvm::LoadInst *load = llvm::dyn_cast<llvm::LoadInst>(&value)) {
                 llvm::Value *base_pointer = get_base_pointer(load->getPointerOperand());
-                if (dirty_base_pointers.count(base_pointer) != 0)
+                if (dirty_base_pointers.count(base_pointer) != 0) {
                     gen_statement = true;
+                }
             }
 
             if (!gen_statement) {
@@ -669,8 +678,9 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
             // skip any pointer casts
             llvm::Value *cur_val = &value;
             while (llvm::Instruction *cur_inst = llvm::dyn_cast<llvm::Instruction>(cur_val)) {
-                if (!(cur_inst->isCast() && cur_inst->getType()->isPointerTy()))
+                if (!(cur_inst->isCast() && cur_inst->getType()->isPointerTy())) {
                     break;
+                }
                 cur_val = cur_inst->getOperand(0);
             }
 
@@ -704,8 +714,9 @@ hlsl::Stmt *HLSLWriterPass::translate_block(llvm::hlsl::Region const *region)
     for (llvm::Value *value : gen_insts) {
         // handle intrinsic functions
         if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(value)) {
-            if (translate_intrinsic_call(stmts, call))
+            if (translate_intrinsic_call(stmts, call)) {
                 continue;
+            }
         }
 
         if (llvm::StoreInst *store = llvm::dyn_cast<llvm::StoreInst>(value)) {
@@ -940,8 +951,9 @@ llvm::Value *HLSLWriterPass::process_pointer_address_recurse(
 
     if (llvm::GEPOperator *gep = llvm::dyn_cast<llvm::GEPOperator>(pointer)) {
         base_pointer = process_pointer_address_recurse(stack, gep->getPointerOperand(), write_size);
-        if (base_pointer == nullptr)
+        if (base_pointer == nullptr) {
             return nullptr;
+        }
 
         llvm::Type *cur_llvm_type = stack.back().field_type;
         uint64_t cur_type_size = 0;
@@ -953,8 +965,9 @@ llvm::Value *HLSLWriterPass::process_pointer_address_recurse(
                 // we can only stop if all of the remaining indices are zero
                 bool all_zero = true;
                 for (unsigned j = i; j < num_indices; ++j) {
-                    if (llvm::ConstantInt *idx = llvm::dyn_cast<llvm::ConstantInt>(
-                            gep->getOperand(j + 1))) {
+                    if (llvm::ConstantInt *idx =
+                        llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(j + 1)))
+                    {
                         if (!idx->isZero()) {
                             all_zero = false;
                             break;
@@ -965,13 +978,13 @@ llvm::Value *HLSLWriterPass::process_pointer_address_recurse(
                     }
                 }
                 // we can stop here
-                if (all_zero)
+                if (all_zero) {
                     break;
+                }
             }
 
             llvm::Value *idx_val = gep->getOperand(i + 1);
-            if (llvm::ConstantInt *idx = llvm::dyn_cast<llvm::ConstantInt>(idx_val))
-            {
+            if (llvm::ConstantInt *idx = llvm::dyn_cast<llvm::ConstantInt>(idx_val)) {
                 unsigned idx_imm = unsigned(idx->getZExtValue());
                 llvm::Type *field_type =
                     llvm::cast<llvm::CompositeType>(cur_llvm_type)->getTypeAtIndex(idx_imm);
@@ -1019,8 +1032,9 @@ llvm::Value *HLSLWriterPass::process_pointer_address(
     while (cur_type_size > write_size) {
         // check for array, vector or struct
 
-        if (!llvm::isa<llvm::CompositeType>(cur_llvm_type))
+        if (!llvm::isa<llvm::CompositeType>(cur_llvm_type)) {
             break;
+        }
 
         llvm::Type *first_type = cur_llvm_type->getContainedType(0);
         stack.push_back(Type_walk_element(
@@ -1030,6 +1044,17 @@ llvm::Value *HLSLWriterPass::process_pointer_address(
     }
 
     return base_pointer;
+}
+
+// Get the definition for a compound type field.
+hlsl::Definition *HLSLWriterPass::get_field_definition(
+    hlsl::Type   *type,
+    hlsl::Symbol *sym)
+{
+    if (hlsl::Scope *scope = m_def_tab.get_type_scope(type)) {
+        return scope->find_definition_in_scope(sym);
+    }
+    return NULL;
 }
 
 // Create an lvalue expression for the compound element given by the type walk stack.
@@ -1054,8 +1079,9 @@ hlsl::Expr *HLSLWriterPass::create_compound_elem_expr(
                 if (stack[i].field_index_val) {
                     llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(stack[i].field_index_val);
                     idx_imm = unsigned(idx->getZExtValue()) + stack[i].field_index_offs;
-                } else
+                } else {
                     idx_imm = stack[i].field_index_offs;
+                }
                 cur_expr = create_vector_access(cur_expr, idx_imm);
             } else {
                 hlsl::Expr *array_index;
@@ -1091,8 +1117,12 @@ hlsl::Expr *HLSLWriterPass::create_compound_elem_expr(
                 idx_imm += unsigned(idx->getZExtValue());
             }
             hlsl::Type_struct::Field *field = struct_type->get_field(idx_imm);
-            hlsl::Expr *field_ref = create_reference(
-                field->get_symbol(), field->get_type());
+            hlsl::Definition         *f_def = get_field_definition(struct_type, field->get_symbol());
+
+            hlsl::Expr *field_ref = f_def != NULL ?
+                create_reference(f_def) :
+                create_reference(
+                    field->get_symbol(), field->get_type());
             cur_expr = m_expr_factory.create_binary(
                 Expr_binary::OK_SELECT, cur_expr, field_ref);
 
@@ -1195,8 +1225,9 @@ bool HLSLWriterPass::translate_intrinsic_call(
     llvm::CallInst *call)
 {
     llvm::Function *called_func = call->getCalledFunction();
-    if (called_func == nullptr)
+    if (called_func == nullptr) {
         return false;
+    }
 
     // we need to handle memset and memcpy intrinsics
     switch (called_func->getIntrinsicID()) {
@@ -1204,18 +1235,21 @@ bool HLSLWriterPass::translate_intrinsic_call(
         {
             // expect the destination pointer to be a bitcast
             llvm::BitCastInst *bitcast = llvm::dyn_cast<llvm::BitCastInst>(call->getOperand(0));
-            if (bitcast == nullptr)
+            if (bitcast == nullptr) {
                 return false;
+            }
 
             // only handle as zero memory
             llvm::ConstantInt *fill_val = llvm::dyn_cast<llvm::ConstantInt>(call->getOperand(1));
-            if (fill_val == nullptr || !fill_val->isZero())
+            if (fill_val == nullptr || !fill_val->isZero()) {
                 return false;
+            }
 
             // only allow constant size
             llvm::ConstantInt *size_val = llvm::dyn_cast<llvm::ConstantInt>(call->getOperand(2));
-            if (size_val == nullptr)
+            if (size_val == nullptr) {
                 return false;
+            }
             int64_t write_size = int64_t(size_val->getZExtValue());
 
             llvm::Value *dest = bitcast->getOperand(0);
@@ -1248,12 +1282,14 @@ bool HLSLWriterPass::translate_intrinsic_call(
                 }
 
                 // done?
-                if (write_size <= 0)
+                if (write_size <= 0) {
                     break;
+                }
 
                 // go to next element
-                if (!move_to_next_compound_elem(stack))
+                if (!move_to_next_compound_elem(stack)) {
                     return false;
+                }
             }
             return true;
         }
@@ -1261,19 +1297,22 @@ bool HLSLWriterPass::translate_intrinsic_call(
         {
             // expect the destination pointer to be a bitcast
             llvm::BitCastInst *bitcast_dst = llvm::dyn_cast<llvm::BitCastInst>(call->getOperand(0));
-            if (bitcast_dst == nullptr)
+            if (bitcast_dst == nullptr) {
                 return false;
+            }
 
             // expect the source pointer to be a bitcast (may be a bitcast instruction or value
             // (in case of a constant))
             llvm::Operator *bitcast_src = llvm::dyn_cast<llvm::Operator>(call->getOperand(1));
-            if (bitcast_src->getOpcode() != llvm::Instruction::BitCast)
+            if (bitcast_src->getOpcode() != llvm::Instruction::BitCast) {
                 return false;
+            }
 
             // only allow constant size
             llvm::ConstantInt *size_val = llvm::dyn_cast<llvm::ConstantInt>(call->getOperand(2));
-            if (size_val == nullptr)
+            if (size_val == nullptr) {
                 return false;
+            }
             int64_t write_size = int64_t(size_val->getZExtValue());
 
             llvm::Value *dest = bitcast_dst->getOperand(0);
@@ -1311,14 +1350,17 @@ bool HLSLWriterPass::translate_intrinsic_call(
                 }
 
                 // done?
-                if (write_size <= 0)
+                if (write_size <= 0) {
                     break;
+                }
 
                 // go to next element in both stacks
-                if (!move_to_next_compound_elem(stack_dest))
+                if (!move_to_next_compound_elem(stack_dest)) {
                     return false;
-                if (!move_to_next_compound_elem(stack_src))
+                }
+                if (!move_to_next_compound_elem(stack_src)) {
                     return false;
+                }
             }
             return true;
         }
@@ -1401,17 +1443,12 @@ void HLSLWriterPass::translate_store(
     llvm::Value *value   = inst->getValueOperand();
     llvm::Value *pointer = inst->getPointerOperand();
 
-    llvm::BitCastInst *nearest_bitcast = nullptr;
     int64_t target_size = 0;
-    int64_t orig_size = 0;
     while (llvm::BitCastInst *bitcast = llvm::dyn_cast<llvm::BitCastInst>(pointer)) {
         // skip bitcasts but remember first target size
         if (target_size == 0) {
-            nearest_bitcast = bitcast;
             target_size = m_cur_data_layout->getTypeStoreSize(
                 bitcast->getDestTy()->getPointerElementType());
-            orig_size = m_cur_data_layout->getTypeStoreSize(
-                bitcast->getSrcTy()->getPointerElementType());
         }
         pointer = bitcast->getOperand(0);
     }
@@ -1510,8 +1547,9 @@ void HLSLWriterPass::translate_store(
         }
 
         // done?
-        if (target_size <= 0)
+        if (target_size <= 0) {
             break;
+        }
 
         // go to next element
         if (!move_to_next_compound_elem(stack)) {
@@ -1994,10 +2032,15 @@ hlsl::Expr *HLSLWriterPass::translate_expr(llvm::Value *value)
         case llvm::Instruction::GetElementPtr:
             {
                 llvm::GetElementPtrInst *gep = llvm::cast<llvm::GetElementPtrInst>(inst);
+#if 0
                 MDL_ASSERT(gep->hasAllZeroIndices());
 
                 // treat as pointer cast, skip it
                 return translate_expr(gep->getOperand(0));
+#else
+                // reuse lval expression code, which will create the necessary selects/array access
+                return translate_lval_expression(gep);
+#endif
             }
 
 
@@ -2116,8 +2159,9 @@ hlsl::Type *HLSLWriterPass::to_unsigned_type(hlsl::Type *type)
             hlsl::Type_scalar *u_type = hlsl::cast<hlsl::Type_scalar>(to_unsigned_type(e_type));
 
             if (u_type != nullptr) {
-                if (u_type != e_type)
+                if (u_type != e_type) {
                     return m_type_factory.get_vector(u_type, v_type->get_size());
+                }
                 return type;
             }
         }
@@ -2130,8 +2174,9 @@ hlsl::Type *HLSLWriterPass::to_unsigned_type(hlsl::Type *type)
             hlsl::Type_vector *u_type = hlsl::cast<hlsl::Type_vector>(to_unsigned_type(e_type));
 
             if (u_type != nullptr) {
-                if (u_type != e_type)
+                if (u_type != e_type) {
                     return m_type_factory.get_matrix(u_type, m_type->get_columns());
+                }
                 return type;
             }
         }
@@ -2213,8 +2258,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_bin(llvm::Instruction *inst)
         {
             // map XOR on boolean values to NOT-EQUAL to be compatible to SLANG
             hlsl_op = hlsl::Expr_binary::OK_NOT_EQUAL;
-        } else
+        } else {
             hlsl_op = hlsl::Expr_binary::OK_BITWISE_XOR;
+        }
         break;
 
     // "Other operators"
@@ -2400,8 +2446,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
     if (hlsl::Def_function *func_def = get_definition(func)) {
         DG_node *call_node = m_dg.get_node(func_def);
 
-        if (m_curr_node != nullptr)
+        if (m_curr_node != nullptr) {
             m_dg.add_edge(m_curr_node, call_node);
+        }
 
         hlsl::Type_function *func_type = func_def->get_type();
 
@@ -2413,8 +2460,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
             !call->getType()->isVoidTy())
         {
             hlsl::Type_function::Parameter *param = func_type->get_parameter(0);
-            if (param->get_modifier() == hlsl::Type_function::Parameter::PM_OUT)
+            if (param->get_modifier() == hlsl::Type_function::Parameter::PM_OUT) {
                 has_out_return = true;
+            }
         }
     } else {
         // call to an unknown entity
@@ -2430,8 +2478,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
                 name = name.slice(0, pos);
 
                 // need some mapping between LLVM intrinsics and HLSL
-                if (name == "fabs")
+                if (name == "fabs") {
                     name = "abs";
+                }
             }
         }
         func_sym = get_sym(name);
@@ -2444,17 +2493,20 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
     unsigned num_void_args = 0;
     for (llvm::Value *arg : call->arg_operands()) {
         llvm::Type *arg_llvm_type = arg->getType();
-        if (llvm::PointerType *pt = llvm::dyn_cast<llvm::PointerType>(arg_llvm_type))
+        if (llvm::PointerType *pt = llvm::dyn_cast<llvm::PointerType>(arg_llvm_type)) {
             arg_llvm_type = pt->getPointerElementType();
+        }
 
         hlsl::Type *arg_type = convert_type(arg_llvm_type);
-        if (hlsl::is<hlsl::Type_void>(arg_type))
+        if (hlsl::is<hlsl::Type_void>(arg_type)) {
             ++num_void_args;
+        }
     }
 
     size_t n_args = call->getNumArgOperands() - num_void_args;
-    if (has_out_return)
+    if (has_out_return) {
         ++n_args;
+    }
 
     Small_VLA<hlsl::Expr *, 8> args(m_alloc, n_args);
 
@@ -2473,12 +2525,14 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
 
     for (llvm::Value *arg : call->arg_operands()) {
         llvm::Type *arg_llvm_type = arg->getType();
-        if (llvm::PointerType *pt = llvm::dyn_cast<llvm::PointerType>(arg_llvm_type))
+        if (llvm::PointerType *pt = llvm::dyn_cast<llvm::PointerType>(arg_llvm_type)) {
             arg_llvm_type = pt->getPointerElementType();
+        }
 
         hlsl::Type *arg_type = convert_type(arg_llvm_type);
-        if (hlsl::is<hlsl::Type_void>(arg_type))
+        if (hlsl::is<hlsl::Type_void>(arg_type)) {
             continue;  // skip void typed parameters
+        }
 
         hlsl::Expr *arg_expr = nullptr;
         if (llvm::isa<llvm::UndefValue>(arg)) {
@@ -2514,8 +2568,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_call(
         expr_call = r;
     }
 
-    if (dst_var != nullptr)
+    if (dst_var != nullptr) {
         return create_assign_expr(dst_var, expr_call);
+    }
     return expr_call;
 }
 
@@ -2579,8 +2634,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_cast(llvm::CastInst *inst)
     case llvm::Instruction::Trunc:
         {
             hlsl::Type *hlsl_type = convert_type(inst->getType());
-            if (expr->get_type() == hlsl_type)
+            if (expr->get_type() == hlsl_type) {
                 return expr;
+            }
 
             hlsl::Expr *casted_expr = create_cast(hlsl_type, expr);
             if (llvm::IntegerType *dest_int_type = llvm::dyn_cast<llvm::IntegerType>(dest_type)) {
@@ -2608,8 +2664,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_cast(llvm::CastInst *inst)
     case llvm::Instruction::BitCast:
         {
             hlsl::Type *hlsl_type = convert_type(inst->getType());
-            if (hlsl::Expr *res = convert_to(expr, hlsl_type))
+            if (hlsl::Expr *res = convert_to(expr, hlsl_type)) {
                 return res;
+            }
 
             if (src_type->isVectorTy() && dest_type->isVectorTy() &&
                     src_type->getVectorNumElements() == dest_type->getVectorNumElements()) {
@@ -2760,12 +2817,14 @@ hlsl::Expr *HLSLWriterPass::translate_expr_load(llvm::LoadInst *inst)
         }
 
         // done?
-        if (target_size <= 0)
+        if (target_size <= 0) {
             break;
+        }
 
         // go to next element
-        if (!move_to_next_compound_elem(stack))
+        if (!move_to_next_compound_elem(stack)) {
             return m_expr_factory.create_invalid(zero_loc);
+        }
     }
 
     // atomic element read, just return it
@@ -2819,8 +2878,9 @@ hlsl::Expr *HLSLWriterPass::translate_lval_expression(llvm::Value *pointer)
             // check whether a bitcast wants us to stop going deeper into the compound
             if (target_size != 0) {
                 uint64_t cur_type_size = m_cur_data_layout->getTypeStoreSize(cur_llvm_type);
-                if (cur_type_size <= target_size)
+                if (cur_type_size <= target_size) {
                     break;
+                }
             }
 
             if (hlsl::is<hlsl::Type_array>(cur_type) ||
@@ -2855,7 +2915,11 @@ hlsl::Expr *HLSLWriterPass::translate_lval_expression(llvm::Value *pointer)
                 }
                 unsigned idx_val = unsigned(idx->getZExtValue());
                 hlsl::Type_struct::Field *field = struct_type->get_field(idx_val);
-                hlsl::Expr *field_ref = create_reference(field->get_symbol(), field->get_type());
+                hlsl::Definition         *f_def = get_field_definition(struct_type, field->get_symbol());
+
+                hlsl::Expr *field_ref = f_def != NULL ?
+                    create_reference(f_def) :
+                    create_reference(field->get_symbol(), field->get_type());
                 cur_expr = m_expr_factory.create_binary(
                     Expr_binary::OK_SELECT, cur_expr, field_ref);
 
@@ -2884,26 +2948,32 @@ hlsl::Expr *HLSLWriterPass::translate_lval_expression(llvm::Value *pointer)
 static hlsl::Expr_call *as_vector_constructor_call(hlsl::Expr *expr)
 {
     hlsl::Expr_call *call = hlsl::as<hlsl::Expr_call>(expr);
-    if (call == nullptr)
+    if (call == nullptr) {
         return nullptr;
+    }
     hlsl::Expr_ref *callee_ref = hlsl::as<hlsl::Expr_ref>(call->get_callee());
-    if (callee_ref == nullptr)
+    if (callee_ref == nullptr) {
         return nullptr;
+    }
 
     hlsl::Type *res_type = call->get_type();
-    if (res_type == nullptr || !hlsl::is<hlsl::Type_vector>(res_type->skip_type_alias()))
+    if (res_type == nullptr || !hlsl::is<hlsl::Type_vector>(res_type->skip_type_alias())) {
         return nullptr;
+    }
 
     hlsl::Definition *def = callee_ref->get_definition();
-    if (def == nullptr)
+    if (def == nullptr) {
         return nullptr;
+    }
 
     hlsl::Def_function *call_def = hlsl::as<hlsl::Def_function>(def);
-    if (call_def == nullptr)
+    if (call_def == nullptr) {
         return nullptr;
+    }
 
-    if (call_def->get_semantics() != hlsl::Def_function::DS_ELEM_CONSTRUCTOR)
+    if (call_def->get_semantics() != hlsl::Def_function::DS_ELEM_CONSTRUCTOR) {
         return nullptr;
+    }
 
     return call;
 }
@@ -3000,10 +3070,11 @@ hlsl::Expr *HLSLWriterPass::translate_expr_shufflevector(llvm::ShuffleVectorInst
             index = first_valid_index;
         }
 
-        if (index >= v1_size)
+        if (index >= v1_size) {
             vec_elems[cur_elem_idx] = create_vector_access(v2_expr, unsigned(index - v1_size));
-        else
+        } else {
             vec_elems[cur_elem_idx] = create_vector_access(v1_expr, unsigned(index));
+        }
         ++cur_elem_idx;
     }
 
@@ -3069,8 +3140,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertelement(llvm::InsertElementInst
                 vec_elems[index_val] = translate_expr(cur_insert->getOperand(1));
 
                 // all vector element initializers found?
-                if (--remaining_elems == 0)
+                if (--remaining_elems == 0) {
                     break;
+                }
             }
         } else {
             MDL_ASSERT(!"InsertElement with non-constant index not supported");
@@ -3079,23 +3151,26 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertelement(llvm::InsertElementInst
 
         cur_value = cur_insert->getOperand(0);
         cur_insert = llvm::dyn_cast<llvm::InsertElementInst>(cur_value);
-        if (cur_insert == nullptr)
+        if (cur_insert == nullptr) {
             break;
+        }
     }
 
     // not all elements found? -> extract them from the current remaining value
     if (remaining_elems) {
         if (llvm::ConstantVector *cv = llvm::dyn_cast<llvm::ConstantVector>(cur_value)) {
             for (uint64_t i = 0; i < num_elems; ++i) {
-                if (vec_elems[i] != nullptr)
+                if (vec_elems[i] != nullptr) {
                     continue;
+                }
                 vec_elems[i] = translate_expr(cv->getOperand(unsigned(i)));
             }
         } else {
             hlsl::Expr *base_expr = translate_expr(cur_value);
             for (uint64_t i = 0; i < num_elems; ++i) {
-                if (vec_elems[i] != nullptr)
+                if (vec_elems[i] != nullptr) {
                     continue;
+                }
 
                 vec_elems[i] = create_vector_access(base_expr, unsigned(i));
             }
@@ -3130,8 +3205,9 @@ public:
     InsertValueObject *get_child(unsigned index)
     {
         MDL_ASSERT(index < m_children.size());
-        if (index >= m_children.size())
+        if (index >= m_children.size()) {
             return nullptr;
+        }
         return m_children[index];
     }
 
@@ -3154,8 +3230,9 @@ public:
     /// \param base_expr  an expression to use, when the expression for this object has not been set
     hlsl::Expr *translate(IAllocator *alloc, HLSLWriterPass *writer, hlsl::Expr *base_expr)
     {
-        if (m_expr)
+        if (m_expr != nullptr) {
             return m_expr;
+        }
 
         if (m_children.size() == 0) {
             return base_expr;
@@ -3179,12 +3256,13 @@ private:
             return st->getNumElements();
         } else if (llvm::ArrayType *at = llvm::dyn_cast<llvm::ArrayType>(llvm_type)) {
             return at->getNumElements();
-        } else
+        } else {
             return 0;
+        }
     }
 
 private:
-    hlsl::Expr *m_expr;
+    hlsl::Expr                     *m_expr;
     Arena_VLA<InsertValueObject *> m_children;
 };
 
@@ -3215,8 +3293,9 @@ hlsl::Expr *HLSLWriterPass::translate_expr_insertvalue(llvm::InsertValueInst *in
 
         cur_value = cur_insert->getAggregateOperand();
         cur_insert = llvm::dyn_cast<llvm::InsertValueInst>(cur_value);
-        if (cur_insert == nullptr)
+        if (cur_insert == nullptr) {
             break;
+        }
     }
 
     // translate collected values into an expression
@@ -3272,7 +3351,11 @@ hlsl::Expr *HLSLWriterPass::translate_expr_extractvalue(llvm::ExtractValueInst *
             hlsl::Type_struct *s_type = hlsl::cast<hlsl::Type_struct>(cur_type);
 
             if (hlsl::Type_struct::Field *field = s_type->get_field(i)) {
-                hlsl::Expr *index_ref = create_reference(field->get_symbol(), field->get_type());
+                hlsl::Definition *f_def = get_field_definition(s_type, field->get_symbol());
+
+                hlsl::Expr *index_ref = f_def != NULL ?
+                    create_reference(f_def) :
+                    create_reference(field->get_symbol(), field->get_type());
                 res = m_expr_factory.create_binary(
                     Expr_binary::OK_SELECT, res, index_ref);
             } else {
@@ -3377,8 +3460,9 @@ hlsl::Type *HLSLWriterPass::convert_type(llvm::Type *type)
             // Support such constructs
             // %X = trunc i32 %Y to i2
             // %Z = icmp i2 %X, 1
-            if (bit_width > 1 && bit_width <= 32)
+            if (bit_width > 1 && bit_width <= 32) {
                 return m_type_factory.get_int();
+            }
 
             switch (int_type->getBitWidth()) {
             case 1:
@@ -3462,8 +3546,8 @@ hlsl::Type *HLSLWriterPass::convert_type(llvm::Type *type)
         return m_type_factory.get_double();
 
     case llvm::Type::PointerTyID:
-        if (llvm::ArrayType *array_type = llvm::dyn_cast<llvm::ArrayType>(
-            type->getPointerElementType()))
+        if (llvm::ArrayType *array_type =
+            llvm::dyn_cast<llvm::ArrayType>(type->getPointerElementType()))
         {
             uint64_t size = array_type->getNumElements();
             if (size == 0) {
@@ -3474,8 +3558,8 @@ hlsl::Type *HLSLWriterPass::convert_type(llvm::Type *type)
             hlsl::Type *base_type = convert_type(array_type->getElementType());
             return m_type_factory.get_array(base_type, size_t(size));
         }
-        if (llvm::StructType *struct_type = llvm::dyn_cast<llvm::StructType>(
-            type->getPointerElementType()))
+        if (llvm::StructType *struct_type =
+            llvm::dyn_cast<llvm::StructType>(type->getPointerElementType()))
         {
             // for pointers to structs, just skip the pointer
             return convert_struct_type(struct_type);
@@ -3529,8 +3613,9 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     llvm::StructType *s_type)
 {
     auto it = m_type_cache.find(s_type);
-    if (it != m_type_cache.end())
+    if (it != m_type_cache.end()) {
         return it->second;
+    }
 
     string struct_name(m_alloc);
 
@@ -3538,31 +3623,42 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
 
     if (s_type->hasName()) {
         llvm::StringRef name = s_type->getName();
-        if (name == "State_core")
+        if (name == "State_core") {
             return create_state_core_struct_type(s_type);
-        if (name == "State_environment")
+        }
+        if (name == "State_environment") {
             return create_state_env_struct_type(s_type);
-        if (name == "Res_data")
+        }
+        if (name == "Res_data") {
             return create_res_data_struct_type(s_type);
+        }
         if (name.startswith("struct.BSDF_")) {
-            if (name == "struct.BSDF_sample_data")
+            if (name == "struct.BSDF_sample_data") {
                 return create_bsdf_sample_data_struct_types(s_type);
-            if (name == "struct.BSDF_evaluate_data")
+            }
+            if (name == "struct.BSDF_evaluate_data") {
                 return create_bsdf_evaluate_data_struct_types(s_type);
-            if (name == "struct.BSDF_pdf_data")
+            }
+            if (name == "struct.BSDF_pdf_data") {
                 return create_bsdf_pdf_data_struct_types(s_type);
-            if (name == "struct.BSDF_auxiliary_data")
+            }
+            if (name == "struct.BSDF_auxiliary_data") {
                 return create_bsdf_auxiliary_data_struct_types(s_type);
+            }
         }
         if (name.startswith("struct.EDF_")) {
-            if (name == "struct.EDF_sample_data")
+            if (name == "struct.EDF_sample_data") {
                 return create_edf_sample_data_struct_types(s_type);
-            if (name == "struct.EDF_evaluate_data")
+            }
+            if (name == "struct.EDF_evaluate_data") {
                 return create_edf_evaluate_data_struct_types(s_type);
-            if (name == "struct.EDF_pdf_data")
+            }
+            if (name == "struct.EDF_pdf_data") {
                 return create_edf_pdf_data_struct_types(s_type);
-            if (name == "struct.EDF_auxiliary_data")
+            }
+            if (name == "struct.EDF_auxiliary_data") {
                 return create_edf_auxiliary_data_struct_types(s_type);
+            }
         }
         if (name == "struct.float3") {
             hlsl::Type_scalar *float_type = m_type_factory.get_float();
@@ -3577,24 +3673,28 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
             return float4_type;
         }
 
-        if (name.startswith("struct."))
+        if (name.startswith("struct.")) {
             name = name.substr(7);
+        }
 
         auto it = m_struct_dbg_info.find(string(name.begin(), name.end(), m_alloc));
-        if (it != m_struct_dbg_info.end())
+        if (it != m_struct_dbg_info.end()) {
             di_type = it->second;
+        }
 
         // strip the leading "::" from the fully qualified MDL type name
         size_t skip = 0;
-        if (name.startswith("::"))
+        if (name.startswith("::")) {
             skip = 2;
+        }
 
         struct_name = string(name.begin() + skip, name.end(), m_alloc);
 
         // replace all ':' and '.' by '_'
         for (char &ch : struct_name) {
-            if (ch == ':' || ch == '.')
+            if (ch == ':' || ch == '.') {
                 ch = '_';
+            }
         }
     }
 
@@ -3605,8 +3705,9 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     bool has_non_void_field = false;
     for (unsigned i = 0; i < n_fields; ++i) {
         hlsl::Type *field_type = convert_type(s_type->getElementType(i));
-        if (hlsl::is<hlsl::Type_void>(field_type))
+        if (hlsl::is<hlsl::Type_void>(field_type)) {
             continue;
+        }
 
         has_non_void_field = true;
         break;
@@ -3624,14 +3725,15 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     // Slang does not
     Symbol *struct_sym;
     bool is_api_type = false;
-    if (is_deriv && s_type == m_type_mapper.get_deriv_float2_type())
+    if (is_deriv && s_type == m_type_mapper.get_deriv_float2_type()) {
         struct_sym = get_sym("Derived_float2"), is_api_type = true;
-    else if (is_deriv && s_type == m_type_mapper.get_deriv_float3_type())
+    } else if (is_deriv && s_type == m_type_mapper.get_deriv_float3_type()) {
         struct_sym = get_sym("Derived_float3"), is_api_type = true;
-    else
+    } else {
         struct_sym = get_unique_hlsl_sym(
             struct_name.c_str(),
             is_deriv ? "deriv_type" : "structtype");
+    }
 
     hlsl::Declaration_struct *decl_struct = m_decl_factory.create_struct(zero_loc);
     decl_struct->set_name(get_name(zero_loc, struct_sym));
@@ -3643,8 +3745,9 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     unsigned n = 0;
     for (unsigned i = 0; i < n_fields; ++i) {
         hlsl::Type *field_type = convert_type(s_type->getElementType(i));
-        if (hlsl::is<hlsl::Type_void>(field_type))
+        if (hlsl::is<hlsl::Type_void>(field_type)) {
             continue;
+        }
 
         hlsl::Symbol *sym = nullptr;
 
@@ -3694,19 +3797,21 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     m_type_cache[s_type] = res;
 
     // don't add API types to the unit to avoid printing
-    if (!is_api_type)
+    if (!is_api_type) {
         m_unit->add_decl(decl_struct);
+    }
 
     return res;
 }
 
-// Create an HLSL struct with the given names for the given LLVM struct type.
+// Create an HLSL struct definition and type with the given names for the given
+// LLVM struct type.
 hlsl::Type_struct *HLSLWriterPass::create_struct_from_llvm(
-    llvm::StructType *type,
-    char const *type_name,
-    size_t num_field_names,
+    llvm::StructType   *type,
+    char const         *type_name,
+    size_t             num_field_names,
     char const * const *field_names,
-    bool add_to_unit)
+    bool               add_to_unit)
 {
     if (num_field_names != type->getNumContainedTypes()) {
         MDL_ASSERT(num_field_names == type->getNumContainedTypes());
@@ -3727,8 +3832,22 @@ hlsl::Type_struct *HLSLWriterPass::create_struct_from_llvm(
     hlsl::Type_struct *res = m_type_factory.get_struct(fields, s_sym);
     m_type_cache[type] = res;
 
-    if (add_to_unit)
+    Def_type *t_def = m_def_tab.enter_type_definition(s_sym, res, &zero_loc);
+    s_decl->set_definition(t_def);
+
+    {
+        Definition_table::Scope_enter enter(m_def_tab, t_def);
+
+        for (size_t i = 0; i < num_field_names; ++i) {
+            hlsl::Type_struct::Field &field = fields[i];
+
+            m_def_tab.enter_member_definition(field.get_symbol(), field.get_type(), &zero_loc);
+        }
+    }
+
+    if (add_to_unit) {
         m_unit->add_decl(s_decl);
+    }
 
     return res;
 }
@@ -3840,8 +3959,7 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_evaluate_data_struct_types(llvm::
                "df_handle_slot_mode POINTER is not supported for HLSL");
 
     hlsl::Type_struct *res;
-    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
-    {
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE) {
         hlsl::Type_struct::Field fields[7];
 
         fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
@@ -3852,9 +3970,7 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_evaluate_data_struct_types(llvm::
         fields[5] = add_struct_field(decl_struct, float3_type, "bsdf_glossy");
         fields[6] = add_struct_field(decl_struct, float_type,  "pdf");
         res = m_type_factory.get_struct(fields, struct_sym);
-    }
-    else // DF_HSM_FIXED (no pointers in HLSL)
-    {
+    } else /* DF_HSM_FIXED (no pointers in HLSL) */ {
         size_t fixed_array_size = static_cast<size_t>(m_df_handle_slot_mode);
         hlsl::Type *float3_array_type = m_type_factory.get_array(float3_type, fixed_array_size);
         hlsl::Type_scalar *int_type = m_type_factory.get_int();
@@ -3916,8 +4032,7 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_auxiliary_data_struct_types(llvm:
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
     hlsl::Type_struct *res;
-    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
-    {
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE) {
         hlsl::Type_struct::Field fields[5];
 
         fields[0] = add_struct_field(decl_struct, float3_type, "ior1");
@@ -3926,9 +4041,7 @@ hlsl::Type_struct *HLSLWriterPass::create_bsdf_auxiliary_data_struct_types(llvm:
         fields[3] = add_struct_field(decl_struct, float3_type, "albedo");
         fields[4] = add_struct_field(decl_struct, float3_type, "normal");
         res = m_type_factory.get_struct(fields, struct_sym);
-    }
-    else // DF_HSM_FIXED (no pointers in HLSL)
-    {
+    } else /* DF_HSM_FIXED (no pointers in HLSL) */ {
         size_t fixed_array_size = static_cast<size_t>(m_df_handle_slot_mode);
         hlsl::Type *float3_array_type = m_type_factory.get_array(float3_type, fixed_array_size);
         hlsl::Type_scalar *int_type = m_type_factory.get_int();
@@ -3993,8 +4106,7 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_evaluate_data_struct_types(llvm::S
                "df_handle_slot_mode POINTER is not supported for HLSL");
 
     hlsl::Type_struct *res;
-    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
-    {
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE) {
         hlsl::Type_struct::Field fields[4];
 
         fields[0] = add_struct_field(decl_struct, float3_type, "k1");
@@ -4002,9 +4114,7 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_evaluate_data_struct_types(llvm::S
         fields[2] = add_struct_field(decl_struct, float3_type, "edf");
         fields[3] = add_struct_field(decl_struct, float_type, "pdf");
         res = m_type_factory.get_struct(fields, struct_sym);
-    }
-    else // DF_HSM_FIXED (no pointers in HLSL)
-    {
+    } else /* DF_HSM_FIXED (no pointers in HLSL) */ {
         size_t fixed_array_size = static_cast<size_t>(m_df_handle_slot_mode);
         hlsl::Type *float3_array_type = m_type_factory.get_array(float3_type, fixed_array_size);
         hlsl::Type_scalar *int_type = m_type_factory.get_int();
@@ -4060,16 +4170,13 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_auxiliary_data_struct_types(llvm::
     decl_struct->set_name(get_name(zero_loc, struct_sym));
 
     hlsl::Type_struct *res;
-    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE)
-    {
+    if (m_df_handle_slot_mode == mi::mdl::DF_HSM_NONE) {
         hlsl::Type_struct::Field fields[1];
 
         fields[0] = add_struct_field(decl_struct, float3_type, "k1");
 
         res = m_type_factory.get_struct(fields, struct_sym);
-    }
-    else // DF_HSM_FIXED (no pointers in HLSL)
-    {
+    } else /* DF_HSM_FIXED (no pointers in HLSL) */ {
         hlsl::Type_scalar *int_type = m_type_factory.get_int();
 
         hlsl::Type_struct::Field fields[2];
@@ -4086,19 +4193,19 @@ hlsl::Type_struct *HLSLWriterPass::create_edf_auxiliary_data_struct_types(llvm::
     return res;
 }
 
-// Get an HLSL symbol for the given location and LLVM string.
+// Get an HLSL symbol for an LLVM string.
 hlsl::Symbol *HLSLWriterPass::get_sym(llvm::StringRef const &str)
 {
     return m_symbol_table.get_symbol(str.str().c_str());
 }
 
-/// Get an HLSL symbol for the given location and string.
+// Get an HLSL symbol for a string.
 hlsl::Symbol *HLSLWriterPass::get_sym(char const *str)
 {
     return m_symbol_table.get_symbol(str);
 }
 
-/// Get a valid HLSL symbol for an LLVM string and a template.
+// Get an unique HLSL symbol for an LLVM string and a template.
 hlsl::Symbol *HLSLWriterPass::get_unique_hlsl_sym(
     llvm::StringRef const &str,
     char const            *templ)
@@ -4106,7 +4213,7 @@ hlsl::Symbol *HLSLWriterPass::get_unique_hlsl_sym(
     return get_unique_hlsl_sym(str.str().c_str(), templ);
 }
 
-/// Get a valid HLSL symbol for an LLVM string and a template.
+// Get an unique HLSL symbol for an LLVM string and a template.
 hlsl::Symbol *HLSLWriterPass::get_unique_hlsl_sym(
     char const *str,
     char const *templ)
@@ -4114,13 +4221,44 @@ hlsl::Symbol *HLSLWriterPass::get_unique_hlsl_sym(
     bool valid = true;
     char const *name = str;
 
+    char tbuf[60];
+
     if (!isalpha(str[0]) && str[0] != '_') {
         valid = false;
     } else {
-        for (char const *p = &str[1]; *p != '\0'; ++p) {
+        char const *p   = &str[1];
+        char const *dot = NULL;
+
+        for (; *p != '\0'; ++p) {
+            if (*p == '.') {
+                dot = p;
+                break;
+            }
             if (!isalnum(*p) && *p != '_') {
                 valid = false;
                 break;
+            }
+        }
+
+        if (dot != NULL) {
+            for (p = dot + 1; *p != '\0'; ++p) {
+                if (!isdigit(*p)) {
+                    valid = false;
+                    break;
+                }
+            }
+
+            if (valid && p != dot + 1) {
+                // be smarter with LLVM renamed symbols that ends with .[digit]+
+                size_t l = dot - str;
+                if (l >= sizeof(tbuf)) {
+                    l = sizeof(tbuf) - 1;
+                }
+                strncpy(tbuf, str, l);
+                tbuf[l] = '\0';
+                str = name = tbuf;
+            } else {
+                valid = false;
             }
         }
     }
@@ -4252,8 +4390,9 @@ hlsl::Symbol *HLSLWriterPass::add_func_parameter(
 hlsl::Def_function *HLSLWriterPass::get_struct_constructor(hlsl::Type_struct *type)
 {
     auto it = m_struct_constructor_map.find(type);
-    if (it != m_struct_constructor_map.end())
+    if (it != m_struct_constructor_map.end()) {
         return it->second;
+    }
 
     // declare the constructor function
     string constr_name("constr_", m_alloc);
@@ -4393,34 +4532,39 @@ hlsl::Symbol *HLSLWriterPass::get_vector_index_sym(llvm::Value *index)
     return nullptr;
 }
 
-// Create a reference to a variable of the given type.
-hlsl::Expr *HLSLWriterPass::create_reference(hlsl::Type_name *type_name, hlsl::Type *type)
+// Create a reference to an entity of the given name and type.
+hlsl::Expr_ref *HLSLWriterPass::create_reference(
+    hlsl::Type_name  *type_name,
+    hlsl::Type       *type)
 {
-    hlsl::Expr *ref = m_expr_factory.create_reference(type_name);
+    hlsl::Expr_ref *ref = m_expr_factory.create_reference(type_name);
     ref->set_type(type);
     return ref;
 }
 
-// Create a reference to a variable of the given type.
-hlsl::Expr *HLSLWriterPass::create_reference(hlsl::Symbol *var_sym, hlsl::Type *type)
+// Create a reference to an entity of the given symbol and HLSL type.
+hlsl::Expr_ref *HLSLWriterPass::create_reference(
+    hlsl::Symbol *sym,
+    hlsl::Type   *type)
 {
-    return create_reference(get_type_name(var_sym), type);
+    return create_reference(get_type_name(sym), type);
 }
 
 // Create a reference to a variable of the given type.
-hlsl::Expr *HLSLWriterPass::create_reference(hlsl::Symbol *var_sym, llvm::Type *type)
+hlsl::Expr_ref *HLSLWriterPass::create_reference(
+    hlsl::Symbol *sym,
+    llvm::Type   *type)
 {
-    return create_reference(var_sym, convert_type(type));
+    return create_reference(sym, convert_type(type));
 }
 
 // Create a reference to an entity.
-hlsl::Expr *HLSLWriterPass::create_reference(hlsl::Definition *def)
+hlsl::Expr_ref *HLSLWriterPass::create_reference(
+    hlsl::Definition *def)
 {
-    hlsl::Expr *expr = create_reference(def->get_symbol(), def->get_type());
-    if (hlsl::Expr_ref *ref = hlsl::as<hlsl::Expr_ref>(expr)) {
-        ref->set_definition(def);
-    }
-    return expr;
+    hlsl::Expr_ref *ref = create_reference(def->get_symbol(), def->get_type());
+    ref->set_definition(def);
+    return ref;
 }
 
 // Create a select expression on a field of a struct.
@@ -4465,7 +4609,10 @@ hlsl::Expr *HLSLWriterPass::create_field_access(hlsl::Expr *struct_expr, unsigne
         return m_expr_factory.create_invalid(zero_loc);
     }
 
-    hlsl::Expr *field_ref = create_reference(field->get_symbol(), field->get_type());
+    hlsl::Definition *f_def = get_field_definition(type, field->get_symbol());
+
+    hlsl::Expr *field_ref = f_def != NULL ?
+        create_reference(f_def) : create_reference(field->get_symbol(), field->get_type());
 
     hlsl::Expr *res = m_expr_factory.create_binary(
         Expr_binary::OK_SELECT, struct_expr, field_ref);
@@ -4531,20 +4678,23 @@ hlsl::Expr *HLSLWriterPass::create_matrix_access(hlsl::Expr *matrix, unsigned in
 hlsl::Expr *HLSLWriterPass::create_compound_access(hlsl::Expr *comp_expr, unsigned comp_index)
 {
     hlsl::Type *comp_type = comp_expr->get_type()->skip_type_alias();
-    if (hlsl::is<hlsl::Type_struct>(comp_type))
+    switch (comp_type->get_kind()) {
+    case hlsl::Type::TK_STRUCT:
         return create_field_access(comp_expr, comp_index);
 
-    if (hlsl::is<hlsl::Type_array>(comp_type))
+    case hlsl::Type::TK_ARRAY:
         return create_array_access(comp_expr, comp_index);
 
-    if (hlsl::is<hlsl::Type_vector>(comp_type))
+    case hlsl::Type::TK_VECTOR:
         return create_vector_access(comp_expr, comp_index);
 
-    if (hlsl::is<hlsl::Type_matrix>(comp_type))
+    case hlsl::Type::TK_MATRIX:
         return create_matrix_access(comp_expr, comp_index);
 
-    MDL_ASSERT(!"create_compound_access on invalid expression");
-    return m_expr_factory.create_invalid(zero_loc);
+    default:
+        MDL_ASSERT(!"create_compound_access on invalid expression");
+        return m_expr_factory.create_invalid(zero_loc);
+    }
 }
 
 // Create an assign statement, assigning an expression to an lvalue expression.
@@ -4606,8 +4756,9 @@ hlsl::Def_function *HLSLWriterPass::lookup_constructor(hlsl::Type *type)
     if (hlsl::Def_function *def = hlsl::as_or_null<hlsl::Def_function>(
         m_def_tab.get_predef_scope()->find_definition_in_scope(type->get_sym())))
     {
-        if (def->get_semantics() == hlsl::Def_function::DS_ELEM_CONSTRUCTOR)
+        if (def->get_semantics() == hlsl::Def_function::DS_ELEM_CONSTRUCTOR) {
             return def;
+        }
     }
     return NULL;
 }
@@ -4709,7 +4860,8 @@ hlsl::Def_variable *HLSLWriterPass::create_local_var(
     return var_def;
 }
 
-// Generates a new local variable.
+// Generates a new local variable for an LLVM value and use this variable as the value's
+// result in further generated HLSL code.
 hlsl::Def_variable *HLSLWriterPass::create_local_var(
     llvm::Value *value,
     bool        do_not_register,
@@ -4722,8 +4874,9 @@ hlsl::Def_variable *HLSLWriterPass::create_local_var(
         type = p_type->getElementType();
     }
 
-    if (type->isVoidTy())
+    if (type->isVoidTy()) {
         return nullptr;
+    }
 
     auto it = m_local_var_map.find(value);
     if (it != m_local_var_map.end()) {
@@ -4745,8 +4898,9 @@ hlsl::Def_variable *HLSLWriterPass::create_local_var(
 hlsl::Def_variable *HLSLWriterPass::create_local_const(llvm::Constant *cv)
 {
     auto it = m_local_var_map.find(cv);
-    if (it != m_local_var_map.end())
+    if (it != m_local_var_map.end()) {
         return hlsl::as<hlsl::Def_variable>(it->second);
+    }
 
     llvm::Type   *type = cv->getType();
     hlsl::Symbol *cnst_sym = get_unique_hlsl_sym(cv->getName(), "cnst");
@@ -4778,12 +4932,13 @@ hlsl::Def_variable *HLSLWriterPass::create_local_const(llvm::Constant *cv)
     return cnst_def;
 }
 
-// Generates a new local const variable to hold an LLVM value.
+// Generates a new global static const variable to hold an LLVM value.
 hlsl::Def_variable *HLSLWriterPass::create_global_const(llvm::Constant *cv)
 {
     auto it = m_global_var_map.find(cv);
-    if (it != m_global_var_map.end())
+    if (it != m_global_var_map.end()) {
         return hlsl::as<hlsl::Def_variable>(it->second);
+    }
 
     hlsl::Definition_table::Scope_transition scope(m_def_tab, m_def_tab.get_global_scope());
 
@@ -4823,8 +4978,9 @@ std::pair<hlsl::Def_variable *, hlsl::Def_variable *> HLSLWriterPass::get_phi_va
     llvm::PHINode *phi)
 {
     auto it = m_phi_var_in_out_map.find(phi);
-    if (it != m_phi_var_in_out_map.end())
+    if (it != m_phi_var_in_out_map.end()) {
         return it->second;
+    }
 
     // TODO: use debug info to generate a better name
     hlsl::Symbol *in_sym  = get_unique_hlsl_sym("phi_in", "phi_in_");
@@ -4833,7 +4989,7 @@ std::pair<hlsl::Def_variable *, hlsl::Def_variable *> HLSLWriterPass::get_phi_va
     // TODO: arrays?
     llvm::Type *type = phi->getType();
     hlsl::Def_variable *phi_in_def  = create_local_var(in_sym, type);
-    hlsl::Def_variable *phi_out_def = create_local_var(out_sym, type, true);
+    hlsl::Def_variable *phi_out_def = create_local_var(out_sym, type);
 
     auto res = std::make_pair(phi_in_def, phi_out_def);
     m_phi_var_in_out_map[phi] = res;
@@ -4843,7 +4999,7 @@ std::pair<hlsl::Def_variable *, hlsl::Def_variable *> HLSLWriterPass::get_phi_va
     return res;
 }
 
-// Get or create the symbol of the in-variable of a PHI node.
+// Get the definition of the in-variable of a PHI node.
 hlsl::Def_variable *HLSLWriterPass::get_phi_in_var(llvm::PHINode *phi)
 {
     return get_phi_vars(phi).first;
@@ -4858,8 +5014,9 @@ hlsl::Def_variable *HLSLWriterPass::get_phi_out_var(llvm::PHINode *phi)
 
 /// Check if the given statement is empty.
 static bool is_empty_statment(hlsl::Stmt *stmt) {
-    if (stmt == nullptr)
+    if (stmt == nullptr) {
         return true;
+    }
     if (hlsl::Stmt_expr *expr_stmt = as<hlsl::Stmt_expr>(stmt)) {
         return expr_stmt->get_expression() == nullptr;
     }
@@ -4871,10 +5028,12 @@ static bool is_empty_statment(hlsl::Stmt *stmt) {
 // If one statement is "empty" (nullptr), the other will be returned.
 hlsl::Stmt *HLSLWriterPass::join_statements(hlsl::Stmt *head, hlsl::Stmt *tail)
 {
-    if (is_empty_statment(head))
+    if (is_empty_statment(head)) {
         return tail;
-    if (is_empty_statment(tail))
+    }
+    if (is_empty_statment(tail)) {
         return head;
+    }
 
     hlsl::Stmt_compound *block;
     if (head->get_kind() == hlsl::Stmt::SK_COMPOUND) {

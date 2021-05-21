@@ -35,11 +35,11 @@
     [\link mi_neuray_example_derivatives Previous\endlink]
 \endif
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_discovery Next\endlink]
+    [\link mi_neuray_example_create_module Next\endlink]
 </div>
 
 This example demonstrates the traversal of compiled materials.
-It thereby allows investigating the structure of expression graphs based on an example 
+It thereby allows investigating the structure of expression graphs based on an example
 application that reconstructs compilable MDL code.
 
 \section example_traversal_new New Topics
@@ -52,39 +52,42 @@ application that reconstructs compilable MDL code.
 <dl>
     <dt><b>Basic traversal of a compiled material</b></dt>
     <dd><br>
-        With this example, we provide the \c compiled_material_traverser_base, a simple base 
+        With this example, we provide the \c compiled_material_traverser_base, a simple base
         class for iterating over the structure of a material in a recursive manner. During the
-        traversal, virtual functions are called on certain occasions and while reaching 
-        particular elements in the expression graph. Deriving classes, like the 
+        traversal, virtual functions are called on certain occasions and while reaching
+        particular elements in the expression graph. Deriving classes, like the
         \c compiled_material_traverser_print, implement those virtual methods in order
         to realize their intended logic. To keep track of the current state, the implementations
         can provide a custom context object that is passed through for each invocation without
         any changes by the base class.
 
         Similar to the definition of an MDL material, a compiled material also consists of three
-        sections: parameters, temporaries, and the body. Therefore, the traversal also has three 
+        sections: parameters, temporaries, and the body. Therefore, the traversal also has three
         corresponding stages: \c ES_PARAMETERS, \c ES_TEMPORARIES, and \c ES_BODY.
         There is one virtual method call at the beginning of each of those stages and one at
-        the end, respectively. For convenience, there are two additional stages provided to the 
+        the end, respectively. For convenience, there are two additional stages provided to the
         deriving classes: \c ES_NOT_STARTED to define the current state before a traversal has
         been started and \c ES_FINISHED to indicate that the traversal is done. Deriving classes
         are free to keep track of the current state using the context object that is passed through.
 
-        During the three main stages, the traversal visits the #mi::neuraylib::IExpression 
-        and #mi::neuraylib::IValue nodes of the tree recursively. When reaching the next 
-        node in the tree, the \c visit_begin(...) method is called. Then, the child elements are 
-        processed. In case of multiple children, there is an additional call to 
-        \c visit_child(...) for each child. This will happen while iterating over the arguments of a 
+        During the three main stages, the traversal visits the #mi::neuraylib::IExpression
+        and #mi::neuraylib::IValue nodes of the tree recursively. When reaching the next
+        node in the tree, the \c visit_begin(...) method is called. Then, the child elements are
+        processed. In case of multiple children, there is an additional call to
+        \c visit_child(...) for each child. This will happen while iterating over the arguments of a
         #mi::neuraylib::IExpression_direct_call and while iterating over the components of a
-        #mi::neuraylib::IValue_compound. A call to \c visit_end(...) indicates that the 
+        #mi::neuraylib::IValue_compound. A call to \c visit_end(...) indicates that the
         processing of the current node is done.
 
         Each of these three methods provides a pointer to the compiled material that is processed,
         the custom context object, and a \c Traversal_element with information about the element
-        that is currently visited. This includes pointers to the current expression, value, 
-        parameter, or temporary. Only one of these four pointers is different from \c NULL 
-        during each invocation. Depending on the stage, not all cases are possible. 
-        During the \c ES_PARAMETERS stage, for instance, only parameters and values but no temporaries or expressions can occur. The Traversal_element also provides a \c sibling_count and a \c sibling_index that might be useful to derived classes like the \c compiled_material_traverser_print.
+        that is currently visited. This includes pointers to the current expression, value,
+        parameter, or temporary. Only one of these four pointers is different from \c NULL during
+        each invocation. Depending on the stage, not all cases are possible. During the \c
+        ES_PARAMETERS stage, for instance, only parameters and values but no temporaries or
+        expressions can occur. The Traversal_element also provides a \c sibling_count and a \c
+        sibling_index that might be useful to derived classes like the \c
+        compiled_material_traverser_print.
 
         To start the actual traversal, the protected \c traverse(...) method is called by
         by the deriving class. At this point the custom context object is provided to the base class.
@@ -99,10 +102,10 @@ application that reconstructs compilable MDL code.
     <dt><b>Using the MDL printer</b></dt>
     <dd><br>
         The input of the traversers is a compiled material. Therefore, we first need to
-        load a module, create a material instance, and compile this instance to get a 
-        #mi::neuraylib::ICompiled_material. 
-        Before starting the iteration of the expression tree, we setup the 
-        \c Compiled_material_traverser_print::Context to configure the behavior of the printer: 
+        load a module, create a material instance, and compile this instance to get a
+        #mi::neuraylib::ICompiled_material.
+        Before starting the iteration of the expression tree, we setup the
+        \c Compiled_material_traverser_print::Context to configure the behavior of the printer:
 \code{.unparsed}
 
 // Creates the context of a traversal, which includes required component and configurations.
@@ -112,11 +115,11 @@ Compiled_material_traverser_print::Context(
     bool keep_structure)                      // show compiler output vs. print valid MDL code
 
 \endcode
-        The constructor consumes three arguments. While the first two are required to resolve 
-        textures, measured BSDFs, and light profiles, the last one parameter requires more 
+        The constructor consumes three arguments. While the first two are required to resolve
+        textures, measured BSDFs, and light profiles, the last one parameter requires more
         explanations.
 
-        The structures produced by the compiler do not always match the structure of 
+        The structures produced by the compiler do not always match the structure of
         the input material. The main reason for that is optimization and the simplification of
         expressions that are constant during compile time. Another example is the
         transformation of constants to parameters while in class compilation mode.
@@ -124,12 +127,12 @@ Compiled_material_traverser_print::Context(
         This can happen if keywords, like \c material_emission, appear as parameters.
         However, the discussed printer focuses on generating compilable MDL code but we also
         want to provide a tool to investigate the produced compiler output. To enable both,
-        the example allows choosing between the two behaviors. Setting \c keep_structure to 
-        \c true preserves the structure of the compiler output even if this would result in 
+        the example allows choosing between the two behaviors. Setting \c keep_structure to
+        \c true preserves the structure of the compiler output even if this would result in
         printed MDL code that will not compile. Setting \c keep_structure to \c false, which is
-        the default value, will inline the transformed constants back into the body. This results in MDL code that is easier to read and that can be 
-        loaded and compiled later.
-        
+        the default value, will inline the transformed constants back into the body. This results
+        in MDL code that is easier to read and that can be loaded and compiled later.
+
         After setting up the context, the traversal can be started by calling \c print_mdl(...):
 \code{.cpp}
 
@@ -141,7 +144,7 @@ std::string Compiled_material_traverser_print::print_mdl(
     const std::string& output_material_name) const // simple name of the output material
 
 \endcode
-        Since the #mi::neuraylib::ICompiled_material lacks some information to generate a 
+        Since the #mi::neuraylib::ICompiled_material lacks some information to generate a
         valid module, the original module name has to be provided for referencing
         exported functions in the original module in which the material to process was defined in.
         The new material also requires a name that has to be provided, too.
@@ -155,7 +158,7 @@ std::string Compiled_material_traverser_print::print_mdl(
 std::string Compiled_material_traverser_print::Context::get_is_valid_mdl()
 
 \endcode
-        If we do not inline transformed constants, we want to inform about invalid MDL after 
+        If we do not inline transformed constants, we want to inform about invalid MDL after
         running the printer. The result will be false if an invalid case was encountered.
         Note, this can only be false if \c keep_structure of the context was set to true.
 
@@ -196,8 +199,8 @@ const std::set<std::string>& Compiled_material_traverser_print::Context::get_use
 >> example_traversal
 
 \endcode
-        All three commands above will produce the same results as they use the default parameters -- 
-        the traversal of the materials defined in the example module. The class compilation 
+        All three commands above will produce the same results as they use the default parameters --
+        the traversal of the materials defined in the example module. The class compilation
         mode will be used and the compiler generated parameters are inlined.
     </dd>
 
@@ -205,15 +208,15 @@ const std::set<std::string>& Compiled_material_traverser_print::Context::get_use
     <dd><br>
         With the goal of demonstrating the traversal, this printer has some restrictions:
 
-        - Since the original module of the compiled input material is simply imported in the 
-          generated MDL module, all local functions that are used by the material need to be 
-          exported by the original module. If this is not the case, these dependencies can not be 
+        - Since the original module of the compiled input material is simply imported in the
+          generated MDL module, all local functions that are used by the material need to be
+          exported by the original module. If this is not the case, these dependencies can not be
           resolved for the generated material.
         - Only MDL 1.4 compliant materials are supported.
 
         The header of \c compiled_material_traverser_base is listed below. It contains the
-        interface declarations for the basic traversal. Please also refer to the source files for 
-        more details on the printing and the formatting that is performed by the printer implementation. 
+        interface declarations for the basic traversal. Please also refer to the source files for
+        more details on the printing and the formatting that is performed by the printer implementation.
     </dd>
 </dl>
 
@@ -235,7 +238,7 @@ const std::set<std::string>& Compiled_material_traverser_print::Context::get_use
     [\link mi_neuray_example_derivatives Previous\endlink]
 \endif
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_discovery Next\endlink]
+    [\link mi_neuray_example_create_module Next\endlink]
 </div>
 
 */

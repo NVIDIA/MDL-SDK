@@ -150,7 +150,7 @@ public:
     /// Datastructure used by #IType_factory to register enum types.
     typedef std::vector<std::pair<std::string, mi::Sint32> > Values;
     /// Datastructure used by #IType_factory to register enum types.
-    typedef std::vector<mi::base::Handle<const IAnnotation_block> > Value_annotations;
+    using Value_annotations = std::vector<mi::base::Handle<const IAnnotation_block> >;
 
     enum Predefined_id {
         EID_USER           = -1,
@@ -303,7 +303,7 @@ public:
     typedef std::vector<
         std::pair<mi::base::Handle<const IType>, std::string> > Fields;
     /// Datastructure used by #IType_factory to register struct types.
-    typedef std::vector<mi::base::Handle<const IAnnotation_block> > Field_annotations;
+    using Field_annotations = std::vector<mi::base::Handle<const IAnnotation_block> >;
 
     enum Predefined_id {
         SID_USER               = -1,
@@ -529,6 +529,8 @@ public:
 
     virtual const IType_struct* get_predefined_struct( IType_struct::Predefined_id id) const = 0;
 
+    virtual IType_list* clone( const IType_list* list) const = 0;
+
     virtual mi::Sint32 compare( const IType* lhs, const IType* rhs) const = 0;
 
     virtual mi::Sint32 compare( const IType_list* lhs, const IType_list* rhs) const = 0;
@@ -617,6 +619,12 @@ public:
     virtual IType_list* deserialize_list( SERIAL::Deserializer* deserializer) = 0;
 
     //@}
+
+    /// Re-creates a types based on the string created by #get_serialization_type_name().
+    ///
+    /// For enums and structs, the corresponding module must have been loaded, such that these
+    /// types are registered.
+    virtual const IType* create_type( const char* serialization_type_name) const = 0;
 };
 
 /// Returns the global type factory.

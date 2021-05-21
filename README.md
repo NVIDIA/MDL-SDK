@@ -56,7 +56,7 @@ The binary release is different in some functionality as documented in the
 ## Building the MDL SDK from Source
 
 MDL uses [CMake](http://www.cmake.org/) to generate build files for a 
-particular development environment. It is suggested to use CMake 3.11 or later, 
+particular development environment. It is required to use CMake 3.12 or later, 
 which can be downloaded from the [CMake Website](https://cmake.org/download/).
 When using a Unix-like system, you can install the *cmake* package using 
 the respective package management systems. On the Mac OS X platform, third party
@@ -65,48 +65,58 @@ dependencies can be resolved using the [Homebrew Package Manager](https://brew.s
 
 ### Dependencies
 
-The source code requires a C++11 compiler and several third-party libraries 
+The source code requires a C++17 compiler and several third-party libraries
 and tools to build the MDL SDK. Additional third-party libraries are used in 
 the examples.
 
-The build with the following x64-platform-compiler combinations has been 
+The build with the following 64-bit platform-compiler combinations has been 
 successfully tested:
 
--   **Windows 10:**     Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142) 
-    are recommended. Visual Studio 2015 (msvc v140) is the minimum requirement.
--   **Ubuntu 18.04:**   gcc/g++6 and gcc/g++7
+-   **Windows 10:**     Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142)
+-   **Ubuntu 18.04:**   GCC 7, GCC 8, or GCC 9 (on x86-64 or aarch64)
 -   **Mac OS X 10.13:** Xcode 8.3.3 (Apple Clang 8.1)
 
 The versions listed with the following dependencies have been
 successfully tested. Where not mentioned otherwise, other versions
 might work as well.
 The tested versions include the ones specified in the
-[VFX Reference Platform](https://vfxplatform.com/) CY2020.
+[VFX Reference Platform](https://vfxplatform.com/) CY2021.
 
 <a name="thirdparty-dependencies-libs"></a>
 The following third-party libraries are required to build the MDL SDK:
 
--   **Boost** *(1.67.0 or 1.70.0)* (headers)  
+-   **Boost** *(1.67.0 or 1.73.0)* (headers)  
     Linux: Install the *libboost-dev* package.  
     Windows: Download and extract the boost source code from 
     [boost.org](https://www.boost.org/users/download/).  
     Mac OS X: Install the *boost* package using brew.
 
--   **FreeImage** *(3.17.0)*  
+-   **FreeImage** *(3.18.0)*  
     Linux: Install the *libfreeimage-dev* package.  
     Windows: Download and extract the pre-compiled binaries from 
     [freeimage.sourceforge.net](http://freeimage.sourceforge.net/download.html).  
     Mac OS X: Install the *freeimage* package using brew.
 
--   **Python2** *(2.7.1)* or **Python3** *(3.7.5)*
+-   **Python3** *(3.7.5)*  
     Linux: Install the *python* package.  
-    Windows and Max OS X: Download and install Python 2.7 or 3.7 from 
+    Windows and Max OS X: Download and install Python 3.7 from 
     [python.org](https://www.python.org/downloads/).
 
 -   **Clang 7.0.0**  
     Using version 7.0.0 is mandatory.  
     Pre-compiled binaries can be found on
     [llvm.org](http://releases.llvm.org/download.html#7.0.0).
+
+For generating and compiling MDL Python Bindings, the following additional dependencies are required:
+
+-   **Python3 Development Package** *(3.7.5)*  
+    Linux: Install the *python-dev* package in addition to *python*.  
+    Windows and Max OS X: Download and install Python 3.7 from 
+    [python.org](https://www.python.org/downloads/).
+
+-   **SWIG** *(4.0.2)*  
+    Follow the instructions for downloading or building on 
+    [python.org](http://www.swig.org/download.html).
 
 In order to build and run all examples, you need additional third-party 
 libraries. These additional libraries are:
@@ -127,7 +137,7 @@ libraries. These additional libraries are:
     Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Qt** *(5.10.1 or 5.12.6)*  
+-   **Qt** *(5.10.1)*  
     Please follow the instructions on the [Qt Website](https://www.qt.io/).  
     To build with Qt support on Linux, your system's GLIBC needs to be release 
     2.14 or later.
@@ -135,7 +145,6 @@ libraries. These additional libraries are:
 -   **DirectX Raytracing support**  
     Building the DXR example requires:  
 
-    - Windows 10 version 1809 and the corresponding SDK 10.0.17763.0 or
     - Windows 10 version 1909 and the corresponding SDK 10.0.18362.0
 
     Additionally the optional *Graphic Tools* feature has to be installed.
@@ -160,7 +169,7 @@ Required tools to build the documentation:
 
 ### Building on Windows
 
-1.  Before generating the Visual Studio 2015 solution, be sure to
+1.  Before generating the Visual Studio solution, be sure to
     download and extract or install the third-party libraries listed
     above.  The following steps assume you have extracted the pre-compiled 
     binaries to a common third-party directory that is:
@@ -174,12 +183,12 @@ Required tools to build the documentation:
     binaries.
 
     It is recommended that you build into a subdirectory, not into the repository root.
-    *C:/projects/mdl-sdk/build/vs2015* for example is fine, assuming you cloned the repository to:
+    *C:/projects/mdl-sdk/build/vs2017* for example is fine, assuming you cloned the repository to:
 
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the
-    Generator. Select `Visual Studio 14 2015 Win64` (for newer CMake versions
+    Generator. Select `Visual Studio 14 2017 Win64` (for newer CMake versions
     select `x64` as platform), enter `host=x64` as toolset and click
     `Finish`.  CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
@@ -209,14 +218,20 @@ Required tools to build the documentation:
     -   **GLFW_DIR** in Ungrouped Entries,  
         for example: *C:/projects/thirdparty/glfw-3.2.1.bin.WIN64*
 
+    -   **PYTHON_DIR** in Ungrouped Entries (only if not found in the PATH),  
+        for example: *C:/Python37*
+
     -   **clang_PATH** in Ungrouped Entries (only if not found in the PATH),  
         for example: *C:/Program Files/LLVM-7/bin/clang.exe*
 
-    -   **python_PATH** in Ungrouped Entries (only of not found in the PATH),  
-        for example: *C:/projects/thirdparty/python_2_7_1/bin/python.exe*
+    -   **python_PATH** in Ungrouped Entries (only if not found in the PATH),  
+        for example: *C:/projects/thirdparty/python_2_7_1/bin/python.exe*  
+
+    -   **swig_PATH** in Ungrouped Entries (only if not found in the PATH),  
+        for example: *C:/projects/thirdparty/swigwin-4.0.2/swig.exe*
 
     -   **Qt5_DIR** in Ungrouped Entries,  
-        for example: *C:/Qt/5.10.1/msvc2015_64*
+        for example: *C:/Qt/5.10.1/msvc2017_64*
 
     -   **ARNOLD_SDK_DIR** in Ungrouped Entries,
         for example: *C:/projects/thirdparty/Arnold-6.0.3.0-windows*
@@ -242,13 +257,7 @@ Required tools to build the documentation:
     You can also open the Visual Studio solution directly from the build 
     directory.
 
-7.  For Visual Studio 2015, you may have to adapt the `Target Platform Version` under
-    `General` in the example and third-party project properties to avoid getting build errors.
-    CMake is configured to select the latest SDK installed. Select `10.0.18362.0`
-    manually if you have the SDK installed. Otherwise, select version `10.0.17763.0`.
-    For later Visual Studio versions, CMake will use the correct platform version.
-
-8.  Use Visual Studio to build the MDL SDK library, the MDL Core library,
+7.  Use Visual Studio to build the MDL SDK library, the MDL Core library,
     and the examples. When running the examples using the Visual Studio debugger,
     you can provide additional command line arguments by specifying them in the
     individual Visual Studio project settings.
@@ -288,9 +297,13 @@ Required tools to build the documentation:
     binary as described [above](#thirdparty-dependencies-libs). In
     the following, it is assumed that the extracted clang is the only
     clang compiler found in the system path or, for step 3.ii, that it
-    has been extracted to:
+    has been extracted to (on x86-64):
 
         $HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-linux-gnu-ubuntu-16.04/bin/clang
+
+    or (on aarch64):
+
+        $HOME/projects/thirdparty/clang+llvm-7.0.0-aarch64-linux-gnu/bin/clang
     
 2.  It is assumed that you checked out the repository in your home directory 
     as follows:
@@ -305,7 +318,7 @@ Required tools to build the documentation:
     that you build into a subdirectory, not the repository root: 
 
     ```bash
-    export MDL_SDK_BUILD=$MDL_SDK_ROOT/build/linux-x64-gcc7
+    export MDL_SDK_BUILD=$MDL_SDK_ROOT/build
     mkdir -p $MDL_SDK_BUILD
     cd $MDL_SDK_BUILD
     ```
@@ -318,7 +331,7 @@ Required tools to build the documentation:
         interactions:
 
         ```bash
-        cmake ../..
+        cmake ..
         ```
 
         In this case, you can continue with Step 4.
@@ -326,11 +339,12 @@ Required tools to build the documentation:
     2.  Optionally, you can use CMake options and the *-D* flags to customize 
         your build.
 
-        One or multiple of these flags can be used to enable and disable examples and logging (see 
+        One or multiple of these flags can be used to enable and disable
+        examples and logging (see 
         [Additional CMake Options](#additional-cmake-options)), for example:
 
         ```bash
-        cmake -DMDL_BUILD_SDK_EXAMPLES=OFF -DMDL_BUILD_CORE_EXAMPLES=OFF ../..
+        cmake -DMDL_BUILD_SDK_EXAMPLES=OFF -DMDL_BUILD_CORE_EXAMPLES=OFF ..
         ```
 
         You can also use the flags to point CMake to custom installation 
@@ -343,32 +357,40 @@ Required tools to build the documentation:
         call to CMake could look as follows:
 
         ```bash
-        cmake -DGLEW_DIR=$HOME/projects/thirdparty/glew-2.1.0 ../..
+        cmake -DGLEW_DIR=$HOME/projects/thirdparty/glew-2.1.0 ..
         ```
 
         When a different clang compiler is installed on your system, you
         can provide the path to a clang 7.0.0 by setting the 'clang_Path'
-        option:
+        option (on x86-64):
 
         ```bash
-        cmake -Dclang_PATH=$HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-linux-gnu-ubuntu-16.04/bin/clang ../..
+        cmake -Dclang_PATH=$HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-linux-gnu-ubuntu-16.04/bin/clang ..
         ```
-        
+
+        or (on aarch64):
+
+        ```bash
+        cmake -Dclang_PATH=$HOME/projects/thirdparty/clang+llvm-7.0.0-aarch64-linux-gnu/bin/clang ..
+        ```
+
         The same applies to other dependencies like Python 2.7.
 
         For builds using a different compiler version, you need to pass the 
         compiler names when calling CMake as follows:
 
         ```bash
-        sudo apt-get install gcc-6 g++-6
-        cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-6 -DCMAKE_CXX_COMPILER=/usr/bin/g++-6 ../..
+        sudo apt-get install gcc-7 g++-7
+        cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-7 -DCMAKE_CXX_COMPILER=/usr/bin/g++-7 ..
         ```
         
         To create an optimized build on a Unix-like system, set the build type to *Release*:
 
         ```bash
-        cmake -DCMAKE_BUILD_TYPE=Release ../..
+        cmake -DCMAKE_BUILD_TYPE=Release ..
         ```
+
+        and replace `Debug` by `Release` below.
 
     3.  In case CMake is not able to find a working CUDA compiler for the 
         examples, make sure the *nvcc* is reachable through the system PATH 
@@ -389,7 +411,7 @@ Required tools to build the documentation:
         or pass the Qt5_DIR as CMake option:
 
         ```bash
-        cmake -DQt5_DIR=$HOME/Qt/5.10.1/gcc_64 ../..
+        cmake -DQt5_DIR=$HOME/Qt/5.10.1/gcc_64 ..
         ```
 
 4.  After a successful configuration, you can run make from within the
@@ -406,13 +428,13 @@ Required tools to build the documentation:
     the image plugins using the `LD_LIBRARY_PATH` variable:
 
     ```bash
-    export LD_LIBRARY_PATH=$MDL_SDK_BUILD/src/prod/lib/mdl_sdk:$MDL_SDK_BUILD/src/prod/lib/mdl_core:$MDL_SDK_BUILD/src/shaders/plugin/freeimage${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+    export LD_LIBRARY_PATH=$MDL_SDK_BUILD/src/prod/lib/mdl_sdk/Debug:$MDL_SDK_BUILD/src/prod/lib/mdl_core/Debug:$MDL_SDK_BUILD/src/shaders/plugin/freeimage/Debug:${LD_LIBRARY_PATH}
     ```
 
     For example, to run the MDL SDK modules example, use:
 
     ```bash
-    cd $MDL_SDK_BUILD/examples/mdl_sdk/modules
+    cd $MDL_SDK_BUILD/examples/mdl_sdk/modules/Debug
     ./modules
     ```
 
@@ -437,7 +459,7 @@ Required tools to build the documentation:
     -   **clang_PATH** in Ungrouped Entries,  
         for example: *$HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang*
 
-    -   **python_PATH** in Ungrouped Entries (only of not found in the PATH),  
+    -   **python_PATH** in Ungrouped Entries (only if not found in the PATH),  
         for example: */usr/bin/python*
 
     -   **Qt5_DIR** in Ungrouped Entries,  
@@ -458,13 +480,13 @@ Required tools to build the documentation:
 
     ```bash
     export Qt5_DIR=$HOME/Qt/5.10.1/clang_64
-    export DYLD_LIBRARY_PATH=$MDL_SDK_BUILD/src/prod/lib/mdl_sdk:$MDL_SDK_BUILD/src/prod/lib/mdl_core:$MDL_SDK_BUILD/src/shaders/plugin/freeimage:${Qt5_DIR}/lib:${Qt5_DIR}/plugins/imageformats${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}
+    export DYLD_LIBRARY_PATH=$MDL_SDK_BUILD/src/prod/lib/mdl_sdk/Debug:$MDL_SDK_BUILD/src/prod/lib/mdl_core/Debug:$MDL_SDK_BUILD/src/shaders/plugin/freeimage/Debug:${Qt5_DIR}/lib:${Qt5_DIR}/plugins/imageformats:${DYLD_LIBRARY_PATH}
     ```
 
     For example, to run the MDL SDK modules example, use:
 
     ```bash
-    cd $MDL_SDK_BUILD/examples/mdl_sdk/modules
+    cd $MDL_SDK_BUILD/examples/mdl_sdk/modules/Debug
     ./modules
     ```
 
@@ -493,6 +515,9 @@ select particular logging information:
 
 -   **MDL_ENABLE_QT_EXAMPLES**  
     [ON/OFF] enable/disable examples that require Qt.
+
+-   **MDL_ENABLE_PYTHON_BINDINGS**  
+    [ON/OFF] enable/disable the generation and compilation of the MDL Python Bindings.
 
 -   **MDL_BUILD_ARNOLD_PLUGIN**  
     [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
@@ -545,7 +570,7 @@ need to generate; they are a part of the source code release.
         to `YES` in `doc/mdl_sdkapi` and `doc/mdl_coreapi`.
 
     2.  Set the `GRAPHVIZ_DOT_HOME` environment variable to the directory 
-        containing the GraphVis `dot` command (not the local `doc/mdl_sdkapi` 
+        containing the GraphViz `dot` command (not the local `doc/mdl_sdkapi` 
         or `doc/mdl_coreapi` directory with the equally named `dot` shell 
         script, which is just a wrapper). Defaults to /usr/bin on Linux.
 

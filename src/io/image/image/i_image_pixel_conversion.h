@@ -551,17 +551,6 @@ MI_HOST_DEVICE_INLINE bool copy(
 
 template <Pixel_type Source, Pixel_type Dest>
 MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
-    const Source_base_type* const source, Dest_base_type* const dest)
-{
-#ifndef __CUDACC__
-    // Use exists_pixel_conversion( Source, Dest) to find out whether the conversion from
-    // Source to Dest is supported.
-    ASSERT( M_IMAGE, !"pixel type conversion not implemented for this combination");
-#endif
-}
-
-template <Pixel_type Source, Pixel_type Dest>
-MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const Source_base_type* source, Dest_base_type* dest, const mi::Size count)
 {
     for( mi::Size i = 0; i < count; ++i) {

@@ -61,9 +61,19 @@ public:
         mi::Uint32 argc,
         const mi::base::IInterface* argv[]);
 
-    // public API methods
+    Function_definition_impl( bool materials_are_functions);
+
+    // public API methods (IInterface)
+
+    const mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) const;
+
+    mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id);
+
+    // public API methods (IScene_element)
 
     mi::neuraylib::Element_type get_element_type() const final;
+
+    // public API methods (IFunction_definition)
 
     const char* get_module() const final;
 
@@ -85,6 +95,8 @@ public:
     bool is_exported() const final;
 
     bool is_uniform() const final;
+
+    bool is_material() const final;
 
     const mi::neuraylib::IType* get_return_type() const final;
 
@@ -114,10 +126,6 @@ public:
 
     bool is_valid(mi::neuraylib::IMdl_execution_context* context) const final;
 
-    mi::neuraylib::IFunction_call* create_function_call(
-        const mi::neuraylib::IExpression_list* arguments,
-        mi::Sint32* errors = nullptr) const final;
-
     const mi::neuraylib::IExpression* get_body() const final;
 
     mi::Size get_temporary_count() const final;
@@ -125,6 +133,14 @@ public:
     const mi::neuraylib::IExpression* get_temporary( mi::Size index) const final;
 
     const char* get_temporary_name( mi::Size index) const final;
+
+    mi::neuraylib::IFunction_call* create_function_call(
+        const mi::neuraylib::IExpression_list* arguments,
+        mi::Sint32* errors) const final;
+
+private:
+    mutable std::string m_cached_thumbnail;
+    bool m_materials_are_functions;
 };
 
 } // namespace NEURAY

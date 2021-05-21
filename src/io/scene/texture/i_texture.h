@@ -69,13 +69,17 @@ public:
     /// The reference is set to a NULL tag.
     Texture();
 
-    Texture& operator=( const Texture&) = delete;
-
     /// Sets the reference image.
     void set_image( DB::Tag image);
 
     /// Returns the referenced image.
     DB::Tag get_image() const;
+
+    /// Sets the reference volume data.
+    void set_volume_data( DB::Tag volume);
+
+    /// Returns the referenced volume data.
+    DB::Tag get_volume_data() const;
 
     /// Sets the gamma value of this texture.
     ///
@@ -135,6 +139,7 @@ public:
 
 private:
 
+    DB::Tag m_volume_data;             ///< The referenced volume.
     DB::Tag m_image;                   ///< The referenced image.
     mi::Float32 m_gamma;               ///< The gamma value.
     Texture_compression m_compression; ///< The compression method.

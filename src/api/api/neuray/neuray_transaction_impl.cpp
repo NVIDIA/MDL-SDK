@@ -58,11 +58,9 @@
 #include <io/scene/dbimage/i_dbimage.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
-#include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
-#include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
+#include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
+#include <io/scene/mdl_elements/i_mdl_elements_module.h>
 
 
 namespace MI {
@@ -119,14 +117,14 @@ mi::Sint32 Transaction_impl::commit()
 
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-        "TX %u comitting ...", m_id_as_uint);
+        "TX %u committing ...", m_id_as_uint);
 #endif
 
     mi::Sint32 result = m_db_transaction->commit() ? 0 : -1;
 
 #ifdef VERBOSE_TX
     LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-        "TX %u comitting done.", m_id_as_uint);
+        "TX %u committing done.", m_id_as_uint);
 #endif
 
     return result;
@@ -221,7 +219,7 @@ mi::base::IInterface* Transaction_impl::edit(
         return nullptr;
 
     SERIAL::Class_id id = m_db_transaction->get_class_id(tag);
-    if (id == MDL::ID_MDL_MATERIAL_DEFINITION || id == MDL::ID_MDL_FUNCTION_DEFINITION)
+    if( id == MDL::ID_MDL_FUNCTION_DEFINITION)
         return nullptr;
 
 #ifdef VERBOSE_TX
@@ -254,18 +252,12 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
 
     // prevent any copies of IMdl_module, IMdl_material_definition, IMdl_function_definition
     if(     (class_id == MDL::ID_MDL_MODULE)
-         || (class_id == MDL::ID_MDL_MATERIAL_DEFINITION)
          || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
         return -6;
 
-    if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
-        DB::Access<MDL::Mdl_function_call> f_call(source_tag, m_db_transaction);
-        if (f_call->is_immutable())
-            return -6;
-    }
-    if (class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
-        DB::Access<MDL::Mdl_material_instance> m_inst(source_tag, m_db_transaction);
-        if (m_inst->is_immutable())
+    if( class_id == MDL::ID_MDL_FUNCTION_CALL) {
+        DB::Access<MDL::Mdl_function_call> fc( source_tag, m_db_transaction);
+        if( fc->is_immutable())
             return -6;
     }
 
@@ -287,18 +279,12 @@ mi::Sint32 Transaction_impl::copy( const char* source, const char* target, mi::U
         if( target_tag) {
             SERIAL::Class_id target_class_id = m_db_transaction->get_class_id( target_tag);
             if(    (target_class_id == MDL::ID_MDL_MODULE)
-                || (target_class_id == MDL::ID_MDL_MATERIAL_DEFINITION)
                 || (target_class_id == MDL::ID_MDL_FUNCTION_DEFINITION))
                 return -9;
 
-            if (target_class_id == MDL::ID_MDL_FUNCTION_CALL) {
-                DB::Access<MDL::Mdl_function_call> f_call(target_tag, m_db_transaction);
-                if (f_call->is_immutable())
-                    return -9;
-            }
-            if (target_class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
-                DB::Access<MDL::Mdl_material_instance> m_inst(target_tag, m_db_transaction);
-                if (m_inst->is_immutable())
+            if( target_class_id == MDL::ID_MDL_FUNCTION_CALL) {
+                DB::Access<MDL::Mdl_function_call> fc( target_tag, m_db_transaction);
+                if( fc->is_immutable())
                     return -9;
             }
         }
@@ -453,6 +439,12 @@ mi::IArray* Transaction_impl::list_elements(
     LOG::mod_log->vdebug( M_NEURAY_API, LOG::Mod_log::C_MISC, "  root_element:  %s", root_element);
     LOG::mod_log->vdebug( M_NEURAY_API, LOG::Mod_log::C_MISC, "  name_pattern:  %s", name_pattern);
 
+    bool materials_are_functions        = m_class_factory->get_materials_are_functions();
+    bool material_definitions_requested = false;
+    bool material_instances_requested   = false;
+    bool function_definitions_requested = false;
+    bool function_calls_requested       = false;
+
     // convert type_names to set of SERIAL::Class_id
     std::set<SERIAL::Class_id> class_ids;
     for( size_t i = 0; type_names && i < type_names->get_length(); ++i) {
@@ -464,6 +456,18 @@ mi::IArray* Transaction_impl::list_elements(
             continue;
         }
         std::string type_name = type_name_istring->get_c_str();
+        if( type_name == "Function_definition")
+            function_definitions_requested = true;
+        if( type_name == "Function_call" )
+            function_calls_requested = true;
+        if( type_name == "Material_definition") {
+            material_definitions_requested = true;
+            if( !materials_are_functions) type_name = "Function_definition";
+        }
+        if( type_name == "Material_instance" ) {
+            material_instances_requested = true;
+            if( !materials_are_functions) type_name = "Function_call";
+        }
         SERIAL::Class_id class_id = m_class_factory->get_class_id( type_name.c_str());
         if( class_id == 0) {
             // try again with "__" prefix
@@ -482,16 +486,64 @@ mi::IArray* Transaction_impl::list_elements(
     }
 
     // create result array
-    mi::IDynamic_array* result
-        = m_class_factory->create_type_instance<mi::IDynamic_array>( nullptr, "String[]", 0, nullptr);
+    mi::base::Handle<mi::IDynamic_array> result(
+        m_class_factory->create_type_instance<mi::IDynamic_array>( nullptr, "String[]", 0, nullptr));
 
     // start DFS post-order graph traversal at root_tag
     std::set<DB::Tag> tags_seen;
     tags_seen.insert( root_tag); // not really needed if the graph is acyclic
     list_elements_internal(
-        root_tag, name_pattern ? &name_regex : nullptr, type_names ? &class_ids : nullptr, result, tags_seen);
+        root_tag, name_pattern ? &name_regex : nullptr, type_names ? &class_ids : nullptr, result.get(), tags_seen);
 
-    return result;
+    // post-process the result w.r.t. function definitions and function calls
+    bool filter_definitions      = material_definitions_requested ^ function_definitions_requested;
+    bool filter_calls            = material_instances_requested ^ function_calls_requested;
+    bool post_process            = !materials_are_functions && (filter_definitions || filter_calls);
+
+    if( post_process) {
+
+        mi::base::Handle<mi::IDynamic_array> new_result(
+            m_class_factory->create_type_instance<mi::IDynamic_array>( nullptr, "String[]", 0, nullptr));
+
+        for( mi::Size i = 0, n = result->get_length(); i < n; ++i) {
+
+            mi::base::Handle<mi::IString> element( result->get_element<mi::IString>( i));
+            std::string name = element->get_c_str();
+            DB::Tag tag = m_db_transaction->name_to_tag( name.c_str());
+            SERIAL::Class_id class_id = m_db_transaction->get_class_id( tag);
+
+            if( filter_definitions && (class_id == MDL::ID_MDL_FUNCTION_DEFINITION)) {
+
+                DB::Access<MDL::Mdl_function_definition> fd( tag, m_db_transaction);
+                bool is_material = fd->is_material();
+                if( is_material && !material_definitions_requested)
+                    ; // ignore
+                else if( !is_material && !function_definitions_requested)
+                    ; // ignore
+                else
+                    new_result->push_back( element.get()); // keep
+
+            } else if( filter_calls && (class_id == MDL::ID_MDL_FUNCTION_CALL)) {
+
+                DB::Access<MDL::Mdl_function_call> fc( tag, m_db_transaction);
+                bool is_material = fc->is_material();
+                if( is_material && !material_instances_requested)
+                    ; // ignore
+                else if( !is_material && !function_calls_requested)
+                    ; // ignore
+                else
+                    new_result->push_back( element.get()); // keep
+
+            } else {
+                new_result->push_back( element.get()); // keep
+            }
+        }
+
+        result = new_result;
+    }
+
+    result->retain();
+    return result.get();
 }
 
 mi::Sint32 Transaction_impl::get_privacy_level( const char* name) const

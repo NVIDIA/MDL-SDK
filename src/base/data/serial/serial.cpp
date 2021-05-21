@@ -92,9 +92,6 @@ class Deserialization_class_compare
 class Deserialization_manager_impl : public Deserialization_manager
 {
   public:
-    // destructor
-    ~Deserialization_manager_impl();
-
     // Any module may register a factory function for a given Class_id. When
     // the deserializer finds this Class_id it will call the given factory
     // function to create an appropriate object. This object then provides the
@@ -199,28 +196,6 @@ void Serializer_impl::write(const char* value)
     // serialize length+1 to distinguish NULL from '\0'
     write_size_t(size + 1u);
     write(value, size);
-}
-
-void Serializer_impl::write(const std::string& value)
-{
-    write_size_t(value.size() + 1u);
-    write(value.c_str(), value.size());
-}
-
-void Serializer_impl::write(const mi::base::Uuid& value)
-{
-    write(value.m_id1);
-    write(value.m_id2);
-    write(value.m_id3);
-    write(value.m_id4);
-}
-
-void Serializer_impl::write(const mi::math::Color& value)
-{
-    write(value.r);
-    write(value.g);
-    write(value.b);
-    write(value.a);
 }
 
 void Serializer_impl::write(const CONT::Bitvector& value)
@@ -381,41 +356,6 @@ void Deserializer_impl::read(char** value_pointer)
     (*value_pointer)[size-1] = '\0';
 }
 
-void Deserializer_impl::read(std::string* value_pointer)
-{
-    size_t size;
-    read_size_t(&size);
-
-    if (size == 0) {
-        // This should not happen unless someone serializes a NULL const char* and
-        // deserializes it as std::string.
-        value_pointer->clear();
-        return;
-    }
-
-    // length+1 was serialized to distinguish NULL from '\0'
-    size -= 1;
-    value_pointer->resize(size);
-    if (size > 0)
-        read(&((*value_pointer)[0]), size);
-}
-
-void Deserializer_impl::read(mi::base::Uuid* value_pointer)
-{
-    read(&value_pointer->m_id1);
-    read(&value_pointer->m_id2);
-    read(&value_pointer->m_id3);
-    read(&value_pointer->m_id4);
-}
-
-void Deserializer_impl::read(mi::math::Color* value_pointer)
-{
-    read(&value_pointer->r);
-    read(&value_pointer->g);
-    read(&value_pointer->b);
-    read(&value_pointer->a);
-}
-
 void Deserializer_impl::read(CONT::Bitvector* value_pointer)
 {
     size_t size;
@@ -490,11 +430,6 @@ void Deserialization_manager::release(
     delete mgr;
 }
 
-// destructor
-Deserialization_manager_impl::~Deserialization_manager_impl()
-{
-}
-
 // Any module may register a factory function for a given Class_id. When
 // the deserializer finds this Class_id it will call the given factory
 // function to create an appropriate object. This object then provides the
@@ -566,6 +501,24 @@ void Deserializer_impl::set_error_handler(IDeserializer_error_handler<>* handler
 {
     m_error_handler = mi::base::make_handle_dup< IDeserializer_error_handler<> >(handler);
 }
+
+template <typename S, typename>
+inline void write(S* serial, const mi::math::Color& value)
+{
+    serial->write(value.begin(),value.size());
+}
+
+template <typename D, typename>
+inline void read(D* serial, mi::math::Color* value)
+{
+    serial->read(value->begin(),value->size());
+}
+
+template void write<Serializer>(Serializer*, const mi::math::Color&);
+template void write<mi::neuraylib::ISerializer>(mi::neuraylib::ISerializer*, const mi::math::Color&);
+template void read<Deserializer>(Deserializer*, mi::math::Color*);
+template void read<mi::neuraylib::IDeserializer>(mi::neuraylib::IDeserializer*, mi::math::Color*);
+
 
 } // namespace DB
 

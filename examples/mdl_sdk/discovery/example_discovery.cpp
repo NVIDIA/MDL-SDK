@@ -265,12 +265,13 @@ void log_api_package(const IMdl_info* info, int level)
 static void usage(const char *name)
 {
     std::cout
-        << "usage: " << name << " [options] [<material_name1> ...]\n"
+        << "usage: " << name << " [options]\n"
         << "--help, -h            print this text\n"
         << "--filter, -f <kind>   discovery filter, can occur multiple times\n"
         << "                      Valid values are: DK_PACKAGE DK_MODULE DK_XLIFF DK_TEXTURE\n"
         << "                      DK_LIGHTPROFILE DK_MEASURED_BSDF DK_ALL(default)\n"
-        << "--mdl_path, -m <path> mdl search path, can occur multiple times\n";
+        << "--mdl_path, -m <path> mdl search path, can occur multiple times\n"
+        << "                      if none is provided, the example search path is used\n";
     exit(EXIT_FAILURE);
 }
 
@@ -307,13 +308,10 @@ int MAIN_UTF8(int argc, char* argv[])
             }
         }
 
-        // at least one search path is required for the example to work
-        if (options.additional_mdl_paths.size() == 0) {
-            usage(argv[0]);
+        // disable the example search path if search path options are present
+        if (options.additional_mdl_paths.size() > 0) {
+            options.add_example_search_path = false;
         }
-
-        // disable the example search path
-        options.add_example_search_path = false;
     }
 
     // disable admin and user space search paths to limit the output to only

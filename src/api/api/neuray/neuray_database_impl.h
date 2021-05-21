@@ -83,7 +83,7 @@ public:
 
     mi::Sint32 unlock( mi::Uint32 lock_id);
 
-    void garbage_collection();
+    void garbage_collection( mi::neuraylib::IDatabase::Garbage_collection_priority priority);
 
     // internal methods
 

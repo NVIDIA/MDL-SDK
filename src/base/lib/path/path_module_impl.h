@@ -68,10 +68,6 @@ public:
     std::string search( Kind kind, const std::string& file_name) const;
 
 private:
-    /// On Windows, replaces all slashes by backslashes.
-    /// On all other platforms, returns the string unchanged.
-    static std::string normalize( const std::string& s);
-
     /// Lock for m_search_paths.
     mutable mi::base::Lock m_lock;
 

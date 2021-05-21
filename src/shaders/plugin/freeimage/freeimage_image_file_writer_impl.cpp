@@ -95,7 +95,7 @@ Image_file_writer_impl::~Image_file_writer_impl()
         int flags = 0;
         // Export JPGs with the desired quality.
         if( m_format == FIF_JPEG)
-            flags |= m_quality;
+            flags |= m_quality; // 0..100
         // Export EXRs using full 32bit precision (default is 16bit precision), enable ZIP
         // compression.
         if( m_format == FIF_EXR)

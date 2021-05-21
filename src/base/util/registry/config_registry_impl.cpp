@@ -34,6 +34,7 @@
 #include "config_registry_impl.h"
 
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
+#include <algorithm>
 #include <cctype>
 #include <ostream>
 #include <vector>

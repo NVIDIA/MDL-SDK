@@ -155,17 +155,38 @@ inline void Serializer::write(const std::vector< std::vector<T, A1>, A2>& array)
     }
 }
 
-inline void write(Serializer* serial, bool value)   { serial->write( value ); }
-inline void write(Serializer* serial, Uint8 value)  { serial->write( value ); }
-inline void write(Serializer* serial, Uint16 value) { serial->write( value ); }
-inline void write(Serializer* serial, Uint32 value) { serial->write( value ); }
-inline void write(Serializer* serial, Uint64 value) { serial->write( value ); }
-inline void write(Serializer* serial, Sint8 value)  { serial->write( value ); }
-inline void write(Serializer* serial, Sint16 value) { serial->write( value ); }
-inline void write(Serializer* serial, Sint32 value) { serial->write( value ); }
-inline void write(Serializer* serial, Sint64 value) { serial->write( value ); }
-inline void write(Serializer* serial, float value)  { serial->write( value ); }
-inline void write(Serializer* serial, double value) { serial->write( value ); }
+template <typename S, typename>
+inline void write(S* serial, bool value)   { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Uint8 value)  { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Uint16 value) { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Uint32 value) { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Uint64 value) { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Sint8 value)  { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Sint16 value) { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Sint32 value) { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, Sint64 value) { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, float value)  { serial->write( &value, 1 ); }
+
+template <typename S, typename>
+inline void write(S* serial, double value) { serial->write( &value, 1 ); }
 
 inline void write(
     Serializer* serial,
@@ -187,10 +208,10 @@ inline void write(Serializer* serial, const DB::Tag_version& value )
     write( serial, value.m_transaction_id );
 }
 
-template <typename T, Size R, Size C>
-inline void write(Serializer* serial, const mi::math::Matrix<T,R,C>& value)
+template <typename T, Size R, Size C, typename S, typename>
+inline void write(S* serial, const mi::math::Matrix_struct<T,R,C>& value)
 {
-    serial->write(value.begin(),value.size());
+    serial->write(mi::math::matrix_base_ptr(value),R*C);
 }
 
 inline void write(Serializer* serial, const char* value)
@@ -198,25 +219,40 @@ inline void write(Serializer* serial, const char* value)
     serial->write( value );
 }
 
-inline void write(Serializer* serial,  const std::string& value)
+template <typename S, typename>
+inline void write(S* serial, const std::string& value)
 {
-    serial->write( value );
+    write(serial,(Uint64)value.size()+1);       // silly, only for backwards compatibility
+    serial->write(reinterpret_cast<const Uint8*>(value.c_str()),value.size());
 }
 
-inline void write(Serializer* serial, const mi::base::Uuid& value)
+template <typename S, typename>
+inline void write(S* serial, const mi::base::Uuid& value)
 {
-    serial->write( value );
+    write(serial,value.m_id1);
+    write(serial,value.m_id2);
+    write(serial,value.m_id3);
+    write(serial,value.m_id4);
 }
 
-inline void write(Serializer* serial, const mi::math::Color& value)
+template <typename T, Size DIM, typename S, typename>
+inline void write(S* serial, const mi::math::Vector_struct<T,DIM>& value)
 {
-    serial->write( value );
+    serial->write(mi::math::vector_base_ptr(value),DIM);
 }
 
-template <typename T, Size DIM>
-inline void write(Serializer* serial, const mi::math::Vector<T,DIM>& value)
+template <typename T, Size DIM, typename S, typename>
+inline void write(S* serial, const mi::math::Bbox_struct<T,DIM>& value)
 {
-    serial->write(value.begin(),DIM);
+    write(serial,value.min);
+    write(serial,value.max);
+}
+
+template <typename T, Size DIM, typename S, typename>
+inline void write(S* serial, const mi::math::Bbox<T,DIM>& value)
+{
+    write(serial,value.min);
+    write(serial,value.max);
 }
 
 inline void write(Serializer* serial, const CONT::Bitvector& value)
@@ -239,17 +275,33 @@ inline void write(Serializer* serial, const Serializable& value)
     serial->write( value );
 }
 
-inline void read(Deserializer* deser, bool* value_pointer)   { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Uint8* value_pointer)  { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Uint16* value_pointer) { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Uint32* value_pointer) { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Uint64* value_pointer) { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Sint8* value_pointer)  { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Sint16* value_pointer) { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Sint32* value_pointer) { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, Sint64* value_pointer) { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, float* value_pointer)  { deser->read( value_pointer ); }
-inline void read(Deserializer* deser, double* value_pointer) { deser->read( value_pointer ); }
+inline void write(mi::neuraylib::ISerializer* serial, const mi::neuraylib::ISerializable& value)
+{
+    value.serialize(serial);
+}
+
+template <typename D, typename>
+inline void read(D* deser, bool* value_pointer)   { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Uint8* value_pointer)  { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Uint16* value_pointer) { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Uint32* value_pointer) { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Uint64* value_pointer) { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Sint8* value_pointer)  { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Sint16* value_pointer) { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Sint32* value_pointer) { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, Sint64* value_pointer) { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, float* value_pointer)  { deser->read( value_pointer, 1 ); }
+template <typename D, typename>
+inline void read(D* deser, double* value_pointer) { deser->read( value_pointer, 1 ); }
 
 inline void read(Deserializer* deser, DB::Tag* value_pointer)
 {
@@ -272,10 +324,10 @@ inline void read(Deserializer* deser, DB::Tag_version* value_pointer)
 }
 
 
-template <typename T, Size R, Size C>
-inline void read(Deserializer* deser, mi::math::Matrix<T,R,C>* value_pointer)
+template <typename T, Size R, Size C, typename D, typename>
+inline void read(D* deser, mi::math::Matrix_struct<T,R,C>* value_pointer)
 {
-    deser->read( value_pointer->begin(), value_pointer->size() );
+    deser->read( mi::math::matrix_base_ptr(*value_pointer), R*C);
 }
 
 inline void read(Deserializer* deser, char** value_pointer)
@@ -283,25 +335,42 @@ inline void read(Deserializer* deser, char** value_pointer)
     deser->read( value_pointer );
 }
 
-inline void read(Deserializer* deser, std::string* value_pointer)
+template <typename D, typename>
+inline void read(D* deser, std::string* value_pointer)
 {
-    deser->read( value_pointer );
+    Uint64 size;
+    read(deser,&size);
+    value_pointer->resize(size-1);      // silly, only for backwards compatibility
+    deser->read(reinterpret_cast<mi::Uint8*>(&((*value_pointer)[0])),size-1);
 }
 
-inline void read(Deserializer* deser, mi::math::Color* value_pointer)
+template <typename D, typename>
+inline void read(D* deser, mi::base::Uuid* value_pointer)
 {
-    deser->read( value_pointer );
+    read(deser,&value_pointer->m_id1);
+    read(deser,&value_pointer->m_id2);
+    read(deser,&value_pointer->m_id3);
+    read(deser,&value_pointer->m_id4);
 }
 
-inline void read(Deserializer* deser, mi::base::Uuid* value_pointer)
+template <typename T, Size DIM, typename D, typename>
+inline void read(D* deser, mi::math::Vector_struct<T,DIM>* value)
 {
-    deser->read( value_pointer );
+    deser->read(mi::math::vector_base_ptr(*value),DIM);
 }
 
-template <typename T, Size DIM>
-inline void read(Deserializer* deser, mi::math::Vector<T,DIM>* value)
+template <typename T, Size DIM, typename D, typename>
+inline void read(D* deser, mi::math::Bbox_struct<T,DIM>* value)
 {
-    deser->read(value->begin(),DIM);
+    read(deser,&value->min);
+    read(deser,&value->max);
+}
+
+template <typename T, Size DIM, typename D, typename>
+inline void read(D* deser, mi::math::Bbox<T,DIM>* value)
+{
+    read(deser,&value->min);
+    read(deser,&value->max);
 }
 
 inline void read(Deserializer* deser, CONT::Bitvector* value_type)
@@ -326,77 +395,84 @@ inline void read(Deserializer* deser, Serializable* value_type)
     deser->read( value_type );
 }
 
-template <class Iterator>
-inline void read_range(Deserializer& deserializer, Iterator begin, Iterator end)
+inline void read(mi::neuraylib::IDeserializer* deser, mi::neuraylib::ISerializable* value_type)
+{
+    value_type->deserialize(deser);
+}
+
+template <class Iterator, typename D, typename>
+inline void read_range(D& deserializer, Iterator begin, Iterator end)
 {
     while (begin != end)
         read(&deserializer, &(*(begin++)));
 }
 
-template <typename T, size_t N>
-inline void read_range(Deserializer& deserializer, T (&arr)[N])
+template <typename T, size_t N, typename D, typename>
+inline void read_range(D& deserializer, T (&arr)[N])
 {
     read_range(deserializer,arr+0,arr+N);
 }
 
-template <class Iterator>
-inline void write_range(Serializer& serializer, Iterator begin, Iterator end)
+template <class Iterator, typename S, typename>
+inline void write_range(S& serializer, Iterator begin, Iterator end)
 {
     while (begin != end)
         write(&serializer, *begin++);
 }
 
-template <typename T, size_t N>
-inline void write_range(Serializer& serializer, const T (&arr)[N])
+template <typename T, size_t N, typename S, typename>
+inline void write_range(S& serializer, const T (&arr)[N])
 {
     write_range(serializer,arr+0,arr+N);
 }
 
-template <typename T>
-inline void write(Serializer* serializer, const std::vector<T>& array)
+template <typename T, typename S, typename>
+inline void write(S* serializer, const std::vector<T>& array)
 {
-    serializer->write_size_t(array.size());
+    write(serializer,(mi::Uint64)array.size());
     write_range(*serializer, array.begin(), array.end());
 }
 
-template <typename T,typename A>
-inline void write(Serializer* serializer, const std::vector<T,A>& array)
+template <typename T,typename A, typename S, typename>
+inline void write(S* serializer, const std::vector<T,A>& array)
 {
-    serializer->write_size_t(array.size());
+    write(serializer,(mi::Uint64)array.size());
     write_range(*serializer, array.begin(), array.end());
 }
 
-template <typename T>
-inline void write(Serializer* serializer, const std::vector<T*>& array)
+template <typename T, typename S, typename>
+inline void write(S* serializer, const std::vector<T*>& array)
 {
-    const size_t size(array.size());
-    serializer->write_size_t(size);
-    for (size_t i=0; i != size; ++i)
+    const mi::Uint64 size(array.size());
+    write(serializer,size);
+    for (mi::Uint64 i=0; i != size; ++i)
         write(serializer,array[i]);
 }
 
-template <typename T,typename A>
-inline void write(Serializer* serializer, const std::vector<T*,A>& array)
+template <typename T,typename A, typename S, typename>
+inline void write(S* serializer, const std::vector<T*,A>& array)
 {
-    const size_t size(array.size());
-    serializer->write_size_t(size);
-    for (size_t i=0; i != size; ++i)
+    const mi::Uint64 size(array.size());
+    write(serializer,size);
+    for (mi::Uint64 i=0; i != size; ++i)
         write(serializer,array[i]);
 }
 
-template <typename T>
-inline void read(Deserializer* deserializer, std::vector<T>* array)
+template <typename T, typename D, typename>
+inline void read(D* deserializer, std::vector<T>* array)
 {
-    size_t size;
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     array->resize(size);
     read_range(*deserializer, array->begin(), array->end());
 }
 
-inline void read(Deserializer* deserializer, std::vector<bool>* array)
+// needed because read_range is not compatible with bool vector iterators
+template <typename D, typename = enable_if_deserializer_t<D>>
+inline void read(D* deserializer, std::vector<bool>* array)
 {
-    size_t size;
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     array->resize(size);
     for (std::vector<bool>::iterator it = array->begin(), end = array->end(); it != end; ++it)
     {
@@ -406,81 +482,81 @@ inline void read(Deserializer* deserializer, std::vector<bool>* array)
     }
 }
 
-template <typename T,typename A>
-inline void read(Deserializer* deserializer, std::vector<T,A>* array)
+template <typename T,typename A, typename D, typename>
+inline void read(D* deserializer, std::vector<T,A>* array)
 {
-    size_t size;
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     array->resize(size);
     read_range(*deserializer, array->begin(), array->end());
 }
 
-template <typename T>
-inline void read(Deserializer* deserializer, std::vector<T*>* array)
+template <typename T, typename D, typename>
+inline void read(D* deserializer, std::vector<T*>* array)
 {
-    size_t size;
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     array->resize(size);
     for (size_t i=0; i != size; ++i)
         (*array)[i] = reinterpret_cast<T*>( deserializer->deserialize() );
 }
 
-template <typename T,typename A>
-inline void read(Deserializer* deserializer, std::vector<T*,A>* array)
+template <typename T,typename A, typename D, typename>
+inline void read(D* deserializer, std::vector<T*,A>* array)
 {
-    size_t size;
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     array->resize(size);
     for (size_t i=0; i != size; ++i)
         (*array)[i] = reinterpret_cast<T*>( deserializer->deserialize() );
 }
 
-template <typename T>
-inline void write(Serializer* serializer, const std::list<T>& list)
+template <typename T, typename S, typename>
+inline void write(S* serializer, const std::list<T>& list)
 {
-    serializer->write_size_t(list.size());
+    write(serializer,(mi::Uint64)list.size());
     for (typename std::list<T>::const_iterator i=list.begin(),e=list.end(); i!=e; ++i)
         write(serializer,*i);
 }
 
-template <typename T>
-inline void read(Deserializer* deserializer, std::list<T>* list)
+template <typename T, typename D, typename>
+inline void read(D* deserializer, std::list<T>* list)
 {
-    size_t size = 0;
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     list->resize(size);
     for (typename std::list<T>::iterator i=list->begin(),e=list->end(); i!=e; ++i)
         read(deserializer,&*i);
 }
 
-template <typename T, typename U>
-inline void write(Serializer* serializer, const std::pair<T, U>& pair)
+template <typename T, typename U, typename S, typename>
+inline void write(S* serializer, const std::pair<T, U>& pair)
 {
     write(serializer, pair.first);
     write(serializer, pair.second);
 }
 
-template <typename T, typename U>
-inline void read(Deserializer* deserializer, std::pair<T, U>* pair)
+template <typename T, typename U, typename D, typename>
+inline void read(D* deserializer, std::pair<T, U>* pair)
 {
     read(deserializer, &(pair->first));
     read(deserializer, &(pair->second));
 }
 
-template <typename T, typename SWO>
-void write(Serializer* serializer, const std::set<T,SWO>& set)
+template <typename T, typename SWO, typename S, typename>
+void write(S* serializer, const std::set<T,SWO>& set)
 {
     const size_t size(set.size());
-    serializer->write_size_t(size);
+    write(serializer,(mi::Uint64)size);
     write_range( *serializer, set.begin(), set.end() );
 }
 
-template <typename T, typename SWO>
-void read(Deserializer* deserializer, std::set<T,SWO>* set)
+template <typename T, typename SWO, typename D, typename>
+void read(D* deserializer, std::set<T,SWO>* set)
 {
-    size_t size;
     set->clear();
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     T value;
     for ( size_t i(0); i != size; ++i ) {
         read( deserializer, &value );
@@ -490,20 +566,20 @@ void read(Deserializer* deserializer, std::set<T,SWO>* set)
     }
 }
 
-template <typename T, typename U, typename SWO>
-void write(Serializer* serializer, const std::map<T,U,SWO>& map)
+template <typename T, typename U, typename SWO, typename S, typename>
+void write(S* serializer, const std::map<T,U,SWO>& map)
 {
     const size_t size(map.size());
-    serializer->write_size_t(size);
+    write(serializer,(mi::Uint64)size);
     write_range( *serializer, map.begin(), map.end() );
 }
 
-template <typename T, typename U, typename SWO>
-void read(Deserializer* deserializer, std::map<T,U,SWO>* map)
+template <typename T, typename U, typename SWO, typename D, typename>
+void read(D* deserializer, std::map<T,U,SWO>* map)
 {
-    size_t size;
     map->clear();
-    deserializer->read_size_t(&size);
+    mi::Uint64 size;
+    deserializer->read(&size);
     std::pair<T,U> value;
     for ( size_t i(0); i != size; ++i ) {
         read( deserializer, &value );
@@ -513,20 +589,20 @@ void read(Deserializer* deserializer, std::map<T,U,SWO>* map)
     }
 }
 
-template<class K, class V, class C, class A>
-void write(Serializer* ser, const std::multimap<K,V,C,A>& map)
+template<class K, class V, class C, class A, typename S, typename>
+void write(S* ser, const std::multimap<K,V,C,A>& map)
 {
     const size_t size(map.size());
-    ser->write_size_t(size);
+    write(ser,(mi::Uint64)size);
     write_range(*ser,map.begin(),map.end());
 }
 
-template<class K, class V, class C, class A>
-void read(Deserializer* deser, std::multimap<K,V,C,A>* map)
+template<class K, class V, class C, class A, typename D, typename>
+void read(D* deser, std::multimap<K,V,C,A>* map)
 {
-    size_t size;
     map->clear();
-    deser->read_size_t(&size);
+    mi::Uint64 size;
+    deser->read(&size);
     std::pair<K,V> value;
     for (size_t i(0); i != size; ++i) {
         read(deser,&value);
@@ -538,15 +614,15 @@ void read(Deserializer* deser, std::multimap<K,V,C,A>* map)
 
 
 
-template <typename Enum_type>
-void write_enum(Serializer* serializer, Enum_type enum_value )
+template <typename Enum_type, typename S, typename>
+void write_enum(S* serializer, Enum_type enum_value )
 {
     write(serializer,static_cast<typename std::underlying_type<Enum_type>::type>(enum_value));
 }
 
 
-template <typename Enum_type>
-void read_enum(Deserializer* deserializer, Enum_type* enum_value )
+template <typename Enum_type, typename D, typename>
+void read_enum(D* deserializer, Enum_type* enum_value )
 {
     typename std::underlying_type<Enum_type>::type v;
     read(deserializer,&v);

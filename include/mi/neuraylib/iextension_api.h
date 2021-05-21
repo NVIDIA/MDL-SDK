@@ -111,6 +111,48 @@ public:
         return register_class( class_name, typename T::IID(), factory.get());
     }
 
+    /// Unregisters a class with the \neurayApiName.
+    ///
+    /// Class unregistration must be done
+    /// \ifnot MDL_SOURCE_RELEASE in #mi::neuraylib::IPlugin::exit() or \endif
+    /// after \neurayProductName has been shut down.
+    ///
+    /// \param class_name   The class name under which the class was registered.
+    /// \param uuid         The class ID of the class. You can simply pass IID() of your class
+    ///                     derived from #mi::neuraylib::User_class.
+    /// \return
+    ///                     -  0: Success.
+    ///                     - -1: There is no class declaration registered under the name
+    ///                           \p class_name and/or UUID \p uuid.
+    ///                     - -2: Invalid parameters (\c NULL pointer).
+    ///                     - -3: The method may not be called at that point of time.
+    ///                     - -4: Invalid class name.
+    virtual Sint32 unregister_class( const char* class_name, base::Uuid uuid) = 0;
+
+    /// Unregisters a class with the \neurayApiName.
+    ///
+    /// Class unregistration must be done
+    /// \ifnot MDL_SOURCE_RELEASE in #mi::neuraylib::IPlugin::exit() or \endif
+    /// before \neurayProductName has been shut down.
+    ///
+    /// This templated member function is a wrapper of the non-template variant for the user's
+    /// convenience. It uses the default class factory #mi::neuraylib::User_class_factory
+    /// specialized for T.
+    ///
+    /// \param class_name   The class name under which the class was registered.
+    /// \return
+    ///                     -  0: Success.
+    ///                     - -1: There is no class declaration registered under the name
+    ///                           \p class_name and/or UUID \p uuid.
+    ///                     - -2: Invalid parameters (\c NULL pointer).
+    ///                     - -3: The method may not be called at that point of time.
+    ///                     - -4: Invalid class name.
+    template <class T>
+    Sint32 unregister_class( const char* class_name)
+    {
+        return unregister_class( class_name, typename T::IID());
+    }
+
     //@}
     /// \name Importers and exporters
     //@{
@@ -118,7 +160,7 @@ public:
     /// Registers a new importer with the \neurayApiName.
     ///
     /// Importer registration must be done
-    /// \ifnot MDL_SOURCE_RELEASE in #mi::neuraylib::IPlugin::init() or \endif 
+    /// \ifnot MDL_SOURCE_RELEASE in #mi::neuraylib::IPlugin::init() or \endif
     /// before \neurayProductName has been started.
     ///
     /// \param importer     The new importer to register.
@@ -131,7 +173,7 @@ public:
     /// Registers a new exporter with the \neurayApiName.
     ///
     /// Exporter registration must be done
-    /// \ifnot MDL_SOURCE_RELEASE in #mi::neuraylib::IPlugin::init() or \endif 
+    /// \ifnot MDL_SOURCE_RELEASE in #mi::neuraylib::IPlugin::init() or \endif
     /// before \neurayProductName has been started.
     ///
     /// \param exporter     The new exporter to register.
@@ -188,7 +230,7 @@ public:
     ///                         declaration.
     /// \return
     ///                         -  0: Success.
-    ///                         - -1: There is already a class, structure, enum, or call
+    ///                         - -1: There is already a class, structure, enum
     ///                               declaration registered under the name \p structure_name.
     ///                         - -2: Invalid parameters (\c NULL pointer).
     ///                         - -4: Invalid name for a structure declaration.
@@ -225,7 +267,7 @@ public:
     ///                         declaration.
     /// \return
     ///                         -  0: Success.
-    ///                         - -1: There is already a class, structure, enum, or call
+    ///                         - -1: There is already a class, structure, or enum
     ///                               declaration registered under the name \p enum_name.
     ///                         - -2: Invalid parameters (\c NULL pointer).
     ///                         - -4: Invalid name for an enum declaration.
@@ -245,6 +287,7 @@ public:
     virtual Sint32 unregister_enum_decl( const char* enum_name) = 0;
 
     //@}
+
 };
 
 /*@}*/ // end group mi_neuray_configuration

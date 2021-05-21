@@ -131,6 +131,15 @@ MDL::IAnnotation_block* get_internal_annotation_block( mi::neuraylib::IAnnotatio
 const MDL::IAnnotation_block* get_internal_annotation_block(
     const mi::neuraylib::IAnnotation_block* block);
 
+/// Returns the internal annotation list wrapped by \p list (or \c NULL if list is \c NULL or
+/// not a wrapper).
+MDL::IAnnotation_list* get_internal_annotation_list( mi::neuraylib::IAnnotation_list* list);
+
+/// Returns the internal annotation list wrapped by \p list (or \c NULL if list is \c NULL or
+/// not a wrapper).
+const MDL::IAnnotation_list* get_internal_annotation_list(
+    const mi::neuraylib::IAnnotation_list* list);
+
 
 /// Wrapper that implements an external expression interface by wrapping an internal one.
 ///
@@ -325,21 +334,25 @@ public:
 
     mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const;
 
+    bool is_exported() const;
+
+    void get_mdl_version(
+        mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const;
+
     mi::Size get_parameter_count() const;
 
-    const char* get_parameter_name(mi::Size index) const;
+    const char* get_parameter_name( mi::Size index) const;
 
-    mi::Size get_parameter_index(const char* name) const;
+    mi::Size get_parameter_index( const char* name) const;
 
     const mi::neuraylib::IType_list* get_parameter_types() const;
 
     const mi::neuraylib::IExpression_list* get_defaults() const;
 
-    bool is_exported() const;
-
     const mi::neuraylib::IAnnotation_block* get_annotations() const;
 
-    const mi::neuraylib::IAnnotation* create_annotation(const mi::neuraylib::IExpression_list* arguments) const;
+    const mi::neuraylib::IAnnotation* create_annotation(
+        const mi::neuraylib::IExpression_list* arguments) const;
 
 private:
     const mi::base::Handle<const Expression_factory> m_ef;
@@ -488,6 +501,9 @@ public:
     mi::neuraylib::IExpression_parameter* create_parameter(
         const mi::neuraylib::IType* type, mi::Size index) const;
 
+    mi::neuraylib::IExpression_direct_call* create_direct_call(
+        const char* name, mi::neuraylib::IExpression_list* arguments, mi::Sint32* errors) const;
+
     mi::neuraylib::IExpression_list* create_expression_list() const;
 
     mi::neuraylib::IAnnotation* create_annotation(
@@ -533,14 +549,6 @@ public:
         mi::Sint32* errors) const;
 
     // internal methods
-
-    /// Creates an direct call.
-    ///
-    /// \param name         The corresponding function or material definition.
-    /// \param arguments    The arguments of the direct call.
-    /// \return             The created call.
-    mi::neuraylib::IExpression_direct_call* create_direct_call(
-        const char* name, mi::neuraylib::IExpression_list* arguments) const;
 
     /// Creates a temporary reference.
     ///

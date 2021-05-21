@@ -108,7 +108,7 @@ class Transaction_wrapper : public Transaction
     void store_for_reference_counting(Tag tag, SCHED::Job* job, const char* name, 
         Privacy_level privacy_level, Journal_type journal_type, Privacy_level store_level = 255)
     {
-        store_for_reference_counting(tag, job, name, privacy_level, journal_type, store_level);
+        m_transaction->store_for_reference_counting(tag, job, name, privacy_level, journal_type, store_level);
     }
 
     Tag store_deferred(const char* name, Privacy_level privacy_level, Tag_set* references)

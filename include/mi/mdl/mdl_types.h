@@ -67,7 +67,7 @@ public:
         TK_STRUCT,                  ///< A struct type.
         TK_TEXTURE,                 ///< A texture type.
         TK_BSDF_MEASUREMENT,        ///< The bsdf measurement type.
-        TK_INCOMPLETE,              ///< The incomplete type, used internally by the compiler.
+        TK_AUTO,                    ///< The incomplete type, used internally by the compiler.
         TK_ERROR = 0xFFFFFFFF       ///< The error type.
     };
 
@@ -129,11 +129,11 @@ public:
 };
 
 /// The incomplete type temporary represents a in the syntax tree that is not yet deduced.
-class IType_incomplete : public IType
+class IType_auto : public IType
 {
 public:
     /// The kind of this subclass.
-    static Kind const s_kind = TK_INCOMPLETE;
+    static Kind const s_kind = TK_AUTO;
 };
 
 /// The base interface of all atomic types.
@@ -754,8 +754,8 @@ public:
     /// Create a new type error instance.
     virtual IType_error const *create_error() = 0;
 
-    /// Create a new type incomplete instance.
-    virtual IType_incomplete const *create_incomplete() = 0;
+    /// Create a new type auto (non-deduced incomplete type) instance.
+    virtual IType_auto const *create_auto() = 0;
 
     /// Create a new type bool instance.
     virtual IType_bool const *create_bool() = 0;

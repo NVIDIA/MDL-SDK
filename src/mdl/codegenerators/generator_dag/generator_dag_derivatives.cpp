@@ -95,7 +95,7 @@ bool is_floating_point_based_type(IType const *type)
 
     case IType::TK_VECTOR:
         {
-            IType_vector const *vec_type = as<IType_vector>(type);
+            IType_vector const *vec_type = cast<IType_vector>(type);
             IType_atomic const *elem_type = vec_type->get_element_type();
             IType::Kind elem_kind = elem_type->get_kind();
             return elem_kind == IType::TK_FLOAT || elem_kind == IType::TK_DOUBLE;
@@ -103,7 +103,7 @@ bool is_floating_point_based_type(IType const *type)
 
     case IType::TK_ARRAY:
         {
-            IType_array const *array_type = as<IType_array>(type);
+            IType_array const *array_type = cast<IType_array>(type);
             IType const *elem_type = array_type->get_element_type();
             return is_floating_point_based_type(elem_type);
         }
@@ -121,6 +121,10 @@ class Function_processor : public Module_visitor
 
 public:
     /// Constructor.
+    ///
+    /// \param alloc        the allocator
+    /// \param deriv_info   the derivative information for this module
+    /// \param module       the module
     Function_processor(IAllocator *alloc, Derivative_infos &deriv_infos, Module const *module)
     : m_alloc(alloc)
     , m_arena(alloc)
@@ -142,6 +146,8 @@ public:
     }
 
     /// Analyze the given function instance.
+    ///
+    /// \param func_inst  the instance
     Func_deriv_info *process(Function_instance const &func_inst)
     {
         m_func_inst = &func_inst;
@@ -195,8 +201,9 @@ public:
 
                 Module const *owner = m_module;
                 IDefinition const *def = ref->get_definition();
-                if (def->get_property(IDefinition::DP_IS_IMPORTED))
+                if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
                     def = m_module->get_original_definition(def, owner);
+                }
 
                 mi::base::Handle<IModule const> i_owner(owner, mi::base::DUP_INTERFACE);
                 def = skip_presets(def, i_owner);
@@ -236,7 +243,7 @@ public:
     }
 
     /// Fallback pre_visit function for non implemented expression types.
-    bool pre_visit(IExpression *expr) MDL_OVERRIDE
+    bool pre_visit(IExpression *expr) MDL_FINAL
     {
         if (m_want_derivatives) {
             m_exprs_want_derivatives->insert(expr);
@@ -246,7 +253,7 @@ public:
 
     /// Post-visitor for a variable declaration.
     /// Collects variable initializers.
-    void post_visit(IDeclaration_variable *var_decl) MDL_OVERRIDE
+    void post_visit(IDeclaration_variable *var_decl) MDL_FINAL
     {
         for (int i = 0, n = var_decl->get_variable_count(); i < n; ++i) {
             IDefinition const *var_def = var_decl->get_variable_name(i)->get_definition();
@@ -257,10 +264,11 @@ public:
 
     /// Visitor for a condition expression.
     /// Makes sure, no derivatives are requested for the condition.
-    bool pre_visit(IExpression_conditional *expr) MDL_OVERRIDE
+    bool pre_visit(IExpression_conditional *expr) MDL_FINAL
     {
-        if (!pre_visit(static_cast<IExpression *>(expr)))
+        if (!pre_visit(static_cast<IExpression *>(expr))) {
             return false;
+        }
 
         // No derivatives for the condition
         {
@@ -275,10 +283,11 @@ public:
     }
 
     /// Pre-visitor for a binary expression with special cases.
-    bool pre_visit(IExpression_binary *expr) MDL_OVERRIDE
+    bool pre_visit(IExpression_binary *expr) MDL_FINAL
     {
-        if (!pre_visit(static_cast<IExpression *>(expr)))
+        if (!pre_visit(static_cast<IExpression *>(expr))) {
             return false;
+        }
 
         // Special cases for some operators
         switch (expr->get_operator()) {
@@ -307,7 +316,7 @@ public:
 
     /// Post-visitor for a binary expression.
     /// Collects assignment expressions.
-    IExpression *post_visit(IExpression_binary *expr) MDL_OVERRIDE
+    IExpression *post_visit(IExpression_binary *expr) MDL_FINAL
     {
         // not an assignment operator?
         if (!is_binary_assign_operator(IExpression::Operator(expr->get_operator()))) {
@@ -324,7 +333,7 @@ public:
 
     /// Post-visitor for a reference expression.
     /// Collects variables and parameters.
-    IExpression *post_visit(IExpression_reference *ref) MDL_OVERRIDE
+    IExpression *post_visit(IExpression_reference *ref) MDL_FINAL
     {
         if (!m_want_derivatives) {
             return ref;
@@ -354,7 +363,7 @@ public:
 
     /// Pre-visitor for call expressions.
     /// Handles some known function calls and adds unknown functions to a worklist.
-    bool pre_visit(IExpression_call *call) MDL_OVERRIDE
+    bool pre_visit(IExpression_call *call) MDL_FINAL
     {
         if (m_want_derivatives) {
             m_exprs_want_derivatives->insert(call);
@@ -468,8 +477,7 @@ public:
 
             default:
                 // for math functions want-derivatives also applies to all arguments, if set
-                if (IDefinition::DS_INTRINSIC_MATH_FIRST <= sema &&
-                        sema <= IDefinition::DS_INTRINSIC_MATH_LAST) {
+                if (is_math_semantics(sema)) {
                     if (is_math_deriv_args_supported(sema) &&
                         is_floating_point_based_type(call->get_type()))
                     {
@@ -494,7 +502,7 @@ public:
     /// Visitor for return statements.
     /// Return statements are sinks for derivatives, if the function instance should return
     /// derivatives.
-    bool pre_visit(IStatement_return *stmt) MDL_OVERRIDE
+    bool pre_visit(IStatement_return *stmt) MDL_FINAL
     {
         if (m_func_inst->get_return_derivs()) {
             m_ret_statements.push_back(stmt);
@@ -600,8 +608,9 @@ void set_known_function_argument_derivs(
     }
 
     // nothing to do, if no derivatives should be returned
-    if (!return_derivs)
+    if (!return_derivs) {
         return;
+    }
 
     IDefinition::Semantics sema = def->get_semantics();
 
@@ -671,21 +680,19 @@ void set_known_function_argument_derivs(
     mi::mdl::IType const          *ret_tp = f_tp->get_return_type();
 
     // for float or double based math functions, return_derivs also applies to all arguments
-    if (IDefinition::DS_INTRINSIC_MATH_FIRST <= sema &&
-            sema <= IDefinition::DS_INTRINSIC_MATH_LAST &&
-            is_floating_point_based_type(ret_tp)) {
-
-        if (!is_math_deriv_args_supported(sema))
+    if (is_math_semantics(sema) && is_floating_point_based_type(ret_tp)) {
+        if (!is_math_deriv_args_supported(sema)) {
             return;
+        }
         arg_derivs.set_bits();
         return;
     }
 
     // special handling of operators
-    if (IDefinition::DS_OP_BASE <= sema && sema <= IDefinition::DS_OP_END) {
+    if (semantic_is_operator(sema)) {
         // for float or double based operators, return_derivs also applies to arguments
         if (is_floating_point_based_type(ret_tp)) {
-            switch (IExpression::Operator(sema - IDefinition::DS_OP_BASE)) {
+            switch (semantic_to_operator(sema)) {
             case IExpression::OK_SEQUENCE:
                 // return_derivs only applies to the last argument
                 arg_derivs.set_bit(0);  // mark as any derivatives requested
@@ -726,11 +733,10 @@ Func_deriv_info const *Derivative_infos::get_function_derivative_infos(
     }
 
     // Handle known functions
-    IDefinition const *def = func_inst.get_def();
-    IDeclaration_function const *func_decl =
-        cast<IDeclaration_function>(def->get_declaration());
+    IDefinition const    *def    = func_inst.get_def();
+    IType_function const *f_type = cast<IType_function>(def->get_type());
 
-    Func_deriv_info *info = alloc_function_derivative_infos(func_decl->get_parameter_count());
+    Func_deriv_info *info = alloc_function_derivative_infos(f_type->get_parameter_count());
     set_known_function_argument_derivs(
         def,
         func_inst.get_return_derivs(),
@@ -776,8 +782,9 @@ Func_deriv_info *Derivative_infos::get_or_calc_function_derivative_infos(
 bool Derivative_infos::should_calc_derivatives(DAG_node const *node) const
 {
     Deriv_info_dag_map::const_iterator it = m_deriv_info_dag_map.find(node);
-    if (it == m_deriv_info_dag_map.end())
+    if (it == m_deriv_info_dag_map.end()) {
         return false;
+    }
     return it->second;
 }
 
@@ -803,8 +810,9 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool w
         return arg_derivs;
     case IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR:
         // want-derivatives applies to all arguments, if set
-        if (want_derivatives)
+        if (want_derivatives) {
             arg_derivs.set_bits();
+        }
         return arg_derivs;
     case IDefinition::Semantics(IDefinition::DS_OP_BASE + IExpression::OK_TERNARY):
         // want-derivatives only applies to second and third argument, if set
@@ -827,11 +835,15 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool w
 
     char const *signature = call->get_name();
     mi::base::Handle<IModule const> mod(m_resolver->get_owner_module(signature));
-    if (!mod) return arg_derivs;  // unknown -> no derivs requested
+    if (!mod) {
+        return arg_derivs;  // unknown -> no derivs requested
+    }
 
     Module const *module = impl_cast<Module>(mod.get());
     IDefinition const *def = module->find_signature(signature, /*only_exported=*/ false);
-    if (def == NULL) return arg_derivs;  // unknown -> no derivs requested
+    if (def == NULL) {
+        return arg_derivs;  // unknown -> no derivs requested
+    }
 
     def = skip_presets(def, mod);
 
@@ -964,7 +976,7 @@ IValue const *Deriv_DAG_builder::create_dual_comp_zero(IType const *type)
     case IType::TK_FUNCTION:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         MDL_ASSERT(!"type not allowed as dual component");
         return NULL;
@@ -996,8 +1008,9 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
 
     case DAG_node::EK_CONSTANT:
         {
-            if (!want_derivatives)
+            if (!want_derivatives) {
                 return expr;
+            }
 
             // create (val, 0, 0) constant
             DAG_constant const *dag_const = cast<DAG_constant>(expr);
@@ -1013,8 +1026,9 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
 
     case DAG_node::EK_PARAMETER:
         {
-            if (!want_derivatives)
+            if (!want_derivatives) {
                 return expr;
+            }
 
             // a parameter can never provide derivatives, so wrap it in a make_deriv() call
             DAG_call::Call_argument wrap_args[1] = {
@@ -1034,8 +1048,9 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
                 m_deriv_infos.call_wants_arg_derivatives(call, want_derivatives));
 
             string call_name(m_alloc);
-            if (want_derivatives)
+            if (want_derivatives) {
                 call_name += '#';
+            }
             call_name += call->get_name();
 
             int n_args = call->get_argument_count();
@@ -1079,8 +1094,9 @@ DAG_node const *Deriv_DAG_builder::rebuild(DAG_node const *expr, bool want_deriv
         return NULL;
     }
 
-    if (want_derivatives)
+    if (want_derivatives) {
         m_deriv_infos.mark_calc_derivatives(res);
+    }
 
     m_result_cache[cache_key] = res;
 

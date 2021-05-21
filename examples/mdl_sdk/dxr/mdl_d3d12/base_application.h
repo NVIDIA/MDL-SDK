@@ -110,6 +110,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , handle_z_axis_up(false)
             , units_per_meter(1.0f)
             , gpu(-1)
+            , gpu_debug(false)
             , enable_shader_cache(false)
         {
         }
@@ -132,6 +133,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool handle_z_axis_up;
         float units_per_meter;
         int32_t gpu;
+        bool gpu_debug;
         bool enable_shader_cache;
 
         std::unordered_map<std::string, std::string> user_options;

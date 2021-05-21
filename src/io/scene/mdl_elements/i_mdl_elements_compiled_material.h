@@ -75,7 +75,7 @@ public:
     /// \param transaction                 The DB transaction to use.
     /// \param instance                    The wrapped MDL material instance.
     /// \param module_filename             The filename of the module.
-    /// \param module_name                 The fully-qualified MDL module name.
+    /// \param module_name                 The MDL module name.
     /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
     /// \param mdl_wavelength_min          The smallest supported wavelength.
     /// \param mdl_wavelength_max          The largest supported wavelength.

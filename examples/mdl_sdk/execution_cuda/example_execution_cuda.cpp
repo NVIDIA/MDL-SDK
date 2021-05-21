@@ -139,7 +139,7 @@ mi::neuraylib::ICanvas *bake_expression_cuda_ptx(
     // Create a canvas (with only one tile) and copy the result image to it
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
         image_api->create_canvas("Rgb_fp", options.res_x, options.res_y));
-    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
     float3 *data = static_cast<float3 *>(tile->get_data());
     check_cuda_success(cuMemcpyDtoH(
         data, device_outbuf, options.res_x * options.res_y * sizeof(float3)));
@@ -266,6 +266,9 @@ int MAIN_UTF8(int argc, char* argv[])
         mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
             neuray->get_api_component<mi::neuraylib::IMdl_backend_api>());
 
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+            mdl_factory->create_execution_context());
+
         {
             // Generate code for material sub-expressions of different materials
             // according to the requested material pattern
@@ -284,15 +287,38 @@ int MAIN_UTF8(int argc, char* argv[])
 
             for (std::size_t i = 0, n = options.material_names.size(); i < n; ++i) {
                 if ((options.material_pattern & (1 << i)) != 0) {
+
                     // split module and material name
                     std::string module_name, material_simple_name;
                     if (!mi::examples::mdl::parse_cmd_argument_material_name(
                         options.material_names[i], module_name, material_simple_name, true))
                             continue;
 
+                    // load the module.
+                    mdl_impexp_api->load_module(transaction.get(), module_name.c_str(), context.get());
+                    if (!print_messages(context.get()))
+                        exit_failure("Loading module '%s' failed.", module_name.c_str());
+
+                    // get the database name for the module we loaded
+                    mi::base::Handle<const mi::IString> module_db_name(
+                        mdl_factory->get_db_module_name(module_name.c_str()));
+                    mi::base::Handle<const mi::neuraylib::IModule> module(
+                        transaction->access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
+                    if (!module)
+                        exit_failure("Failed to access the loaded module.");
+
+                    // Attach the material name
+                    std::string material_db_name
+                        = std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
+                    material_db_name = mi::examples::mdl::add_missing_material_signature(
+                        module.get(), material_db_name);
+                    if (material_db_name.empty())
+                        exit_failure("Failed to find the material %s in the module %s.",
+                            material_simple_name.c_str(), module_name.c_str());
+
                     // add the sub expression
                     mc.add_material_subexpr(
-                        module_name, material_simple_name,
+                        module_name, material_db_name,
                         "surface.scattering.tint", ("tint_" + to_string(i)).c_str(),
                         options.use_class_compilation);
                 }

@@ -213,6 +213,7 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
         // (all parameters are folded in instance mode)
         context->set_option("fold_all_bool_parameters", mdl_options.fold_all_bool_parameters);
         context->set_option("fold_all_enum_parameters", mdl_options.fold_all_enum_parameters);
+        context->set_option("ignore_noinline", true);
 
         mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
             material_instance->create_compiled_material(flags, context));
@@ -230,10 +231,8 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
     // this is used to check if a new target is required or if an existing one can be reused.
     const std::string old_hash = m_compiled_hash;
     const mi::base::Uuid hash = compiled_material->get_hash();
-    m_compiled_hash  = std::to_string(hash.m_id1);
-    m_compiled_hash += std::to_string(hash.m_id2);
-    m_compiled_hash += std::to_string(hash.m_id3);
-    m_compiled_hash += std::to_string(hash.m_id4);
+    m_compiled_hash = mi::examples::strings::format(
+        "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
 
     if (old_hash.empty())
         log_verbose("Hash: " + get_name() + ": " + m_compiled_hash);
@@ -431,10 +430,9 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     auto p = m_app->get_profiling().measure("loading material instance data");
 
     const mi::base::Uuid hash = compiled_material->get_hash();
-    m_resource_hash = std::to_string(hash.m_id1);
-    m_resource_hash += std::to_string(hash.m_id2);
-    m_resource_hash += std::to_string(hash.m_id3);
-    m_resource_hash += std::to_string(hash.m_id4);
+    m_resource_hash = mi::examples::strings::format(
+        "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
+
 
     // copy resource list from target an re-fill it
     for (size_t i = 0, n = static_cast<size_t>(Mdl_resource_kind::_Count); i < n; ++i)

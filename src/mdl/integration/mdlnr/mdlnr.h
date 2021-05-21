@@ -75,8 +75,6 @@ public:
     mi::mdl::ILambda_function *deserialize_lambda_function(
         SERIAL::Deserializer *deserializer);
 
-    void client_build_version(const char* build, const char* bridge_protocol) const;
-
     mi::mdl::ICode_cache *get_code_cache() const;
 
     bool utf8_match(char const *file_mask, char const *file_name) const;
@@ -111,7 +109,7 @@ private:
     /// Pointer to the MDL interface.
     mi::mdl::IMDL *m_mdl;
 
-    /// The allocator that wraps new/delete (overloaded in MI::MEM) as IAllocator.
+    /// The allocator that wraps new/delete as IAllocator.
     mi::base::Handle<mi::base::IAllocator> m_allocator;
 
     /// The code cache used for JIT-generated source code.

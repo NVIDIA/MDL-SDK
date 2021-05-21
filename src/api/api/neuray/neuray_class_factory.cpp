@@ -49,6 +49,9 @@
 #include "neuray_type_impl.h"
 #include "neuray_value_impl.h"
 
+#include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
+#include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
+
 
 #include <iomanip>
 #include <sstream>
@@ -66,6 +69,7 @@ namespace NEURAY {
 Class_factory* s_class_factory;
 
 Class_factory::Class_factory()
+  : m_materials_are_functions( false)
 {
 }
 
@@ -75,6 +79,16 @@ Class_factory::~Class_factory()
     ASSERT( M_NEURAY_API, m_map_uuid_user_class_factory.size() == 0);
     ASSERT( M_NEURAY_API, m_map_name_structure_decl.size() == 0);
     ASSERT( M_NEURAY_API, m_map_name_enum_decl.size() == 0);
+}
+
+void Class_factory::set_materials_are_functions( bool value)
+{
+    m_materials_are_functions = value;
+}
+
+bool Class_factory::get_materials_are_functions() const
+{
+    return m_materials_are_functions;
 }
 
 mi::Sint32 Class_factory::register_class(
@@ -161,13 +175,34 @@ mi::Sint32 Class_factory::register_class(
     if( m_map_name_structure_decl.find( class_name)     != m_map_name_structure_decl.end())
         return -1;
 
+    if( strcmp( class_name, "__DiCE_class_without_name") != 0)
+        m_map_name_user_class_factory[class_name] = make_handle_dup( factory);
+
+    m_map_uuid_user_class_factory[uuid] = make_handle_dup( factory);
+
+    return 0;
+}
+
+mi::Sint32 Class_factory::unregister_class(
+    const char* class_name,
+    const mi::base::Uuid& uuid)
+{
+    ASSERT( M_NEURAY_API, class_name);
+
+    auto it_name_user_class_factory = m_map_name_user_class_factory.find( class_name);
+    auto it_uuid_user_class_factory = m_map_uuid_user_class_factory.find( uuid);
+
+    if( it_uuid_user_class_factory == m_map_uuid_user_class_factory.end())
+        return -1;
+
     if( strcmp( class_name, "__DiCE_class_without_name") != 0) {
-        m_map_name_user_class_factory[class_name] = factory;
-        factory->retain();
+        if( it_name_user_class_factory == m_map_name_user_class_factory.end())
+            return -1;
+
+        m_map_name_user_class_factory.erase( it_name_user_class_factory);
     }
 
-    m_map_uuid_user_class_factory[uuid] = factory;
-    factory->retain();
+    m_map_uuid_user_class_factory.erase( it_uuid_user_class_factory);
 
     return 0;
 }
@@ -223,7 +258,8 @@ mi::Sint32 Class_factory::register_structure_decl(
         return -5;
 
     // Clone the declaration such that modifications after registration have no effect.
-    mi::IStructure_decl* copy = create_class_instance<mi::IStructure_decl>( nullptr, "Structure_decl");
+    mi::base::Handle<mi::IStructure_decl> copy(
+        create_class_instance<mi::IStructure_decl>( nullptr, "Structure_decl"));
     mi::Size n = decl->get_length();
     for( mi::Size i = 0; i < n; ++i) {
         mi::Sint32 result
@@ -233,12 +269,11 @@ mi::Sint32 Class_factory::register_structure_decl(
     }
 
     // Set the type name
-    Structure_decl_impl* copy_impl = static_cast<Structure_decl_impl*>( copy);
+    Structure_decl_impl* copy_impl = static_cast<Structure_decl_impl*>( copy.get());
     copy_impl->set_structure_type_name( structure_name);
 
     m_map_name_structure_decl[structure_name] = copy;
 
-    // The cppcheck error about a leak of copy_impl here is wrong (owned by the map above).
     return 0;
 }
 
@@ -248,12 +283,10 @@ mi::Sint32 Class_factory::unregister_structure_decl( const char* structure_name)
 
     mi::base::Lock::Block block( &m_map_name_structure_decl_lock);
 
-    std::map<std::string, const mi::IStructure_decl*>::iterator it
-        = m_map_name_structure_decl.find( structure_name);
+    auto it = m_map_name_structure_decl.find( structure_name);
     if( it == m_map_name_structure_decl.end())
         return -1;
 
-    it->second->release();
     m_map_name_structure_decl.erase( it);
 
     return 0;
@@ -261,15 +294,16 @@ mi::Sint32 Class_factory::unregister_structure_decl( const char* structure_name)
 
 const mi::IStructure_decl* Class_factory::get_structure_decl( const char* structure_name) const
 {
+    ASSERT( M_NEURAY_API, structure_name);
+
     mi::base::Lock::Block block( &m_map_name_structure_decl_lock);
 
-    std::map<std::string, const mi::IStructure_decl*>::const_iterator it
-        = m_map_name_structure_decl.find( structure_name);
+    auto it = m_map_name_structure_decl.find( structure_name);
     if( it == m_map_name_structure_decl.end())
         return nullptr;
 
     it->second->retain();
-    return it->second;
+    return it->second.get();
 }
 
 mi::Sint32 Class_factory::register_enum_decl(
@@ -297,7 +331,7 @@ mi::Sint32 Class_factory::register_enum_decl(
         return -6;
 
     // Clone the declaration such that modifications after registration have no effect.
-    mi::IEnum_decl* copy = create_class_instance<mi::IEnum_decl>( nullptr, "Enum_decl");
+    mi::base::Handle<mi::IEnum_decl> copy( create_class_instance<mi::IEnum_decl>( nullptr, "Enum_decl"));
     for( mi::Size i = 0; i < n; ++i) {
         mi::Sint32 result = copy->add_enumerator( decl->get_name( i), decl->get_value( i));
         ASSERT( M_NEURAY_API, result == 0);
@@ -305,12 +339,11 @@ mi::Sint32 Class_factory::register_enum_decl(
     }
 
     // Set the type name
-    Enum_decl_impl* copy_impl = static_cast<Enum_decl_impl*>( copy);
+    Enum_decl_impl* copy_impl = static_cast<Enum_decl_impl*>( copy.get());
     copy_impl->set_enum_type_name( enum_name);
 
     m_map_name_enum_decl[enum_name] = copy;
 
-    // The cppcheck error about a leak of copy_impl here is wrong (owned by the map above).
     return 0;
 }
 
@@ -320,12 +353,10 @@ mi::Sint32 Class_factory::unregister_enum_decl( const char* enum_name)
 
     mi::base::Lock::Block block( &m_map_name_enum_decl_lock);
 
-    std::map<std::string, const mi::IEnum_decl*>::iterator it
-        = m_map_name_enum_decl.find( enum_name);
+    auto it = m_map_name_enum_decl.find( enum_name);
     if( it == m_map_name_enum_decl.end())
         return -1;
 
-    it->second->release();
     m_map_name_enum_decl.erase( it);
 
     return 0;
@@ -333,61 +364,39 @@ mi::Sint32 Class_factory::unregister_enum_decl( const char* enum_name)
 
 const mi::IEnum_decl* Class_factory::get_enum_decl( const char* enum_name) const
 {
+    ASSERT( M_NEURAY_API, enum_name);
+
     mi::base::Lock::Block block( &m_map_name_enum_decl_lock);
 
-    std::map<std::string, const mi::IEnum_decl*>::const_iterator it
-        = m_map_name_enum_decl.find( enum_name);
+    auto it = m_map_name_enum_decl.find( enum_name);
     if( it == m_map_name_enum_decl.end())
         return nullptr;
 
     it->second->retain();
-    return it->second;
+    return it->second.get();
 }
 
 void Class_factory::unregister_user_defined_classes()
 {
-    for( std::map<std::string, mi::neuraylib::IUser_class_factory*>::iterator it
-        = m_map_name_user_class_factory.begin(); it != m_map_name_user_class_factory.end(); ++it) {
-        it->second->release();
-        it->second = 0;
-    }
     m_map_name_user_class_factory.clear();
-    for( std::map<mi::base::Uuid, mi::neuraylib::IUser_class_factory*>::iterator it
-        = m_map_uuid_user_class_factory.begin(); it != m_map_uuid_user_class_factory.end(); ++it) {
-        it->second->release();
-        it->second = 0;
-    }
     m_map_uuid_user_class_factory.clear();
 }
 
 void Class_factory::unregister_structure_decls()
 {
     mi::base::Lock::Block block( &m_map_name_structure_decl_lock);
-
-    for( std::map<std::string, const mi::IStructure_decl*>::iterator it
-        = m_map_name_structure_decl.begin(); it != m_map_name_structure_decl.end(); ++it) {
-        it->second->release();
-        it->second = 0;
-    }
     m_map_name_structure_decl.clear();
 }
 
 void Class_factory::unregister_enum_decls()
 {
     mi::base::Lock::Block block( &m_map_name_enum_decl_lock);
-
-    for( std::map<std::string, const mi::IEnum_decl*>::iterator it
-        = m_map_name_enum_decl.begin(); it != m_map_name_enum_decl.end(); ++it) {
-        it->second->release();
-        it->second = 0;
-    }
     m_map_name_enum_decl.clear();
 }
 
 SERIAL::Class_id Class_factory::get_class_id( const char* class_name) const
 {
-    std::map<std::string, SERIAL::Class_id>::const_iterator it
-        = m_map_name_id.find( class_name);
+    auto it = m_map_name_id.find( class_name);
     if( it == m_map_name_id.end())
         return 0;
 
@@ -535,8 +544,7 @@ mi::base::IInterface* Class_factory::create_class_instance(
         return user_class.get();
     }
 
-    std::map<std::string, Db_element_factory>::const_iterator it
-        = m_map_name_db_element_factory.find( class_name);
+    auto it = m_map_name_db_element_factory.find( class_name);
 
     if( it == m_map_name_db_element_factory.end()) {
 
@@ -762,12 +770,23 @@ mi::base::IInterface* Class_factory::invoke_api_class_factory(
     SERIAL::Class_id class_id) const
 {
     // lookup API class factory by class ID
-    std::map<SERIAL::Class_id, Api_class_factory>::const_iterator it
-        = m_map_id_api_class_factory.find( class_id);
+    auto it = m_map_id_api_class_factory.find( class_id);
     if( it == m_map_id_api_class_factory.end())
         return nullptr;
 
-    // create API class instance
+    // create API class instance: special case for MDL functions
+    if( (class_id == MDL::ID_MDL_FUNCTION_DEFINITION) || (class_id == MDL::ID_MDL_FUNCTION_CALL)) {
+        mi::base::Handle<mi::IBoolean> materials_are_functions(
+            create_class_instance<mi::IBoolean>( transaction, "Boolean"));
+        materials_are_functions->set_value( m_materials_are_functions);
+        const mi::base::IInterface* argv[1];
+        argv[0] = materials_are_functions.get();
+
+        Api_class_factory api_class_factory = it->second;
+        return api_class_factory( transaction, 1, argv);
+    }
+
+    // create API class instance: general case
     Api_class_factory api_class_factory = it->second;
     return api_class_factory( transaction, 0, nullptr);
 }
@@ -779,8 +798,7 @@ mi::base::IInterface* Class_factory::invoke_api_or_user_class_factory(
     const mi::base::IInterface* argv[]) const
 {
     // lookup API class factory by class name
-    std::map<std::string, Api_class_factory>::const_iterator it_api
-        = m_map_name_api_class_factory.find( class_name);
+    auto it_api = m_map_name_api_class_factory.find( class_name);
     if( it_api != m_map_name_api_class_factory.end()) {
 
         // create API class instance
@@ -789,13 +807,12 @@ mi::base::IInterface* Class_factory::invoke_api_or_user_class_factory(
     }
 
     // lookup user class factory by class name
-    std::map<std::string, mi::neuraylib::IUser_class_factory*>::const_iterator it_user
-        = m_map_name_user_class_factory.find( class_name);
+    auto it_user = m_map_name_user_class_factory.find( class_name);
     if( it_user == m_map_name_user_class_factory.end())
         return nullptr;
 
     // create user class instance
-    mi::neuraylib::IUser_class_factory* user_class_factory = it_user->second;
+    mi::neuraylib::IUser_class_factory* user_class_factory = it_user->second.get();
     return user_class_factory->create( transaction, argc, argv);
 }
 
@@ -806,8 +823,7 @@ DB::Element_base* Class_factory::invoke_db_element_factory(
     const mi::base::IInterface* argv[]) const
 {
     // lookup DB element factory
-    std::map<std::string, Db_element_factory>::const_iterator it
-        = m_map_name_db_element_factory.find( class_name);
+    auto it = m_map_name_db_element_factory.find( class_name);
     if( it == m_map_name_db_element_factory.end())
         return nullptr;
 
@@ -819,13 +835,12 @@ DB::Element_base* Class_factory::invoke_db_element_factory(
 mi::base::IInterface* Class_factory::invoke_user_class_factory( const mi::base::Uuid& uuid) const
 {
     // lookup user class factory by class UUID
-    std::map<mi::base::Uuid, mi::neuraylib::IUser_class_factory*>::const_iterator it
-        = m_map_uuid_user_class_factory.find( uuid);
+    auto it = m_map_uuid_user_class_factory.find( uuid);
     if( it == m_map_uuid_user_class_factory.end())
         return nullptr;
 
     // create user class instance
-    mi::neuraylib::IUser_class_factory* user_class_factory = it->second;
+    mi::neuraylib::IUser_class_factory* user_class_factory = it->second.get();
     return user_class_factory->create( nullptr, 0, nullptr);
 }
 
@@ -833,17 +848,15 @@ bool Class_factory::contains_blacklisted_type_names(
     const std::string& type_name, std::vector<std::string>& blacklist)
 {
     // check if type_name is blacklisted
-    std::vector<std::string>::iterator it
-        = find( blacklist.begin(), blacklist.end(), type_name);
+    auto it = find( blacklist.begin(), blacklist.end(), type_name);
     if( it != blacklist.end())
         return true;
 
     // descend into structures
-    std::map<std::string, const mi::IStructure_decl*>::const_iterator it_structure_decl
-        = m_map_name_structure_decl.find( type_name);
+    auto it_structure_decl = m_map_name_structure_decl.find( type_name);
     if( it_structure_decl != m_map_name_structure_decl.end()) {
         blacklist.push_back( type_name);
-        bool result = contains_blacklisted_type_names( it_structure_decl->second, blacklist);
+        bool result = contains_blacklisted_type_names( it_structure_decl->second.get(), blacklist);
         blacklist.pop_back();
         return result;
     }

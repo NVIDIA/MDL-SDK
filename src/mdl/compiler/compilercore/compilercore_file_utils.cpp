@@ -32,6 +32,8 @@
 #include "compilercore_wchar_support.h"
 #include "compilercore_file_utils.h"
 
+#include <cctype>
+
 #include <mi/base/miwindows.h>
 
 #include <sys/types.h>

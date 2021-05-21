@@ -25,83 +25,83 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-mdl 1.6;
+mdl 1.7;
 
-export bool data_isvalid(uniform string name) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+export bool data_isvalid(
+    uniform string name) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export int data_lookup_int(
     uniform string name,
-    int            default_value = int()) [[ intrinsic(), since(1,6), literal_param() ]];
+    int            default_value = int()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform int data_lookup_uniform_int(
     uniform string name,
-    uniform int    default_value = int()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform int    default_value = int()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 
 export int2 data_lookup_int2(
     uniform string name,
-    int2           default_value = int2()) [[ intrinsic(), since(1,6), literal_param() ]];
+    int2           default_value = int2()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform int2 data_lookup_uniform_int2(
     uniform string name,
-    uniform int2   default_value = int2()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform int2   default_value = int2()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 
 export int3 data_lookup_int3(
     uniform string name,
-    int3           default_value = int3()) [[ intrinsic(), since(1,6), literal_param() ]];
+    int3           default_value = int3()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform int3 data_lookup_uniform_int3(
     uniform string name,
-    uniform int3   default_value = int3()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform int3   default_value = int3()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export int4 data_lookup_int4(
     uniform string name,
-    int4           default_value = int4()) [[ intrinsic(), since(1,6), literal_param() ]];
+    int4           default_value = int4()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform int4 data_lookup_uniform_int4(
     uniform string name,
-    uniform int4   default_value = int4()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform int4   default_value = int4()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export float data_lookup_float(
     uniform string name,
-    float            default_value = float()) [[ intrinsic(), since(1,6), literal_param() ]];
+    float          default_value = float()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform float data_lookup_uniform_float(
     uniform string name,
-    uniform float  default_value = float()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform float  default_value = float()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 
 export float2 data_lookup_float2(
     uniform string name,
-    float2         default_value = float2()) [[ intrinsic(), since(1,6), literal_param() ]];
+    float2         default_value = float2()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform float2 data_lookup_uniform_float2(
     uniform string name,
-    uniform float2 default_value = float2()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform float2 default_value = float2()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 
 export float3 data_lookup_float3(
     uniform string name,
-    float3         default_value = float3()) [[ intrinsic(), since(1,6), literal_param() ]];
+    float3         default_value = float3()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform float3 data_lookup_uniform_float3(
     uniform string name,
-    uniform float3 default_value = float3()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform float3 default_value = float3()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export float4 data_lookup_float4(
     uniform string name,
-    float4         default_value = float4()) [[ intrinsic(), since(1,6), literal_param() ]];
+    float4         default_value = float4()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform float4 data_lookup_uniform_float4(
     uniform string name,
-    uniform float4 default_value = float4()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
+    uniform float4 default_value = float4()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export color data_lookup_color(
     uniform string name,
-    color          default_value = color()) [[ intrinsic(), since(1,6), literal_param() ]];
+    color          default_value = color()) varying [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
 
 export uniform color data_lookup_uniform_color(
     uniform string name,
-    uniform color  default_value = color()) uniform [[ intrinsic(), since(1,6), literal_param() ]];
-
+    uniform color  default_value = color()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];

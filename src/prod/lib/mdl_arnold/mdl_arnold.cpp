@@ -1,5 +1,5 @@
 /***************************************************************************************************
-* Copyright 2020 NVIDIA Corporation. All rights reserved.
+* Copyright 2021 NVIDIA Corporation. All rights reserved.
 **************************************************************************************************/
 
 #include "mdl_arnold.h"
@@ -328,11 +328,24 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
                        "current search paths:%s", mdl_name.c_str(), current_search_paths.c_str());
             return false;
         }
+        
+        module = mdl_sdk.get_transaction().access<mi::neuraylib::IModule>(module_db_name->get_c_str());
     }
 
-    // get the material by the material db name and ensure it exists
+    // get correct material signature
     std::string material_db_name = module_db_name->get_c_str();
     material_db_name += "::" + material_name;
+    mi::base::Handle<const mi::IArray> result(
+        module->get_function_overloads(material_db_name.c_str()));
+    if (!result || result->get_length() != 1) {
+        AiMsgWarning("[mdl] failed to find signature for material '%s'",
+                   material_name.c_str());
+        return false;
+    }
+    mi::base::Handle<const mi::IString> overload(result->get_element<mi::IString>(0));
+    material_db_name = overload->get_c_str();
+                    
+    // get material by the material db name and ensure it exists
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
         mdl_sdk.get_transaction().access<mi::neuraylib::IMaterial_definition>(
         material_db_name.c_str()));

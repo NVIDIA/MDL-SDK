@@ -53,6 +53,8 @@ enum Log_prefix {
     LOG_PREFIX_MODULE       = 0x0010, ///< module that generates the log message
     LOG_PREFIX_CATEGORY     = 0x0020, ///< category of the log message
     LOG_PREFIX_SEVERITY     = 0x0040, ///< severity of the log message
+    LOG_PREFIX_CUDA_DEVICE  = 0x0080, ///< CUDA device (if relevant)
+    LOG_PREFIX_TAGS         = 0x0100, ///< message detail tags
     LOG_PREFIX_FORCE_32_BIT = 0xffffffffU
 };
 

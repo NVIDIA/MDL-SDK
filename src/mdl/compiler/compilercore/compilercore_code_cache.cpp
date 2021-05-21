@@ -30,6 +30,8 @@
 
 #include "compilercore_code_cache.h"
 
+#include <cstdint>
+
 namespace mi {
 namespace mdl {
 

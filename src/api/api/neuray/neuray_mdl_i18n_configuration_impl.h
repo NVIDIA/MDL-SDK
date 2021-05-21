@@ -99,7 +99,7 @@ private:
     mi::neuraylib::INeuray* m_neuray_impl;
     std::string m_locale;
     std::string m_system_locale;
-    MI::SYSTEM::Access_module<MI::MDL::I18N::Mdl_translator_module> m_i18n_module;
+    SYSTEM::Access_module<MDL::I18N::Mdl_translator_module> m_i18n_module;
 };
 
 } // namespace NEURAY

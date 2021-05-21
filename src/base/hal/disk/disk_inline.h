@@ -107,24 +107,5 @@ inline int Directory::error() const
 }
 
 
-template <typename InputIterator>
-std::string find_file_on_paths(
-    const char* file_name,
-    InputIterator iter,
-    InputIterator end)
-{
-    std::string fullpath = find_file_on_path(file_name);
-
-    if (fullpath.empty()) {
-        while (iter != end) {
-            fullpath = find_file_on_path(file_name, *iter);
-            if (!fullpath.empty())
-                break;
-            ++iter;
-        }
-    }
-    return fullpath;
-}
-
 }
 }

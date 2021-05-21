@@ -34,41 +34,84 @@
 
 #include "neuray_material_instance_impl.h"
 
-#include <mi/base/handle.h>
-#include <boost/shared_ptr.hpp>
-#include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
-#include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
-#include <io/scene/scene/i_scene_journal_types.h>
+#include <mi/neuraylib/ifunction_definition.h>
+#include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 
-#include "neuray_compiled_material_impl.h"
-#include "neuray_mdl_execution_context_impl.h"
-#include "neuray_expression_impl.h"
-#include "neuray_transaction_impl.h"
-#include "neuray_type_impl.h"
+#include "neuray_function_call_impl.h"
 
 namespace MI {
 
 namespace NEURAY {
 
-DB::Element_base* Material_instance_impl::create_db_element(
-    mi::neuraylib::ITransaction* transaction,
-    mi::Uint32 argc,
-    const mi::base::IInterface* argv[])
+mi::neuraylib::IMaterial_instance* Material_instance_impl::create_api_class(
+    mi::neuraylib::IFunction_call* impl)
 {
-    if( argc != 0)
-        return nullptr;
-    return new MDL::Mdl_material_instance;
+    return new Material_instance_impl( impl);
 }
 
-mi::base::IInterface* Material_instance_impl::create_api_class(
-    mi::neuraylib::ITransaction* transaction,
-    mi::Uint32 argc,
-    const mi::base::IInterface* argv[])
+const mi::neuraylib::IMaterial_instance* Material_instance_impl::create_api_class(
+    const mi::neuraylib::IFunction_call* impl)
 {
-    if( argc != 0)
-        return nullptr;
-    return (new Material_instance_impl())->cast_to_major();
+    return new Material_instance_impl( const_cast<mi::neuraylib::IFunction_call*>( impl));
+}
+
+mi::base::IInterface* Material_instance_impl::get_interface(
+    const mi::base::Uuid& interface_id)
+{
+    return m_impl->get_interface( interface_id);
+}
+
+const mi::base::IInterface* Material_instance_impl::get_interface(
+    const mi::base::Uuid& interface_id) const
+{
+    return m_impl->get_interface( interface_id);
+}
+
+mi::IData* Material_instance_impl::create_attribute( const char* name, const char* type)
+{
+    return m_impl->create_attribute( name, type);
+}
+
+bool Material_instance_impl::destroy_attribute( const char* name)
+{
+    return m_impl->destroy_attribute( name);
+}
+
+const mi::IData* Material_instance_impl::access_attribute( const char* name) const
+{
+    return m_impl->access_attribute( name);
+}
+
+mi::IData* Material_instance_impl::edit_attribute( const char* name)
+{
+    return m_impl->edit_attribute( name);
+}
+
+bool Material_instance_impl::is_attribute( const char* name) const
+{
+    return m_impl->is_attribute( name);
+}
+
+const char* Material_instance_impl::get_attribute_type_name( const char* name) const
+{
+    return m_impl->get_attribute_type_name( name);
+}
+
+mi::Sint32 Material_instance_impl::set_attribute_propagation(
+    const char* name, mi::neuraylib::Propagation_type value)
+{
+    return m_impl->set_attribute_propagation( name, value);
+}
+
+mi::neuraylib::Propagation_type Material_instance_impl::get_attribute_propagation(
+    const char* name) const
+{
+    return m_impl->get_attribute_propagation( name);
+}
+
+const char* Material_instance_impl::enumerate_attributes( mi::Sint32 index) const
+{
+    return m_impl->enumerate_attributes( index);
 }
 
 mi::neuraylib::Element_type Material_instance_impl::get_element_type() const
@@ -78,162 +121,102 @@ mi::neuraylib::Element_type Material_instance_impl::get_element_type() const
 
 const char* Material_instance_impl::get_material_definition() const
 {
-    DB::Tag tag = get_db_element()->get_material_definition(get_db_transaction());
-    if (!tag.is_valid())
-        return nullptr; // no valid definition
-    return get_db_transaction()->tag_to_name( tag);
+    return m_impl->get_function_definition();
 }
 
 const char* Material_instance_impl::get_mdl_material_definition() const
 {
-    return get_db_element()->get_mdl_material_definition();
+    return m_impl->get_mdl_function_definition();
+}
+
+const mi::neuraylib::IType* Material_instance_impl::get_return_type() const
+{
+    return m_impl->get_return_type();
 }
 
 mi::Size Material_instance_impl::get_parameter_count() const
 {
-    return get_db_element()->get_parameter_count();
+    return m_impl->get_parameter_count();
 }
 
 const char* Material_instance_impl::get_parameter_name( mi::Size index) const
 {
-    return get_db_element()->get_parameter_name( index);
+    return m_impl->get_parameter_name( index);
 }
 
 mi::Size Material_instance_impl::get_parameter_index( const char* name) const
 {
-    return get_db_element()->get_parameter_index( name);
+    return m_impl->get_parameter_index( name);
 }
 
 const mi::neuraylib::IType_list* Material_instance_impl::get_parameter_types() const
 {
-    mi::base::Handle<Type_factory> tf( get_transaction()->get_type_factory());
-    mi::base::Handle<const MDL::IType_list> result_int( get_db_element()->get_parameter_types());
-    return tf->create_type_list( result_int.get(), this->cast_to_major());
+    return m_impl->get_parameter_types();
 }
 
 const mi::neuraylib::IExpression_list* Material_instance_impl::get_arguments() const
 {
-    mi::base::Handle<Expression_factory> ef( get_transaction()->get_expression_factory());
-    mi::base::Handle<const MDL::IExpression_list> result_int( get_db_element()->get_arguments());
-    return ef->create_expression_list( result_int.get(), this->cast_to_major());
+    return m_impl->get_arguments();
 }
 
 mi::Sint32 Material_instance_impl::set_arguments(
     const mi::neuraylib::IExpression_list* arguments)
 {
-    if( !arguments)
-        return -1;
-
-    mi::base::Handle<const MDL::IExpression_list> arguments_int(
-        get_internal_expression_list( arguments));
-
-    DB::Tag_set tags;
-    MDL::collect_references( arguments_int.get(), &tags);
-    for( DB::Tag_set::const_iterator it = tags.begin(); it != tags.end(); ++it)
-        if( !can_reference_tag( *it))
-            return -7;
-
-    add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
-    return get_db_element()->set_arguments( get_db_transaction(), arguments_int.get());
+    return m_impl->set_arguments( arguments);
 }
 
 mi::Sint32 Material_instance_impl::set_argument(
     mi::Size index, const mi::neuraylib::IExpression* argument)
 {
-    if( !argument)
-        return -1;
-    mi::base::Handle<const MDL::IExpression> argument_int( get_internal_expression( argument));
-
-    DB::Tag_set tags;
-    MDL::collect_references( argument_int.get(), &tags);
-    for( DB::Tag_set::const_iterator it = tags.begin(); it != tags.end(); ++it)
-        if( !can_reference_tag( *it))
-            return -7;
-
-    mi::Sint32 result = get_db_element()->set_argument(
-        get_db_transaction(), index, argument_int.get());
-    if( result == 0)
-        add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
-    return result;
+    return m_impl->set_argument( index, argument);
 }
 
 mi::Sint32 Material_instance_impl::set_argument(
     const char* name, const mi::neuraylib::IExpression* argument)
 {
-    if( !argument)
-        return -1;
-
-    mi::base::Handle<const MDL::IExpression> argument_int( get_internal_expression( argument));
-
-    DB::Tag_set tags;
-    MDL::collect_references( argument_int.get(), &tags);
-    for( DB::Tag_set::const_iterator it = tags.begin(); it != tags.end(); ++it)
-        if( !can_reference_tag( *it))
-            return -7;
-
-    mi::Sint32 result = get_db_element()->set_argument(
-        get_db_transaction(), name, argument_int.get());
-    if( result == 0)
-        add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
-    return result;
-}
-
-mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_material(
-    mi::Uint32 flags,
-    mi::neuraylib::IMdl_execution_context* context) const
-{
-    if (get_db_element()->is_immutable())
-        return nullptr;
-
-    MDL::Execution_context default_context;
-    Mdl_execution_context_impl* context_impl =
-        static_cast<Mdl_execution_context_impl*>(context);
-
-    bool class_compilation = flags & CLASS_COMPILATION;
-    boost::shared_ptr<MDL::Mdl_compiled_material> db_instance(
-        get_db_element()->create_compiled_material(
-            get_db_transaction(), class_compilation,
-            context_impl ? &context_impl->get_context() : &default_context));
-
-    if (!db_instance)
-        return nullptr;
-    mi::neuraylib::ICompiled_material* api_instance
-        = get_transaction()->create<mi::neuraylib::ICompiled_material>(
-            "__Compiled_material");
-    static_cast<Compiled_material_impl*>(api_instance)->get_db_element()->swap(
-        *db_instance.get());
-    return api_instance;
+    return m_impl->set_argument( name, argument);
 }
 
 bool Material_instance_impl::is_default() const
 {
-    return get_db_element()->is_immutable();
+    return m_impl->is_default();
 }
 
-bool Material_instance_impl::is_valid(mi::neuraylib::IMdl_execution_context* context) const
+bool Material_instance_impl::is_valid( mi::neuraylib::IMdl_execution_context* context) const
 {
-    MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
-
-    return get_db_element()->is_valid(get_db_transaction(), mdl_context);
+    return m_impl->is_valid( context);
 }
 
 mi::Sint32 Material_instance_impl::repair(
     mi::Uint32 flags,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+    return m_impl->repair( flags, context);
+}
 
-    mi::Sint32 r = get_db_element()->repair(get_db_transaction(),
-        flags & mi::neuraylib::MDL_REPAIR_INVALID_ARGUMENTS,
-        flags & mi::neuraylib::MDL_REMOVE_INVALID_ARGUMENTS,
-       /*level=*/0,
-        mdl_context);
+mi::neuraylib::ICompiled_material* Material_instance_impl::create_compiled_material(
+    mi::Uint32 flags,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    const Function_call_impl* fc = static_cast<const Function_call_impl*>( m_impl.get());
+    return fc->create_compiled_material( flags, context);
+}
 
-    if (r == 0)
-        add_journal_flag(SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
-    return r;
+const MDL::Mdl_function_call* Material_instance_impl::get_db_element() const
+{
+    const Function_call_impl* fc = static_cast<const Function_call_impl*>( m_impl.get());
+    return static_cast<const MDL::Mdl_function_call*>( fc->get_db_element());
+}
+
+MDL::Mdl_function_call* Material_instance_impl::get_db_element()
+{
+    Function_call_impl* fc = static_cast<Function_call_impl*>( m_impl.get());
+    return static_cast<MDL::Mdl_function_call*>( fc->get_db_element());
+}
+
+Material_instance_impl::Material_instance_impl( mi::neuraylib::IFunction_call* impl)
+  : m_impl( impl, mi::base::DUP_INTERFACE)
+{
 }
 
 } // namespace NEURAY

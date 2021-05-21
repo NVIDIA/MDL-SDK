@@ -86,12 +86,17 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
         mi::base::Handle<mi::neuraylib::ITexture> texture(
             transaction->create<mi::neuraylib::ITexture>( "Texture"));
         texture->set_image( "nvidia_image");
+        // Setting the gamma override value here is not strictly necessary, since the canvas of
+        // the image has already a gamma value of 2.2. However, if new MDL source code is
+        // generated based on this texture, the explicit setting here causes "::tex::gamma_srgb" to
+        // be used instead of "::tex::gamma_default", which might be desired.
+        texture->set_gamma( 2.2f);
         transaction->store( texture.get(), "nvidia_texture");
     }
     {
-        // Import the "::nvidia::sdk_examples::tutorials" and "base" module.
-        // The "::nvidia::sdk_examples::tutorials" module is found via the
-        // configured module search path.
+        // Import the "::nvidia::sdk_examples::tutorials" and "base" module. The
+        // "::nvidia::sdk_examples::tutorials" module is found via the configured module search
+        // path.
         check_success( mdl_impexp_api->load_module(
             transaction.get(), "::nvidia::sdk_examples::tutorials", context.get()) >= 0);
         check_success( print_messages( context.get()));
@@ -158,7 +163,7 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
         transaction->store( function_call.get(), "call of texture_return.tint");
     }
     {
-        // Prepare the arguments of the material instance for 
+        // Prepare the arguments of the material instance for
         // "mdl::nvidia::sdk_examples::tutorials::example_material":
         // set the "tint" argument to the "call of texture_return.tint" function call.
         mi::base::Handle<mi::neuraylib::IExpression> arg_expr(
@@ -168,12 +173,12 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
             expression_factory->create_expression_list());
         arguments->add_expression( "tint", arg_expr.get());
 
-        // Create a material instance from the material definition 
+        // Create a material instance from the material definition
         // "mdl::nvidia::sdk_examples::tutorials::example_material"
         // with the just prepared arguments.
         mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
             transaction->access<mi::neuraylib::IMaterial_definition>(
-                "mdl::nvidia::sdk_examples::tutorials::example_material"));
+                "mdl::nvidia::sdk_examples::tutorials::example_material(color,float)"));
         mi::Sint32 result;
         mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
             material_definition->create_material_instance( arguments.get(), &result));

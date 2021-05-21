@@ -30,17 +30,17 @@
 ///             expressions/types
 
 #include <map>
-#include <list>
+#include <set>
 #include <string>
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_mdl.h>
+#include <base/data/db/i_db_tag.h>
 
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_expression.h"
 #include "i_mdl_elements_value.h"
-
 #include "mdl_elements_utilities.h"
 
 namespace mi {
@@ -75,52 +75,58 @@ namespace MDL {
 class IType;
 
 /// Helper class that converts neuray type/expressions into MDL AST.
-class Mdl_ast_builder {
-public:
-    typedef std::list<std::string> User_type_list;
+class Mdl_ast_builder
+{
 public:
     /// Constructor.
     ///
-    /// \param owner        the MDL module that will own the newly constructed entities
-    /// \param transaction  the current transaction
-    /// \param args         the arguments for occurring parameter references
-    /// \param name_manger  name mangler, converts namespace and module names to mdl identifiers.
+    /// \param owner                   The MDL module that will own the newly constructed entities.
+    /// \param transaction             The current transaction.
+    /// \param traverse_ek_parameter   Indicates whether parameter references should be traversed
+    ///                                and resolved via \p args, or converted to a parameter
+    ///                                reference pointing to the declared parameters.
+    /// \param args                    The arguments for occurring parameter references (only used
+    ///                                if \p traverse_ek_parameter is \c true).
+    /// \param name_manger             Name mangler, converts namespace and module names to MDL
+    ///                                identifiers.
+    /// \param avoid_resource_urls     Indicates whether to create tag-based or string-based
+    ///                                resources.
     Mdl_ast_builder(
         mi::mdl::IModule* owner,
         DB::Transaction* transaction,
-        const mi::base::Handle<IExpression_list const>& args,
-        Name_mangler& name_mangler);
+        bool traverse_ek_parameter,
+        const IExpression_list* args,
+        Name_mangler& name_mangler,
+        bool avoid_resource_urls);
 
     /// Create a simple name from a string without signature.
     ///
-    /// \param name  the name
+    /// \param name  the core name
     const mi::mdl::ISimple_name* create_simple_name( const std::string& name);
 
     /// Create a qualified name from a string without signature.
     ///
-    /// \param name  the name
+    /// \param name  the core name
     ///
-    /// \note Handle :: as scope operator
+    /// Handles :: as scope operator.
     mi::mdl::IQualified_name* create_qualified_name( const std::string& name);
 
     /// Create a qualified name (containing the scope) from a string.
     ///
-    /// \param name  the name
+    /// \param name  the core name
     ///
-    /// \note Handle :: as scope operator, might create a qualified name without a component
+    /// Handles :: as scope operator, might create a qualified name without a component.
     mi::mdl::IQualified_name* create_scope_name( const std::string& name);
 
     /// Construct a Type_name AST element for a neuray type.
     ///
     /// \param type   the neuray type
-    mi::mdl::IType_name* create_type_name(
-        const mi::base::Handle<const IType>& type);
+    mi::mdl::IType_name* create_type_name( const mi::base::Handle<const IType>& type);
 
     /// Retrieve the filed symbol from a DS_INTRINSIC_DAG_FIELD_ACCESS call.
     ///
     /// \param def  the unmangled MDL DAG name of the call
-    const mi::mdl::ISymbol* get_field_sym(
-        const std::string& def);
+    const mi::mdl::ISymbol* get_field_sym( const std::string& def);
 
     /// Transform a call.
     ///
@@ -132,38 +138,27 @@ public:
     /// \param named_args   if true, create a call with name arguments, else with
     ///                     positional arguments
     const mi::mdl::IExpression* transform_call(
-        const mi::base::Handle<const IType>& ret_type,
+        const IType* ret_type,
         mi::mdl::IDefinition::Semantics sema,
-        const std::string &callee_name,
+        const std::string& callee_name,
         mi::Size n_params,
-        const mi::base::Handle<const IExpression_list>& args,
+        const IExpression_list* args,
         bool named_args);
-
-    /// Given a call name and a list of arguments, add a multi_scatter parameter
-    /// and create a call.
-    const mi::mdl::IExpression* add_multiscatter_param(
-        std::string const &callee_name,
-        mi::Size n_params,
-        bool named_args,
-        mi::base::Handle<IExpression_list const> const &args);
 
     /// Transform a MDL expression from neuray representation to MDL representation.
     ///
     /// \param expr  the neuray expression
-    const mi::mdl::IExpression* transform_expr(
-        const mi::base::Handle<const IExpression>& expr);
+    const mi::mdl::IExpression* transform_expr( const IExpression* expr);
 
     /// Transform a MDL expression from neuray representation to MDL representation.
     ///
     /// \param value  the neuray value
-    const mi::mdl::IExpression* transform_value(
-        const mi::base::Handle<const IValue>& value);
+    const mi::mdl::IExpression* transform_value( const IValue* value);
 
     /// Transform a (non-user defined) MDL type from neuray representation to MDL representation.
     ///
     /// \param type  the neuray type
-    const mi::mdl::IType* transform_type(
-        const mi::base::Handle<const IType>& type);
+    const mi::mdl::IType* transform_type( const IType* type);
 
     /// Create a new temporary symbol.
     const mi::mdl::ISymbol* get_temporary_symbol();
@@ -191,9 +186,7 @@ public:
     ///
     /// \param sym   the name of the new parameter
     /// \param init  the expression that will be replaced by this parameter
-    void declare_parameter(
-        const mi::mdl::ISymbol* sym,
-        const mi::base::Handle<const IExpression>& init);
+    void declare_parameter( const mi::mdl::ISymbol* sym, const IExpression* init);
 
     /// Remove all declared parameter mappings.
     void remove_parameters();
@@ -202,14 +195,26 @@ public:
     const mi::mdl::IType_enum* convert_enum_type(const IType_enum* e_tp);
 
     /// Get the list of used user types.
-    const User_type_list& get_used_user_types() const { return m_used_user_types; }
+    const std::set<std::string>& get_used_user_types() const { return m_used_user_types; }
 
 private:
+    /// Given a call name and a list of arguments, add a multi_scatter parameter
+    /// and create a call.
+    const mi::mdl::IExpression* add_multiscatter_param(
+        const std::string& callee_name,
+        mi::Size n_params,
+        bool named_args,
+        const IExpression_list* args);
+
     /// The MDL module that will own the newly constructed entities.
     mi::mdl::Module* m_owner;
 
     /// The current transaction.
     DB::Transaction* m_trans;
+
+    /// Indicates whether parameter references should be traversed and resolved via \c m_args, or
+    /// converted to a parameter reference pointing to the declared parameters.
+    bool m_traverse_ek_parameter;
 
     /// The name factory of \c m_owner.
     mi::mdl::IName_factory& m_nf;
@@ -237,25 +242,35 @@ private:
         }
     };
 
-    typedef std::map<
+    using Param_map = std::map<
         mi::base::Handle<const IExpression>,
         const mi::mdl::ISymbol*,
-        Handle_less<const IExpression>
-    > Param_map;
+        Handle_less<const IExpression>>;
 
     /// The parameter map.
     Param_map m_param_map;
 
-    /// The arguments of the original entity.
+    using Param_vector = std::vector<const mi::mdl::ISymbol*>;
+
+    /// The parameter vector.
+    Param_vector m_param_vector;
+
+    /// The arguments of the original entity (only used if \c m_traverse_ek_parameter is \c true).
     mi::base::Handle<IExpression_list const> m_args;
 
-    /// List of used user types.
-    User_type_list m_used_user_types;
+    /// Set of used user types (decoded).
+    std::set<std::string> m_used_user_types;
 
     mi::mdl::IMDL::MDL_version m_owner_version;
 
     /// Name mangler.
     Name_mangler& m_name_mangler;
+
+    /// Create tag- or string-based resources.
+    bool m_avoid_resource_urls;
+
+    /// Set of indirect calls in the current call stack, used to check for cycles.
+    std::set<DB::Tag> m_set_indirect_calls;
 };
 
 } // namespace MDL

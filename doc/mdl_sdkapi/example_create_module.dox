@@ -1,0 +1,123 @@
+/******************************************************************************
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_create_module Example for building of new MDL Modules
+
+<div align="right">
+    [\link mi_neuray_example_traversal Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_discovery Next\endlink]
+</div>
+
+This example builds a new MDL module from scratch
+
+\section example_create_module_new New Topics
+
+  - Creation of a simple diffuse material
+  - Creation of a material variant
+  - Using the uniform analysis
+  - Creation and usage of user-defined enum and struct types
+
+\section example_create_module_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Creation of a simple diffuse material
+    </b></dt>
+    <dd><br>
+        To define a new material, one needs to specify at least the parameters and the body of the
+        material. Since the body typically references the parameters, it is recommended to start
+        with the parameters, and then to create the body bottom-up in a post-order graph traversal.
+        Here we create a single color parameter with name \c "tint".
+
+        The body of the material consists of three chained function calls: \c
+        df::diffuse_reflection_bsdf(), \c material_surface(), and \c material(). Note how the
+        argument for \c df::diffuse_reflection_bsdf() references the \c "tint" parameter of the
+        material. Each of the first two function call is used as argument to the following function
+        call.
+
+        Finally, the intended name of the new material, as well as its parameters and the body, are
+        passed to #mi::neuraylib::IMdl_module_builder::add_function().
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Creation of a material variant
+    </b></dt>
+    <dd><br>
+        To define a variant, one needs to specify the prototype and the (new) defaults. Since the
+        material in the first step does not have any default, the new default is required for this
+        variant here. In addition, we define an optional annotation for the variant itself.
+
+        Finally, the intended name of the new variant, as well as the prototype, the defaults, and
+        the annotations are passed to #mi::neuraylib::IMdl_module_builder::add_variant().
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Using the uniform analysis
+    </b></dt>
+    <dd><br>
+        The graph structure of the body of a function or material might require certain parameters
+        to be uniform in order to obtain valid MDL module. Since these constraints might not be
+        obvious, the uniform analysis can be used to obtain such information.
+
+        Here, the \c "across_materials" parameter is created without modifiers first, and the
+        information from the uniform analysis is used to add the uniform modifier before the
+        material is actually added.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Creation and usage of user-defined enum and struct types
+    </b></dt>
+    <dd><br>
+        First, a new enum type with two enumerators and a new struct type with two \c int fields is
+        created.
+
+        Afterwards, we create a function that makes use of these user-defined types. Note the
+        conversion from the enum type to \c int since there are no comparison operators for
+        user-defined types. Also note the accesses to the field values of the struct type. Next,
+        the expressions for the condition, for the \c true expression, and for the \c false
+        expression of the ternary operator are created. Finally, these expressions are passed as
+        arguments to the ternary operator which represents the root of the function body.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_create_module Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/create_module/example_create_module.cpp</tt>
+
+\include create_module/example_create_module.cpp
+
+<div align="right">
+    [\link mi_neuray_example_traversal Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_discovery Next\endlink]
+</div>
+
+*/

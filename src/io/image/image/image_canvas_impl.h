@@ -61,6 +61,11 @@ public:
     ///
     /// Used to implement DB::Element_base::get_size() for DBIMAGE::Image.
     virtual mi::Size get_size() const = 0;
+
+    /// Releases the allocated tile memory.
+    /// \return \c true on success, \c false, if the canvas does not support lazy loading and therefore
+    ///          cannot simply free its data.
+    virtual bool release_tiles() const = 0;
 };
 
 /// A simple implementation of the ICanvas interface.
@@ -72,7 +77,7 @@ public:
 ///
 /// File-based or archive-based canvases could flush unused tiles if memory gets tight (not yet
 /// implemented).
-class Canvas_impl
+class Canvas_impl final // constructor invokes virtual method calls
   : public mi::base::Interface_implement<ICanvas>,
     public boost::noncopyable
 {
@@ -246,17 +251,23 @@ public:
 
     mi::Uint32 get_tiles_size_y() const { return m_nr_of_tiles_y; }
 
-    const mi::neuraylib::ITile* get_tile(
+    const mi::neuraylib::ITile* deprecated_get_tile(
         mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer) const;
 
-    mi::neuraylib::ITile* get_tile(
+    mi::neuraylib::ITile* deprecated_get_tile(
         mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer);
+
+    const mi::neuraylib::ITile* get_tile( mi::Uint32 layer = 0) const;
+
+    mi::neuraylib::ITile* get_tile( mi::Uint32 layer = 0);
 
     // methods of IMAGE::ICanvas
 
     bool get_is_cubemap() const { return m_is_cubemap; }
 
     mi::Size get_size() const;
+
+    bool release_tiles() const;
 
 private:
     /// Indicates whether this canvas supports lazy loading.

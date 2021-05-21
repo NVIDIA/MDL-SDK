@@ -964,9 +964,10 @@ public:
 
         ISymbol const *sym;
         int           code = 0;
-        bool          res = true;
-
-        res = e_type->get_value(m_value, sym, code);
+#ifdef ENABLE_ASSERT
+        bool          res =
+#endif
+        e_type->get_value(m_value, sym, code);
         MDL_ASSERT(res && "Could not lookup enum value index");
 
         return code;
@@ -1060,11 +1061,12 @@ public:
         case IType::TK_TEXTURE:
             {
                 IType_texture const *res_tp = cast<IType_texture>(dst_tp);
-                // convert to texture with default gamma
+                // convert to texture with default gamma and selector ""
                 return factory->create_texture(
                     res_tp,
                     m_value,
                     IValue_texture::gamma_default,
+                    /*selector=*/"",
                     /*tag_value=*/0,
                     /*tag_version=*/0);
             }
@@ -1120,6 +1122,9 @@ public:
     /// Get the gamma mode.
     gamma_mode get_gamma_mode() const MDL_FINAL { return m_gamma_mode; }
 
+    /// Get the channel selector value of this texture.
+    char const *get_selector() const MDL_FINAL { return m_selector; }
+
     /// Get the tag value.
     int get_tag_value() const MDL_FINAL { return m_tag_value; }
 
@@ -1130,11 +1135,20 @@ public:
     Bsdf_data_kind get_bsdf_data_kind() const MDL_FINAL { return m_bsdf_data_kind; }
 
     /// Constructor.
+    ///
+    /// \param arena        the memory arena to store strings on
+    /// \param type         the type of the texture
+    /// \param value        the (string) value of the texture
+    /// \param gamma        the gamma value of the texture
+    /// \param selector     the channel selector of the texture if any or ""
+    /// \param tag_value    the tag value of the texture
+    /// \param tag_version  the version of the tag
     explicit Value_texture(
         Memory_arena        *arena,
         IType_texture const *type,
         char const          *value,
         gamma_mode          gamma,
+        char const          *selector,
         int                 tag_value,
         unsigned            tag_version)
     : Base(type)
@@ -1143,12 +1157,17 @@ public:
     , m_tag_value(tag_value)
     , m_tag_version(tag_version)
     , m_bsdf_data_kind(BDK_NONE)
+    , m_selector(Arena_strdup(*arena, selector))
     {
     }
 
     /// Constructor for bsdf data texture.
+    ///
+    /// \param type         the type of the texture
+    /// \param kind         the BSDF kind of the texture
+    /// \param tag_value    the tag value of the texture
+    /// \param tag_version  the version of the tag
     explicit Value_texture(
-        Memory_arena        *arena,
         IType_texture const *type,
         Bsdf_data_kind      kind,
         int                 tag_value,
@@ -1159,6 +1178,7 @@ public:
     , m_tag_value(tag_value)
     , m_tag_version(tag_version)
     , m_bsdf_data_kind(kind)
+    , m_selector("")
     {
     }
 
@@ -1173,6 +1193,8 @@ private:
     unsigned m_tag_version;
     /// The BSDF data kind.
     Bsdf_data_kind m_bsdf_data_kind;
+    /// The selector value or "".
+    char const *const m_selector;
 };
 
 /// Implementation of the "string" valued IValue_light_profile class.
@@ -2792,12 +2814,13 @@ IValue_texture const *Value_factory::create_texture(
     IType_texture const            *type,
     char const                     *value,
     IValue_texture::gamma_mode     gamma,
+    char const                     *selector,
     int                            tag_value,
     unsigned                       tag_version)
 {
     MDL_ASSERT(value != NULL && "<NULL> textures are not allowed");
     IValue_texture *v = m_builder.create<Value_texture>(
-        m_builder.get_arena(), type, value, gamma, tag_value, tag_version);
+        m_builder.get_arena(), type, value, gamma, selector, tag_value, tag_version);
     std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (!res.second) {
         m_builder.get_arena()->drop(v);
@@ -2815,7 +2838,7 @@ IValue_texture const *Value_factory::create_bsdf_data_texture(
     MDL_ASSERT(bsdf_data_kind != IValue_texture::BDK_NONE && "NONE kind is not allowed");
     IType_texture const *type = m_tf.create_texture(IType_texture::TS_BSDF_DATA);
     IValue_texture *v = m_builder.create<Value_texture>(
-        m_builder.get_arena(), type, bsdf_data_kind, tag_value, tag_version);
+        type, bsdf_data_kind, tag_value, tag_version);
     std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (!res.second) {
         m_builder.get_arena()->drop(v);
@@ -3041,7 +3064,7 @@ IValue const *Value_factory::import(IValue const *value)
 
             }
             return create_texture(
-                tp, v->get_string_value(), v->get_gamma_mode(),
+                tp, v->get_string_value(), v->get_gamma_mode(), v->get_selector(),
                 v->get_tag_value(), v->get_tag_version());
         }
     case IValue::VK_LIGHT_PROFILE:
@@ -3153,9 +3176,10 @@ void Value_factory::deserialize(Factory_deserializer &deserializer)
     deserializer.register_value(Tag_t(2), m_true_value);
     deserializer.register_value(Tag_t(3), m_false_value);
 
-    Tag_t t;
-
-    t = deserializer.read_section_tag();
+#ifdef ENABLE_ASSERT
+    Tag_t t =
+#endif
+    deserializer.read_section_tag();
     MDL_ASSERT(t == Serializer::ST_VALUE_TABLE);
     DOUT(("value factory {\n"));
     INC_SCOPE();
@@ -3165,8 +3189,10 @@ void Value_factory::deserialize(Factory_deserializer &deserializer)
 
     DOUT(("used type factory %u\n", unsigned(type_factory_tag)));
 
-    IType_factory const *tf;
-    tf = deserializer.get_type_factory(type_factory_tag);
+#ifdef ENABLE_ASSERT
+    IType_factory const *tf =
+#endif
+    deserializer.get_type_factory(type_factory_tag);
     MDL_ASSERT(tf == &m_tf);
 
     // read the number of values
@@ -3255,12 +3281,14 @@ size_t Value_factory::IValue_hash::operator() (IValue const *value) const
         }
     case IValue::VK_TEXTURE:
         {
-            IValue_texture const *resource = cast<IValue_texture>(value);
-            char const *s = resource->get_string_value();
+            IValue_texture const *texture = cast<IValue_texture>(value);
+            char const *s = texture->get_string_value();
+            char const *c = texture->get_selector();
             return
-                h + hash_string(s) + size_t(kind) * 3 + resource->get_gamma_mode() * 17391 +
-                size_t(resource->get_tag_value()) * 9 + size_t(resource->get_tag_version()) * 5 +
-                resource->get_bsdf_data_kind() * 7;
+                h + hash_string(s) + size_t(kind) * 3 + texture->get_gamma_mode() * 17391 +
+                hash_string(c) * 13 + 
+                size_t(texture->get_tag_value()) * 9 + size_t(texture->get_tag_version()) * 5 +
+                texture->get_bsdf_data_kind() * 7;
         }
     case IValue::VK_LIGHT_PROFILE:
     case IValue::VK_BSDF_MEASUREMENT:
@@ -3327,6 +3355,8 @@ bool Value_factory::IValue_equal::operator()(IValue const *a, IValue const *b) c
             if (ra->get_gamma_mode() != rb->get_gamma_mode())
                 return false;
             if (strcmp(ra->get_string_value(), rb->get_string_value()) != 0)
+                return false;
+            if (strcmp(ra->get_selector(), rb->get_selector()) != 0)
                 return false;
             if (ra->get_tag_value() != rb->get_tag_value())
                 return false;

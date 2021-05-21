@@ -57,6 +57,22 @@ inline double distance(double a, double b) { return abs(a-b); }
 MDL_CONSTEXPR inline float  normalize(float a)  { return 1.0f; }
 MDL_CONSTEXPR inline double normalize(double a) { return 1.0; }
 
+/// Helper: bit cast from int to float.
+static float int_bits_to_float(int x)
+{
+    union { int i; float f; } u;
+    u.i = x;
+    return u.f;
+}
+
+/// Helper: bit cast from float to int.
+static int float_bits_to_int(float x)
+{
+    union { int i; float f; } u;
+    u.f = x;
+    return u.i;
+}
+
 /// Helper for luminance(float3)
 static IValue const *do_luminance_sRGB(
     IValue_factory       *value_factory,

@@ -87,6 +87,11 @@ mi::Sint32 Mdl_i18n_configuration_impl::set_locale( const char* locale)
             if (system_locale)
             {
                 translator_locale = system_locale;
+                // Truncate to 2 letters
+                if (translator_locale.size() > 2)
+                {
+                    translator_locale = translator_locale.substr(0, 2);
+                }
             }
         }
         else

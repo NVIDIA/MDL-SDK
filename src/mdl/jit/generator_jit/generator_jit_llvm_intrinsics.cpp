@@ -209,6 +209,22 @@ void print_string(Line_buffer *buffer, char const *value)
 
 namespace {
 
+/// Helper: bit cast from int to float.
+float mdl_int_bits_to_float(int x)
+{
+    union { int i; float f; } u;
+    u.i = x;
+    return u.f;
+}
+
+/// Helper: bit cast from float to int.
+int mdl_float_bits_to_int(float x)
+{
+    union { int i; float f; } u;
+    u.f = x;
+    return u.i;
+}
+
 typedef IResource_handler::Tex_wrap_mode                Tex_wrap_mode;
 typedef IResource_handler::Deriv_float2                 Deriv_float2;
 typedef IResource_handler::Mbsdf_part                   Mbsdf_part;
@@ -1050,12 +1066,9 @@ void df_bsdf_measurement_resolution(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
-    {
+    if (handler != NULL && resource != 0) {
         handler->bm_resolution(result, res_data->get_resource_store(resource - 1), part);
-    }
-    else
-    {
+    } else {
         result[0] = 0;
         result[1] = 0;
         result[2] = 0;
@@ -1073,13 +1086,10 @@ void df_bsdf_measurement_evaluate(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
-    {
+    if (handler != NULL && resource != 0) {
         handler->bm_evaluate(result, res_data->get_resource_store(resource - 1),
                              data->get_thread_data(), theta_phi_in, theta_phi_out, part);
-    }
-    else
-    {
+    } else {
         result[0] = 0.0f;
         result[1] = 0.0f;
         result[2] = 0.0f;
@@ -1097,13 +1107,10 @@ void df_bsdf_measurement_sample(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
-    {
+    if (handler != NULL && resource != 0) {
         handler->bm_sample(result, res_data->get_resource_store(resource - 1),
                            data->get_thread_data(), theta_phi_out, xi, part);
-    }
-    else
-    {
+    } else {
         result[0] = 0.0f;
         result[1] = 0.0f;
         result[2] = 1.0f;
@@ -1120,9 +1127,10 @@ float df_bsdf_measurement_pdf(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
+    if (handler != NULL && resource != 0) {
         return handler->bm_pdf(res_data->get_resource_store(resource - 1),
                            data->get_thread_data(), theta_phi_in, theta_phi_out, part);
+    }
     return 0.0f;
 }
 
@@ -1135,13 +1143,10 @@ void df_bsdf_measurement_albedos(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
-    {
+    if (handler != NULL && resource != 0) {
         handler->bm_albedos(result, res_data->get_resource_store(resource - 1),
                            data->get_thread_data(), theta_phi);
-    }
-    else
-    {
+    } else {
         result[0] = 0.0f;
         result[1] = 0.0f;
         result[2] = 0.0f;
@@ -1157,9 +1162,10 @@ float df_light_profile_evaluate(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
+    if (handler != NULL && resource != 0) {
         return handler->lp_evaluate(res_data->get_resource_store(resource - 1),
                            data->get_thread_data(), theta_phi);
+    }
     return 0.0f;
 }
 
@@ -1172,13 +1178,10 @@ void df_light_profile_sample(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
-    {
+    if (handler != NULL && resource != 0) {
         handler->lp_sample(result, res_data->get_resource_store(resource - 1),
                            data->get_thread_data(), xi);
-    }
-    else
-    {
+    } else {
         result[0] = 0.0f;
         result[1] = 0.0f;
         result[2] = 1.0f;
@@ -1193,9 +1196,10 @@ float df_light_profile_pdf(
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler = res_data->get_resource_handler();
-    if (handler != NULL && resource != 0)
+    if (handler != NULL && resource != 0) {
         return handler->lp_pdf(res_data->get_resource_store(resource - 1),
                            data->get_thread_data(), theta_phi);
+    }
     return 0.0f;
 }
 
@@ -1214,6 +1218,7 @@ typedef int    (*II_IIII)(int, int);
 typedef int    (*II_FF)(float);
 typedef int    (*II_DD)(double);
 typedef float  (*FF_FF)(float);
+typedef float  (*FF_II)(int);
 typedef float  (*FF_FFFF)(float, float);
 typedef float  (*FF_FFff)(float, float *);
 typedef float  (*FF_FFII)(float, int);
@@ -1310,7 +1315,7 @@ static bool has_fast_variant(MDL_runtime_creator::Runtime_function code)
 // Get an external C-runtime function.
 llvm::Function *MDL_runtime_creator::get_c_runtime_func(
     Runtime_function code,
-    char const *signature)
+    char const       *signature)
 {
 #define EXTERNAL_CMATH(en, name, type) \
 case en: \
@@ -1381,6 +1386,8 @@ case en: \
         EXTERNAL_CMATH(RT_ATAN2,    atan2,  DD_DDDD);
         LLVM_INTRINSIC(RT_CEIL,     ceil);
         LLVM_INTRINSIC(RT_COS,      cos);
+        EXTERNAL_CMATH(RT_COSHF,    coshf, FF_FF);
+        EXTERNAL_CMATH(RT_COSH,     cosh,  DD_DD);
         LLVM_INTRINSIC(RT_EXP,      exp);
         LLVM_INTRINSIC(RT_EXP2,     exp2);
         LLVM_INTRINSIC(RT_FLOOR,    floor);
@@ -1394,9 +1401,13 @@ case en: \
         LLVM_INTRINSIC(RT_POW,      pow);
         _LLVM_INTRINSIC(RT_POWI,    "powi.f64");
         LLVM_INTRINSIC(RT_SIN,      sin);
+        EXTERNAL_CMATH(RT_SINHF,    sinhf, FF_FF);
+        EXTERNAL_CMATH(RT_SINH,     sinh,  DD_DD);
         LLVM_INTRINSIC(RT_SQRT,     sqrt);
         EXTERNAL_CMATH(RT_TANF,     tanf, FF_FF);
         EXTERNAL_CMATH(RT_TAN,      tan,  DD_DD);
+        EXTERNAL_CMATH(RT_TANHF,    tanhf, FF_FF);
+        EXTERNAL_CMATH(RT_TANH,     tanh, DD_DD);
         LLVM_INTRINSIC(RT_COPYSIGN, copysign);
         default:
             MDL_ASSERT(!"unsupported <cmath> runtime function requested");
@@ -1406,57 +1417,66 @@ case en: \
     case LLVM_code_generator::TL_PTX:
         // use libdevice calls
         switch (code) {
-        EXTERNAL_LIBDEVICE(RT_ABSF,      fabsf,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_ABS,       fabs,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_ABSI,      abs,       II_II);
-        EXTERNAL_LIBDEVICE(RT_ACOSF,     acosf,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_ACOS,      acos,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_ASINF,     asinf,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_ASIN,      asin,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_ATANF,     atanf,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_ATAN,      atan,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_ATAN2F,    atan2f,    FF_FFFF);
-        EXTERNAL_LIBDEVICE(RT_ATAN2,     atan2,     DD_DDDD);
-        EXTERNAL_LIBDEVICE(RT_CEILF,     ceilf,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_CEIL,      ceil,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_COSF,      cosf,      FF_FF);
-        EXTERNAL_LIBDEVICE(RT_COS,       cos,       DD_DD);
-        EXTERNAL_LIBDEVICE(RT_EXPF,      expf,      FF_FF);
-        EXTERNAL_LIBDEVICE(RT_EXP,       exp,       DD_DD);
-        EXTERNAL_LIBDEVICE(RT_FLOORF,    floorf,    FF_FF);
-        EXTERNAL_LIBDEVICE(RT_FLOOR,     floor,     DD_DD);
-        EXTERNAL_LIBDEVICE(RT_FMODF,     fmodf,     FF_FFFF);
-        EXTERNAL_LIBDEVICE(RT_FMOD,      fmod,      DD_DDDD);
-        EXTERNAL_LIBDEVICE(RT_LOGF,      logf,      FF_FF);
-        EXTERNAL_LIBDEVICE(RT_LOG,       log,       DD_DD);
-        EXTERNAL_LIBDEVICE(RT_LOG10F,    log10f,    FF_FF);
-        EXTERNAL_LIBDEVICE(RT_LOG10,     log10,     DD_DD);
-        EXTERNAL_LIBDEVICE(RT_MODFF,     modff,     FF_FFff);
-        EXTERNAL_LIBDEVICE(RT_MODF,      modf,      DD_DDdd);
-        EXTERNAL_LIBDEVICE(RT_POWF,      powf,      FF_FFFF);
-        EXTERNAL_LIBDEVICE(RT_POW,       pow,       DD_DDDD);
-        EXTERNAL_LIBDEVICE(RT_POWI,      powi,      DD_DDII);
-        EXTERNAL_LIBDEVICE(RT_SINF,      sinf,      FF_FF);
-        EXTERNAL_LIBDEVICE(RT_SIN,       sin,       DD_DD);
-        EXTERNAL_LIBDEVICE(RT_SQRTF,     sqrtf,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_SQRT,      sqrt,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_TANF,      tanf,      FF_FF);
-        EXTERNAL_LIBDEVICE(RT_TAN,       tan,       DD_DD);
-        EXTERNAL_LIBDEVICE(RT_COPYSIGNF, copysignf, FF_FFFF);
-        EXTERNAL_LIBDEVICE(RT_COPYSIGN,  copysign,  DD_DDDD);
-        EXTERNAL_LIBDEVICE(RT_SINCOSF,   sincosf,   VV_FFffff);
-        EXTERNAL_LIBDEVICE(RT_LOG2F,     log2f,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_LOG2,      log2,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_EXP2F,     exp2f,     FF_FF);
-        EXTERNAL_LIBDEVICE(RT_EXP2,      exp2,      DD_DD);
-        EXTERNAL_LIBDEVICE(RT_MINI,      min,       II_IIII);
-        EXTERNAL_LIBDEVICE(RT_MAXI,      max,       II_IIII);
-        EXTERNAL_LIBDEVICE(RT_MINF,      fminf,     FF_FFFF);
-        EXTERNAL_LIBDEVICE(RT_MAXF,      fmaxf,     FF_FFFF);
-        EXTERNAL_LIBDEVICE(RT_MIN,       fmin,      DD_DDDD);
-        EXTERNAL_LIBDEVICE(RT_MAX,       fmax,      DD_DDDD);
-        EXTERNAL_LIBDEVICE(RT_RSQRTF,    rsqrtf,    FF_FF);
-        EXTERNAL_LIBDEVICE(RT_RSQRT,     rsqrt,     DD_DD);
+        EXTERNAL_LIBDEVICE(RT_ABSF,              fabsf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_ABS,               fabs,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_ABSI,              abs,               II_II);
+        EXTERNAL_LIBDEVICE(RT_ACOSF,             acosf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_ACOS,              acos,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_ASINF,             asinf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_ASIN,              asin,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_ATANF,             atanf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_ATAN,              atan,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_ATAN2F,            atan2f,            FF_FFFF);
+        EXTERNAL_LIBDEVICE(RT_ATAN2,             atan2,             DD_DDDD);
+        EXTERNAL_LIBDEVICE(RT_CEILF,             ceilf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_CEIL,              ceil,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_COSF,              cosf,              FF_FF);
+        EXTERNAL_LIBDEVICE(RT_COS,               cos,               DD_DD);
+        EXTERNAL_LIBDEVICE(RT_COSHF,             coshf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_COSH,              cosh,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_EXPF,              expf,              FF_FF);
+        EXTERNAL_LIBDEVICE(RT_EXP,               exp,               DD_DD);
+        EXTERNAL_LIBDEVICE(RT_FLOORF,            floorf,            FF_FF);
+        EXTERNAL_LIBDEVICE(RT_FLOOR,             floor,             DD_DD);
+        EXTERNAL_LIBDEVICE(RT_FMODF,             fmodf,             FF_FFFF);
+        EXTERNAL_LIBDEVICE(RT_FMOD,              fmod,              DD_DDDD);
+        EXTERNAL_LIBDEVICE(RT_LOGF,              logf,              FF_FF);
+        EXTERNAL_LIBDEVICE(RT_LOG,               log,               DD_DD);
+        EXTERNAL_LIBDEVICE(RT_LOG10F,            log10f,            FF_FF);
+        EXTERNAL_LIBDEVICE(RT_LOG10,             log10,             DD_DD);
+        EXTERNAL_LIBDEVICE(RT_MODFF,             modff,             FF_FFff);
+        EXTERNAL_LIBDEVICE(RT_MODF,              modf,              DD_DDdd);
+        EXTERNAL_LIBDEVICE(RT_POWF,              powf,              FF_FFFF);
+        EXTERNAL_LIBDEVICE(RT_POW,               pow,               DD_DDDD);
+        EXTERNAL_LIBDEVICE(RT_POWI,              powi,              DD_DDII);
+        EXTERNAL_LIBDEVICE(RT_SINF,              sinf,              FF_FF);
+        EXTERNAL_LIBDEVICE(RT_SIN,               sin,               DD_DD);
+        EXTERNAL_LIBDEVICE(RT_SINHF,             sinhf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_SINH,              sinh,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_SQRTF,             sqrtf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_SQRT,              sqrt,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_TANF,              tanf,              FF_FF);
+        EXTERNAL_LIBDEVICE(RT_TAN,               tan,               DD_DD);
+        EXTERNAL_LIBDEVICE(RT_TANHF,             tanhf,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_TANH,              tanh,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_COPYSIGNF,         copysignf,         FF_FFFF);
+        EXTERNAL_LIBDEVICE(RT_COPYSIGN,          copysign,          DD_DDDD);
+        EXTERNAL_LIBDEVICE(RT_SINCOSF,           sincosf,           VV_FFffff);
+        EXTERNAL_LIBDEVICE(RT_LOG2F,             log2f,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_LOG2,              log2,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_EXP2F,             exp2f,             FF_FF);
+        EXTERNAL_LIBDEVICE(RT_EXP2,              exp2,              DD_DD);
+        EXTERNAL_LIBDEVICE(RT_MINI,              min,               II_IIII);
+        EXTERNAL_LIBDEVICE(RT_MAXI,              max,               II_IIII);
+        EXTERNAL_LIBDEVICE(RT_MINF,              fminf,             FF_FFFF);
+        EXTERNAL_LIBDEVICE(RT_MAXF,              fmaxf,             FF_FFFF);
+        EXTERNAL_LIBDEVICE(RT_MIN,               fmin,              DD_DDDD);
+        EXTERNAL_LIBDEVICE(RT_MAX,               fmax,              DD_DDDD);
+        EXTERNAL_LIBDEVICE(RT_RSQRTF,            rsqrtf,            FF_FF);
+        EXTERNAL_LIBDEVICE(RT_RSQRT,             rsqrt,             DD_DD);
+        EXTERNAL_LIBDEVICE(RT_INT_BITS_TO_FLOAT, int_as_float,      FF_II);
+        EXTERNAL_LIBDEVICE(RT_FLOAT_BITS_TO_INT, float_as_int,      II_FF);
+
         default:
             MDL_ASSERT(!"unsupported <cmath> runtime function requested");
             break;
@@ -1464,50 +1484,58 @@ case en: \
         break;
     case LLVM_code_generator::TL_HLSL:
         switch (code) {
-        LLVM_INTRINSIC(RT_ABS,       fabs);
-        HLSL_INTRINSIC(RT_ABSI,      abs,       II_II);
-        HLSL_INTRINSIC(RT_ACOSF,     acos,      FF_FF);
-        HLSL_INTRINSIC(RT_ACOS,      acos,      DD_DD);
-        HLSL_INTRINSIC(RT_ASINF,     asin,      FF_FF);
-        HLSL_INTRINSIC(RT_ASIN,      asin,      DD_DD);
-        HLSL_INTRINSIC(RT_ATANF,     atan,      FF_FF);
-        HLSL_INTRINSIC(RT_ATAN,      atan,      DD_DD);
-        HLSL_INTRINSIC(RT_ATAN2F,    atan2,     FF_FFFF);
-        HLSL_INTRINSIC(RT_ATAN2,     atan2,     DD_DDDD);
-        LLVM_INTRINSIC(RT_CEIL,      ceil);
-        LLVM_INTRINSIC(RT_COS,       cos);
-        LLVM_INTRINSIC(RT_EXP,       exp);
-        LLVM_INTRINSIC(RT_EXP2,      exp2);
-        HLSL_INTRINSIC(RT_FLOORF,    floor,     FF_FF);
-        HLSL_INTRINSIC(RT_FLOOR,     floor,     DD_DD);
-        HLSL_INTRINSIC(RT_FMODF,     fmod,      FF_FFFF);
-        HLSL_INTRINSIC(RT_FMOD,      fmod,      DD_DDDD);
-        HLSL_INTRINSIC(RT_FRACF,     frac,      FF_FF);
-        HLSL_INTRINSIC(RT_FRAC,      frac,      DD_DD);
-        LLVM_INTRINSIC(RT_LOG,       log);
-        LLVM_INTRINSIC(RT_LOG2,      log2);
-        LLVM_INTRINSIC(RT_LOG10,     log10);
-        HLSL_INTRINSIC(RT_MODFF,     modf,      FF_FFff);
-        HLSL_INTRINSIC(RT_MODF,      modf,      DD_DDdd);
-        HLSL_INTRINSIC(RT_POWF,      pow,       FF_FFFF);
-        HLSL_INTRINSIC(RT_POW,       pow,       DD_DDDD);
-        HLSL_INTRINSIC(RT_POWI,      pow,       DD_DDII);
-        LLVM_INTRINSIC(RT_SIN,       sin);
-        LLVM_INTRINSIC(RT_SQRT,      sqrt);
-        HLSL_INTRINSIC(RT_TANF,      tan,       FF_FF);
-        HLSL_INTRINSIC(RT_TAN,       tan,       DD_DD);
-        HLSL_INTRINSIC(RT_COPYSIGNF, copysign,  FF_FFFF);
-        HLSL_INTRINSIC(RT_COPYSIGN,  copysign,  DD_DDDD);
-        HLSL_INTRINSIC(RT_MINI,      min,       II_IIII);
-        HLSL_INTRINSIC(RT_MAXI,      max,       II_IIII);
-        HLSL_INTRINSIC(RT_MINF,      min,       FF_FFFF);
-        HLSL_INTRINSIC(RT_MAXF,      max,       FF_FFFF);
-        HLSL_INTRINSIC(RT_MIN,       min,       DD_DDDD);
-        HLSL_INTRINSIC(RT_MAX,       max,       DD_DDDD);
-        HLSL_INTRINSIC(RT_RSQRTF,    rsqrt,     FF_FF);
-        HLSL_INTRINSIC(RT_RSQRT,     rsqrt,     DD_DD);
-        HLSL_INTRINSIC(RT_SIGNF,     sign,      II_FF);
-        HLSL_INTRINSIC(RT_SIGN,      sign,      II_DD);
+        LLVM_INTRINSIC(RT_ABS,               fabs);
+        HLSL_INTRINSIC(RT_ABSI,              abs,       II_II);
+        HLSL_INTRINSIC(RT_ACOSF,             acos,      FF_FF);
+        HLSL_INTRINSIC(RT_ACOS,              acos,      DD_DD);
+        HLSL_INTRINSIC(RT_ASINF,             asin,      FF_FF);
+        HLSL_INTRINSIC(RT_ASIN,              asin,      DD_DD);
+        HLSL_INTRINSIC(RT_ATANF,             atan,      FF_FF);
+        HLSL_INTRINSIC(RT_ATAN,              atan,      DD_DD);
+        HLSL_INTRINSIC(RT_ATAN2F,            atan2,     FF_FFFF);
+        HLSL_INTRINSIC(RT_ATAN2,             atan2,     DD_DDDD);
+        LLVM_INTRINSIC(RT_CEIL,              ceil);
+        LLVM_INTRINSIC(RT_COS,               cos);
+        HLSL_INTRINSIC(RT_COSHF,             cosh,      FF_FF);
+        HLSL_INTRINSIC(RT_COSH,              cosh,      DD_DD);
+        LLVM_INTRINSIC(RT_EXP,               exp);
+        LLVM_INTRINSIC(RT_EXP2,              exp2);
+        HLSL_INTRINSIC(RT_FLOORF,            floor,     FF_FF);
+        HLSL_INTRINSIC(RT_FLOOR,             floor,     DD_DD);
+        HLSL_INTRINSIC(RT_FMODF,             fmod,      FF_FFFF);
+        HLSL_INTRINSIC(RT_FMOD,              fmod,      DD_DDDD);
+        HLSL_INTRINSIC(RT_FRACF,             frac,      FF_FF);
+        HLSL_INTRINSIC(RT_FRAC,              frac,      DD_DD);
+        LLVM_INTRINSIC(RT_LOG,               log);
+        LLVM_INTRINSIC(RT_LOG2,              log2);
+        LLVM_INTRINSIC(RT_LOG10,             log10);
+        HLSL_INTRINSIC(RT_MODFF,             modf,      FF_FFff);
+        HLSL_INTRINSIC(RT_MODF,              modf,      DD_DDdd);
+        HLSL_INTRINSIC(RT_POWF,              pow,       FF_FFFF);
+        HLSL_INTRINSIC(RT_POW,               pow,       DD_DDDD);
+        HLSL_INTRINSIC(RT_POWI,              pow,       DD_DDII);
+        LLVM_INTRINSIC(RT_SIN,               sin);
+        HLSL_INTRINSIC(RT_SINHF,             sinh,      FF_FF);
+        HLSL_INTRINSIC(RT_SINH,              sinh,      DD_DD);
+        LLVM_INTRINSIC(RT_SQRT,              sqrt);
+        HLSL_INTRINSIC(RT_TANF,              tan,       FF_FF);
+        HLSL_INTRINSIC(RT_TAN,               tan,       DD_DD);
+        HLSL_INTRINSIC(RT_TANHF,             tanh,      FF_FF);
+        HLSL_INTRINSIC(RT_TANH,              tanh,      DD_DD);
+        HLSL_INTRINSIC(RT_COPYSIGNF,         copysign,  FF_FFFF);
+        HLSL_INTRINSIC(RT_COPYSIGN,          copysign,  DD_DDDD);
+        HLSL_INTRINSIC(RT_MINI,              min,       II_IIII);
+        HLSL_INTRINSIC(RT_MAXI,              max,       II_IIII);
+        HLSL_INTRINSIC(RT_MINF,              min,       FF_FFFF);
+        HLSL_INTRINSIC(RT_MAXF,              max,       FF_FFFF);
+        HLSL_INTRINSIC(RT_MIN,               min,       DD_DDDD);
+        HLSL_INTRINSIC(RT_MAX,               max,       DD_DDDD);
+        HLSL_INTRINSIC(RT_RSQRTF,            rsqrt,     FF_FF);
+        HLSL_INTRINSIC(RT_RSQRT,             rsqrt,     DD_DD);
+        HLSL_INTRINSIC(RT_SIGNF,             sign,      II_FF);
+        HLSL_INTRINSIC(RT_SIGN,              sign,      II_DD);
+        HLSL_INTRINSIC(RT_INT_BITS_TO_FLOAT, asfloat,   FF_II);
+        HLSL_INTRINSIC(RT_FLOAT_BITS_TO_INT, asint,     II_FF);
 
         default:
             MDL_ASSERT(!"unsupported HLSL runtime function requested");
@@ -1767,7 +1795,9 @@ llvm::Function *MDL_runtime_creator::decl_from_signature(
 }
 
 // Load an runtime function arguments value.
-llvm::Value *MDL_runtime_creator::load_by_value(Function_context &ctx, llvm::Value *arg)
+llvm::Value *MDL_runtime_creator::load_by_value(
+    Function_context &ctx,
+    llvm::Value      *arg)
 {
     // use a simple heuristic here: if the type is a pointer to an array, it was passed
     // by reference
@@ -1787,12 +1817,15 @@ llvm::Value *MDL_runtime_creator::load_by_value(Function_context &ctx, llvm::Val
 
 // Get the start offset of the next entry with the given type in a valist.
 // offset should point to after the last entry and will be advanced to after the new entry.
-int MDL_runtime_creator::get_next_valist_entry_offset(int &offset, llvm::Type *operand_type)
+int MDL_runtime_creator::get_next_valist_entry_offset(
+    int        &offset,
+    llvm::Type *operand_type)
 {
     llvm::DataLayout data_layout(m_code_gen.get_llvm_module());
 
-    if (offset != 0)
+    if (offset != 0) {
         offset = int(llvm::alignTo(offset, data_layout.getPrefTypeAlignment(operand_type)));
+    }
 
     int start_offset = offset;
 
@@ -1803,8 +1836,11 @@ int MDL_runtime_creator::get_next_valist_entry_offset(int &offset, llvm::Type *o
 
 // Get a pointer to the next entry in the given valist buffer.
 // offset should point to after the last entry and will be advanced to after the new entry.
-llvm::Value *MDL_runtime_creator::get_next_valist_pointer(Function_context &ctx,
-    llvm::Value *valist, int &offset, llvm::Type *operand_type)
+llvm::Value *MDL_runtime_creator::get_next_valist_pointer(
+    Function_context &ctx,
+    llvm::Value      *valist,
+    int              &offset,
+    llvm::Type       *operand_type)
 {
     llvm::Value *values[2] = { ctx.get_constant(0) };
 
@@ -1898,13 +1934,13 @@ void MDL_runtime_creator::call_rt_func_void(
 
 // Call texture attribute runtime function.
 llvm::Value *MDL_runtime_creator::call_tex_attr_func(
-    Function_context &ctx,
-    Runtime_function tex_func_code,
+    Function_context                      &ctx,
+    Runtime_function                      tex_func_code,
     Type_mapper::Tex_handler_vtable_index tex_func_idx,
-    llvm::Value *res_data,
-    llvm::Value *tex_id,
-    llvm::Value *opt_uv_tile,
-    llvm::Type *res_type)
+    llvm::Value                           *res_data,
+    llvm::Value                           *tex_id,
+    llvm::Value                           *opt_uv_tile,
+    llvm::Type                            *res_type)
 {
     llvm::Value *res;
 
@@ -1970,11 +2006,11 @@ llvm::Value *MDL_runtime_creator::call_tex_attr_func(
 
 // Call attribute runtime function.
 llvm::Value *MDL_runtime_creator::call_attr_func(
-    Function_context &ctx,
-    Runtime_function func_code,
+    Function_context                      &ctx,
+    Runtime_function                      func_code,
     Type_mapper::Tex_handler_vtable_index tex_func_idx,
-    llvm::Value *res_data,
-    llvm::Value *res_id)
+    llvm::Value                           *res_data,
+    llvm::Value                           *res_id)
 {
     llvm::Value *res;
 
@@ -2017,44 +2053,68 @@ llvm::Function *MDL_runtime_creator::find_in_c_runtime(
         return get_c_runtime_func(RT_LOG2, signature);
 #endif
     case RT_MDL_MINI:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_MINI, signature);
+        }
         return NULL;
     case RT_MDL_MAXI:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_MAXI, signature);
+        }
         return NULL;
     case RT_MDL_MINF:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_MINF, signature);
+        }
         return NULL;
     case RT_MDL_MAXF:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_MAXF, signature);
+        }
         return NULL;
     case RT_MDL_MIN:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_MIN, signature);
+        }
         return NULL;
     case RT_MDL_MAX:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_MAX, signature);
+        }
         return NULL;
     case RT_MDL_RSQRTF:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_RSQRTF, signature);
+        }
         return NULL;
     case RT_MDL_RSQRT:
-        if (m_target_lang == LLVM_code_generator::TL_PTX)
+        if (m_target_lang == LLVM_code_generator::TL_PTX) {
             return get_c_runtime_func(RT_RSQRT, signature);
+        }
         return NULL;
     case RT_MDL_FRAC:
-        if (m_target_lang == LLVM_code_generator::TL_HLSL)
+        if (m_target_lang == LLVM_code_generator::TL_HLSL) {
             return get_c_runtime_func(RT_FRAC, signature);
+        }
         return NULL;
     case RT_MDL_FRACF:
-        if (m_target_lang == LLVM_code_generator::TL_HLSL)
+        if (m_target_lang == LLVM_code_generator::TL_HLSL) {
             return get_c_runtime_func(RT_FRACF, signature);
+        }
+        return NULL;
+    case RT_MDL_INT_BITS_TO_FLOATI:
+        if (m_target_lang == LLVM_code_generator::TL_PTX ||
+            m_target_lang == LLVM_code_generator::TL_HLSL)
+        {
+            return get_c_runtime_func(RT_INT_BITS_TO_FLOAT, signature);
+        }
+        return NULL;
+    case RT_MDL_FLOAT_BITS_TO_INTF:
+        if (m_target_lang == LLVM_code_generator::TL_PTX ||
+            m_target_lang == LLVM_code_generator::TL_HLSL)
+        {
+            return get_c_runtime_func(RT_FLOAT_BITS_TO_INT, signature);
+        }
         return NULL;
     default:
         return NULL;
@@ -2064,12 +2124,13 @@ llvm::Function *MDL_runtime_creator::find_in_c_runtime(
 // Create a runtime function.
 llvm::Function *MDL_runtime_creator::create_runtime_func(
     Runtime_function code,
-    char const *name,
-    char const *signature)
+    char const       *name,
+    char const       *signature)
 {
     // check if this is available as a native runtime function
-    if (llvm::Function *c_func = find_in_c_runtime(code, signature))
+    if (llvm::Function *c_func = find_in_c_runtime(code, signature)) {
         return c_func;
+    }
 
     bool           is_sret = false;
     llvm::Function *func   = decl_from_signature(name, signature, is_sret);
@@ -2092,6 +2153,15 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     // check for glue functions first
     switch (code) {
+    case RT_MDL_INT_BITS_TO_FLOATI:
+        func->setDoesNotThrow();
+        MARK_NATIVE(func);  // mdl_int_bits_to_floati
+        return func;
+    case RT_MDL_FLOAT_BITS_TO_INTF:
+        func->setDoesNotThrow();
+        MARK_NATIVE(func);  // mdl_float_bits_to_intf
+        return func;
+
     case RT_MDL_TEX_RESOLUTION_2D:
         func->setDoesNotThrow();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
@@ -2591,8 +2661,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TO_CSTRING:
         func->setDoesNotThrow();
-        if (!m_code_gen.m_type_mapper.strings_mapped_to_ids())
+        if (!m_code_gen.m_type_mapper.strings_mapped_to_ids()) {
             func->addParamAttr(0, llvm::Attribute::NoCapture); // string_or_id
+        }
         break;
 
     case RT_MDL_OUT_OF_BOUNDS:
@@ -3044,6 +3115,8 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_CMATH(ceil,   DD_DD);
     REG_CMATH(cosf,   FF_FF);
     REG_CMATH(cos,    DD_DD);
+    REG_CMATH(coshf,  FF_FF);
+    REG_CMATH(cosh,   DD_DD);
     REG_CMATH(fabsf,  FF_FF);
     REG_CMATH(fabs,   DD_DD);
     REG_CMATH(expf,   FF_FF);
@@ -3063,10 +3136,14 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_CMATH2("powi", mi::mdl::powi, DD_DDII);
     REG_CMATH(sinf,   FF_FF);
     REG_CMATH(sin,    DD_DD);
+    REG_CMATH(sinhf,  FF_FF);
+    REG_CMATH(sinh,   DD_DD);
     REG_CMATH(sqrtf,  FF_FF);
     REG_CMATH(sqrt,   DD_DD);
     REG_CMATH(tanf,   FF_FF);
     REG_CMATH(tan,    DD_DD);
+    REG_CMATH(tanhf,  FF_FF);
+    REG_CMATH(tanh,   DD_DD);
 #ifdef _MSC_VER
     // no copysign in MS runtime
     REG_CMATH2("copysign",  ::_copysign,        DD_DDDD);
@@ -3111,6 +3188,9 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
         jitted_code->register_function("mdl_" #func_impl, (void *)func_impl)
     #define REG_FUNC2(symname, func_impl) \
         jitted_code->register_function(symname, (void *)func_impl)
+
+    REG_FUNC2("mdl_int_bits_to_floati", check_sig<FF_II>(mdl_int_bits_to_float));
+    REG_FUNC2("mdl_float_bits_to_intf", check_sig<II_FF>(mdl_float_bits_to_int));
 
     REG_FUNC(tex_resolution_2d);
     // Note: no tex_resolution_3d function is used for the internal native runtime,
@@ -3401,6 +3481,25 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_microfacet_roughness(
     llvm::Value *a = load_by_value(ctx, arg_it++);
 
     // just return the roughness unmodified
+    ctx.create_return(a);
+    return func;
+}
+
+// Generate LLVM IR for state::get_adapt_normal()
+llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
+    Internal_function const *int_func)
+{
+    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+    llvm::Function    *func     = ctx_data->get_function();
+    unsigned          flags     = ctx_data->get_function_flags();
+
+    Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
+
+    llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
+    llvm::Value *a = load_by_value(ctx, arg_it++);
+
+    // just return the normal unmodified
     ctx.create_return(a);
     return func;
 }
@@ -3887,6 +3986,26 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
             }
             break;
 
+        case Internal_function::KI_STATE_ADAPT_NORMAL:
+            if (m_code_gen.m_use_renderer_adapt_normal) {
+                Function_instance inst(
+                    m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+                LLVM_context_data* ctx_data =
+                    m_code_gen.get_or_create_context_data(NULL, inst, "::state");
+                llvm::Function* func = ctx_data->get_function();
+                func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+                func->setName("mdl_adapt_normal");
+                func->setDoesNotThrow();
+                func->setOnlyReadsMemory();
+                func->addParamAttr(0, llvm::Attribute::ReadOnly);  // mark state param as read-only
+                func->addParamAttr(0, llvm::Attribute::NoCapture);
+                m_internal_funcs[kind] = ctx_data->get_function();
+            }
+            else {
+                m_internal_funcs[kind] = create_state_adapt_normal(int_func);
+            }
+            break;
+
         case Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION:
             m_internal_funcs[kind] = create_df_bsdf_measurement_resolution(int_func);
             break;
@@ -4021,7 +4140,13 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
     bool return_derivs = call_expr->returns_derivatives(*this);
 
     llvm::Function *callee = NULL;
+    unsigned promote = PR_NONE;
     if (m_target_lang == TL_HLSL) {
+        IDefinition const *latest_def = promote_to_highest_version(callee_def, promote);
+        if (promote != PR_NONE) {
+            callee_def = latest_def;
+        }
+
         callee = get_hlsl_intrinsic_function(callee_def, return_derivs);
     }
     if (callee == NULL) {
@@ -4147,6 +4272,8 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
             }
         }
     }
+
+    add_promoted_arguments(ctx, promote, args);
 
     llvm::BasicBlock *end_bb = NULL;
     llvm::Value      *tmp    = NULL;

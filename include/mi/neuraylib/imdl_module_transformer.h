@@ -32,7 +32,7 @@
 #define MI_NEURAYLIB_IMDL_MODULE_TRANSFORMER_H
 
 #include <mi/base/interface_declare.h>
-#include <mi/neuraylib/imodule.h>
+#include <mi/neuraylib/iexpression.h>
 
 namespace mi {
 
@@ -42,7 +42,7 @@ namespace neuraylib {
 
 class IMdl_execution_context;
 
-/** \addtogroup mi_neuray_mdl_misc
+/** \addtogroup mi_neuray_mdl_sdk_misc
 @{
 */
 
@@ -55,6 +55,8 @@ class IMdl_execution_context;
 ///       - Conversion between named and positional arguments.
 ///       - Reformatting of the MDL source code.
 ///       - Possibly restructering of alias declarations (including introduction of new ones).
+///
+/// /// \see #mi::neuraylib::IMdl_factory::create_module_transformer()
 class IMdl_module_transformer : public
     mi::base::Interface_declare<0x3501f2ef,0xe7c0,0x492e,0xb2,0xd5,0x73,0xe2,0x33,0xa0,0x77,0x36>
 {

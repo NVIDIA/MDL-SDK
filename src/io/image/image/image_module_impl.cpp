@@ -144,10 +144,10 @@ IMipmap* Image_module_impl::create_mipmap(
     mi::Float32 gamma) const
 {
     if( pixel_type == PT_UNDEF || width == 0 || height == 0 || layers == 0 || gamma < 0)
-        return 0;
+        return nullptr;
 
     if( is_cubemap && layers != 6)
-        return 0;
+        return nullptr;
 
     return new Mipmap_impl(
         pixel_type, width, height, tile_width, tile_height, layers, is_cubemap, gamma);
@@ -210,11 +210,11 @@ IMipmap* Image_module_impl::create_mipmap(
 {
     mi::Size count = canvases.size();
     if( count == 0)
-        return 0;
+        return nullptr;
 
     for( mi::Uint32 i = 0; i < count; ++i)
         if( !canvases[i])
-            return 0;
+            return nullptr;
 
     return new Mipmap_impl( canvases, is_cubemap);
 }
@@ -258,10 +258,10 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     mi::Float32 gamma) const
 {
     if( pixel_type == PT_UNDEF || width == 0 || height == 0 || layers == 0 || gamma < 0)
-        return 0;
+        return nullptr;
 
     if( is_cubemap && layers != 6)
-        return 0;
+        return nullptr;
 
     return new Canvas_impl(
         pixel_type, width, height, tile_width, tile_height, layers, is_cubemap, gamma);
@@ -274,7 +274,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     mi::Uint32 tile_height,
     mi::Sint32* errors) const
 {
-    return new Canvas_impl( filename, miplevel, tile_width, tile_height, /*image_file*/0, errors);
+    return new Canvas_impl( filename, miplevel, tile_width, tile_height, /*image_file*/nullptr, errors);
 }
 
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
@@ -295,7 +295,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
         miplevel,
         tile_width,
         tile_height,
-        /*image_file*/ 0,
+        /*image_file*/ nullptr,
         errors);
 }
 
@@ -310,7 +310,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     mi::Sint32* errors) const
 {
     if( !reader || !image_format)
-        return 0;
+        return nullptr;
 
     return new Canvas_impl(
         Memory_based(),
@@ -320,7 +320,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
         miplevel,
         tile_width,
         tile_height,
-        /*image_file*/ 0,
+        /*image_file*/ nullptr,
         errors);
 }
 
@@ -328,7 +328,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     mi::neuraylib::ITile* tile, mi::Float32 gamma) const
 {
     if( !tile || gamma < 0)
-        return 0;
+        return nullptr;
 
     return new Canvas_impl( tile, gamma);
 }
@@ -339,7 +339,7 @@ mi::neuraylib::ITile* Image_module_impl::create_tile(
     mi::Uint32 height) const
 {
     if( width == 0 || height == 0 || pixel_type == PT_UNDEF)
-        return 0;
+        return nullptr;
 
     return IMAGE::create_tile( pixel_type, width, height);
 }
@@ -359,36 +359,36 @@ IMipmap* Image_module_impl::copy_mipmap( const IMipmap* other, bool only_first_l
 
 mi::neuraylib::ICanvas* Image_module_impl::copy_canvas( const mi::neuraylib::ICanvas* other) const
 {
-    Pixel_type pixel_type    = convert_pixel_type_string_to_enum( other->get_type());
+    const Pixel_type pixel_type    = convert_pixel_type_string_to_enum( other->get_type());
     if( pixel_type == PT_UNDEF)
-        return 0;
-    mi::Uint32 canvas_width  = other->get_resolution_x();
-    mi::Uint32 canvas_height = other->get_resolution_y();
-    mi::Uint32 tile_width    = other->get_tile_resolution_x();
-    mi::Uint32 tile_height   = other->get_tile_resolution_y();
-    mi::Uint32 nr_of_tiles_x = other->get_tiles_size_x();
-    mi::Uint32 nr_of_tiles_y = other->get_tiles_size_y();
-    mi::Uint32 nr_of_layers  = other->get_layers_size();
-    mi::Float32 gamma        = other->get_gamma();
+        return nullptr;
+    const mi::Uint32 canvas_width  = other->get_resolution_x();
+    const mi::Uint32 canvas_height = other->get_resolution_y();
+    const mi::Uint32 tile_width    = other->get_tile_resolution_x();
+    const mi::Uint32 tile_height   = other->get_tile_resolution_y();
+    const mi::Uint32 nr_of_tiles_x = other->get_tiles_size_x();
+    const mi::Uint32 nr_of_tiles_y = other->get_tiles_size_y();
+    const mi::Uint32 nr_of_layers  = other->get_layers_size();
+    const mi::Float32 gamma        = other->get_gamma();
 
-    bool is_cubemap = get_canvas_is_cubemap( other);
-    mi::neuraylib::ICanvas* canvas = create_canvas( pixel_type,
+    const bool is_cubemap = get_canvas_is_cubemap( other);
+    mi::neuraylib::ICanvas* const canvas = create_canvas( pixel_type,
         canvas_width, canvas_height, tile_width, tile_height, nr_of_layers, is_cubemap, gamma);
     if (!canvas)
         return nullptr;
 
-    mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
-    mi::Size count = static_cast<mi::Size>( tile_width) * tile_height * bytes_per_pixel;
+    const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
+    const mi::Size count = static_cast<mi::Size>( tile_width) * tile_height * bytes_per_pixel;
 
     for( mi::Uint32 z = 0; z < nr_of_layers; ++z)
         for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
             for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                 mi::base::Handle<const mi::neuraylib::ITile> other_tile(
-                    other->get_tile( x*tile_width, y*tile_height, z));
+                    other->deprecated_get_tile( x*tile_width, y*tile_height, z));
                 mi::base::Handle<mi::neuraylib::ITile> tile(
-                    canvas->get_tile( x*tile_width, y*tile_height, z));
-                const void* other_tile_data = other_tile->get_data();
-                void* tile_data = tile->get_data();
+                    canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
+                const void* const other_tile_data = other_tile->get_data();
+                void* const tile_data = tile->get_data();
                 memcpy( tile_data, other_tile_data, count);
             }
 
@@ -401,7 +401,7 @@ mi::neuraylib::ITile* Image_module_impl::copy_tile( const mi::neuraylib::ITile* 
     mi::Uint32 width  = other->get_resolution_x();
     mi::Uint32 height = other->get_resolution_y();
     if( width == 0 || height == 0 || pixel_type == PT_UNDEF)
-        return 0;
+        return nullptr;
 
     mi::neuraylib::ITile* tile = create_tile( pixel_type, width, height);
 
@@ -414,11 +414,118 @@ mi::neuraylib::ITile* Image_module_impl::copy_tile( const mi::neuraylib::ITile* 
     return tile;
 }
 
+mi::Sint32 Image_module_impl::copy_mipmap_data( const IMipmap* source, IMipmap* dest) const
+{
+    mi::Uint32 source_levels  = source->get_nlevels();
+    mi::Uint32 dest_levels = dest->get_nlevels();
+    if( dest_levels != source_levels)
+        return -1;
+
+    for( mi::Uint32 i = 0; i < source_levels; ++i) {
+        mi::base::Handle<const mi::neuraylib::ICanvas> source_canvas( source->get_level( i));
+        mi::base::Handle<mi::neuraylib::ICanvas> dest_canvas( dest->get_level( i));
+        mi::Sint32 result = copy_canvas_data( source_canvas.get(), dest_canvas.get());
+        if( result != 0)
+            return result;
+    }
+
+    return 0;
+}
+
+mi::Sint32 Image_module_impl::copy_canvas_data(
+    const mi::neuraylib::ICanvas* source, mi::neuraylib::ICanvas* dest) const
+{
+    const Pixel_type source_pixel_type = convert_pixel_type_string_to_enum( source->get_type());
+    if( source_pixel_type == PT_UNDEF)
+        return -2;
+    const mi::Uint32 source_canvas_width  = source->get_resolution_x();
+    const mi::Uint32 source_canvas_height = source->get_resolution_y();
+    const mi::Uint32 source_tile_width    = source->get_tile_resolution_x();
+    const mi::Uint32 source_tile_height   = source->get_tile_resolution_y();
+    const mi::Uint32 source_nr_of_tiles_x = source->get_tiles_size_x();
+    const mi::Uint32 source_nr_of_tiles_y = source->get_tiles_size_y();
+    const mi::Uint32 source_nr_of_layers  = source->get_layers_size();
+    const mi::Float32 source_gamma        = source->get_gamma();
+    // is_cubemap does not really matter and we might not be able to detect it reliably
+
+    const Pixel_type dest_pixel_type = convert_pixel_type_string_to_enum( dest->get_type());
+    if( dest_pixel_type == PT_UNDEF)
+        return -2;
+    const mi::Uint32 dest_canvas_width  = dest->get_resolution_x();
+    const mi::Uint32 dest_canvas_height = dest->get_resolution_y();
+    const mi::Uint32 dest_tile_width    = dest->get_tile_resolution_x();
+    const mi::Uint32 dest_tile_height   = dest->get_tile_resolution_y();
+    const mi::Uint32 dest_nr_of_tiles_x = dest->get_tiles_size_x();
+    const mi::Uint32 dest_nr_of_tiles_y = dest->get_tiles_size_y();
+    const mi::Uint32 dest_nr_of_layers  = dest->get_layers_size();
+    const mi::Float32 dest_gamma        = dest->get_gamma();
+    // is_cubemap does not really matter and we might not be able to detect it reliably
+
+    if(    dest_pixel_type    != source_pixel_type
+        || dest_canvas_width  != source_canvas_width
+        || dest_canvas_height != source_canvas_height
+        || dest_tile_width    != source_tile_width
+        || dest_tile_height   != source_tile_height
+        || dest_nr_of_tiles_x != source_nr_of_tiles_x
+        || dest_nr_of_tiles_y != source_nr_of_tiles_y
+        || dest_nr_of_layers  != source_nr_of_layers
+        || dest_gamma         != source_gamma)
+        return -1;
+
+    const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( source_pixel_type);
+    const mi::Size count
+        = static_cast<mi::Size>( source_tile_width) * source_tile_height * bytes_per_pixel;
+
+    for( mi::Uint32 z = 0; z < source_nr_of_layers; ++z)
+        for( mi::Uint32 y = 0; y < source_nr_of_tiles_y; ++y)
+            for( mi::Uint32 x = 0; x < source_nr_of_tiles_x; ++x) {
+                mi::base::Handle<const mi::neuraylib::ITile> source_tile(
+                    source->deprecated_get_tile( x*source_tile_width, y*source_tile_height, z));
+                mi::base::Handle<mi::neuraylib::ITile> dest_tile(
+                    dest->deprecated_get_tile( x*dest_tile_width, y*dest_tile_height, z));
+                const void* const source_tile_data = source_tile->get_data();
+                void* const dest_tile_data         = dest_tile->get_data();
+                memcpy( dest_tile_data, source_tile_data, count);
+            }
+
+    return 0;
+}
+
+mi::Sint32 Image_module_impl::copy_tile_data(
+    const mi::neuraylib::ITile* source, mi::neuraylib::ITile* dest) const
+{
+    const Pixel_type source_pixel_type = convert_pixel_type_string_to_enum( source->get_type());
+    if( source_pixel_type == PT_UNDEF)
+        return -2;
+    const mi::Uint32 source_width  = source->get_resolution_x();
+    const mi::Uint32 source_height = source->get_resolution_y();
+
+    const Pixel_type dest_pixel_type = convert_pixel_type_string_to_enum( dest->get_type());
+    if( dest_pixel_type == PT_UNDEF)
+        return -2;
+    const mi::Uint32 dest_width  = dest->get_resolution_x();
+    const mi::Uint32 dest_height = dest->get_resolution_y();
+
+    if(    dest_pixel_type != source_pixel_type
+        || dest_width      != source_width
+        || dest_height     != source_height)
+        return -1;
+
+    const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( source_pixel_type);
+    const mi::Size count = static_cast<mi::Size>( source_width) * source_height * bytes_per_pixel;
+
+    const void* const source_data = source->get_data();
+    void* const dest_data         = dest->get_data();
+    memcpy( dest_data, source_data, count);
+
+    return 0;
+}
+
 IMipmap* Image_module_impl::convert_mipmap(
     const IMipmap* old_mipmap, Pixel_type new_pixel_type, bool only_first_level) const
 {
     if( !old_mipmap)
-        return 0;
+        return nullptr;
 
     mi::Uint32 converted_levels = only_first_level ? 1 : old_mipmap->get_nlevels();
 
@@ -436,11 +543,11 @@ mi::neuraylib::ICanvas* Image_module_impl::convert_canvas(
     const mi::neuraylib::ICanvas* old_canvas, Pixel_type new_pixel_type) const
 {
     if( !old_canvas || new_pixel_type == PT_UNDEF)
-        return 0;
+        return nullptr;
 
     Pixel_type old_pixel_type = convert_pixel_type_string_to_enum( old_canvas->get_type());
     if( old_pixel_type == PT_UNDEF)
-        return 0;
+        return nullptr;
 
     if( old_pixel_type == new_pixel_type)
         return copy_canvas( old_canvas); // faster than the code below
@@ -463,9 +570,9 @@ mi::neuraylib::ICanvas* Image_module_impl::convert_canvas(
         for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
             for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                 mi::base::Handle<const mi::neuraylib::ITile> old_tile(
-                    old_canvas->get_tile( x*tile_width, y*tile_height, z));
+                    old_canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                 mi::base::Handle<mi::neuraylib::ITile> new_tile(
-                    new_canvas->get_tile( x*tile_width, y*tile_height, z));
+                    new_canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                 const void* old_data = old_tile->get_data();
                 void* new_data = new_tile->get_data();
                 convert( old_data, new_data, old_pixel_type, new_pixel_type, nr_of_pixels);
@@ -478,11 +585,11 @@ mi::neuraylib::ITile* Image_module_impl::convert_tile(
     const mi::neuraylib::ITile* old_tile, Pixel_type new_pixel_type) const
 {
     if( !old_tile || new_pixel_type == PT_UNDEF)
-        return 0;
+        return nullptr;
 
     Pixel_type old_pixel_type = convert_pixel_type_string_to_enum( old_tile->get_type());
     if( old_pixel_type == PT_UNDEF)
-        return 0;
+        return nullptr;
 
     if( old_pixel_type == new_pixel_type)
         return copy_tile( old_tile); // faster than the code below
@@ -493,7 +600,7 @@ mi::neuraylib::ITile* Image_module_impl::convert_tile(
 
     mi::neuraylib::ITile* new_tile = IMAGE::create_tile( new_pixel_type, tile_width, tile_height);
     if( !new_tile)
-        return 0;
+        return nullptr;
 
     const void* old_data = old_tile->get_data();
     void* new_data = new_tile->get_data();
@@ -534,7 +641,7 @@ void Image_module_impl::adjust_gamma(
                 for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y) {
                     for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                         mi::base::Handle<mi::neuraylib::ITile> tile(
-                                canvas->get_tile( x*tile_width, y*tile_height, z));
+                                canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                         ASSERT(M_IMAGE, tile->get_resolution_x() == tile_width);
                         ASSERT(M_IMAGE, tile->get_resolution_y() == tile_height);
                         mi::Float32* data = static_cast<mi::Float32*>( tile->get_data());
@@ -549,8 +656,7 @@ void Image_module_impl::adjust_gamma(
             LOG::mod_log->warning(M_IMAGE, LOG::Mod_log::C_IO,
                 "Adjusting gamma to integer format %s, which can lead to banding/quantization artifacts.",
                 canvas->get_type());
-            ASSERT(M_IMAGE, !"Trying to adjust gamma for an integer format");
-            // fall through in release builds
+            ASSERT(M_IMAGE, !"Trying to adjust gamma for an integer format"); // fallthrough
         case PT_RGBE:
         case PT_RGBEA: {
             std::vector<mi::Float32> buffer(4*nr_of_pixels);
@@ -558,7 +664,7 @@ void Image_module_impl::adjust_gamma(
                 for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y) {
                     for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                         mi::base::Handle<mi::neuraylib::ITile> tile(
-                            canvas->get_tile( x*tile_width, y*tile_height, z));
+                            canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                         void* data = tile->get_data();
                         convert( data, buffer.data(), pixel_type, PT_COLOR, nr_of_pixels);
                         IMAGE::adjust_gamma( buffer.data(), nr_of_pixels, 4, exponent);
@@ -635,7 +741,7 @@ void Image_module_impl::serialize_canvas(
         for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
             for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                 mi::base::Handle<const mi::neuraylib::ITile> tile(
-                    canvas->get_tile( x*tile_width, y*tile_height, z));
+                    canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                 const void* tile_data = tile->get_data();
                 serializer->write( static_cast<const char*>( tile_data), count);
             }
@@ -679,7 +785,7 @@ mi::neuraylib::ICanvas* Image_module_impl::deserialize_canvas(
         for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
             for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                 mi::base::Handle<mi::neuraylib::ITile> tile(
-                    canvas->get_tile( x*tile_width, y*tile_height, z));
+                    canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                 void* tile_data = tile->get_data();
                 deserializer->read( static_cast<char*>( tile_data), count);
             }
@@ -728,10 +834,15 @@ mi::neuraylib::ITile* Image_module_impl::deserialize_tile(
 }
 
 bool Image_module_impl::export_canvas(
-    const mi::neuraylib::ICanvas* canvas,
+    const mi::neuraylib::ICanvas* canvas_ptr,
     const char* output_filename,
-    mi::Uint32 quality) const
+    mi::Uint32 quality,
+    bool force_default_gamma) const
 {
+    // Wrap incoming canvas pointer into handle for easier management later.
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( canvas_ptr, mi::base::DUP_INTERFACE);
+    canvas_ptr = nullptr;
+
     std::string root, extension;
     HAL::Ospath::splitext( output_filename, root, extension);
     if( !extension.empty() && extension[0] == '.' )
@@ -753,14 +864,20 @@ bool Image_module_impl::export_canvas(
         return false;
     }
 
+    Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
+    mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
+
+    // If enabled and necessary, adjust gamma to export_default_gamma
+    if( force_default_gamma && fabs( canvas->get_gamma() - export_default_gamma) > 0.001) {
+        mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas.get()));
+        adjust_gamma( tmp.get(), export_default_gamma);
+        canvas = tmp;
+    }
+
     // If necessary, convert canvas to export_pixel_type
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas2;
     if( strcmp( canvas_pixel_type, export_pixel_type) != 0) {
-        canvas2 = convert_canvas( canvas, convert_pixel_type_string_to_enum( export_pixel_type));
-        ASSERT( M_IMAGE, canvas2.is_valid_interface());
-    } else {
-        canvas2 = make_handle_dup( canvas);
-        canvas = 0; // only use canvas2 below
+        canvas = convert_canvas( canvas.get(), export_pixel_type_enum);
+        ASSERT( M_IMAGE, canvas);
     }
 
     DISK::File_writer_impl writer;
@@ -770,20 +887,20 @@ bool Image_module_impl::export_canvas(
         return false;
     }
 
-    mi::Uint32 image_width   = canvas2->get_resolution_x();
-    mi::Uint32 image_height  = canvas2->get_resolution_y();
-    mi::Uint32 tile_width    = canvas2->get_tile_resolution_x();
-    mi::Uint32 tile_height   = canvas2->get_tile_resolution_y();
-    mi::Uint32 nr_of_tiles_x = canvas2->get_tiles_size_x();
-    mi::Uint32 nr_of_tiles_y = canvas2->get_tiles_size_y();
-    mi::Uint32 nr_of_layers  = canvas2->get_layers_size();
-    const char* pixel_type   = canvas2->get_type();
-    mi::Float32 gamma        = canvas2->get_gamma();
-    bool is_cubemap          = get_canvas_is_cubemap( canvas2.get());
+    mi::Uint32 image_width   = canvas->get_resolution_x();
+    mi::Uint32 image_height  = canvas->get_resolution_y();
+    mi::Uint32 tile_width    = canvas->get_tile_resolution_x();
+    mi::Uint32 tile_height   = canvas->get_tile_resolution_y();
+    mi::Uint32 nr_of_tiles_x = canvas->get_tiles_size_x();
+    mi::Uint32 nr_of_tiles_y = canvas->get_tiles_size_y();
+    mi::Uint32 nr_of_layers  = canvas->get_layers_size();
+    const char* pixel_type   = canvas->get_type();
+    mi::Float32 gamma        = canvas->get_gamma();
+    bool is_cubemap          = get_canvas_is_cubemap( canvas.get());
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing( &writer,
         pixel_type, image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality));
-    if( !image_file.is_valid_interface()) {
+    if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties.",
             plugin->get_name(), output_filename);
@@ -794,7 +911,7 @@ bool Image_module_impl::export_canvas(
         for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
             for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                 mi::base::Handle<const mi::neuraylib::ITile> tile(
-                    canvas2->get_tile( x*tile_width, y*tile_height, z));
+                    canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                 if( !image_file->write( tile.get(), x*tile_width, y*tile_height, z, 0)) {
                     LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                         "The image plugin \"%s\" failed to export \"%s\" due to unsupported "
@@ -813,7 +930,8 @@ bool Image_module_impl::export_canvas(
 bool Image_module_impl::export_mipmap(
     const IMipmap* mipmap,
     const char* output_filename,
-    mi::Uint32 quality) const
+    mi::Uint32 quality,
+    bool force_default_gamma) const
 {
     std::string root, extension;
     HAL::Ospath::splitext( output_filename, root, extension);
@@ -828,7 +946,7 @@ bool Image_module_impl::export_mipmap(
     }
 
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    if( !canvas.is_valid_interface())
+    if( !canvas)
         return false;
 
     const char* canvas_pixel_type = canvas->get_type();
@@ -840,6 +958,9 @@ bool Image_module_impl::export_mipmap(
         return false;
     }
 
+    Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
+    mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
+
     DISK::File_writer_impl writer;
     if( !writer.open( output_filename)) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
@@ -849,24 +970,19 @@ bool Image_module_impl::export_mipmap(
 
     mi::Uint32 image_width   = canvas->get_resolution_x();
     mi::Uint32 image_height  = canvas->get_resolution_y();
-    mi::Uint32 tile_width    = canvas->get_tile_resolution_x();
-    mi::Uint32 tile_height   = canvas->get_tile_resolution_y();
-    mi::Uint32 nr_of_tiles_x = canvas->get_tiles_size_x();
-    mi::Uint32 nr_of_tiles_y = canvas->get_tiles_size_y();
     mi::Uint32 nr_of_layers  = canvas->get_layers_size();
     mi::Uint32 nr_of_levels  = mipmap->get_nlevels();
     mi::Float32 gamma        = canvas->get_gamma();
     bool is_cubemap          = get_canvas_is_cubemap( canvas.get());
-    canvas = 0;
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing( &writer,
         export_pixel_type, image_width, image_height, nr_of_layers, nr_of_levels, is_cubemap, gamma,
         quality));
-    if( !image_file.is_valid_interface()) {
+    if( !image_file) {
         // if multiple levels are not supported try again exporting only the first level
         image_file = plugin->open_for_writing( &writer, export_pixel_type,
             image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality);
-        if( !image_file.is_valid_interface()) {
+        if( !image_file) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties.",
                 plugin->get_name(), output_filename);
@@ -879,32 +995,34 @@ bool Image_module_impl::export_mipmap(
     for( mi::Uint32 l = 0; l < nr_of_levels; ++l) {
 
         mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( l));
-        ASSERT( M_IMAGE, canvas.is_valid_interface());
-        if( !canvas.is_valid_interface())
+        ASSERT( M_IMAGE, canvas);
+        if( !canvas)
             return false;
 
-        tile_width    = canvas->get_tile_resolution_x();
-        tile_height   = canvas->get_tile_resolution_y();
-        nr_of_tiles_x = canvas->get_tiles_size_x();
-        nr_of_tiles_y = canvas->get_tiles_size_y();
-        nr_of_layers  = canvas->get_layers_size();
+        mi::Uint32 tile_width    = canvas->get_tile_resolution_x();
+        mi::Uint32 tile_height   = canvas->get_tile_resolution_y();
+        mi::Uint32 nr_of_tiles_x = canvas->get_tiles_size_x();
+        mi::Uint32 nr_of_tiles_y = canvas->get_tiles_size_y();
+        nr_of_layers             = canvas->get_layers_size();
+
+        // If enabled and necessary, adjust gamma to export_default_gamma
+        if( force_default_gamma && fabs( canvas->get_gamma() - export_default_gamma) > 0.001) {
+            mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas.get()));
+            adjust_gamma( tmp.get(), export_default_gamma);
+            canvas = tmp;
+        }
 
         // If necessary, convert canvas to export_pixel_type
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas2;
         if( strcmp( canvas_pixel_type, export_pixel_type) != 0) {
-            canvas2 = convert_canvas( canvas.get(),
-                convert_pixel_type_string_to_enum( export_pixel_type));
-            ASSERT( M_IMAGE, canvas2.is_valid_interface());
-        } else {
-            canvas2 = make_handle_dup( canvas.get());
-            canvas = 0; // only use canvas2 below
+            canvas = convert_canvas( canvas.get(), export_pixel_type_enum);
+            ASSERT( M_IMAGE, canvas);
         }
 
         for( mi::Uint32 z = 0; z < nr_of_layers; ++z)
             for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
                 for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                     mi::base::Handle<const mi::neuraylib::ITile> tile(
-                        canvas2->get_tile( x*tile_width, y*tile_height, z));
+                        canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                     if( !image_file->write( tile.get(), x*tile_width, y*tile_height, z, l)) {
                         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                             "The image plugin \"%s\" failed to export \"%s\" due to unsupported "
@@ -923,18 +1041,23 @@ bool Image_module_impl::export_mipmap(
 }
 
 mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
-    const mi::neuraylib::ICanvas* canvas,
+    const mi::neuraylib::ICanvas* canvas_ptr,
     const char* image_format,
     const char* pixel_type,
-    mi::Uint32 quality) const
+    mi::Uint32 quality,
+    bool force_default_gamma) const
 {
+    // Wrap incoming canvas pointer into handle for easier management later.
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( canvas_ptr, mi::base::DUP_INTERFACE);
+    canvas_ptr = nullptr;
+
     DISK::Memory_writer_impl writer;
 
     mi::neuraylib::IImage_plugin* plugin = find_plugin_for_export( image_format);
     if( !plugin) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "No image plugin found to handle image format \"%s\".", image_format);
-        return 0;
+        return nullptr;
     }
 
     const char* export_pixel_type = find_best_pixel_type_for_export( pixel_type, plugin);
@@ -942,48 +1065,54 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" supports only the import, but not the export of images.",
             plugin->get_name());
-        return 0;
+        return nullptr;
+    }
+
+    Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
+    mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
+
+    // If enabled and necessary, adjust gamma to export_default_gamma
+    if( force_default_gamma && fabs( canvas->get_gamma() - export_default_gamma) > 0.001) {
+        mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas.get()));
+        adjust_gamma( tmp.get(), export_default_gamma);
+        canvas = tmp;
     }
 
     // If necessary, convert canvas to export_pixel_type
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas2;
     if( strcmp( export_pixel_type, canvas->get_type()) != 0) {
-        canvas2 = convert_canvas( canvas, convert_pixel_type_string_to_enum( export_pixel_type));
-        ASSERT( M_IMAGE, canvas2.is_valid_interface());
-    } else {
-        canvas2 = make_handle_dup( canvas);
-        canvas = 0; // only use canvas2 below
+        canvas = convert_canvas( canvas.get(), export_pixel_type_enum);
+        ASSERT( M_IMAGE, canvas);
     }
 
-    mi::Uint32 image_width   = canvas2->get_resolution_x();
-    mi::Uint32 image_height  = canvas2->get_resolution_y();
-    mi::Uint32 tile_width    = canvas2->get_tile_resolution_x();
-    mi::Uint32 tile_height   = canvas2->get_tile_resolution_y();
-    mi::Uint32 nr_of_tiles_x = canvas2->get_tiles_size_x();
-    mi::Uint32 nr_of_tiles_y = canvas2->get_tiles_size_y();
-    mi::Uint32 nr_of_layers  = canvas2->get_layers_size();
-    mi::Float32 gamma        = canvas2->get_gamma();
-    bool is_cubemap          = get_canvas_is_cubemap( canvas2.get());
+    mi::Uint32 image_width   = canvas->get_resolution_x();
+    mi::Uint32 image_height  = canvas->get_resolution_y();
+    mi::Uint32 tile_width    = canvas->get_tile_resolution_x();
+    mi::Uint32 tile_height   = canvas->get_tile_resolution_y();
+    mi::Uint32 nr_of_tiles_x = canvas->get_tiles_size_x();
+    mi::Uint32 nr_of_tiles_y = canvas->get_tiles_size_y();
+    mi::Uint32 nr_of_layers  = canvas->get_layers_size();
+    mi::Float32 gamma        = canvas->get_gamma();
+    bool is_cubemap          = get_canvas_is_cubemap( canvas.get());
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_writing( &writer,
         export_pixel_type, image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality));
-    if( !image_file.is_valid_interface()) {
+    if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to encode the canvas due to unsupported properties.",
             plugin->get_name());
-        return 0;
+        return nullptr;
     }
 
     for( mi::Uint32 z = 0; z < nr_of_layers; ++z)
         for( mi::Uint32 y = 0; y < nr_of_tiles_y; ++y)
             for( mi::Uint32 x = 0; x < nr_of_tiles_x; ++x) {
                 mi::base::Handle<const mi::neuraylib::ITile> tile(
-                    canvas2->get_tile( x*tile_width, y*tile_height, z));
+                    canvas->deprecated_get_tile( x*tile_width, y*tile_height, z));
                 if( !image_file->write( tile.get(), x*tile_width, y*tile_height, z, 0)) {
                     LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                         "The image plugin \"%s\" failed to encode the canvas due to unsupported "
                         "properties.", plugin->get_name());
-                    return 0;
+                    return nullptr;
                 }
             }
 
@@ -1001,7 +1130,7 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_import(
         reader->rewind();
         file_size = reader->get_file_size();
         if( bytes_read != 512 && file_size >= 512)
-            return 0;
+            return nullptr;
     }
 
     std::priority_queue<mi::neuraylib::IImage_plugin*,
@@ -1020,12 +1149,12 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_import(
                 if( !reader || plugin->test( buffer, static_cast<mi::Uint32>( file_size)))
                     queue.push( plugin);
             }
-            plugin_extension = extension ? plugin->get_file_extension( ++extension_index) : 0;
+            plugin_extension = extension ? plugin->get_file_extension( ++extension_index) : nullptr;
         }
     }
 
     if( queue.empty())
-        return 0;
+        return nullptr;
 
     return queue.top();
 }
@@ -1034,7 +1163,7 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_export(
     const char* extension) const
 {
     if( !extension)
-        return 0;
+        return nullptr;
 
     std::priority_queue<mi::neuraylib::IImage_plugin*,
                         std::vector<mi::neuraylib::IImage_plugin*>, Plugin_less> queue;
@@ -1049,7 +1178,7 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_export(
 
         while( plugin_extension) {
             if( STRING::compare_case_insensitive( extension, plugin_extension) == 0) {
-                if( plugin->get_supported_type( 0) != 0)
+                if( plugin->get_supported_type( 0) != nullptr)
                     queue.push( plugin);
             }
             plugin_extension = plugin->get_file_extension( ++extension_index);
@@ -1057,7 +1186,7 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_export(
     }
 
     if( queue.empty())
-        return 0;
+        return nullptr;
 
     return queue.top();
 }
@@ -1070,7 +1199,7 @@ void Image_module_impl::set_mdl_container_callback( IMdl_container_callback* mdl
 IMdl_container_callback* Image_module_impl::get_mdl_container_callback() const
 {
     if( !m_mdl_container_callback)
-        return 0;
+        return nullptr;
 
     m_mdl_container_callback->retain();
     return m_mdl_container_callback.get();
@@ -1267,7 +1396,8 @@ bool Image_module_impl::get_canvas_is_cubemap( const mi::neuraylib::ICanvas* can
 }
 
 namespace {
-#ifdef HAS_SSE
+
+#if defined(HAS_SSE) || defined(SSE_INTRINSICS)
 #include <xmmintrin.h>
 
 __m128 fast_pow4(
@@ -1296,11 +1426,12 @@ __m128 fast_pow4(
 }
 
 #endif
+
 void apply_gamma(mi::math::Color& c, mi::Float32 gamma)
 {
     if (gamma == 1.0f)
         return;
-#ifdef HAS_SSE
+#if defined(HAS_SSE) || defined(SSE_INTRINSICS)
     c = mi::base::binary_cast<mi::math::Color_struct>(
         fast_pow4(_mm_set_ps(c.a, c.b, c.g, c.r), _mm_set1_ps(gamma)));
 #else
@@ -1310,7 +1441,8 @@ void apply_gamma(mi::math::Color& c, mi::Float32 gamma)
     c.a = mi::math::fast_pow(c.a, gamma);
 #endif
 }
-}
+
+} // namespace
 
 mi::neuraylib::ICanvas* Image_module_impl::create_miplevel(
     const mi::neuraylib::ICanvas* prev_canvas, float gamma_override) const
@@ -1365,7 +1497,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_miplevel(
                 mi::Uint32 y_end = std::min(y_begin + tile_height, height);
 
                 // Lookup tile for this miplevel
-                mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(x_begin, y_begin));
+                mi::base::Handle<mi::neuraylib::ITile> tile(canvas->deprecated_get_tile(x_begin, y_begin));
 
                 // The current tile corresponds to the range
                 // [prev_x_begin,prev_x_end) x [prev_y_begin,prev_y_end) in the previous miplevel.
@@ -1377,14 +1509,14 @@ mi::neuraylib::ICanvas* Image_module_impl::create_miplevel(
                 // Lookup involved tiles from the previous miplevel (note that these tiles are not
                 // necessarily distinct).
                 mi::base::Handle<const mi::neuraylib::ITile> prev_tiles[4];
-                prev_tiles[0] = prev_canvas->get_tile(prev_x_begin, prev_y_begin);
-                prev_tiles[1] = prev_canvas->get_tile(prev_x_end - 1, prev_y_begin);
-                prev_tiles[2] = prev_canvas->get_tile(prev_x_begin, prev_y_end - 1);
-                prev_tiles[3] = prev_canvas->get_tile(prev_x_end - 1, prev_y_end - 1);
-                ASSERT(M_IMAGE, prev_tiles[0].is_valid_interface());
-                ASSERT(M_IMAGE, prev_tiles[1].is_valid_interface());
-                ASSERT(M_IMAGE, prev_tiles[2].is_valid_interface());
-                ASSERT(M_IMAGE, prev_tiles[3].is_valid_interface());
+                prev_tiles[0] = prev_canvas->deprecated_get_tile(prev_x_begin, prev_y_begin);
+                prev_tiles[1] = prev_canvas->deprecated_get_tile(prev_x_end - 1, prev_y_begin);
+                prev_tiles[2] = prev_canvas->deprecated_get_tile(prev_x_begin, prev_y_end - 1);
+                prev_tiles[3] = prev_canvas->deprecated_get_tile(prev_x_end - 1, prev_y_end - 1);
+                ASSERT(M_IMAGE, prev_tiles[0]);
+                ASSERT(M_IMAGE, prev_tiles[1]);
+                ASSERT(M_IMAGE, prev_tiles[2]);
+                ASSERT(M_IMAGE, prev_tiles[3]);
 
                 // Loop over the pixels of this tile and compute the value for each pixel
                 for (mi::Uint32 y = 0; y < y_end - y_begin; ++y) {

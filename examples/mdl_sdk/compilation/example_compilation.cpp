@@ -52,7 +52,7 @@ struct Options {
 
     // The constructor.
     Options()
-        : material_name("::nvidia::sdk_examples::tutorials::example_compilation")
+        : material_name("::nvidia::sdk_examples::tutorials::example_compilation(color)")
         , expr_path("backface.scattering.tint")
         , change_arguments(true)
     {
@@ -113,7 +113,7 @@ void dump_compiled_material(
 
 // Creates an instance of the given material definition and stores it in the DB.
 void create_material_instance(
-    mi::neuraylib::IMdl_factory* factory,
+    mi::neuraylib::IMdl_factory* mdl_factory,
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_impexp_api* mdl_impexp_api,
     mi::neuraylib::IMdl_execution_context* context,
@@ -133,11 +133,11 @@ void create_material_instance(
 
     // Get the database name for the module we loaded
     mi::base::Handle<const mi::IString> module_db_name(
-        factory->get_db_module_name(module_name.c_str()));
+        mdl_factory->get_db_module_name(module_name.c_str()));
 
     // attach the material name
-    std::string material_db_name =
-        std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
+    std::string material_db_name
+        = std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
 
     // Get the material definition from the database
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(

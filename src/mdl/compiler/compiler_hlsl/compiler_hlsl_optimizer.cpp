@@ -59,8 +59,10 @@ void Optimizer::run(
     Compilation_unit &unit,
     int              opt_level)
 {
-    if (unit.get_messages().get_error_message_count() > 0)
+    if (unit.get_messages().get_error_message_count() > 0) {
+        // do not optimize broken code
         return;
+    }
 
     if (opt_level == 0) {
         // all optimizations are switched off
@@ -77,8 +79,9 @@ bool Optimizer::same_expr(Expr *a, Expr *b) const
 {
     Expr::Kind k = a->get_kind();
 
-    if (k != b->get_kind())
+    if (k != b->get_kind()) {
         return false;
+    }
 
     switch (k) {
     case Expr::EK_INVALID:
@@ -102,8 +105,9 @@ bool Optimizer::same_expr(Expr *a, Expr *b) const
             Expr_unary *ua = cast<Expr_unary>(a);
             Expr_unary *ub = cast<Expr_unary>(b);
 
-            if (ua->get_operator() != ub->get_operator())
+            if (ua->get_operator() != ub->get_operator()) {
                 return false;
+            }
             return same_expr(ua->get_argument(), ub->get_argument());
         }
     case Expr::EK_BINARY:
@@ -111,10 +115,12 @@ bool Optimizer::same_expr(Expr *a, Expr *b) const
             Expr_binary *ba = cast<Expr_binary>(a);
             Expr_binary *bb = cast<Expr_binary>(b);
 
-            if (ba->get_operator() != bb->get_operator())
+            if (ba->get_operator() != bb->get_operator()) {
                 return false;
-            if (!same_expr(ba->get_left_argument(), bb->get_left_argument()))
+            }
+            if (!same_expr(ba->get_left_argument(), bb->get_left_argument())) {
                 return false;
+            }
             return same_expr(ba->get_right_argument(), bb->get_right_argument());
         }
     case Expr::EK_CONDITIONAL:
@@ -122,10 +128,12 @@ bool Optimizer::same_expr(Expr *a, Expr *b) const
             Expr_conditional *ca = cast<Expr_conditional>(a);
             Expr_conditional *cb = cast<Expr_conditional>(b);
 
-            if (!same_expr(ca->get_condition(), cb->get_condition()))
+            if (!same_expr(ca->get_condition(), cb->get_condition())) {
                 return false;
-            if (!same_expr(ca->get_true(), cb->get_true()))
+            }
+            if (!same_expr(ca->get_true(), cb->get_true())) {
                 return false;
+            }
             return same_expr(ca->get_false(), cb->get_false());
         }
     case Expr::EK_CALL:
@@ -176,8 +184,9 @@ Expr *Optimizer::optimize_vector_constructor(Expr_call *constr)
 
         Expr *left = arg->get_left_argument();
 
-        if (!same_expr(base, left))
+        if (!same_expr(base, left)) {
             return NULL;
+        }
 
         symbols[i] =
             cast<Expr_ref>(arg->get_right_argument())->get_name()->get_name()->get_symbol();
@@ -219,8 +228,9 @@ Expr *Optimizer::optimize_vector_constructor(Expr_call *constr)
 Expr *Optimizer::optimize_call(Expr_call *call)
 {
     Expr_ref *callee = as<Expr_ref>(call->get_callee());
-    if (callee == NULL)
+    if (callee == NULL) {
         return NULL;
+    }
 
     Definition *def = callee->get_definition();
     if (def == NULL) {
@@ -229,16 +239,18 @@ Expr *Optimizer::optimize_call(Expr_call *call)
     }
 
     Def_function *fdef = as<Def_function>(def);
-    if (fdef == NULL)
+    if (fdef == NULL) {
         return NULL;
+    }
 
     if (fdef->get_semantics() == Def_function::DS_ELEM_CONSTRUCTOR) {
         Type *res_tp = call->get_type();
 
         if (is<Type_vector>(res_tp->skip_type_alias())) {
             // vector(a.x, a.y, ...) ==> a.xy...
-            if (Expr *res = optimize_vector_constructor(call))
+            if (Expr *res = optimize_vector_constructor(call)) {
                 return res;
+            }
         }
     }
     return NULL;
@@ -344,10 +356,12 @@ Stmt *Optimizer::local_opt(Stmt *stmt)
             Declaration  *decl = decl_stmt->get_declaration();
             Declaration  *n_decl = local_opt(decl);
 
-            if (n_decl == NULL)
+            if (n_decl == NULL) {
                 return NULL;
-            if (n_decl != decl)
+            }
+            if (n_decl != decl) {
                 decl_stmt->set_declaration(n_decl);
+            }
             return decl_stmt;
         }
 
@@ -358,8 +372,9 @@ Stmt *Optimizer::local_opt(Stmt *stmt)
 
             if (expr != NULL) {
                 Expr *n_expr = local_opt(expr);
-                if (n_expr != expr)
+                if (n_expr != expr) {
                     e_stmt->set_expression(n_expr);
+                }
             } else {
                 // useless
                 return NULL;
@@ -375,16 +390,18 @@ Stmt *Optimizer::local_opt(Stmt *stmt)
             Stmt    *else_stmt = if_stmt->get_else_statement();
 
             Expr *n_cond = local_opt(cond);
-            if (n_cond != cond)
+            if (n_cond != cond) {
                 if_stmt->set_condition(cond);
+            }
 
             if (Expr_literal *lit = as<Expr_literal>(n_cond)) {
                 Value_bool *val = cast<Value_bool>(lit->get_value());
 
-                if (val->get_value())
+                if (val->get_value()) {
                     return local_opt(then_stmt);
-                else
+                } else {
                     return else_stmt != NULL ? local_opt(else_stmt) : NULL;
+                }
             }
             Stmt *n_then = local_opt(then_stmt);
             Stmt *n_else = else_stmt != NULL ? local_opt(else_stmt) : NULL;
@@ -563,8 +580,9 @@ Stmt *Optimizer::local_opt(Stmt *stmt)
 
             if (expr != NULL) {
                 Expr *n_expr = local_opt(expr);
-                if (n_expr != expr)
+                if (n_expr != expr) {
                     r_stmt->set_expression(n_expr);
+                }
             }
             return r_stmt;
         }
@@ -613,10 +631,11 @@ Expr *Optimizer::local_opt(Expr *expr)
             if (Expr_literal *lit = as<Expr_literal>(cond)) {
                 Value_bool *b = cast<Value_bool>(lit->get_value());
 
-                if (b->get_value())
+                if (b->get_value()) {
                     return local_opt(c_expr->get_true());
-                else
+                } else {
                     return local_opt(c_expr->get_false());
+                }
             }
 
             Expr *t_ex = local_opt(c_expr->get_true());
@@ -654,8 +673,9 @@ Expr *Optimizer::local_opt(Expr *expr)
         }
         break;
     case Expr::EK_CALL:
-        if (Expr *res = optimize_call(cast<Expr_call>(expr)))
+        if (Expr *res = optimize_call(cast<Expr_call>(expr))) {
             return res;
+        }
         break;
     case Expr::EK_COMPOUND:
         // NYI

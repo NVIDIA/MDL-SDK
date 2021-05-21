@@ -52,7 +52,7 @@ static const SERIAL::Class_id ID_LIGHTPROFILE = 0x5f4c7066; // '_Lpf'
 // There are two DB classes for the scene element BSDF measurement: a proxy class (Lightprofile)
 // and an implementation class (Lightprofile_impl). The implementation class holds the bulk data
 // and related properties, but no filename-related information or attributes. The proxy class holds
-// the filename-related information and attribues, and caches trivial properties from the
+// the filename-related information and attributes, and caches trivial properties from the
 // implementation class for efficiency reasons. Several instances of the proxy class might reference
 // the same instance of the implementation class. The split between proxy and implementation class
 // is \em not visible to API users.
@@ -226,7 +226,7 @@ public:
     /// Returns the container member name for container-based light profiles, and \c NULL otherwise.
     const std::string& get_container_membername() const { return m_resolved_container_membername; }
 
-    /// Retuns the tag of the implementation class.
+    /// Returns the tag of the implementation class.
     ///
     /// Might be an invalid tag after default construction.
     DB::Tag get_impl_tag() const { return m_impl_tag; }
@@ -314,7 +314,7 @@ static const SERIAL::Class_id ID_LIGHTPROFILE_IMPL = 0x5f4c7069; // '_Lpi'
 // There are two DB classes for the scene element BSDF measurement: a proxy class (Lightprofile)
 // and an implementation class (Lightprofile_impl). The implementation class holds the bulk data
 // and related properties, but no filename-related information or attributes. The proxy class holds
-// the filename-related information and attribues, and caches trivial properties from the
+// the filename-related information and attributes, and caches trivial properties from the
 // implementation class for efficiency reasons. Several instances of the proxy class might reference
 // the same instance of the implementation class. The split between proxy and implementation class
 // is \em not visible to API users.

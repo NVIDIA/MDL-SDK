@@ -228,6 +228,7 @@ set(_STANDARD_MDL
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/scene.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/builtins.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/debug.mdl
+    ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/nvidia_baking.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../shaders/mdl/base/base.mdl
     )
 

@@ -71,8 +71,9 @@ void Database_impl::close()
     delete this;
 }
 
-void Database_impl::garbage_collection()
+void Database_impl::garbage_collection(int /*priority*/)
 {
+    // Priority argument is ignored, always runs at highest priority.
     Uint32 counter = m_global_scope->increment_transaction_count();
     if (counter > 1) {
         m_global_scope->decrement_transaction_count();

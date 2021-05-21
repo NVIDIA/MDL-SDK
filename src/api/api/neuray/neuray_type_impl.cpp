@@ -44,24 +44,24 @@ namespace NEURAY {
 mi::Uint32 int_modifiers_to_ext_modifiers( mi::Uint32 modifiers)
 {
     ASSERT( M_SCENE, (modifiers
-        & ~MDL::IType_alias::MK_UNIFORM
-        & ~MDL::IType_alias::MK_VARYING) == 0);
+        & ~MDL::IType::MK_UNIFORM
+        & ~MDL::IType::MK_VARYING) == 0);
 
     mi::Uint32 result = 0;
-    if( modifiers & MDL::IType_alias::MK_UNIFORM) result |= mi::neuraylib::IType_alias::MK_UNIFORM;
-    if( modifiers & MDL::IType_alias::MK_VARYING) result |= mi::neuraylib::IType_alias::MK_VARYING;
+    if( modifiers & MDL::IType::MK_UNIFORM) result |= mi::neuraylib::IType::MK_UNIFORM;
+    if( modifiers & MDL::IType::MK_VARYING) result |= mi::neuraylib::IType::MK_VARYING;
     return result;
 }
 
 mi::Uint32 ext_modifiers_to_int_modifiers( mi::Uint32 modifiers)
 {
     ASSERT( M_SCENE, (modifiers
-        & ~mi::neuraylib::IType_alias::MK_UNIFORM
-        & ~mi::neuraylib::IType_alias::MK_VARYING) == 0);
+        & ~mi::neuraylib::IType::MK_UNIFORM
+        & ~mi::neuraylib::IType::MK_VARYING) == 0);
 
     mi::Uint32 result = 0;
-    if( modifiers & mi::neuraylib::IType_alias::MK_UNIFORM) result |= MDL::IType_alias::MK_UNIFORM;
-    if( modifiers & mi::neuraylib::IType_alias::MK_VARYING) result |= MDL::IType_alias::MK_VARYING;
+    if( modifiers & mi::neuraylib::IType::MK_UNIFORM) result |= MDL::IType::MK_UNIFORM;
+    if( modifiers & mi::neuraylib::IType::MK_VARYING) result |= MDL::IType::MK_VARYING;
     return result;
 }
 
@@ -544,6 +544,13 @@ const mi::neuraylib::IType_struct* Type_factory::get_predefined_struct(
     MDL::IType_struct::Predefined_id id_int = ext_struct_id_to_int_struct_id( id);
     mi::base::Handle<const MDL::IType_struct> result_int( m_tf->get_predefined_struct( id_int));
     return create<mi::neuraylib::IType_struct>( result_int.get(), /*owner*/ nullptr);
+}
+
+mi::neuraylib::IType_list* Type_factory::clone( const mi::neuraylib::IType_list* type_list) const
+{
+    mi::base::Handle<const MDL::IType_list> type_list_int( get_internal_type_list( type_list));
+    mi::base::Handle<MDL::IType_list> result_int( m_tf->clone( type_list_int.get()));
+    return create_type_list( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::Sint32 Type_factory::compare(

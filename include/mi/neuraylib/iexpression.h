@@ -47,6 +47,21 @@ class IExpression_list;
 @{
 */
 
+/// The MDL version.
+enum Mdl_version {
+    MDL_VERSION_1_0,                       ///< MDL version 1.0
+    MDL_VERSION_1_1,                       ///< MDL version 1.1
+    MDL_VERSION_1_2,                       ///< MDL version 1.2
+    MDL_VERSION_1_3,                       ///< MDL version 1.3
+    MDL_VERSION_1_4,                       ///< MDL version 1.4
+    MDL_VERSION_1_5,                       ///< MDL version 1.5
+    MDL_VERSION_1_6,                       ///< MDL version 1.6
+    MDL_VERSION_1_7,                       ///< MDL version 1.7
+    MDL_VERSION_LATEST = MDL_VERSION_1_7,  ///< Latest MDL version
+    MDL_VERSION_INVALID = 0xffffffffU,     ///< Invalid MDL version
+    MDL_VERSION_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+};
+
 /// The interface to MDL expressions.
 ///
 /// Expressions can be created using the expression factory #mi::neuraylib::IExpression_factory.
@@ -93,9 +108,7 @@ mi_static_assert( sizeof( IExpression::Kind) == sizeof( Uint32));
 
 /// A constant expression.
 ///
-/// Constant expressions appear as defaults of material or function definitions, as arguments of
-/// material instances or function calls, as arguments of annotations, and in fields and temporaries
-/// of compiled materials.
+/// Constant expressions appear basically everywhere where expression are used.
 class IExpression_constant : public
     mi::base::Interface_declare<0x9da8d465,0x4058,0x46cb,0x83,0x6e,0x0e,0x38,0xa6,0x7f,0xcd,0xef,
                                 neuraylib::IExpression>
@@ -149,8 +162,8 @@ public:
 /// representing the actual call. See also #mi::neuraylib::IExpression_direct_call for direct call
 /// expressions.
 ///
-/// Indirect call expressions appear as defaults of material or function definitions and as
-/// arguments of material instances or function calls.
+/// Indirect call expressions appear as defaults of material or function definitions, as arguments
+/// of material instances or function calls, and as defaults in the module builder.
 class IExpression_call : public
     mi::base::Interface_declare<0xcf625aec,0x8eb8,0x4743,0x9f,0xf6,0x76,0x82,0x2c,0x02,0x54,0xa3,
                                 neuraylib::IExpression>
@@ -203,7 +216,8 @@ public:
 /// simply references another DB element representing the actual call as for indirect call
 /// expressions, see #mi::neuraylib::IExpression_call).
 ///
-/// Direct call expressions appear in fields and temporaries of compiled materials.
+/// Direct call expressions appear in fields and temporaries of compiled materials, in the bodies
+/// of function and material definitions, and in bodies in the module builder.
 class IExpression_direct_call : public
     mi::base::Interface_declare<0x9253c9d6,0xe162,0x4234,0xab,0x91,0x54,0xc1,0xe4,0x87,0x39,0x66,
                                 neuraylib::IExpression>
@@ -221,7 +235,8 @@ public:
 
 /// A temporary reference expression.
 ///
-/// Temporary reference expressions appear in fields and temporaries of compiled materials.
+/// Temporary reference expressions appear in fields and temporaries of compiled materials, and in
+/// the bodies of function and material definitions.
 class IExpression_temporary : public
     mi::base::Interface_declare<0xd91f484b,0xdbf8,0x4585,0x9d,0xab,0xba,0xd9,0x91,0x7f,0xe1,0x4c,
                                 neuraylib::IExpression>
@@ -322,8 +337,8 @@ public:
         AS_UNKNOWN = 0,                          ///< Unknown semantics.
         AS_ANNOTATION_FIRST = 0x0100,
 
-        AS_INTRINSIC_ANNOTATION                  ///< This is the internal intrinsic() annotation.
-        = AS_ANNOTATION_FIRST,
+        /// This is the internal intrinsic() annotation.
+        AS_INTRINSIC_ANNOTATION = AS_ANNOTATION_FIRST,
         AS_THROWS_ANNOTATION,                    ///< This is the internal throws() annotation.
         AS_SINCE_ANNOTATION,                     ///< This is the internal since() annotation.
         AS_REMOVED_ANNOTATION,                   ///< This is the internal removed() annotation.
@@ -391,6 +406,19 @@ public:
     /// Returns the semantic of this annotation definition.
     virtual Semantics get_semantic() const = 0;
 
+    /// Indicates whether the annotation definition is exported by its module.
+    virtual bool is_exported() const = 0;
+
+    /// Returns the MDL version when this annotation definition was added and removed.
+    ///
+    /// \param[out] since     The MDL version in which this annotation definition was added. If the
+    ///                       annotation definition does not belong to the standard library, the
+    ///                       MDL version of the corresponding module is returned.
+    /// \param[out] removed   The MDL version in which this annotation definition was removed, or
+    ///                       mi::neuraylib::MDL_VERSION_INVALID if the annotation has not been
+    ///                       removed so far or does not belong to the standard library.
+    virtual void get_mdl_version( Mdl_version& since, Mdl_version& removed) const = 0;
+
     /// Returns the parameter count of the annotation definition.
     virtual Size get_parameter_count() const = 0;
 
@@ -399,23 +427,20 @@ public:
     /// \param index    The parameter index.
     /// \return         The name of the parameter or \c NULL if index
     ///                 is out of range.
-    virtual const char* get_parameter_name(Size index) const = 0;
+    virtual const char* get_parameter_name( Size index) const = 0;
 
     /// Returns the parameter index of the given name.
     ///
     /// \param name     The parameter name.
     /// \return         The index of the parameter or \c -1 if there is no
     ///                 parameter of that \p name.
-    virtual Size get_parameter_index(const char* name) const = 0;
+    virtual Size get_parameter_index( const char* name) const = 0;
 
     /// Returns the parameter types of the annotation definition.
     virtual const IType_list* get_parameter_types() const = 0;
 
     /// Returns the parameter defaults of the annotation definition.
     virtual const IExpression_list* get_defaults() const = 0;
-
-    /// Indicates whether the annotation definition is exported by its module.
-    virtual bool is_exported() const = 0;
 
     /// Returns the annotations of this definition or \c NULL if no
     /// annotations exist.
@@ -427,10 +452,10 @@ public:
     /// \return             The created annotation or \c NULL if one of the arguments
     ///                     does not correspond to an actual parameter of the annotation or
     ///                     is not a constant expression.
-    virtual const IAnnotation* create_annotation(const IExpression_list* arguments) const = 0;
+    virtual const IAnnotation* create_annotation( const IExpression_list* arguments) const = 0;
 };
 
-mi_static_assert(sizeof(IAnnotation_definition::Semantics) == sizeof(Uint32));
+mi_static_assert( sizeof( IAnnotation_definition::Semantics) == sizeof( Uint32));
 
 /// An annotation is similar to a direct call expression, but without return type. Its definition
 /// can be obtained by calling #mi::neuraylib::IAnnotation::get_definition().
@@ -540,24 +565,71 @@ public:
     /// Returns the value factory associated with this expression factory.
     virtual IValue_factory* get_value_factory() const = 0;
 
-    /// Creates a constant.
+    /// Creates a constant (mutable).
+    ///
+    /// \param value        The value of the constant.
+    /// \return             The created constant, or \c NULL in case of errors.
+    virtual IExpression_constant* create_constant( IValue* value) const = 0;
+
+    /// Creates a constant (const).
     ///
     /// \param value        The value of the constant.
     /// \return             The created constant.
-    virtual IExpression_constant* create_constant( IValue* value) const = 0;
+    virtual const IExpression_constant* create_constant( const IValue* value) const = 0;
 
     /// Creates a call.
     ///
     /// \param name         The DB name of the referenced function call or material instance.
-    /// \return             The created call.
+    /// \return             The created call, or \c NULL in case of errors.
     virtual IExpression_call* create_call( const char* name) const = 0;
 
     /// Creates a parameter reference.
     ///
     /// \param type         The type of the parameter.
     /// \param index        The index of the parameter.
-    /// \return             The created parameter reference.
+    /// \return             The created parameter reference, or \c NULL in case of errors.
     virtual IExpression_parameter* create_parameter( const IType* type, Size index) const = 0;
+
+    /// Creates a direct call.
+    ///
+    /// \param name         The DB name of the referenced function or material definition.
+    /// \param arguments    The arguments of the created direct call. \n
+    ///                     Arguments for parameters without default are mandatory, otherwise
+    ///                     optional. The type of an argument must match the corresponding parameter
+    ///                     type. Any argument missing in \p arguments will be set to the default of
+    ///                     the corresponding parameter. \n
+    ///                     Note that the expressions in \p arguments are copied. Valid
+    ///                     subexpressions are constants, direct calls, and parameter references.
+    ///                     operation is a deep copy, e.g., DB elements referenced in call
+    ///                     expressions are also copied. \n
+    ///                     \c NULL is a valid argument which is handled like an empty expression
+    ///                     list.
+    /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                     written. The error codes have the following meaning:
+    ///                     -  0: Success.
+    ///                     - -1: An argument for a non-existing parameter was provided in
+    ///                           \p arguments.
+    ///                     - -2: The type of an argument in \p arguments does not have the correct
+    ///                           type.
+    ///                     - -3: A parameter that has no default was not provided with an argument
+    ///                           value.
+    ///                     - -4: The function or material definition can not be instantiated
+    ///                           because it is not exported.
+    ///                     - -5: A parameter type is uniform, but the corresponding argument has a
+    ///                           varying return type.
+    ///                     - -6: An argument expression is not a constant, a direct call, nor a
+    ///                           parameter.
+    ///                     - -7: Invalid parameters (\c NULL pointer) or \p name is not a valid
+    ///                           DB name of a function or material definition.
+    ///                     - -8: One of the parameter types is uniform, but the corresponding
+    ///                           argument or default is a call expression and the return type of
+    ///                           the called function or material definition is effectively varying
+    ///                           since the function or material definition itself is varying.
+    ///                     - -9: The function or material definition is invalid due to a module
+    ///                           reload.
+    /// \return             The created call, or \c NULL in case of errors.
+    virtual IExpression_direct_call* create_direct_call(
+        const char* name, IExpression_list* arguments, Sint32* errors = 0) const = 0;
 
     /// Creates a new expression list.
     virtual IExpression_list* create_expression_list() const = 0;

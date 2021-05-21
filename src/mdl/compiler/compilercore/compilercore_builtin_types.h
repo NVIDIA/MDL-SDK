@@ -38,7 +38,7 @@ BUILTIN_TYPE(Type_float,         the_float_type, )
 #endif
 
 BUILTIN_TYPE(Type_error,         the_error_type, )
-BUILTIN_TYPE(Type_incomplete,    the_incomplete_type, )
+BUILTIN_TYPE(Type_auto,          the_auto_type, )
 BUILTIN_TYPE(Type_bool,          the_bool_type, )
 BUILTIN_TYPE(Type_int,           the_int_type, )
 BUILTIN_TYPE(Type_double,        the_double_type, )

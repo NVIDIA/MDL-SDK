@@ -379,7 +379,7 @@ mi::Sint32 Image::reset_reader(
     if( result < 0)
         return result;
 
-    // Convert data from mipmap into temorary variables
+    // Convert data from mipmap into temporary variables
     std::vector<Uvtile> tmp_uvtiles( 1);
     tmp_uvtiles[0].m_mipmap = std::move( mipmap);
     std::vector<Uvfilenames> tmp_uvfilenames( 1);
@@ -424,7 +424,7 @@ mi::Sint32 Image::reset_image_set(
         max_v = mi::math::max( max_v, v);
     }
 
-    // Convert data from image_set into temorary variables
+    // Convert data from image_set into temporary variables
     std::vector<Uvtile> tmp_uvtiles( number_of_tiles);
     std::vector<Uvfilenames> tmp_uvfilenames( number_of_tiles);
     Uv_to_id tmp_uv_to_id( min_u, max_u, min_v, max_v);
@@ -489,7 +489,7 @@ void Image::set_mipmap(
     } else
         tmp_mipmap = make_handle_dup( mipmap);
 
-    // Convert data from image_set into temorary variables
+    // Convert data from image_set into temporary variables
     std::vector<Uvtile> tmp_uvtiles( 1);
     tmp_uvtiles[0].m_mipmap = std::move( tmp_mipmap);
     std::vector<Uvfilenames> tmp_uvfilenames( 1);
@@ -597,38 +597,38 @@ const SERIAL::Serializable* Image::serialize( SERIAL::Serializer* serializer) co
 
     Scene_element_base::serialize( serializer);
 
-    serializer->write( HAL::Ospath::sep());
+    SERIAL::write( serializer, HAL::Ospath::sep());
 
-    serializer->write( remote ? "" : m_original_filename);
-    serializer->write( remote ? "" : m_mdl_file_path);
-    serializer->write( remote ? "" : m_resolved_container_filename);
+    SERIAL::write( serializer, remote ? "" : m_original_filename);
+    SERIAL::write( serializer, remote ? "" : m_mdl_file_path);
+    SERIAL::write( serializer, remote ? "" : m_resolved_container_filename);
 
     serializer->write_size_t( m_uvfilenames.size());
     for( auto it = m_uvfilenames.begin(); it != m_uvfilenames.end(); ++it) {
-         serializer->write( remote ? "" : it->m_resolved_filename);
-         serializer->write( remote ? "" : it->m_container_membername);
-         serializer->write( remote ? "" : it->m_resolved_container_membername);
+         SERIAL::write( serializer, remote ? "" : it->m_resolved_filename);
+         SERIAL::write( serializer, remote ? "" : it->m_container_membername);
+         SERIAL::write( serializer, remote ? "" : it->m_resolved_container_membername);
     }
 
-    serializer->write( m_impl_tag);
-    serializer->write( m_impl_hash);
+    SERIAL::write( serializer, m_impl_tag);
+    SERIAL::write( serializer, m_impl_hash);
 
-    serializer->write( m_cached_is_valid);
-    serializer->write( m_cached_is_uvtile);
-    serializer->write( m_cached_is_cubemap);
+    SERIAL::write( serializer, m_cached_is_valid);
+    SERIAL::write( serializer, m_cached_is_uvtile);
+    SERIAL::write( serializer, m_cached_is_cubemap);
 
     serializer->write_size_t( m_cached_uvtiles.size());
     for( auto it = m_cached_uvtiles.begin(); it != m_cached_uvtiles.end(); ++it) {
-        serializer->write( it->m_u);
-        serializer->write( it->m_v);
+        SERIAL::write( serializer, it->m_u);
+        SERIAL::write( serializer, it->m_v);
         ASSERT( M_SCENE, !it->m_mipmap);
     }
 
     SERIAL::write( serializer, m_cached_uv_to_id.m_ids);
-    serializer->write( m_cached_uv_to_id.m_count_u);
-    serializer->write( m_cached_uv_to_id.m_count_v);
-    serializer->write( m_cached_uv_to_id.m_min_u);
-    serializer->write( m_cached_uv_to_id.m_min_v);
+    SERIAL::write( serializer, m_cached_uv_to_id.m_count_u);
+    SERIAL::write( serializer, m_cached_uv_to_id.m_count_v);
+    SERIAL::write( serializer, m_cached_uv_to_id.m_min_u);
+    SERIAL::write( serializer, m_cached_uv_to_id.m_min_v);
 
     return this + 1;
 }
@@ -643,42 +643,42 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
     Scene_element_base::deserialize( deserializer);
 
     std::string serializer_sep;
-    deserializer->read( &serializer_sep);
+    SERIAL::read( deserializer, &serializer_sep);
     bool convert_path =  serializer_sep != HAL::Ospath::sep();
 
-    deserializer->read( &m_original_filename);
-    deserializer->read( &m_mdl_file_path);
-    deserializer->read( &m_resolved_container_filename);
+    SERIAL::read( deserializer, &m_original_filename);
+    SERIAL::read( deserializer, &m_mdl_file_path);
+    SERIAL::read( deserializer, &m_resolved_container_filename);
 
     deserializer->read_size_t( &s);
     m_uvfilenames.resize( s);
     for( auto it = m_uvfilenames.begin(); it != m_uvfilenames.end(); ++it) {
-        deserializer->read( &it->m_resolved_filename);
-        deserializer->read( &it->m_container_membername);
-        deserializer->read( &it->m_resolved_container_membername);
+        SERIAL::read( deserializer, &it->m_resolved_filename);
+        SERIAL::read( deserializer, &it->m_container_membername);
+        SERIAL::read( deserializer, &it->m_resolved_container_membername);
     }
 
-    deserializer->read( &m_impl_tag);
-    deserializer->read( &m_impl_hash);
+    SERIAL::read( deserializer, &m_impl_tag);
+    SERIAL::read( deserializer, &m_impl_hash);
 
-    deserializer->read( &m_cached_is_valid);
-    deserializer->read( &m_cached_is_uvtile);
-    deserializer->read( &m_cached_is_cubemap);
+    SERIAL::read( deserializer, &m_cached_is_valid);
+    SERIAL::read( deserializer, &m_cached_is_uvtile);
+    SERIAL::read( deserializer, &m_cached_is_cubemap);
 
     deserializer->read_size_t( &s);
     m_cached_uvtiles.resize( s);
 
     for( auto it = m_cached_uvtiles.begin(); it != m_cached_uvtiles.end(); ++it) {
-        deserializer->read( &it->m_u);
-        deserializer->read( &it->m_v);
+        SERIAL::read( deserializer, &it->m_u);
+        SERIAL::read( deserializer, &it->m_v);
         ASSERT( M_SCENE, !it->m_mipmap);
     }
 
     SERIAL::read( deserializer, &m_cached_uv_to_id.m_ids);
-    deserializer->read( &m_cached_uv_to_id.m_count_u);
-    deserializer->read( &m_cached_uv_to_id.m_count_v);
-    deserializer->read( &m_cached_uv_to_id.m_min_u);
-    deserializer->read( &m_cached_uv_to_id.m_min_v);
+    SERIAL::read( deserializer, &m_cached_uv_to_id.m_count_u);
+    SERIAL::read( deserializer, &m_cached_uv_to_id.m_count_v);
+    SERIAL::read( deserializer, &m_cached_uv_to_id.m_min_u);
+    SERIAL::read( deserializer, &m_cached_uv_to_id.m_min_v);
 
     // Adjust filenames for this host
     if( convert_path) {
@@ -1116,21 +1116,21 @@ const SERIAL::Serializable* Image_impl::serialize( SERIAL::Serializer* serialize
 
     Scene_element_base::serialize( serializer);
 
-    serializer->write( m_is_valid);
-    serializer->write( m_is_uvtile);
-    serializer->write( m_is_cubemap);
+    SERIAL::write( serializer, m_is_valid);
+    SERIAL::write( serializer, m_is_uvtile);
+    SERIAL::write( serializer, m_is_cubemap);
 
     serializer->write_size_t( m_uvtiles.size());
     for( auto it = m_uvtiles.begin(); it != m_uvtiles.end(); ++it) {
-        serializer->write( it->m_u);
-        serializer->write( it->m_v);
+        SERIAL::write( serializer, it->m_u);
+        SERIAL::write( serializer, it->m_v);
         image_module->serialize_mipmap( serializer, it->m_mipmap.get());
     }
 
-    serializer->write( m_uv_to_id.m_count_u);
-    serializer->write( m_uv_to_id.m_count_v);
-    serializer->write( m_uv_to_id.m_min_u);
-    serializer->write( m_uv_to_id.m_min_v);
+    SERIAL::write( serializer, m_uv_to_id.m_count_u);
+    SERIAL::write( serializer, m_uv_to_id.m_count_v);
+    SERIAL::write( serializer, m_uv_to_id.m_min_u);
+    SERIAL::write( serializer, m_uv_to_id.m_min_v);
     SERIAL::write( serializer, m_uv_to_id.m_ids);
 
     return this + 1;
@@ -1143,22 +1143,22 @@ SERIAL::Serializable* Image_impl::deserialize( SERIAL::Deserializer* deserialize
 
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_is_valid);
-    deserializer->read( &m_is_uvtile);
-    deserializer->read( &m_is_cubemap);
+    SERIAL::read( deserializer, &m_is_valid);
+    SERIAL::read( deserializer, &m_is_uvtile);
+    SERIAL::read( deserializer, &m_is_cubemap);
 
     deserializer->read_size_t( &s);
     m_uvtiles.resize(s);
     for( auto it = m_uvtiles.begin(); it != m_uvtiles.end(); ++it) {
-        deserializer->read( &it->m_u);
-        deserializer->read( &it->m_v);
+        SERIAL::read( deserializer, &it->m_u);
+        SERIAL::read( deserializer, &it->m_v);
         it->m_mipmap = image_module->deserialize_mipmap( deserializer);
     }
 
-    deserializer->read( &m_uv_to_id.m_count_u);
-    deserializer->read( &m_uv_to_id.m_count_v);
-    deserializer->read( &m_uv_to_id.m_min_u);
-    deserializer->read( &m_uv_to_id.m_min_v);
+    SERIAL::read( deserializer, &m_uv_to_id.m_count_u);
+    SERIAL::read( deserializer, &m_uv_to_id.m_count_v);
+    SERIAL::read( deserializer, &m_uv_to_id.m_min_u);
+    SERIAL::read( deserializer, &m_uv_to_id.m_min_v);
     SERIAL::read( deserializer, &m_uv_to_id.m_ids);
 
     return this + 1;

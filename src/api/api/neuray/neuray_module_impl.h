@@ -34,7 +34,6 @@
 #define API_API_NEURAY_MODULE_IMPL_H
 
 #include <mi/neuraylib/imodule.h>
-#include <mi/neuraylib/imaterial_definition.h>
 
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"

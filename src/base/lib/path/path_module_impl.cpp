@@ -30,7 +30,9 @@
 
 #include "path_module_impl.h"
 
+#ifdef MI_PLATFORM_WINDOWS
 #include <boost/algorithm/string/replace.hpp>
+#endif
 #include <mi/base/config.h>
 #include <base/system/main/module_registration.h>
 #include <base/hal/disk/disk.h>
@@ -53,6 +55,15 @@ static SYSTEM::Module_registration<Path_module_impl> s_module( M_PATH, "PATH");
 Module_registration_entry* Path_module::get_instance()
 {
     return s_module.init_module( s_module.get_name());
+}
+
+std::string Path_module::normalize( const std::string& s)
+{
+#ifdef MI_PLATFORM_WINDOWS
+    return boost::replace_all_copy( s, "/", "\\");
+#else
+    return s;
+#endif
 }
 
 bool Path_module_impl::init()
@@ -193,6 +204,9 @@ mi::Sint32 Path_module_impl::remove_path( Kind kind, const Path& path)
 std::string Path_module_impl::search(
     Kind kind, const std::string& file_name) const
 {
+    if (file_name.empty())
+        return {};
+
     const std::string& normalized_file_name = normalize( file_name);
 
     if( DISK::is_path_absolute( normalized_file_name))
@@ -211,15 +225,6 @@ std::string Path_module_impl::search(
     }
 
     return s_empty_string;
-}
-
-std::string Path_module_impl::normalize( const std::string& s)
-{
-#ifdef MI_PLATFORM_WINDOWS
-    return boost::replace_all_copy( s, "/", "\\");
-#else
-    return s;
-#endif
 }
 
 } // namespace PATH

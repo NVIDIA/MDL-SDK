@@ -657,7 +657,7 @@ public:
     size_type max_size() const { return 0xffffffff; }
 
     /// Memory is allocated for \c count objects of type \c T but objects are not constructed.
-    pointer allocate( size_type count, std::allocator<void>::const_pointer /*hint*/ = 0 ) const
+    pointer allocate( size_type count, void const * /*hint*/ = 0 ) const
     {
 #ifdef DEBUG
         if (count == 1) {

@@ -123,13 +123,15 @@ IExpression_reference const *Module_inliner::promote_call_reference(
             if (minor == 0) {
                 switch (sema) {
                 case Definition::DS_INTRINSIC_DF_SPOT_EDF:
-                    rules = Module::PR_SPOT_EDF_ADD_SPREAD_PARAM;
+                    rules |= Module::PR_SPOT_EDF_ADD_SPREAD_PARAM;
                     break;
                 case Definition::DS_INTRINSIC_DF_MEASURED_EDF:
-                    if (mod_major > 1 || (mod_major == 1 && mod_minor >= 1))
+                    if (mod_major > 1 || (mod_major == 1 && mod_minor >= 1)) {
                         rules |= Module::PC_MEASURED_EDF_ADD_MULTIPLIER;
-                    if (mod_major > 1 || (mod_major == 1 && mod_minor >= 2))
+                    }
+                    if (mod_major > 1 || (mod_major == 1 && mod_minor >= 2)) {
                         rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                    }
                     break;
                 default:
                     break;
@@ -137,7 +139,7 @@ IExpression_reference const *Module_inliner::promote_call_reference(
             } else if (minor == 1) {
                 switch (sema) {
                 case Definition::DS_INTRINSIC_DF_MEASURED_EDF:
-                    rules = Module::PR_MEASURED_EDF_ADD_TANGENT_U;
+                    rules |= Module::PR_MEASURED_EDF_ADD_TANGENT_U;
                     break;
                 default:
                     break;
@@ -146,7 +148,7 @@ IExpression_reference const *Module_inliner::promote_call_reference(
             if (mod_minor >= 3 && minor < 3) {
                 switch (sema) {
                 case Definition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:
-                    rules = Module::PR_ROUNDED_CORNER_ADD_ROUNDNESS;
+                    rules |= Module::PR_ROUNDED_CORNER_ADD_ROUNDNESS;
                     break;
                 default:
                     break;
@@ -155,19 +157,40 @@ IExpression_reference const *Module_inliner::promote_call_reference(
             if (mod_minor >= 4 && minor < 4) {
                 switch (sema) {
                 case Definition::DS_INTRINSIC_DF_FRESNEL_LAYER:
-                    rules = Module::PR_FRESNEL_LAYER_TO_COLOR;
+                    rules |= Module::PR_FRESNEL_LAYER_TO_COLOR;
                     n = "color_fresnel_layer";
                     break;
                 case Definition::DS_INTRINSIC_TEX_WIDTH:
                 case Definition::DS_INTRINSIC_TEX_HEIGHT:
-                    rules = Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
+                    {
+                        IType_function const *func_type = cast<IType_function>(def->get_type());
+
+                        ISymbol const *dummy;
+                        IType   const *p_type;
+                        func_type->get_parameter(0, p_type, dummy);
+
+                        if (is_tex_2d(p_type)) {
+                            // add uv_tile parameter for tex_2d variants
+                            rules |= Module::PR_WIDTH_HEIGHT_ADD_UV_TILE;
+                        }
+                    }
                     break;
                 case Definition::DS_INTRINSIC_TEX_TEXEL_COLOR:
                 case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
                 case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
                 case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
                 case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
-                    rules = Module::PR_TEXEL_ADD_UV_TILE;
+                    {
+                        IType_function const *func_type = cast<IType_function>(def->get_type());
+
+                        ISymbol const *dummy;
+                        IType   const *p_type;
+                        func_type->get_parameter(0, p_type, dummy);
+
+                        if (is_tex_2d(p_type)) {
+                            rules |= Module::PR_TEXEL_ADD_UV_TILE;
+                        }
+                    }
                     break;
                 default:
                     break;
@@ -177,7 +200,7 @@ IExpression_reference const *Module_inliner::promote_call_reference(
                 if (sema == IDefinition::DS_ELEM_CONSTRUCTOR) {
                     IType const *t = tn->get_type();
                     if (t != NULL && is_material_type(t)) {
-                        rules = Module::PR_MATERIAL_ADD_HAIR;
+                        rules |= Module::PR_MATERIAL_ADD_HAIR;
                     }
                 }
             }
@@ -190,7 +213,92 @@ IExpression_reference const *Module_inliner::promote_call_reference(
                     sema == IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF ||
                     sema == IDefinition::DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF)
                 {
-                    rules = Module::PR_GLOSSY_ADD_MULTISCATTER;
+                    rules |= Module::PR_GLOSSY_ADD_MULTISCATTER;
+                }
+            }
+            if (mod_minor >= 7 && minor < 7) {
+                switch (sema) {
+                case IDefinition::DS_ELEM_CONSTRUCTOR:
+                    {
+                        IType const *t = tn->get_type();
+                        if (t != NULL && is_material_volume_type(t)) {
+                            rules |= Module::PR_MATERIAL_VOLUME_ADD_EMISSION_INTENSITY;
+                        }
+                    }
+                    break;
+                case IDefinition::DS_TEXTURE_CONSTRUCTOR:
+                    {
+                        IType_function const *func_type = cast<IType_function>(def->get_type());
+
+                        ISymbol const *dummy;
+                        IType   const *p_type;
+                        func_type->get_parameter(0, p_type, dummy);
+
+                        if (is_tex_2d(p_type) || is_tex_3d(p_type)) {
+                            rules |= Module::PR_TEXTURE_ADD_SELECTOR;
+                        }
+                    }
+                    break;
+                case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+                    rules |= Module::PR_SHEEN_ADD_MULTISCATTER;
+                    break;
+                case Definition::DS_INTRINSIC_TEX_WIDTH:
+                case Definition::DS_INTRINSIC_TEX_HEIGHT:
+                case Definition::DS_INTRINSIC_TEX_DEPTH:
+                    {
+                        IType_function const *func_type = cast<IType_function>(def->get_type());
+
+                        ISymbol const *dummy;
+                        IType   const *p_type;
+                        func_type->get_parameter(0, p_type, dummy);
+
+                        if (is_tex_2d(p_type)) {
+                            rules |= Module::PR_WIDTH_HEIGHT_2D_ADD_FRAME;
+                        } else if (is_tex_3d(p_type)) {
+                            rules |= Module::PR_WIDTH_HEIGHT_3D_ADD_FRAME;
+                        }
+                    }
+                    break;
+                case Definition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+                case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+                case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+                case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+                case Definition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+                    {
+                        IType_function const *func_type = cast<IType_function>(def->get_type());
+
+                        ISymbol const *dummy;
+                        IType   const *p_type;
+                        func_type->get_parameter(0, p_type, dummy);
+
+                        if (is_tex_2d(p_type)) {
+                            rules |= Module::PR_LOOKUP_2D_ADD_FRAME;
+                        } else if (is_tex_3d(p_type)) {
+                            rules |= Module::PR_LOOKUP_3D_ADD_FRAME;
+                        }
+                    }
+                    break;
+                case Definition::DS_INTRINSIC_TEX_TEXEL_COLOR:
+                case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
+                case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
+                case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
+                case Definition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
+                    {
+                        IType_function const *func_type = cast<IType_function>(def->get_type());
+
+                        ISymbol const *dummy;
+                        IType   const *p_type;
+                        func_type->get_parameter(0, p_type, dummy);
+
+                        if (is_tex_2d(p_type)) {
+                            rules |= Module::PR_TEXEL_2D_ADD_FRAME;
+                        } else if (is_tex_3d(p_type)) {
+                            rules |= Module::PR_TEXEL_3D_ADD_FRAME;
+                        }
+                    }
+                    break;
+                default:
+                    break;
                 }
             }
         }
@@ -737,14 +845,26 @@ IQualified_name *Module_inliner::clone_name(IQualified_name const *qname)
     Definition const *def = impl_cast<Definition>(qname->get_definition());
 
     string orig_module_name(m_alloc);
-    if (def->get_original_import_idx() != 0) {
-        Definition const *def_ori = m_module->get_original_definition(def);
-        mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
-        orig_module_name = mod_ori->get_name();
-        def = def_ori;
+    if (def != NULL) {
+        if (def->get_original_import_idx() != 0) {
+            Definition const *def_ori = m_module->get_original_definition(def);
+            mi::base::Handle<Module const> mod_ori(m_module->get_owner_module(def));
+            orig_module_name = mod_ori->get_name();
+            def = def_ori;
+        }
+    } else if (
+        qname->get_component_count() == 1 &&
+        qname->get_component(0)->get_symbol()->get_id() == ISymbol::SYM_TYPE_AUTO)
+    {
+        IQualified_name *res = m_nf.create_qualified_name();
+        ISimple_name const *sname = m_target_module->clone_name(qname->get_component(0));
+        res->add_component(sname);
+        return res;
+    } else {
+        MDL_ASSERT(def != NULL && "NULL definition should only happen for the auto type");
     }
 
-    Reference_map::iterator const& it = m_references.find(def);
+    Reference_map::iterator const &it = m_references.find(def);
     if (it == m_references.end()) {
         if (!qname->is_absolute() && !orig_module_name.empty()) {
             IQualified_name *res = m_nf.create_qualified_name();
@@ -1016,7 +1136,9 @@ IAnnotation *Module_inliner::create_anno(
     qn->add_component(m_nf.create_simple_name(m_nf.create_symbol("anno")));
     qn->add_component(m_nf.create_simple_name(m_nf.create_symbol(anno_name)));
 
-    IAnnotation *anno = m_af.create_annotation(qn);
+    IAnnotation *anno = strcmp(anno_name, "enable_if") == 0 ?
+        m_af.create_enable_if_annotation(qn) :
+        m_af.create_annotation(qn);
     return anno;
 }
 
@@ -1746,13 +1868,25 @@ MDL_module_transformer::MDL_module_transformer(
 // Inline all imports of a module, creating a new one.
 IModule const *MDL_module_transformer::inline_imports(IModule const *imodule)
 {
-    return inline_module(imodule, false);
+    return inline_module(imodule, /*inline_mdle=*/false);
+}
+
+// Inline all imports of a module, creating a new one.
+IModule *MDL_module_transformer::inline_imports(IModule *imodule)
+{
+    return inline_module(imodule, /*inline_mdle=*/false);
 }
 
 // Inline all MDLE imports of a module, creating a new one.
 IModule const *MDL_module_transformer::inline_mdle(IModule const *imodule)
 {
-    return inline_module(imodule, true);
+    return inline_module(imodule, /*inline_mdle=*/true);
+}
+
+// Inline all MDLE imports of a module, creating a new one.
+IModule *MDL_module_transformer::inline_mdle(IModule *imodule)
+{
+    return inline_module(imodule, /*inline_mdle=*/true);
 }
 
 // Compute the resulting MDL version.
@@ -1783,7 +1917,9 @@ IMDL::MDL_version MDL_module_transformer::compute_mdl_version(
 }
 
 // Inline all imports of a module, creating a new one.
-IModule const *MDL_module_transformer::inline_module(IModule const *imodule, bool inline_mdle)
+IModule *MDL_module_transformer::inline_module(
+    IModule const *imodule,
+    bool          inline_mdle)
 {
     if (!imodule->is_valid()) {
         // only valid modules can be inlined
@@ -1805,7 +1941,8 @@ IModule const *MDL_module_transformer::inline_module(IModule const *imodule, boo
         // Nothing to be inlined
         // TODO: should it be copied anyway?
         module->retain();
-        return module;
+        // Const-correctness enforced by the calling methods above.
+        return const_cast<Module*>(module);
     }
 
     // Create new module
@@ -1859,7 +1996,7 @@ IModule const *MDL_module_transformer::inline_module(IModule const *imodule, boo
                 .add(imodule->get_name()));
         Messages const &messages = inlined_module->access_messages();
         for (size_t i = 0, n = messages.get_message_count(); i < n; ++i) {
-            m_msg_list.add_imported(m_last_msg_idx, 0, messages.get_message(i));
+            m_msg_list.add_imported_msg_as_note(m_last_msg_idx, 0, messages.get_message(i));
         }
         return NULL;
     }

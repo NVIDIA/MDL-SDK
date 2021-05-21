@@ -94,6 +94,7 @@ private:
                     tex->get_type(),
                     tex->get_string_value(),
                     tex->get_gamma_mode(),
+                    tex->get_selector(),
                     tag,
                     0);
             }
@@ -125,15 +126,18 @@ private:
 /// \param expr  the expression to check
 static bool is_simple_select(IExpression const *expr)
 {
-    if (!is<IExpression_binary>(expr))
+    if (!is<IExpression_binary>(expr)) {
         return false;
+    }
     IExpression_binary const *b_expr = cast<IExpression_binary>(expr);
-    if (b_expr->get_operator() != IExpression_binary::OK_SELECT)
+    if (b_expr->get_operator() != IExpression_binary::OK_SELECT) {
         return false;
+    }
 
     IExpression const *left  = b_expr->get_left_argument();
-    if (!is<IExpression_reference>(left))
+    if (!is<IExpression_reference>(left)) {
         return false;
+    }
 
     MDL_ASSERT(is<IExpression_reference>(b_expr->get_right_argument()));
 
@@ -182,13 +186,16 @@ public:
     /// Handle variable lookup.
     IValue const *lookup(IDefinition const *var) MDL_FINAL
     {
-        if (m_iter_var == var) return m_iter_value;
+        if (m_iter_var == var) {
+            return m_iter_value;
+        }
 
         DAG_builder::Definition_temporary_map::const_iterator it = m_tmp_value_map.find(var);
         if (it != m_tmp_value_map.end()) {
             DAG_node const *node = it->second;
-            if (node->get_kind() == DAG_node::EK_CONSTANT)
-                return m_value_factory->import(as<DAG_constant>(node)->get_value());
+            if (is<DAG_constant>(node)) {
+                return m_value_factory->import(cast<DAG_constant>(node)->get_value());
+            }
         }
         return m_value_factory->create_bad();
     }
@@ -198,8 +205,9 @@ public:
     bool is_evaluate_intrinsic_function_enabled(
         IDefinition::Semantics semantic) const MDL_FINAL
     {
-        if (m_call_evaluator == NULL)
+        if (m_call_evaluator == NULL) {
             return false;
+        }
 
         return m_call_evaluator->is_evaluate_intrinsic_function_enabled(semantic);
     }
@@ -210,8 +218,9 @@ public:
         const IValue *const arguments[],
         size_t n_arguments) MDL_FINAL
     {
-        if (m_call_evaluator == NULL)
+        if (m_call_evaluator == NULL) {
             return m_value_factory->create_bad();
+        }
 
         return m_call_evaluator->evaluate_intrinsic_function(
             m_value_factory, semantic, arguments, n_arguments);
@@ -295,15 +304,18 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
     if (IExpression_binary const *bin_expr = as<IExpression_binary>(update_expr)) {
         // make sure lhs points to a reference to the iteration variable
         IExpression_reference const *lhs = as<IExpression_reference>(bin_expr->get_left_argument());
-        if (lhs == NULL)
+        if (lhs == NULL) {
             return false;
-        if (lhs->get_definition() != m_iter_var)
+        }
+        if (lhs->get_definition() != m_iter_var) {
             return false;
+        }
 
         // const fold rhs
         IValue const *rhs = bin_expr->get_right_argument()->fold(m_module, m_value_factory, this);
-        if (is<IValue_bad>(rhs))
+        if (is<IValue_bad>(rhs)) {
             return false;
+        }
 
         switch (bin_expr->get_operator()) {
         case IExpression_binary::OK_SELECT:
@@ -381,10 +393,12 @@ bool Variable_lookup_handler::update_iteration_variable(IExpression const *updat
     } else if (IExpression_unary const *un_expr = as<IExpression_unary>(update_expr)) {
         // make sure the expression points to a reference to the iteration variable
         IExpression_reference const *lhs = as<IExpression_reference>(un_expr->get_argument());
-        if (lhs == NULL)
+        if (lhs == NULL) {
             return false;
-        if (lhs->get_definition() != m_iter_var)
+        }
+        if (lhs->get_definition() != m_iter_var) {
             return false;
+        }
 
         switch (un_expr->get_operator()) {
         case IExpression_unary::OK_BITWISE_COMPLEMENT:
@@ -624,10 +638,12 @@ bool Inline_checker::can_inline(IExpression const *expr)
             if (!is_uniform(cond) || !can_inline(cond))
                 return false;
 
-            if (!can_inline(ternary->get_true()))
+            if (!can_inline(ternary->get_true())) {
                 return false;
-            if (!can_inline(ternary->get_false()))
+            }
+            if (!can_inline(ternary->get_false())) {
                 return false;
+            }
             return true;
         }
     case IExpression::EK_CALL:
@@ -743,8 +759,9 @@ bool Inline_checker::has_side_effect(IExpression_call const *call)
 {
     IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
 
-    if (ref->is_array_constructor())
+    if (ref->is_array_constructor()) {
         return false;
+    }
 
     IDefinition const *def = ref->get_definition();
 
@@ -755,13 +772,15 @@ bool Inline_checker::has_side_effect(IExpression_call const *call)
 //  Check, if the given call is allowed AFTER inlining.
 bool Inline_checker::allow_call(IExpression_call const *call)
 {
-    if (!m_forbid_local_calls)
+    if (!m_forbid_local_calls) {
         return true;
+    }
 
     IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
 
-    if (ref->is_array_constructor())
+    if (ref->is_array_constructor()) {
         return true;
+    }
 
     IDefinition const *def = ref->get_definition();
 
@@ -775,8 +794,9 @@ bool Inline_checker::allow_call(IExpression_call const *call)
 // Check if we can inline the given statement.
 bool Inline_checker::can_inline(IStatement const *stmt)
 {
-    if (m_skip_flags != INL_NO_SKIP)
+    if (m_skip_flags != INL_NO_SKIP) {
         return true;
+    }
 
     // check statements, for now only simple expressions
     switch (stmt->get_kind()) {
@@ -842,9 +862,12 @@ bool Inline_checker::can_inline(IStatement const *stmt)
             for (int i = 0, n = block->get_statement_count(); i < n; ++i) {
                 IStatement const *stmt = block->get_statement(i);
 
-                if (!can_inline(stmt))
+                if (!can_inline(stmt)) {
                     return false;
-                if (m_skip_flags != INL_NO_SKIP) break;
+                }
+                if (m_skip_flags != INL_NO_SKIP) {
+                    break;
+                }
             }
             return true;
         }
@@ -854,18 +877,21 @@ bool Inline_checker::can_inline(IStatement const *stmt)
 
             IValue const *cond_result = if_stmt->get_condition()->fold(
                 m_module, m_value_factory, &m_var_lookup_handler);
-            if (is<IValue_bad>(cond_result))
+            if (is<IValue_bad>(cond_result)) {
                 return false;
+            }
 
             // true case
-            if (cond_result->is_one())
+            if (cond_result->is_one()) {
                 return can_inline(if_stmt->get_then_statement());
-            else if (!cond_result->is_zero())
+            } else if (!cond_result->is_zero()) {
                 return false;
+            }
 
             // false case
-            if (if_stmt->get_else_statement() == NULL)
+            if (if_stmt->get_else_statement() == NULL) {
                 return true;
+            }
             return can_inline(if_stmt->get_else_statement());
         }
     case IStatement::SK_SWITCH:
@@ -874,10 +900,10 @@ bool Inline_checker::can_inline(IStatement const *stmt)
 
             IValue const *cond_result = switch_stmt->get_condition()->fold(
                 m_module, m_value_factory, &m_var_lookup_handler);
-            if (is<IValue_bad>(cond_result))
+            IValue_int_valued const *cond_val = as<IValue_int_valued>(cond_result);
+            if (cond_val == NULL) {
                 return false;
-            IValue_int_valued const *cond_val = cast<IValue_int_valued>(cond_result);
-            if (cond_val == NULL) return false;
+            }
 
             int cond_int = cond_val->get_value();
 
@@ -907,7 +933,9 @@ bool Inline_checker::can_inline(IStatement const *stmt)
                     cast<IStatement_case>(switch_stmt->get_case(cur_case_idx));
 
                 bool res = can_inline(cur_case);
-                if (!res) return false;
+                if (!res) {
+                    return false;
+                }
 
                 // case inlining results in any skipping?
                 if (m_skip_flags != INL_NO_SKIP) {
@@ -936,23 +964,28 @@ bool Inline_checker::can_inline(IStatement const *stmt)
             //  - no nested loops
 
             // don't allow nested loops
-            if (m_var_lookup_handler.get_iteration_variable() != NULL)
+            if (m_var_lookup_handler.get_iteration_variable() != NULL) {
                 return false;
+            }
 
-            IStatement_for const *for_stmt = cast<IStatement_for>(stmt);
-            IStatement const *init_stmt = for_stmt->get_init();
+            IStatement_for const         *for_stmt  = cast<IStatement_for>(stmt);
+            IStatement const             *init_stmt = for_stmt->get_init();
             IStatement_declaration const *decl_stmt = as<IStatement_declaration>(init_stmt);
-            if (decl_stmt == NULL)
+            if (decl_stmt == NULL) {
                 return false;
+            }
 
             // fold initializer of the only iteration variable to a constant
             IDeclaration_variable const *decl =
                 cast<IDeclaration_variable>(decl_stmt->get_declaration());
-            if (decl == NULL || decl->get_variable_count() != 1) return false;
+            if (decl == NULL || decl->get_variable_count() != 1) {
+                return false;
+            }
             IValue const *init_val = decl->get_variable_init(0)->fold(
                 m_module, m_value_factory, &m_var_lookup_handler);
-            if (is<IValue_bad>(init_val))
+            if (is<IValue_bad>(init_val)) {
                 return false;
+            }
 
             // set iteration variable in lookup handler
             m_var_lookup_handler.set_iteration_variable(
@@ -975,9 +1008,12 @@ bool Inline_checker::can_inline(IStatement const *stmt)
                 }
 
                 res = can_inline(for_stmt->get_body());
-                if (!res)
+                if (!res) {
                     break;
-                if (m_skip_flags != INL_NO_SKIP) break;
+                }
+                if (m_skip_flags != INL_NO_SKIP) {
+                    break;
+                }
 
                 if (!m_var_lookup_handler.update_iteration_variable(for_stmt->get_update())) {
                     res = false;
@@ -985,8 +1021,9 @@ bool Inline_checker::can_inline(IStatement const *stmt)
                 }
             }
             // didn't exit loop in time?
-            if (steps > max_steps)
+            if (steps > max_steps) {
                 res = false;
+            }
 
             // consume any breaks
             m_skip_flags = Inline_skip_flag(m_skip_flags & ~INL_SKIP_BREAK);
@@ -1015,7 +1052,9 @@ bool Inline_checker::can_inline()
     }
 
     IStatement const *body = m_func_decl->get_body();
-    if (body == NULL) return false;
+    if (body == NULL) {
+        return false;
+    }
 
     bool res = can_inline(body);
     MDL_ASSERT((m_skip_flags & INL_SKIP_BREAK) == 0 && "break was not properly handled");
@@ -1072,14 +1111,16 @@ DAG_builder::DAG_builder(
 , m_forbid_local_calls(false)
 , m_conditional_created(false)
 , m_conditional_df_created(false)
+, m_target_material_model_mode(false)
 {
 }
 
 // Set a resource modifier.
 void DAG_builder::set_resource_modifier(IResource_modifier *modifier)
 {
-    if (modifier == NULL)
+    if (modifier == NULL) {
         modifier = &null_modifier;
+    }
     m_resource_modifier = modifier;
 }
 
@@ -1089,6 +1130,15 @@ bool DAG_builder::forbid_local_function_calls(bool flag)
     bool res = m_forbid_local_calls;
 
     m_forbid_local_calls = flag;
+    return res;
+}
+
+// Enable/disable the target material model compilation mode.
+bool DAG_builder::enable_target_material_compilation_mode(bool flag)
+{
+    bool res = m_target_material_model_mode;
+
+    m_target_material_model_mode = flag;
     return res;
 }
 
@@ -1108,8 +1158,9 @@ bool DAG_builder::is_user_type(IType const *type)
             // for it
             return true;
         }
-    } else if (is<IType_array>(type))
+    } else if (is<IType_array>(type)) {
         return true;
+    }
     return false;
 }
 
@@ -1173,10 +1224,11 @@ void DAG_builder::make_accessible(mi::mdl::IParameter const *param)
 // Push a module on the module stack.
 void DAG_builder::push_module(IModule const *mod)
 {
-    if (m_module_stack_tos >= m_module_stack.size())
+    if (m_module_stack_tos >= m_module_stack.size()) {
         m_module_stack.push_back(mi::base::make_handle_dup(mod));
-    else
+    } else {
         m_module_stack[m_module_stack_tos] = mi::base::make_handle_dup(mod);
+    }
     ++m_module_stack_tos;
 }
 
@@ -1192,8 +1244,9 @@ void DAG_builder::pop_module()
 // Return the top-of-stack module, not retained.
 IModule const *DAG_builder::tos_module() const
 {
-    if (m_module_stack_tos > 0)
+    if (m_module_stack_tos > 0) {
         return m_module_stack[m_module_stack_tos - 1].get();
+    }
     return NULL;
 }
 
@@ -1368,7 +1421,7 @@ DAG_node const *DAG_builder::var_decl_to_dag(
         DAG_node const     *expr = NULL;
 
         if (init != NULL) {
-            expr = exp_to_dag(init);
+            expr = expr_to_dag(init);
         } else {
             // missing default initializer, happens with "uninitialized" arrays
             IType const *var_type = var_decl->get_type_name()->get_type();
@@ -1392,7 +1445,7 @@ DAG_node const *DAG_builder::const_decl_to_dag(
         DAG_node const     *expr = NULL;
 
         if (init != NULL) {
-            expr = exp_to_dag(init);
+            expr = expr_to_dag(init);
         } else {
             // missing default initializer, happens with "uninitialized" arrays
             IType const *const_type = const_decl->get_type_name()->get_type();
@@ -1409,7 +1462,9 @@ DAG_node const *DAG_builder::const_decl_to_dag(
 DAG_node const *DAG_builder::stmt_to_dag(
     IStatement const  *stmt)
 {
-    if (m_skip_flags != INL_NO_SKIP) return NULL;
+    if (m_skip_flags != INL_NO_SKIP) {
+        return NULL;
+    }
 
     switch (stmt->get_kind()) {
     case IStatement::SK_EXPRESSION:
@@ -1417,7 +1472,7 @@ DAG_node const *DAG_builder::stmt_to_dag(
             IStatement_expression const *e_stmt = cast<IStatement_expression>(stmt);
             IExpression           const *expr   = e_stmt->get_expression();
 
-            return exp_to_dag(expr);
+            return expr_to_dag(expr);
         }
     case IStatement::SK_DECLARATION:
         {
@@ -1453,7 +1508,7 @@ DAG_node const *DAG_builder::stmt_to_dag(
     case IStatement::SK_RETURN:
         {
             IExpression const *expr = cast<IStatement_return>(stmt)->get_expression();
-            m_inline_return_node = exp_to_dag(expr);
+            m_inline_return_node = expr_to_dag(expr);
             m_skip_flags = Inline_skip_flag(m_skip_flags | INL_SKIP_RETURN);
             return m_inline_return_node;
         }
@@ -1467,7 +1522,9 @@ DAG_node const *DAG_builder::stmt_to_dag(
                 IStatement const *stmt = block->get_statement(i);
 
                 last = stmt_to_dag(stmt);
-                if (m_skip_flags != INL_NO_SKIP) return NULL;
+                if (m_skip_flags != INL_NO_SKIP) {
+                    return NULL;
+                }
             }
             return last;
         }
@@ -1490,18 +1547,19 @@ DAG_node const *DAG_builder::stmt_to_dag(
             }
 
             // true case
-            if (cond_result->is_one())
+            if (cond_result->is_one()) {
                 return stmt_to_dag(if_stmt->get_then_statement());
-            else if (!cond_result->is_zero()) {
+            } else if (!cond_result->is_zero()) {
                 MDL_ASSERT(!"unexpected condition value");
                 return NULL;
             }
 
             // false case
-            if (if_stmt->get_else_statement() == NULL)
+            if (if_stmt->get_else_statement() == NULL) {
                 return NULL;
-            else
+            } else {
                 return stmt_to_dag(if_stmt->get_else_statement());
+            }
         }
     case IStatement::SK_SWITCH:
         {
@@ -1591,10 +1649,11 @@ DAG_node const *DAG_builder::stmt_to_dag(
                 }
 
                 stmt_to_dag(for_stmt->get_body());
-                if (m_skip_flags != INL_NO_SKIP)
+                if (m_skip_flags != INL_NO_SKIP) {
                     break;
+                }
 
-                exp_to_dag(for_stmt->get_update());
+                expr_to_dag(for_stmt->get_update());
             }
 
             MDL_ASSERT(steps <= max_steps && "try_inline did not recognize number of steps");
@@ -1616,11 +1675,12 @@ DAG_node const *DAG_builder::stmt_to_dag(
 }
 
 // Convert an MDL expression to a DAG expression.
-DAG_node const *DAG_builder::exp_to_dag(
+DAG_node const *DAG_builder::expr_to_dag(
     IExpression const *expr)
 {
-    if (expr == NULL)
+    if (expr == NULL) {
         return NULL;
+    }
     switch (expr->get_kind()) {
     case IExpression::EK_INVALID:
         return NULL;
@@ -1844,13 +1904,14 @@ DAG_node const *DAG_builder::unary_to_dag(
         break;
     default:
         {
-            DAG_node const *node = exp_to_dag(arg);
+            DAG_node const *node = expr_to_dag(arg);
             DAG_constant const *c = as<DAG_constant>(node);
             if (c && m_node_factory.all_args_without_name(&node, 1)) {
                 IValue const *v =
                     DAG_node_factory_impl::apply_unary_op(m_value_factory, op, c->get_value());
-                if (v != NULL)
+                if (v != NULL) {
                     return m_node_factory.create_constant(v);
+                }
             }
 
             IType const *ret_type = m_type_factory.import(unary->get_type());
@@ -1876,14 +1937,15 @@ DAG_node const *DAG_builder::unary_to_dag(
     // if we got here, we have a post/pre increment/decrement
     IType const *type = arg->get_type()->skip_type_alias();
 
-    if (IType_vector const *v_type = as<IType_vector>(type))
+    if (IType_vector const *v_type = as<IType_vector>(type)) {
         type = v_type->get_element_type();
+    }
 
     IValue const   *v_one = create_pre_post_one(type, &m_value_factory);
 
     DAG_constant const *one = m_node_factory.create_constant(v_one);
 
-    DAG_node const *pre_node = exp_to_dag(arg);
+    DAG_node const *pre_node = expr_to_dag(arg);
     DAG_node const *res = NULL;
 
     if (is<DAG_constant>(pre_node) && m_node_factory.all_args_without_name(&pre_node, 1)) {
@@ -1891,8 +1953,9 @@ DAG_node const *DAG_builder::unary_to_dag(
 
         IValue const *v =
             DAG_node_factory_impl::apply_binary_op(m_value_factory, bin_op, v_l, v_one);
-        if (v != NULL)
+        if (v != NULL) {
             res = m_node_factory.create_constant(v);
+        }
     }
 
     if (res == NULL) {
@@ -2100,7 +2163,7 @@ DAG_node const *DAG_builder::create_struct_insert(
 
     bool all_args_const = true;
 
-    VLA<DAG_call::Call_argument> call_args(get_allocator(), n_fields);
+    Small_VLA<DAG_call::Call_argument, 8> call_args(get_allocator(), n_fields);
 
     // FIXME: This should be done somehow by the DAG mangler ...
     // create a constructor call
@@ -2114,8 +2177,9 @@ DAG_node const *DAG_builder::create_struct_insert(
         ISymbol const *field_sym;
         s_type->get_field(i, field_tp, field_sym);
 
-        if (i != 0)
+        if (i != 0) {
             name += ',';
+        }
         name += type_to_name(field_tp);
 
         if (i == index) {
@@ -2163,13 +2227,15 @@ DAG_node const *DAG_builder::create_struct_insert(
     if (all_args_const && m_node_factory.all_args_without_name(call_args.data(), n_fields)) {
         // we know this is an elemental constructor, fold it
         Value_vector values(n_fields, NULL, get_allocator());
-        for (int i = 0; i < n_fields; ++i)
+        for (int i = 0; i < n_fields; ++i) {
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
+        }
 
         IValue const *v = m_node_factory.evaluate_constructor(
             m_value_factory, IDefinition::DS_ELEM_CONSTRUCTOR, s_type, values);
-        if (v != NULL)
+        if (v != NULL) {
             return m_node_factory.create_constant(v);
+        }
     }
 
     // else create a constructor call
@@ -2197,7 +2263,7 @@ DAG_node const *DAG_builder::create_vector_insert(
 
     bool all_args_const = true;
 
-    VLA<DAG_call::Call_argument> call_args(get_allocator(), n_fields);
+    Small_VLA<DAG_call::Call_argument, 4> call_args(get_allocator(), n_fields);
 
     // create a constructor call
     string v_name(type_to_name(v_type));
@@ -2214,8 +2280,9 @@ DAG_node const *DAG_builder::create_vector_insert(
         static char const *vector_components[] = { "x", "y", "z", "w" };
         char const        *field_name = vector_components[i];
 
-        if (i != 0)
+        if (i != 0) {
             name += ',';
+        }
         name += type_to_name(elem_tp);
 
         if (i == index) {
@@ -2260,13 +2327,15 @@ DAG_node const *DAG_builder::create_vector_insert(
     if (all_args_const && m_node_factory.all_args_without_name(call_args.data(), n_fields)) {
         // we know this is an elemental constructor, fold it
         Value_vector values(n_fields, NULL, get_allocator());
-        for (int i = 0; i < n_fields; ++i)
+        for (int i = 0; i < n_fields; ++i) {
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
+        }
 
         IValue const *v = m_node_factory.evaluate_constructor(
             m_value_factory, IDefinition::DS_ELEM_CONSTRUCTOR, v_type, values);
-        if (v != NULL)
+        if (v != NULL) {
             return m_node_factory.create_constant(v);
+        }
     }
 
     // else create a constructor call
@@ -2303,7 +2372,7 @@ DAG_node const *DAG_builder::binary_to_dag(
             // import it into our symbol table
             symbol = m_sym_tab.get_symbol(symbol->get_name());
 
-            DAG_node const *compound = exp_to_dag(left);
+            DAG_node const *compound = expr_to_dag(left);
 
             DAG_constant const *c = as<DAG_constant>(compound);
             if (c && m_node_factory.all_args_without_name(&compound, 1)) {
@@ -2402,9 +2471,9 @@ DAG_node const *DAG_builder::binary_to_dag(
             string name(get_binary_name(binary));
 
             DAG_call::Call_argument call_args[2];
-            call_args[0].arg        = exp_to_dag(left);
+            call_args[0].arg        = expr_to_dag(left);
             call_args[0].param_name = "a";
-            call_args[1].arg        = exp_to_dag(right);
+            call_args[1].arg        = expr_to_dag(right);
             call_args[1].param_name = "i";
             return m_node_factory.create_call(
                 name.c_str(),
@@ -2415,7 +2484,7 @@ DAG_node const *DAG_builder::binary_to_dag(
         }
     case IExpression_binary::OK_SEQUENCE:
         // ignore comma operator, dropping left argument
-        return exp_to_dag(right);
+        return expr_to_dag(right);
     case IExpression_binary::OK_ASSIGN:
         is_assign = true;
         break;
@@ -2467,13 +2536,13 @@ DAG_node const *DAG_builder::binary_to_dag(
         break;
     }
 
-    DAG_node const *r   = exp_to_dag(right);
+    DAG_node const *r   = expr_to_dag(right);
     DAG_node const *res = NULL;
 
-    if (op == IExpression_binary::OK_ASSIGN)
+    if (op == IExpression_binary::OK_ASSIGN) {
         res = r;
-    else {
-        DAG_node const *l = exp_to_dag(left);
+    } else {
+        DAG_node const *l = expr_to_dag(left);
         DAG_node const *args[2] = { l, r };
 
         if (is<DAG_constant>(l) && is<DAG_constant>(r) && m_node_factory.all_args_without_name(args, 2)) {
@@ -2482,8 +2551,9 @@ DAG_node const *DAG_builder::binary_to_dag(
 
             IValue const *v =
                 DAG_node_factory_impl::apply_binary_op(m_value_factory, op, v_l, v_r);
-            if (v != NULL)
+            if (v != NULL) {
                 res = m_node_factory.create_constant(v);
+            }
         }
 
         if (res == NULL) {
@@ -2551,16 +2621,17 @@ DAG_node const *DAG_builder::binary_to_dag(
 DAG_node const *DAG_builder::cond_to_dag(
     IExpression_conditional const *cond)
 {
-    DAG_node const *sel = exp_to_dag(cond->get_condition());
+    DAG_node const *sel = expr_to_dag(cond->get_condition());
 
     if (is<DAG_constant>(sel) && m_node_factory.all_args_without_name(&sel, 1)) {
         DAG_constant const *c = cast<DAG_constant>(sel);
         IValue_bool const  *v = cast<IValue_bool>(c->get_value());
 
-        if (v->get_value())
-            return exp_to_dag(cond->get_true());
-        else
-            return exp_to_dag(cond->get_false());
+        if (v->get_value()) {
+            return expr_to_dag(cond->get_true());
+        } else {
+            return expr_to_dag(cond->get_false());
+        }
     }
 
     IExpression::Operator op = IExpression::OK_TERNARY;
@@ -2570,9 +2641,9 @@ DAG_node const *DAG_builder::cond_to_dag(
     DAG_call::Call_argument call_args[3];
     call_args[0].arg        = sel;
     call_args[0].param_name = "cond";
-    call_args[1].arg        = exp_to_dag(cond->get_true());
+    call_args[1].arg        = expr_to_dag(cond->get_true());
     call_args[1].param_name = "true_exp";
-    call_args[2].arg        = exp_to_dag(cond->get_false());
+    call_args[2].arg        = expr_to_dag(cond->get_false());
     call_args[2].param_name = "false_exp";
 
     IDefinition::Semantics sema = operator_to_semantic(op);
@@ -2597,12 +2668,32 @@ DAG_node const *DAG_builder::cond_to_dag(
     return res;
 }
 
+/// Check if the given annotation block contains a nvidia::baking::target_material_model()
+/// annotation.
+static bool has_target_material_model_anno(
+    IAnnotation_block const *block)
+{
+    if (block != NULL) {
+        for (int i = 0, n = block->get_annotation_count(); i < n; ++i) {
+            IAnnotation const     *anno     = block->get_annotation(i);
+            IQualified_name const *qname    = anno->get_name();
+            IDefinition const     *anno_def = qname->get_definition();
+
+            if (anno_def->get_semantics() == IDefinition::DS_BAKING_TMM_ANNOTATION) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 // Try to inline the given call.
 DAG_node const *DAG_builder::try_inline(
     IExpression_call const *call)
 {
-    if (!m_node_factory.is_inline_allowed())
+    if (!m_node_factory.is_inline_allowed()) {
         return NULL;
+    }
 
     IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
     IDefinition const      *call_def = ref->get_definition();
@@ -2629,27 +2720,43 @@ DAG_node const *DAG_builder::try_inline(
     {
         // always inline materials
         is_material = true;
-    }
 
-    // enter inlining
-    Inline_scope inline_scope(*this);
+        // except we are in target material model compilation mode
+        if (m_target_material_model_mode) {
+            if (has_target_material_model_anno(func_decl->get_annotations())) {
+                // do not inline
+                return NULL;
+            }
+        }
+    }
 
     // if we are here, we can inline this call
     int n_args = call->get_argument_count();
 
+    // Compute the argument expressions: Do this in the context of the caller
+    Small_VLA<DAG_node const *, 8> arg_exprs(get_allocator(), n_args);
+
+    for (int i = 0; i < n_args; ++i) {
+        IArgument const   *arg      = call->get_argument(i);
+        IExpression const *arg_expr = arg->get_argument_expr();
+
+        arg_exprs[i] = expr_to_dag(arg_expr);
+    }
+
+    // enter inlining: Beware, this resets the accessible parameters, so we cannot access the ones
+    // from the caller anymore
+    Inline_scope inline_scope(*this);
+
     for (int i = 0; i < n_args; ++i) {
         IDefinition const *parameter_def = get_parameter_definition(func_decl, i);
-        IArgument const   *arg           = call->get_argument(i);
-        IExpression const *arg_exp       = arg->get_argument_expr();
+        DAG_node const    *expr          = arg_exprs[i];
 
-        DAG_node const *exp = exp_to_dag(arg_exp);
-
-        m_tmp_value_map[parameter_def] = exp;
+        m_tmp_value_map[parameter_def] = expr;
 
         make_accessible(parameter_def);
 
         // set array size for size-deferred arrays
-        set_parameter_array_size_var(func_decl, i, exp);
+        set_parameter_array_size_var(func_decl, i, expr);
     }
 
     if (!is_material) {
@@ -2661,8 +2768,9 @@ DAG_node const *DAG_builder::try_inline(
             call,
             m_forbid_local_calls,
             m_tmp_value_map);
-        if (!checker.can_inline())
+        if (!checker.can_inline()) {
             return NULL;
+        }
     }
 
     Module_scope mod_scope(*this, owner_mod.get());
@@ -2684,8 +2792,13 @@ DAG_node const *DAG_builder::try_inline(
     DAG_call::Call_argument const *args,
     size_t                        n_args)
 {
-    if (!m_node_factory.is_inline_allowed())
+    if (!m_node_factory.is_inline_allowed()) {
         return NULL;
+    }
+
+    if (def->get_kind() != IDefinition::DK_FUNCTION) {
+        return NULL;
+    }
 
     if (!m_node_factory.is_noinline_ignored() &&
         !def->get_property(IDefinition::DP_ALLOW_INLINE))
@@ -2694,14 +2807,19 @@ DAG_node const *DAG_builder::try_inline(
         return NULL;
     }
 
-    if (def->get_kind() != IDefinition::DK_FUNCTION)
-        return NULL;
-
     def = tos_module()->get_original_definition(def);
     IDeclaration_function const *func_decl = cast<IDeclaration_function>(def->get_declaration());
     if (func_decl == NULL) {
         // might happen for compiler generated
         return NULL;
+    }
+
+    // except we are in target material model compilation mode
+    if (m_target_material_model_mode) {
+        if (has_target_material_model_anno(func_decl->get_annotations())) {
+            // do not inline
+            return NULL;
+        }
     }
 
     mi::base::Handle<IModule const> owner_mod(tos_module()->get_owner_module(def));
@@ -2744,8 +2862,9 @@ DAG_node const *DAG_builder::try_inline(
             arg_types,
             m_forbid_local_calls,
             m_tmp_value_map);
-        if (!checker.can_inline())
+        if (!checker.can_inline()) {
             return NULL;
+        }
     }
 
     Module_scope mod_scope(*this, owner_mod.get());
@@ -2780,7 +2899,7 @@ DAG_node const *DAG_builder::call_to_dag(
             if (is<IType_array>(arg_type)) {
                 // skip array copy constructor
                 MDL_ASSERT(arg_type == call->get_type()->skip_type_alias());
-                return exp_to_dag(expr);
+                return expr_to_dag(expr);
             }
         }
     } else {
@@ -2790,8 +2909,9 @@ DAG_node const *DAG_builder::call_to_dag(
         if (call_sema == IDefinition::DS_UNKNOWN) {
             // try to inline user defined function or material
             DAG_node const *res = try_inline(call);
-            if (res != NULL)
+            if (res != NULL) {
                 return res;
+            }
         }
 
         // m_options & FORBID_LOCAL_FUNC_CALLS
@@ -2804,12 +2924,12 @@ DAG_node const *DAG_builder::call_to_dag(
 
     bool all_args_const   = true;
 
-    VLA<DAG_call::Call_argument> call_args(get_allocator(), n_args);
+    Small_VLA<DAG_call::Call_argument, 4> call_args(get_allocator(), n_args);
 
     for (int i = 0; i < n_args; ++i) {
         IArgument const   *arg     = call->get_argument(i);
         IExpression const *arg_exp = arg->get_argument_expr();
-        DAG_node const    *node    = exp_to_dag(arg_exp);
+        DAG_node const    *node    = expr_to_dag(arg_exp);
 
         call_args[i].arg = node;
         all_args_const   = all_args_const && is<DAG_constant>(node);
@@ -2818,9 +2938,10 @@ DAG_node const *DAG_builder::call_to_dag(
     if (ref->is_array_constructor()) {
         if (all_args_const && m_node_factory.all_args_without_name(call_args.data(), n_args)) {
             // create an array literal
-            VLA<IValue const *> values(get_allocator(), n_args);
-            for (int i = 0; i < n_args; ++i)
+            Small_VLA<IValue const *, 16> values(get_allocator(), n_args);
+            for (int i = 0; i < n_args; ++i) {
                 values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
+            }
 
             IType_array const *a_type = cast<IType_array>(ret_type);
             IValue const *v = m_value_factory.create_array(a_type, values.data(), n_args);
@@ -2831,7 +2952,7 @@ DAG_node const *DAG_builder::call_to_dag(
         IType_array const *a_type = cast<IType_array>(ret_type);
         MDL_ASSERT(a_type->is_immediate_sized() && "Broken array constructor");
 
-        VLA<char> names(get_allocator(), 32 * n_args);
+        Small_VLA<char, 256> names(get_allocator(), 32 * n_args);
         for (int i = 0; i < n_args; ++i) {
             char *name = &names[32 * i];
             snprintf(name, 32, "%d", i);
@@ -2854,8 +2975,9 @@ DAG_node const *DAG_builder::call_to_dag(
         && call_sema != IDefinition::DS_UNKNOWN) {
         // known semantic, try to fold
         Value_vector values(n_args, NULL, get_allocator());
-        for (int i = 0; i < n_args; ++i)
+        for (int i = 0; i < n_args; ++i) {
             values[i] = cast<DAG_constant>(call_args[i].arg)->get_value();
+        }
 
         IValue const *res = NULL;
         if (call_def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
@@ -2866,8 +2988,9 @@ DAG_node const *DAG_builder::call_to_dag(
             IValue const * const *args = n_args > 0 ? &values[0] : NULL;
             res = m_node_factory.evaluate_intrinsic_function(call_sema, args, n_args);
         }
-        if (res != NULL)
+        if (res != NULL) {
             return m_node_factory.create_constant(res);
+        }
     }
 
     IType_function const *fun_type = cast<IType_function>(call_def->get_type());
@@ -2927,20 +3050,21 @@ DAG_node const *DAG_builder::let_to_dag(
                     // exp_to_dag(). If necessary, we create a shallow clone of the top-level node
                     // with CSE disabled.
                     size_t next_id = m_node_factory.get_next_id();
-                    DAG_node const *node = exp_to_dag(var_exp);
-                    if (node->get_id() < next_id)
+                    DAG_node const *node = expr_to_dag(var_exp);
+                    if (node->get_id() < next_id) {
                         node = m_node_factory.shallow_copy(node);
+                    }
 
                     m_tmp_value_map[var_def] = node;
                     m_node_factory.add_node_name(node, symbol_name);
                 } else {
-                    DAG_node const *node = exp_to_dag(var_exp);
+                    DAG_node const *node = expr_to_dag(var_exp);
                     m_tmp_value_map[var_def] = node;
                 }
             }
         }
     }
-    return exp_to_dag(let->get_expression());
+    return expr_to_dag(let->get_expression());
 }
 
 // Convert an MDL preset call expression to a DAG IR node.
@@ -2965,7 +3089,7 @@ DAG_node const *DAG_builder::preset_to_dag(
 
     IStatement_expression const *stmt = cast<IStatement_expression>(func_decl->get_body());
     IExpression const           *mat_expr = stmt->get_expression();
-    return exp_to_dag(mat_expr);
+    return expr_to_dag(mat_expr);
 }
 
 // Convert an MDL annotation to a DAG IR node.
@@ -2979,7 +3103,7 @@ DAG_node const *DAG_builder::annotation_to_dag(
     int n_args  = annotation->get_argument_count();
 
     IType_function const *fun_type = cast<IType_function>(annotation_def->get_type());
-    VLA<DAG_call::Call_argument> call_args(get_allocator(), n_args);
+    Small_VLA<DAG_call::Call_argument, 4> call_args(get_allocator(), n_args);
 
     for (int i = 0; i < n_args; ++i) {
         IArgument const   *arg     = annotation->get_argument(i);
@@ -2990,7 +3114,7 @@ DAG_node const *DAG_builder::annotation_to_dag(
             ISymbol const *parameter_symbol;
 
             fun_type->get_parameter(i, parameter_type, parameter_symbol);
-            call_args[i].arg        = exp_to_dag(arg_exp);
+            call_args[i].arg        = expr_to_dag(arg_exp);
             call_args[i].param_name = parameter_symbol->get_name();
         } else {
             IArgument_named const *na = cast<IArgument_named>(arg);
@@ -3000,7 +3124,7 @@ DAG_node const *DAG_builder::annotation_to_dag(
             ISimple_name const *simple_name = na->get_parameter_name();
             ISymbol const      *symbol      = simple_name->get_symbol();
 
-            call_args[i].arg        = exp_to_dag(arg_exp);
+            call_args[i].arg        = expr_to_dag(arg_exp);
             call_args[i].param_name = symbol->get_name();
         }
     }
@@ -3029,18 +3153,21 @@ IDefinition const *DAG_builder::find_parameter_for_size(ISymbol const *sym) cons
         IDefinition const *p_def  = m_accesible_parameters[i];
         IType_array const *a_type = as<IType_array>(p_def->get_type());
 
-        if (a_type == NULL)
+        if (a_type == NULL) {
             continue;
-        if (a_type->is_immediate_sized())
+        }
+        if (a_type->is_immediate_sized()) {
             continue;
+        }
         IType_array_size const *size = a_type->get_deferred_size();
 
         // Beware: we extracted the type from an definition that might originate from
         // another module, hence we cannot compare the symbols directly
         ISymbol const *size_sym = size->get_size_symbol();
 
-        if (strcmp(size_sym->get_name(), sym->get_name()) == 0)
+        if (strcmp(size_sym->get_name(), sym->get_name()) == 0) {
             return p_def;
+        }
     }
     return NULL;
 }
@@ -3081,7 +3208,7 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
             IType_atomic const *e_tp = v_tp->get_element_type();
             IValue const       *elem = default_initializer_value(e_tp);
 
-            VLA<IValue const *> elems(get_allocator(), v_tp->get_size());
+            Small_VLA<IValue const *, 4> elems(get_allocator(), v_tp->get_size());
 
             for (int i = 0, n = v_tp->get_size(); i < n; ++i) {
                 elems[i] = elem;
@@ -3094,7 +3221,7 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
             IType_vector const *e_tp = m_tp->get_element_type();
             IValue const       *elem = default_initializer_value(e_tp);
 
-            VLA<IValue const *> elems(get_allocator(), m_tp->get_columns());
+            Small_VLA<IValue const *, 4> elems(get_allocator(), m_tp->get_columns());
 
             for (int i = 0, n = m_tp->get_columns(); i < n; ++i) {
                 elems[i] = elem;
@@ -3107,7 +3234,7 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
             IType const       *e_tp = a_tp->get_element_type();
             IValue const      *elem = default_initializer_value(e_tp);
 
-            VLA<IValue const *> elems(get_allocator(), a_tp->get_size());
+            Small_VLA<IValue const *, 8> elems(get_allocator(), a_tp->get_size());
 
             for (int i = 0, n = a_tp->get_size(); i < n; ++i) {
                 elems[i] = elem;
@@ -3125,7 +3252,7 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
         {
             IType_struct const *s_tp = cast<IType_struct>(type);
 
-            VLA<IValue const *> elems(get_allocator(), s_tp->get_compound_size());
+            Small_VLA<IValue const *, 8> elems(get_allocator(), s_tp->get_compound_size());
 
             for (int i = 0, n = s_tp->get_compound_size(); i < n; ++i) {
                 IType const  *e_tp = s_tp->get_compound_type(i);
@@ -3143,7 +3270,7 @@ IValue const *DAG_builder::default_initializer_value(IType const *type)
     case IType::TK_BSDF_MEASUREMENT:
         return m_value_factory.create_invalid_ref(cast<IType_reference>(type));
     case IType::TK_FUNCTION:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         return m_value_factory.create_bad();
     }

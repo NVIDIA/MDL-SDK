@@ -563,12 +563,22 @@ void Definition_table::transition_to_scope(Scope *scope)
     }
 
     // remove until prefix is reached
-    for (size_t i = 0; i < curr_idx; ++i)
+    for (size_t i = 0; i < curr_idx; ++i) {
         leave_scope();
+    }
 
     // reopen until top is reached
-    for (size_t i = new_idx; i > 0; --i)
+    for (size_t i = new_idx; i > 0; --i) {
         reopen_scope(new_stack[i - 1]);
+    }
+}
+
+// Associate a type scope.
+void Definition_table::associate_type_scope(
+    Type  *type,
+    Scope *scope)
+{
+    m_type_scopes[type] = scope;
 }
 
 // Enter a new (entity) definition.
@@ -630,6 +640,16 @@ Definition *Definition_table::enter_definition(
 
     set_definition(symbol, new_def);
     return new_def;
+}
+
+// Enter a new type definition.
+Def_type *Definition_table::enter_type_definition(
+    Symbol         *symbol,
+    Type           *type,
+    Location const *loc)
+{
+    return cast<Def_type>(
+        enter_definition(mi::mdl::hlsl::Definition::DK_TYPE, symbol, type, Def_function::DS_UNKNOWN, loc));
 }
 
 // Enter a new function definition.

@@ -64,7 +64,7 @@ namespace neuraylib {
 /// This is an object representing the \neurayLibraryName. Only one object of this type will exist
 /// at a time. It is used for configuration, startup and shutdown of the \neurayLibraryName.
 class INeuray : public
-    mi::base::Interface_declare<0xd98a8ea3,0x3758,0x457c,0xb3,0x37,0xfb,0xcc,0xee,0x40,0x1a,0x99>
+    mi::base::Interface_declare<0x45653b7d,0x4a7e,0x416c,0x87,0xc9,0xd3,0xe7,0xef,0xe1,0x16,0xab>
 {
 public:
     /// Returns the interface version of the \neurayLibraryName.
@@ -103,7 +103,6 @@ public:
     ///                    -  0: Success
     ///                    - -1: Unspecified failure.
     ///                    - -2: Authentication failure (challenge-response).
-    ///                    - -3: Authentication failure (SPM).
     ///                    - -4: Provided license expired.
     ///                    - -5: No professional GPU as required by the license in use was found.
     ///                    - -6: Authentication failure (FLEXlm).

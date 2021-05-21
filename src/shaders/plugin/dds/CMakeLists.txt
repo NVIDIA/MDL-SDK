@@ -50,6 +50,7 @@ set(PROJECT_SOURCES
     "dds_image_file_reader_impl.cpp"
     "dds_image_file_writer_impl.cpp"
     "dds_utilities.cpp"
+    "dds_types.cpp"
     ${PROJECT_HEADERS}
     )
 
@@ -77,4 +78,12 @@ add_library(mdl::dds ALIAS ${PROJECT_NAME})
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 
         mdl::base-system-version
+    )
+
+# -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
+# -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "lib"
     )

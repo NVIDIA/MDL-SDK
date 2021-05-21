@@ -53,6 +53,12 @@ class IMdl_execution_context;
 /// from material definitions using
 /// #mi::neuraylib::IMaterial_definition::create_material_instance().
 ///
+/// \note In order to write code common for functions and materials just once, it is possible to
+///       treat material instances as if they were function calls, i.e., via
+///       #mi::neuraylib::IFunction_call. See
+///       #mi::neuraylib::IMdl_configuration::set_materials_are_functions() for details and
+///       consequences.
+///
 /// \see #mi::neuraylib::IMaterial_definition, #mi::neuraylib::Argument_editor
 class IMaterial_instance : public
     mi::base::Interface_declare<0x037ec156,0x281d,0x466a,0xa1,0x56,0x3e,0xd6,0x83,0xe9,0x5a,0x00,
@@ -72,6 +78,9 @@ public:
     /// \note The MDL name of the material definition is different from the name of the DB element
     ///       (see #get_material_definition()).
     virtual const char* get_mdl_material_definition() const = 0;
+
+    /// Returns the return type of the corresponding material definition (the fixed material type).
+    virtual const IType* get_return_type() const = 0;
 
     /// Returns the number of parameters.
     virtual Size get_parameter_count() const = 0;
@@ -165,6 +174,41 @@ public:
     ///                           varying.
     virtual Sint32 set_argument( const char* name, const IExpression* argument) = 0;
 
+    /// Indicates, if this material instance acts as a default argument of a material or
+    /// function definition.
+    ///
+    /// Defaults are immutable, their arguments cannot be changed and they cannot be used
+    /// in call expressions.
+    ///
+    /// \return true, if this material instance is a default, false otherwise.
+    virtual bool is_default() const = 0;
+
+    /// Returns \c true if this material instance and all its arguments point to valid
+    /// material and function definitions, \c false otherwise.
+    ///
+    /// Material and function definitions can become invalid due to a module reload.
+    ///
+    /// \see #mi::neuraylib::IModule::reload(), #mi::neuraylib::IMaterial_instance::repair()
+    ///
+    /// \param context  Execution context that can be queried for error messages
+    ///                 after the operation has finished. Can be \c NULL.
+    /// \return
+    ///      - \c true:  The instance is valid.
+    ///      - \c false: The instance is invalid.
+    virtual bool is_valid( IMdl_execution_context* context) const = 0;
+
+    /// Attempts to repair an invalid material instance.
+    ///
+    /// \param flags    Repair options, see #mi::neuraylib::Mdl_repair_options.
+    /// \param context  Execution context that can be queried for error messages
+    ///                 after the operation has finished. Can be \c NULL.
+    /// \return
+    ///     -   0:   Success.
+    ///     -  -1:   Repair failed. Check the \c context for details.
+    virtual Sint32 repair(
+        Uint32 flags,
+        IMdl_execution_context* context) = 0;
+
     /// Various options for the creation of compiled materials.
     ///
     /// \see #create_compiled_material()
@@ -233,41 +277,6 @@ public:
     virtual ICompiled_material* create_compiled_material(
         Uint32 flags,
         IMdl_execution_context* context = 0) const = 0;
-
-    /// Indicates, if this material instance acts as a default argument of a material or
-    /// function definition.
-    ///
-    /// Defaults are immutable, their arguments cannot be changed and they cannot be used
-    /// in call expressions.
-    ///
-    /// \return true, if this material instance is a default, false otherwise.
-    virtual bool is_default() const = 0;
-
-    /// Returns \c true if this material instance and all its arguments point to valid
-    /// material and function definitions, \c false otherwise.
-    ///
-    /// Material and function definitions can become invalid due to a module reload.
-    ///
-    /// \see #mi::neuraylib::IModule::reload(), #mi::neuraylib::IMaterial_instance::repair()
-    ///
-    /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
-    /// \return
-    ///      - \c true:  The instance is valid.
-    ///      - \c false: The instance is invalid.
-    virtual bool is_valid(IMdl_execution_context* context) const = 0;
-
-    /// Attempts to repair an invalid material instance.
-    ///
-    /// \param flags    Repair options, see #mi::neuraylib::Mdl_repair_options.
-    /// \param context  Execution context that can be queried for error messages
-    ///                 after the operation has finished. Can be \c NULL.
-    /// \return
-    ///     -   0:   Success.
-    ///     -  -1:   Repair failed. Check the \c context for details.
-    virtual Sint32 repair(
-        Uint32 flags,
-        IMdl_execution_context* context) = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

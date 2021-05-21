@@ -603,13 +603,19 @@ Value *Expr_call::fold(Value_factory &factory) const
                                 values[i] =
                                     module->get_value_factory()->create_enum(e_type, 0);
                             } else {
-                                failed = true;
-                                break;
+                                IValue const *v =
+                                    module->get_value_factory()->create_zero(f_type);
+                                if (is<IValue_bad>(v)) {
+                                    failed = true;
+                                    break;
+                                }
+                                values[i] = v;
                             }
                         }
 
-                        if (!failed)
+                        if (!failed) {
                             return factory.get_compound(c_type, values, n_fields);
+                        }
                     }
                     // cannot fold
                     break;
@@ -840,7 +846,7 @@ Expr_literal *Expr_factory::create_literal(
 }
 
 // Create a new reference expression.
-Expr *Expr_factory::create_reference(
+Expr_ref *Expr_factory::create_reference(
     Type_name *name)
 {
     MDL_ASSERT(name != NULL);

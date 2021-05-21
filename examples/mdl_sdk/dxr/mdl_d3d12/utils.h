@@ -44,6 +44,7 @@
 #define SRC __FILE__,__LINE__
 
 struct ID3D12Object;
+struct ID3D12Device;
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -103,6 +104,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
     void log_set_file_path(const char* log_file_path);
 
     void set_debug_name(ID3D12Object* obj, const std::string& name);
+
+    void set_dred_device(ID3D12Device* device);
 
     inline size_t round_to_power_of_two(size_t value, size_t power_of_two_factor)
     {

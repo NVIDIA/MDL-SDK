@@ -731,53 +731,6 @@ FILE* fopen(
 }
 
 
-std::string find_file_on_paths(
-    const char* file_name,
-    int paths_count,
-    const char* const* search_paths)
-{
-    if (!file_name || file_name[0] == '\0')
-        return std::string();
-
-    // transform search_paths into string list such that we can use the already existing
-    // find_file_on_paths() impl
-    std::vector<std::string> dirs;
-    for (int i=0; i<paths_count; ++i) {
-        if (search_paths[i])
-            dirs.push_back(search_paths[i]);
-    }
-
-    return find_file_on_paths(file_name, dirs);
-}
-
-
-std::string find_file_on_path(
-    const char* file_name,
-    const std::string& dir)
-{
-    if (!file_name || file_name[0] == '\0')
-        return std::string();
-
-    std::string fullpath;
-    if (access(file_name))
-        fullpath = file_name;
-    if (fullpath.empty()) {
-        // concatenate the current dir with file_name
-        std::string file(HAL::Ospath::join(dir, file_name));
-        if (access(file.c_str()))
-            fullpath = file;
-    }
-    return fullpath;
-}
-
-
-std::string find_file_on_paths(
-    const char* file_name,
-    const std::vector<std::string>& dirs)
-{
-    return find_file_on_paths(file_name, dirs.begin(), dirs.end());
-}
-
 std::string convert_to_forward_slashes(
     const std::string &in)      // input
 {

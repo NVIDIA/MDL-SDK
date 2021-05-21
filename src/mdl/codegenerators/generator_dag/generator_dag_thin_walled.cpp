@@ -284,6 +284,8 @@ private:
         case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
+        case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
+        case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
             return check_mixer_no_transmission(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
@@ -653,8 +655,8 @@ private:
         return true;
     }
 
-    /// Check clamped_mix expressions.
-    bool check_clamped_mix(
+    /// Check clamped_mix and unbounded_mix expressions.
+    bool check_clamped_or_unbounded_mix(
         DAG_call const *left,
         DAG_call const *right)
     {
@@ -883,7 +885,9 @@ private:
 
         case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
-            return check_clamped_mix(lbsdf, rbsdf);
+        case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
+        case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
+            return check_clamped_or_unbounded_mix(lbsdf, rbsdf);
 
         case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
         case IDefinition::DS_INTRINSIC_DF_FRESNEL_LAYER:

@@ -40,7 +40,6 @@
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/config/config.h>
-#include <base/lib/mem/mem.h>
 #include <base/lib/plug/i_plug.h>
 #include <base/util/registry/i_config_registry.h>
 #include <base/data/serial/i_serializer.h>
@@ -56,6 +55,10 @@
 #include <mdl/compiler/compilercore/compilercore_mdl.h>
 #include <mdl/compiler/compilercore/compilercore_file_utils.h>
 #include <mdl/compiler/compilercore/compilercore_code_cache.h>
+
+#ifdef DEBUG
+#define USE_MDL_DEBUG_ALLOCATOR
+#endif
 
 namespace MI {
 namespace MDLC {
@@ -108,10 +111,10 @@ public:
     virtual Uint32 retain() const { return 1; }
     virtual Uint32 release() const { return 1; }
     virtual const mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) const {
-        return NULL;
+        return nullptr;
     }
     virtual mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) {
-        return NULL;
+        return nullptr;
     }
     virtual mi::base::Uuid get_iid() const { return IID(); }
 };
@@ -195,15 +198,6 @@ Mdlc_module_impl::Mdlc_module_impl()
 {
 }
 
-#ifdef DEBUG
-static mi::mdl::dbg::DebugMallocAllocator *g_dbg_allocator = NULL;
-
-static void flush_dbg_allocator() {
-    delete g_dbg_allocator;
-    g_dbg_allocator = NULL;
-}
-#endif
-
 bool Mdlc_module_impl::init()
 {
     mi::mdl::iasserter   = &g_assert_helper;
@@ -212,17 +206,8 @@ bool Mdlc_module_impl::init()
 
     m_allocator = new Allocator();
 
-#ifdef DEBUG
-    // use the debug allocator
-    //
-    // Note: the MEM module and the MDLC module have different lifetimes. In particular, the MDLC
-    // might be initialized and shutdown several times while the MEM module is alive. Maybe it is
-    // better to bind the debug allocator to the lifetime of the DATA module instead.
-    delete g_dbg_allocator;
-    g_dbg_allocator = new mi::mdl::dbg::DebugMallocAllocator(m_allocator.get());
-    m_allocator = g_dbg_allocator;
-    SYSTEM::Access_module<MEM::Mem_module> mem_module(/*deferred=*/false);
-    mem_module->set_exit_cb(flush_dbg_allocator);
+#ifdef USE_MDL_DEBUG_ALLOCATOR
+    m_allocator = new mi::mdl::dbg::DebugMallocAllocator(m_allocator.get());
 #endif
 
     m_mdl = mi::mdl::initialize(m_allocator.get());
@@ -267,30 +252,21 @@ void Mdlc_module_impl::exit()
     
     if (m_mdl) {
         m_mdl->release();
-        m_mdl = NULL;
+        m_mdl = nullptr;
     }
     if (m_code_cache) {
         m_code_cache->release();
-        m_code_cache = NULL;
+        m_code_cache = nullptr;
     }
     if (m_module_wait_queue) {
         delete m_module_wait_queue;
-        m_module_wait_queue = NULL;
+        m_module_wait_queue = nullptr;
     }
 
-    // We need to reset m_allocator here for symmetry reasons (and not rely on the destructor).
-#ifdef DEBUG
-    if (g_dbg_allocator) {
-        SYSTEM::Access_module<MEM::Mem_module> mem_module(/*deferred=*/false);
-        mem_module->set_exit_cb(NULL);
-        m_allocator.reset();
-        delete g_dbg_allocator;
-        g_dbg_allocator = NULL;
-    } else {
-        // The debug allocator was destroyed by flush_dbg_allocator() without taking m_allocator
-        // into account. The pointer in m_allocator is now dangling and there is no way to reset
-        // the handle.
-    }
+#ifdef USE_MDL_DEBUG_ALLOCATOR
+    mi::mdl::dbg::DebugMallocAllocator* dbg_allocator = static_cast<mi::mdl::dbg::DebugMallocAllocator*>( m_allocator.get());
+    m_allocator.reset();
+    delete dbg_allocator;
 #else
     m_allocator.reset();
 #endif
@@ -346,12 +322,6 @@ mi::mdl::ILambda_function *Mdlc_module_impl::deserialize_lambda_function(
 {
     MDL_deserializer mdl_deserializer(m_allocator.get(), deserializer);
     return m_mdl->deserialize_lambda(&mdl_deserializer);
-}
-
-
-void Mdlc_module_impl::client_build_version(const char* build, const char* bridge_protocol) const
-{
-
 }
 
 mi::mdl::ICode_cache *Mdlc_module_impl::get_code_cache() const

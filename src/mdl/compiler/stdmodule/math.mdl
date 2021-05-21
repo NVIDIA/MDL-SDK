@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-mdl 1.6;
+mdl 1.7;
 
 export const float PI = 3.14159265358979323846f;
 export const float TWO_PI = 6.28318530717958647692f;
@@ -602,6 +602,36 @@ export color blackbody(float temperature) [[ intrinsic(), const_expr(), since(1,
 export color emission_color(
     float[<N>] wavelengths, float[N] amplitudes) uniform [[ intrinsic(), since(1,3) ]];
 export color emission_color(color value) uniform [[ intrinsic(), since(1,3) ]];
+
+export float cosh(float a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float2 cosh(float2 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float3 cosh(float3 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float4 cosh(float4 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double cosh(double a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double2 cosh(double2 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double3 cosh(double3 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double4 cosh(double4 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+
+export float sinh(float a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float2 sinh(float2 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float3 sinh(float3 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float4 sinh(float4 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double sinh(double a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double2 sinh(double2 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double3 sinh(double3 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double4 sinh(double4 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+
+export float tanh(float a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float2 tanh(float2 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float3 tanh(float3 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float4 tanh(float4 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double tanh(double a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double2 tanh(double2 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double3 tanh(double3 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export double4 tanh(double4 a) [[ intrinsic(), const_expr(), since(1,7) ]];
+
+export int   float_bits_to_int(float a) [[ intrinsic(), const_expr(), since(1,7) ]];
+export float int_bits_to_float(int a)   [[ intrinsic(), const_expr(), since(1,7) ]];
 
 export float  DX(float  a [[ derivable() ]]) [[ intrinsic(), experimental() ]];
 export float2 DX(float2 a [[ derivable() ]]) [[ intrinsic(), experimental() ]];

@@ -56,7 +56,7 @@ namespace hlsl {
 class CNSFunction;
 class Node;
 
-// A node in the CNS Function.
+// A node in the CNS function graph.
 class Node : public ilist_node_with_parent<Node, CNSFunction> {
     friend class CNSLimitGraph;
     friend class CNSFunction;
@@ -86,7 +86,14 @@ public:
     }
 
     /// Constructor from a basic block.
-    Node(CNSFunction *parent, size_t id, BasicBlock *bb)
+    ///
+    /// \param parent  the owner function
+    /// \param id      the unique identifier of this node
+    /// \param bb      the basic block associated with this node
+    Node(
+        CNSFunction *parent,
+        size_t      id,
+        BasicBlock  *bb)
     : m_parent(parent)
     , m_id(id)
     , m_copied_from(0)
@@ -99,7 +106,14 @@ public:
     }
 
     /// Constructor (used by copy).
-    Node(CNSFunction *parent, size_t id, size_t copied_from)
+    ///
+    /// \param parent       the owner function
+    /// \param id           the unique identifier of this node
+    /// \param copied_from  the unique identifier from the node we copy
+    Node(
+        CNSFunction *parent,
+        size_t      id,
+        size_t      copied_from)
     : m_parent(parent)
     , m_id(id)
     , m_copied_from(copied_from)
@@ -111,28 +125,33 @@ public:
     }
 
 public:
-    /// Get the parent.
+    /// Get the parent function.
     CNSFunction *getParent() { return m_parent; }
 
-    /// Set the parent.
+    /// Set the parent function.
     void setParent(CNSFunction *parent) { m_parent = parent; }
 
-    /// Get the ID of this node.
+    /// Get the unique ID of this node.
     size_t get_id() const { return m_id; }
 
-    /// Get the ID of the "original" node this node was copied from (if != zero).
+    /// Get the unique ID of the "original" node this node was copied from (if != zero).
     size_t copied_from() const { return m_copied_from; }
 
     /// Add a basic block to the list of basic blocks.
+    ///
+    /// \param bb  the block to add
     void add_bb(BasicBlock *BB) {
         m_blocks.push_back(BB);
     }
 
     /// Add a predecessor edge to node pred.
+    ///
+    /// \param pred  the predecessor node
     void add_pred(Node *pred) {
         if (pred != this) {
-            if (std::find(m_preds.begin(), m_preds.end(), pred) == m_preds.end())
+            if (std::find(m_preds.begin(), m_preds.end(), pred) == m_preds.end()) {
                 m_preds.push_back(pred);
+            }
         }
     }
 
@@ -146,19 +165,27 @@ public:
     size_t pred_size() const { return m_preds.size(); }
 
     /// Get the predecessor at index i.
+    ///
+    /// \param i  the index of the predecessor node
     Node *get_pred(size_t i) { return m_preds[i]; }
 
     /// Erase the predecessor at index i.
+    ///
+    /// \param i  the index of the predecessor node to erase
     void pred_erase(size_t i) {
         m_preds.erase(m_preds.begin() + i);
     }
 
     /// Erase a given predecessor.
+    ///
+    /// \param pred  the predecessor node to erase
     void pred_erase(Node *pred) {
         m_preds.erase(std::find(m_preds.begin(), m_preds.end(), pred));
     }
 
     /// Add a successor edge to node succ.
+    ///
+    /// \param succ  the successor node to add
     void add_succ(Node *succ) {
         if (succ != this) {
             if (std::find(m_succs.begin(), m_succs.end(), succ) == m_succs.end()) {
@@ -177,14 +204,20 @@ public:
     size_t succ_size() const { return m_succs.size(); }
 
     /// Get the successor at index i.
+    ///
+    /// \param i  the index of the successor node
     Node *get_succ(size_t i) const { return m_succs[i]; }
 
     /// Erase the successor at index i.
+    ///
+    /// \param i  the index of the successor node to erase
     void succ_erase(size_t i) {
         m_succs.erase(m_succs.begin() + i);
     }
 
     /// Erase a given successor.
+    ///
+    /// \param succ  the successor node to erase
     void succ_erase(Node *succ) {
         m_succs.erase(std::find(m_succs.begin(), m_succs.end(), succ));
     }
@@ -199,18 +232,36 @@ public:
     BB_list &blocks() { return m_blocks; }
 
     /// Mark a node on the stack.
-    void markOnStack(bool flag) { if (flag) m_flags |= ON_STACK; else m_flags &= ~ON_STACK; }
+    ///
+    /// \param flag  if TRUE, mark this node laying on stack
+    void markOnStack(bool flag) {
+        if (flag) {
+            m_flags |= ON_STACK;
+        } else {
+            m_flags &= ~ON_STACK;
+        }
+    }
 
-    /// Check if we are inside the stack.
+    /// Check if we this node is inside the stack.
     bool onStack() const { return (m_flags & ON_STACK) != 0; }
 
-    /// mark a node inside a loop.
-    void markLoop(bool flag) { if (flag) m_flags |= ON_LOOP; else m_flags &= ~ON_LOOP; }
+    /// Mark a node inside a loop.
+    ///
+    /// \param flag  if TRUE, this node is inside a loop
+    void markLoop(bool flag) {
+        if (flag) {
+            m_flags |= ON_LOOP;
+        } else {
+            m_flags &= ~ON_LOOP;
+        }
+    }
 
-    /// Check if we are inside a loop.
+    /// Check if this node is inside a loop.
     bool is_loop() const { return (m_flags & ON_LOOP) != 0; }
 
-    /// Mark a node inside a loop as a header.
+    /// Mark this node inside a loop as a header.
+    ///
+    /// \param flag  if TRUE, this node is a loop header
     void mark_loop_head(bool flag) { if (flag) m_flags |= IS_HEADER; else m_flags &= ~IS_HEADER; }
 
     /// Check if this node is a loop header.
@@ -255,11 +306,15 @@ private:
 // The dominator tree over the limit graph.
 typedef DomTreeBase<Node> LGDominatorTree;
 
+/// Wrapper class for a function.
 class CNSFunction {
 public:
     typedef std::list<Node *> NodeList;
 
 public:
+    /// Constructor.
+    ///
+    /// \param func  the associated LLVM function
     CNSFunction(Function &func)
     : m_func(func)
     , m_node_id(0)
@@ -287,6 +342,7 @@ public:
         m_root = m_mapping[&*m_func.begin()];
     }
 
+    /// Destructor.
     ~CNSFunction() {
         while (!m_node_list.empty()) {
             Node *n = m_node_list.front();
@@ -306,29 +362,41 @@ public:
 
     size_t size() const { return m_node_list.size(); }
 
+    /// Get the LLVM function object.
     Function &getFunction() {
         return m_func;
     }
 
+    /// Get the name of this function.
     StringRef getName() {
         return m_func.getName();
     }
 
     /// Create a new node in the graph.
+    ///
+    /// \param bb  the basic block for which the node is created
     Node *createNode(BasicBlock *bb);
 
-    /// Create a new StmtNode as a copy of another StmtNode.
+    /// Create a new Node as a copy of another Node.
+    ///
+    /// \param other  the other node
     Node *createNode(Node const *other);
 
-    /// Delete a node.
+    /// Delete a node from this graph.
+    ///
+    /// \param n  the node to delete
     void dropNode(Node *n);
 
-    /// Update the mapping of a basic block to a StmtNode.
+    /// Update the mapping of a basic block to a Node.
+    ///
+    /// \param bb        the basic block
+    /// \param new_node  the newly associated node
     void updateMapping(BasicBlock *bb, Node *new_node) {
         m_mapping[bb] = new_node;
     }
 
 private:
+    /// The LLVM function.
     Function &m_func;
 
     /// last used node ID.
@@ -337,6 +405,7 @@ private:
     /// The top level node.
     Node *m_root;
 
+    /// The map from basic blocks to nodes.
     std::map<BasicBlock *, Node *> m_mapping;
 
     /// The list of all statement nodes.
@@ -371,13 +440,15 @@ public:
 
 public:
     /// Constructor.
+    ///
+    /// \param func  the function for which the graph is constructed
     CNSLimitGraph(
         CNSFunction &func);
 
     /// Destructor.
     ~CNSLimitGraph();
 
-    /// remove irreducible control flow using Controlled Node Splitting.
+    /// Remove irreducible control flow using Controlled Node Splitting.
     bool removeIrreducibleControlFlow();
 
     WorkList::iterator nodes_begin() {
@@ -392,7 +463,7 @@ public:
         return m_work_list.size();
     }
 
-    /// get the start node of the limit graph.
+    /// Get the start node of the limit graph.
     Node *get_start() const {
         return m_start;
     }
@@ -407,7 +478,7 @@ private:
     /// Recompile the dominance info for the limit graph.
     void recalculateDominance(CNSFunction &func);
 
-    /// helper for SCC calculation.
+    /// Helper for SCC calculation.
     void doDFS(Node *node);
 
     /// Computes the split node candidate set using the CNS approach.
@@ -415,21 +486,34 @@ private:
 
     typedef std::set<Node *> SCC;
 
-    /// process a strongly connected component.
+    /// Process a strongly connected component.
+    ///
+    /// \param scc  a strongly connected component of the graph
     Node *processSCC(SCC const &scc);
 
     /// Calculate all SED-sets from one loop.
     void calcSEDsForLoop(SCC const &scc);
 
     /// Dump the current graph.
-    void dumpLimitGraph(std::string const &baseName, size_t dumpID);
+    ///
+    /// \param baseName  base name of the graph
+    /// \param dumpID    additional identifier of the dump
+    void dumpLimitGraph(
+        std::string const &baseName,
+        size_t            dumpID);
 
     /// Check if the edge from S->D is a backedge.
+    ///
+    /// \param S  the source node of the edge
+    /// \param D  the destination node of the edge
     bool isBackedge(Node const *S, Node const *D) {
         return m_backedges.find(BackEdge(S, D)) != m_backedges.end();
     }
 
     /// Mark the edge from S->D as a backedge.
+    ///
+    /// \param S  the source node of the edge
+    /// \param D  the destination node of the edge
     void mark_backedge(Node *S, Node *D) {
         m_backedges.insert(BackEdge(S, D));
     }
@@ -559,12 +643,13 @@ Node *CNSFunction::createNode(BasicBlock *BB)
     return n;
 }
 
-// Create a new StmtNode as a copy of another StmtNode.
+// Create a new Node as a copy of another Node.
 Node *CNSFunction::createNode(Node const *other)
 {
     size_t copied = other->m_copied_from;
-    if (copied == 0)
+    if (copied == 0) {
         copied = other->m_id;
+    }
 
     Node *n = new Node(this, ++m_node_id, copied);
     m_node_list.push_back(n);
@@ -575,7 +660,7 @@ Node *CNSFunction::createNode(Node const *other)
 void CNSFunction::dropNode(Node *n)
 {
     /*
-    new (n) StmtNode();
+    new (n) Node();
     m_child_list.push_back(n);
     */
 }
@@ -591,16 +676,19 @@ void CNSLimitGraph::buildFromFunction()
     m_start = m_func.front();
 }
 
+/// Apply T2 transformations until limit graph is reached, T1 is done "automatically".
 void CNSLimitGraph::applyT2()
 {
     for (;;) {
         // dbgs() << "Nodes in graph: " << m_work_list.size() << '\n';
         size_t removed = 0;
 
+        // process the worklist
         for (WorkList::iterator it = m_work_list.begin(), end(m_work_list.end()); it != end;) {
             Node *curr = *it;
             // T2: Merge node into single predecessor
             if (curr->pred_size() == 1) {
+                // this node has only ONE predecessor, merge them
                 Node *pred = curr->get_pred(0);
                 // dbgs() << "  - " << pred->id << " -> " << cur->id << '\n';
                 pred->succ_erase(curr);
@@ -628,8 +716,10 @@ void CNSLimitGraph::applyT2()
         }
 
         // dbgs() << "removed: " << removed << '\n';
-        if (removed == 0)
+        if (removed == 0) {
+            // stop if the complete list was processed and no node could be removed
             break;
+        }
     }
     // dbgs() << "Remaining: " << m_work_list.size() << '\n';
     // dbgs() << "----------\n";
@@ -644,8 +734,9 @@ void CNSLimitGraph::recalculateDominance(CNSFunction &func)
 // helper for SCC calculation.
 void CNSLimitGraph::doDFS(Node *node)
 {
-    if (m_visit_count <= node->m_visit_count)
+    if (m_visit_count <= node->m_visit_count) {
         return;
+    }
     node->m_visit_count = m_visit_count;
 
     node->m_dfs_num = m_next_dfs_num++;
@@ -655,8 +746,9 @@ void CNSLimitGraph::doDFS(Node *node)
     node->markOnStack(true);
 
     for (Node *succ : node->succs()) {
-        if (isBackedge(node, succ))
+        if (isBackedge(node, succ)) {
             continue;
+        }
 
         // visit the successor
         doDFS(succ);
@@ -771,7 +863,6 @@ Node *CNSLimitGraph::processSCC(SCC const &scc)
 #endif
 
     Node *head = NULL;
-    Node *entry = NULL;
     for (Node *node : scc) {
         node->markLoop(true);
 
@@ -781,8 +872,9 @@ Node *CNSLimitGraph::processSCC(SCC const &scc)
         Node *max_P = NULL;
 
         for (Node *P : node->preds()) {
-            if (isBackedge(P, node))
+            if (isBackedge(P, node)) {
                 continue;
+            }
 
             if (scc.find(P) == scc.end()) {
                 some_outside = true;
@@ -807,7 +899,6 @@ Node *CNSLimitGraph::processSCC(SCC const &scc)
             mark_backedge(max_P, node);
 
             head = node;
-            entry = max_P;
             break;
         }
     }
@@ -857,7 +948,7 @@ void CNSLimitGraph::calcSEDsForLoop(SCC const &scc)
     m_all_loops.push_back(scc);
 }
 
-
+// Remove irreducible control flow using Controlled Node Splitting.
 bool CNSLimitGraph::removeIrreducibleControlFlow()
 {
     size_t numBlocks = 0;
@@ -879,7 +970,7 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
 
         applyT2();
         if (m_work_list.size() == 1) {
-            // reducible
+            // the whole graph was collapsed into one node, it IS reducible
             break;
         }
 
@@ -893,14 +984,15 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
 
         dumpLimitGraph(m_func.getName(), dumpID++);
 
-        // Select node for splitting
+        // Select node for splitting: So far use the one with less number of instructions
         Node *best = NULL;
         size_t bestNum = 1 << 30;
         // dbgs() << "Candidates:\n";
         for (Node *N : candidates) {
             size_t num = 0;
-            for (BasicBlock *B : N->blocks())
+            for (BasicBlock *B : N->blocks()) {
                 num += B->size();
+            }
 #if 0
             dbgs() << "  " << N->get_id()
                    << " : " << num
@@ -937,8 +1029,10 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
             for (Instruction &inst : *BB) {
                 // A value escapes when a use is in another block or is a phi node
                 for (Instruction::use_iterator UI = inst.use_begin(), UE = inst.use_end();
-                        UI != UE; ++UI) {
-                    Instruction* useI = cast<Instruction>(*UI);
+                    UI != UE;
+                    ++UI)
+                {
+                    Instruction *useI = cast<Instruction>(*UI);
                     if (useI->getParent() != BB || isa<PHINode>(useI)) {
                         // dbgs() << "Demoting value: " << inst << '\n';
                         to_demote.insert(&inst);
@@ -1031,12 +1125,15 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
                                 // the original otherwise
                                 Value *origPhiValue = phi->getIncomingValue(predIndex);
                                 Value *newPhiValue = valueMap[origPhiValue];
-                                if (newPhiValue == NULL)
+                                if (newPhiValue == NULL) {
                                     newPhiValue = origPhiValue;
+                                }
 
                                 phi->addIncoming(newPhiValue, clonedBlock);
-                            } else
-                                break;  // no more phi nodes in the block
+                            } else {
+                                // no more phi nodes in the block
+                                break;
+                            }
                         }
                     }
                 }
@@ -1045,22 +1142,26 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
             // Remove phi operands in cloned blocks for non-existing predecessors
             for (BasicBlock *block : phiUpdateBlocks) {
                 PHINode *firstPHI = dyn_cast<PHINode>(block->begin());
-                if (firstPHI == nullptr)
+                if (firstPHI == nullptr) {
                     continue;
+                }
 
                 std::set<BasicBlock *> preds(pred_begin(block), pred_end(block));
-                if (preds.size() == firstPHI->getNumIncomingValues())
+                if (preds.size() == firstPHI->getNumIncomingValues()) {
                     continue;
+                }
 
                 for (PHINode &phi : block->phis()) {
                     SmallVector <unsigned, 8> toRemove;
                     for (unsigned op = 0, opEnd = phi.getNumIncomingValues(); op != opEnd; ++op) {
                         BasicBlock *pred = phi.getIncomingBlock(op);
-                        if (preds.count(pred) == 0)
+                        if (preds.count(pred) == 0) {
                             toRemove.push_back(op);
+                        }
                     }
-                    for (auto I = toRemove.rbegin(), E = toRemove.rend(); I != E; ++I)
+                    for (auto I = toRemove.rbegin(), E = toRemove.rend(); I != E; ++I) {
                         phi.removeIncomingValue(*I, false);
+                    }
                 }
             }
         }
@@ -1077,11 +1178,13 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
     return changed;
 }
 
+// Constructor.
 ControlledNodeSplittingPass::ControlledNodeSplittingPass()
     : FunctionPass(ID)
 {
 }
 
+// Run this pass on the given function.
 bool ControlledNodeSplittingPass::runOnFunction(Function &function)
 {
     CNSFunction astFunction(function);
@@ -1094,11 +1197,12 @@ bool ControlledNodeSplittingPass::runOnFunction(Function &function)
 char ControlledNodeSplittingPass::ID = 0;
 
 //------------------------------------------------------------------------------
-Pass* createControlledNodeSplittingPass()
+Pass *createControlledNodeSplittingPass()
 {
     return new ControlledNodeSplittingPass();
 }
 
+// Dump the current graph.
 void CNSLimitGraph::dumpLimitGraph(std::string const &baseName, size_t dumpID)
 {
 #ifdef DUMP_LIMITGRAPHS
@@ -1115,13 +1219,15 @@ void CNSLimitGraph::dumpLimitGraph(std::string const &baseName, size_t dumpID)
         fprintf(file, "n%u [label=\"%u",
             unsigned(node->get_id()), unsigned(node->get_id()));
 #endif
-        if (size_t copied_from = node->copied_from())
+        if (size_t copied_from = node->copied_from()) {
             fprintf(file, " (%u)", unsigned(copied_from));
+        }
         fprintf(file, "\"");
-        if (node->is_loop_head())
+        if (node->is_loop_head()) {
             fprintf(file, " shape=box");
-        else if (node->is_loop())
+        } else if (node->is_loop()) {
             fprintf(file, " shape=diamond");
+        }
         fprintf(file, " ]\n");
     }
 
@@ -1131,8 +1237,9 @@ void CNSLimitGraph::dumpLimitGraph(std::string const &baseName, size_t dumpID)
         for (Node const *succ : node->succs()) {
             fprintf(file, "n%u -> n%u", node_id, unsigned(succ->get_id()));
 
-            if (isBackedge(node, succ))
+            if (isBackedge(node, succ)) {
                 fprintf(file, " [ style=dashed ]");
+            }
 
             fprintf(file, "\n");
         }

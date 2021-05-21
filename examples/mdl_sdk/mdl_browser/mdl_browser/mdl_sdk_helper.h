@@ -76,6 +76,9 @@ mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& opt
     auto logger = mi::base::make_handle(new Mdl_browser_logger(false));
     mdl_configuration->set_logger(logger.get());
 
+    // Disable encoded names for now
+    mdl_configuration->set_encoded_names_enabled(false);
+
     // clear all search paths and add specified default ones
     mdl_configuration->clear_mdl_paths();
     mdl_configuration->clear_resource_paths();
@@ -109,10 +112,7 @@ mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& opt
 
     // Configure the MDL SDK
     // Load plugin required for loading textures
-    auto plugin_configuration = mi::base::Handle<mi::neuraylib::IPlugin_configuration>(
-        neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
-
-    if (0 != plugin_configuration->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT))
+    if (mi::examples::mdl::load_plugin(neuray.get(), "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
     {
         std::cerr << "[MDL Browser] Failed to load 'nv_freeimage' library.\n";
         return nullptr;

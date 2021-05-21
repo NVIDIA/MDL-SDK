@@ -675,7 +675,7 @@ public:
     /// \param name  the (type) name of this reference expression
     ///
     /// \returns    the created expression
-    Expr *create_reference(
+    Expr_ref *create_reference(
         Type_name *name);
 
     /// Create a new unary expression.

@@ -1,0 +1,43 @@
+mdl 1.6;
+
+import ::anno::*;
+
+export annotation target_material_model(
+    string override_rendering_material_simple_name  = ""
+    [[ anno::description("If set, the baked material will be rendered using this material. "
+        "Otherwise, the target itself is used.") ]],
+    string override_rendering_material_module  = ""
+    [[ anno::description("If set, the override rendering material will be loaded from this module. "
+        "Otherwise the module of the target model will be used. Absolute and relative MDL paths are supported here.") ]]
+) [[
+    anno::author("NVIDIA Corporation"),
+    anno::description("Marks the material for baking. "
+        "The first material in the material definition chain that has this annotation is selected for baking.")
+]];
+
+export annotation bake_to_texture(
+    string texture_name
+    [[ anno::description("Name of the baked texture parameter in the rendering material.") ]],
+
+    string constant_name = ""
+    [[ anno::description("Name of the constant parameter in the rendering material in case baking was not necessary. "
+        "The empty string forces baking even if a constant is sufficient to transport the data.") ]],
+
+    string pixel_format = ""
+    [[ anno::description("Pixel format of the texture to bake to.") ]],
+
+    string blend_mode = ""
+    [[ anno::description("Control the blending operations when multiple layers are baked to the same texture.") ]],
+
+    string transform = ""
+    [[ anno::description("Specifies a transformation to be applied to the data prior to writing to the texture. "
+        "An empty string means that the data must not be transformed. "
+        "Note, this transformation is not applied to the constant value.") ]],
+
+    string user_data = ""
+    [[ anno::description("User defined parameter to control application specific behavior. "
+        "Encoding/decoding multiple values is in the responsibility of the application." ) ]]
+)[[
+    anno::author("NVIDIA Corporation"),
+    anno::description("Marks parameters in the target material model for baking and controls the mapping to the rendering material.")
+]];

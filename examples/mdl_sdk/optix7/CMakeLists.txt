@@ -96,6 +96,8 @@ else()
 endif()
 
 # generate bytecode for closest hit radiance shader
+# Note: the _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH define is needed to allow
+#       compilation with Clang 7 and VS2019 headers
 add_custom_command(
     OUTPUT
         optix7_mdl_closest_hit_radiance.d
@@ -105,6 +107,7 @@ add_custom_command(
         -I ${OPTIX7_DIR}/include -I ${MDL_INCLUDE_FOLDER}
         -I ${CMAKE_CURRENT_SOURCE_DIR}/../shared
         ${_CLANG_FLAGS}
+        -D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH
         -emit-llvm -c -O3 -ffast-math -fcuda-flush-denormals-to-zero -fno-vectorize
         --cuda-device-only ${CMAKE_CURRENT_SOURCE_DIR}/optix7_mdl_closest_hit_radiance.cu
         -o optix7_mdl_closest_hit_radiance.bc
@@ -133,5 +136,15 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
     FAST_MATH
     )
 
-# add tests if available
+# -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
+# -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "examples/mdl_sdk/optix7"
+    )
+
+# -------------------------------------------------------------------------------------------------
+# Add tests if available
+# -------------------------------------------------------------------------------------------------
 add_tests()

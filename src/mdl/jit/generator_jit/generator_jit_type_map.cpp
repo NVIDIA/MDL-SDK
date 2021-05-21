@@ -610,10 +610,10 @@ llvm::Type *Type_mapper::lookup_type(
     case mdl::IType::TK_BSDF_MEASUREMENT:
         // handled as tags for now
         return m_type_tag;
-    case mdl::IType::TK_INCOMPLETE:
+    case mdl::IType::TK_AUTO:
     case mdl::IType::TK_ERROR:
         // should never be needed
-        MDL_ASSERT(!"requested error type");
+        MDL_ASSERT(!"requested auto/error type");
         return NULL;
     }
     MDL_ASSERT(!"Unsupported type");
@@ -799,7 +799,7 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
     case mi::mdl::IType::TK_BSDF_MEASUREMENT:
         // returned as atomic tags
         return false;
-    case mi::mdl::IType::TK_INCOMPLETE:
+    case mi::mdl::IType::TK_AUTO:
     case mi::mdl::IType::TK_ERROR:
         // should not happen
         break;
@@ -872,8 +872,8 @@ restart:
     case mi::mdl::IType::TK_BSDF_MEASUREMENT:
         // pass tags by value
         return false;
-    case mi::mdl::IType::TK_INCOMPLETE:
-        MDL_ASSERT(!"incomplete type occured");
+    case mi::mdl::IType::TK_AUTO:
+        MDL_ASSERT(!"auto type occured");
         return false;
     case mi::mdl::IType::TK_ERROR:
         MDL_ASSERT(!"error type occured");
@@ -1237,7 +1237,7 @@ llvm::DIType *Type_mapper::get_debug_info_type(
             /*SizeInBits=*/m_type_tag->getBitWidth(),
             llvm::dwarf::DW_ATE_unsigned);
 
-    case mi::mdl::IType::TK_INCOMPLETE:
+    case mi::mdl::IType::TK_AUTO:
     case mi::mdl::IType::TK_ERROR:
         // should not happen
         break;

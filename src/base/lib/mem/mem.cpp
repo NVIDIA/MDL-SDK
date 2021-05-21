@@ -108,11 +108,6 @@ SYSTEM::Module_registration_entry* Mem_module::get_instance()
     return s_module.init_module(s_module.get_name());
 }
 
-void Mem_module::set_exit_cb(void (*cb)())
-{
-    m_exit_memory_callback = cb;
-}
-
 bool Mem_module::init()
 {
 #ifdef WIN32_MEM_DEBUGGING_NOW
@@ -142,8 +137,6 @@ bool Mem_module::init()
 
 void Mem_module::exit()
 {
-    if (m_exit_memory_callback)
-        m_exit_memory_callback();
 }
 
 void* alloc_aligned(const size_t size, const size_t alignment)
@@ -262,12 +255,6 @@ void * operator new [] (
     return operator new(n);
 }
 
-#if !defined(_SGI_COMPILER_VERSION)	// The Irix CC doesn't support
-					// placement delete (a.k.a. "delete
-					// with additional parameters"), so we
-					// don't need to overload these
-					// functions.
-
 //--------------------------------------------------------------------------------------------------
 
 // Forward non-throwing 'operator delete' to standard 'operator delete'.
@@ -289,7 +276,5 @@ void operator delete [] (
 {
     operator delete(ptr);
 }
-
-#endif // _SGI_COMPILER_VERSION
 
 #endif // USE_DBG_ALLOC

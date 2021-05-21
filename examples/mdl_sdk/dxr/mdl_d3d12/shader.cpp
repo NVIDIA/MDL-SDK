@@ -808,16 +808,18 @@ bool Shader_binding_tables::finalize()
         std::max(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT,
                     D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT));
 
+    auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
     if (log_on_failure(m_app->get_device()->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT), D3D12_HEAP_FLAG_NONE, &desc,
+        &heap_properties, D3D12_HEAP_FLAG_NONE, &desc,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr,
         IID_PPV_ARGS(&m_binding_table_buffer)),
         "Failed to create buffer for shader binding table: " + m_debug_name, SRC))
         return false;
     set_debug_name(m_binding_table_buffer.Get(), m_debug_name);
 
+    heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
     if (log_on_failure(m_app->get_device()->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD), D3D12_HEAP_FLAG_NONE, &desc,
+        &heap_properties, D3D12_HEAP_FLAG_NONE, &desc,
         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
         IID_PPV_ARGS(&m_binding_table_buffer_upload)),
         "Failed to create upload buffer for shader binding table: " + m_debug_name, SRC))
@@ -910,16 +912,16 @@ void Shader_binding_tables::upload(D3DCommandList* command_list)
         return;
     }
 
-    command_list->ResourceBarrier(
-        1, &CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST));
+    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+    command_list->ResourceBarrier(1, &resource_barrier);
 
     command_list->CopyResource(
         m_binding_table_buffer.Get(), m_binding_table_buffer_upload.Get());
 
-    command_list->ResourceBarrier(
-        1, &CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
-        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+    resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
+        D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    command_list->ResourceBarrier(1, &resource_barrier);
 }
 
 // ------------------------------------------------------------------------------------------------

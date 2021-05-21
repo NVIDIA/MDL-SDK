@@ -216,7 +216,10 @@ Q_INVOKABLE void View_model::set_result_and_close(const QString& text)
 Q_INVOKABLE void View_model::accept()
 {
     if (m_callbacks && m_callbacks->on_accepted)
-        m_callbacks->on_accepted(m_result.toUtf8().constData());
+    {
+        auto utf8_value = m_result.toUtf8();
+        m_callbacks->on_accepted(utf8_value.constData());
+    }
 }
 
 Q_INVOKABLE void View_model::reject()

@@ -34,7 +34,6 @@
 
 #include "i_log_logger.h"
 
-#include <sstream>
 #include <base/system/main/i_module_id.h>
 
 namespace MI {
@@ -43,132 +42,80 @@ namespace LOG {
 
 namespace MESSAGE {
 
+namespace DETAIL {
 
-class Base : public std::ostringstream
+class Base : public mi::base::Log_stream
 {
 public:
-    typedef MI::SYSTEM::Module_id       Module_id;
-    typedef MI::LOG::ILogger::Category  Category_id;
-
-    Base(Module_id mid, Category_id cid, const mi::base::Message_details& det={})
-    : m_mid(mid)
-    , m_cid(cid)
-    , m_details(det)
+    Base(
+            SYSTEM::Module_id mid,
+            LOG::ILogger::Category cid,
+            mi::base::Message_severity sev,
+            const mi::base::Message_details& det)
+    : Log_stream(nullptr,"",sev,det)
+    , m_module{mid}
+    , m_category{cid}
     {}
 
-protected:
-    const Module_id             m_mid;
-    const Category_id           m_cid;
-    mi::base::Message_details   m_details;
-};
-
-
-struct Fatal : public Base
-{
-    using Base::Base;
-    ~Fatal()
+    ~Base()
     {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->fatal(m_mid, m_cid, m_details, "%s", s.c_str());
+        flush();
+    }
+
+private:
+    SYSTEM::Module_id           m_module;
+    LOG::ILogger::Category      m_category;
+
+    void message(
+            mi::base::Message_severity level,
+            const char*,
+            const mi::base::Message_details& details,
+            const char* message) const override
+    {
+        switch (level) {
+            case mi::base::MESSAGE_SEVERITY_FATAL:
+                return LOG::mod_log->fatal(m_module,m_category,details,"%s",message);
+            case mi::base::MESSAGE_SEVERITY_ERROR:
+                return LOG::mod_log->error(m_module,m_category,details,"%s",message);
+            case mi::base::MESSAGE_SEVERITY_WARNING:
+                return LOG::mod_log->warning(m_module,m_category,details,"%s",message);
+            case mi::base::MESSAGE_SEVERITY_INFO:
+                return LOG::mod_log->info(m_module,m_category,details,"%s",message);
+            case mi::base::MESSAGE_SEVERITY_VERBOSE:
+                return LOG::mod_log->vstat(m_module,m_category,details,"%s",message);
+            case mi::base::MESSAGE_SEVERITY_DEBUG:
+            default:
+                return LOG::mod_log->debug(m_module,m_category,details,"%s",message);
+        }
     }
 };
 
 
-struct Error : public Base
+template <mi::base::Message_severity S>
+struct Base_t : public Base
 {
-    using Base::Base;
-    ~Error()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->error(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
+    using Stream = Base_t<S>;
+
+    Base_t(
+            SYSTEM::Module_id mid,
+            LOG::ILogger::Category cid,
+            const mi::base::Message_details& det={})
+    : Base(mid,cid,S,det)
+    {}
 };
 
+}
 
-struct Warning : public Base
-{
-    using Base::Base;
-    ~Warning()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->warning(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
-};
-
-
-struct Stat : public Base
-{
-    using Base::Base;
-    ~Stat()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->stat(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
-};
-
-
-struct Vstat : public Base
-{
-    using Base::Base;
-    ~Vstat()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->vstat(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
-};
-
-
-struct Progress : public Base
-{
-    using Base::Base;
-    ~Progress()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->progress(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
-};
-
-
-struct Info : public Base
-{
-    using Base::Base;
-    ~Info()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->info(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
-};
-
-
-struct Debug : public Base
-{
-    using Base::Base;
-    ~Debug()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->debug(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
-};
-
-
-struct Vdebug : public Base
-{
-    using Base::Base;
-    ~Vdebug()
-    {
-        const std::string& s = str();
-        if (!s.empty())
-            mod_log->vdebug(m_mid, m_cid, m_details, "%s", s.c_str());
-    }
-};
+// mapping as per log_utilities.cpp
+using Fatal = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_FATAL>;
+using Error = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_ERROR>;
+using Warning = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_WARNING>;
+using Info = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_INFO>;
+using Progress = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_INFO>;
+using Debug = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
+using Stat = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
+using Vstat = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
+using Vdebug = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
 
 
 } // namespace MESSAGE

@@ -63,6 +63,7 @@
 #include "neuray_mdl_i18n_configuration_impl.h"
 #include "neuray_mdl_impexp_api_impl.h"
 #include "neuray_mdle_api_impl.h"
+#include "neuray_plugin_api_impl.h"
 #include "neuray_plugin_configuration_impl.h"
 
 #include "neuray_version_impl.h"
@@ -116,6 +117,7 @@ Neuray_impl::Neuray_impl()
     m_mdl_compatibility_api_impl = new NEURAY::Mdl_compatibility_api_impl( this);
     m_mdl_configuration_impl = new NEURAY::Mdl_configuration_impl( this);
     m_mdle_api_impl = new NEURAY::Mdle_api_impl( this);
+    m_plugin_api_impl = new NEURAY::Plugin_api_impl(this);
     m_plugin_configuration_impl = new NEURAY::Plugin_configuration_impl(this);
 
     // Register API components that are always available,
@@ -126,7 +128,8 @@ Neuray_impl::Neuray_impl()
     register_api_component<mi::neuraylib::IVersion>( m_version_impl.get());
     register_api_component<mi::neuraylib::IMdl_configuration>( m_mdl_configuration_impl);
     register_api_component<mi::neuraylib::IMdl_i18n_configuration>( m_mdl_i18n_configuration_impl);
-    register_api_component<mi::neuraylib::IPlugin_configuration>(m_plugin_configuration_impl);
+    register_api_component<mi::neuraylib::IPlugin_api>( m_plugin_api_impl);
+    register_api_component<mi::neuraylib::IPlugin_configuration>( m_plugin_configuration_impl);
 }
 
 Neuray_impl::~Neuray_impl()
@@ -142,6 +145,7 @@ Neuray_impl::~Neuray_impl()
 
     // Unregister API components that are always available,
     // other API components are unregistered in shutdown()
+    unregister_api_component<mi::neuraylib::IPlugin_api>();
     unregister_api_component<mi::neuraylib::IPlugin_configuration>();
     unregister_api_component<mi::neuraylib::IMdl_i18n_configuration>();
     unregister_api_component<mi::neuraylib::IMdl_configuration>();
@@ -178,6 +182,7 @@ Neuray_impl::~Neuray_impl()
     ref_count = m_mdl_compiler_impl->release();             CHECK_RESULT;
     ref_count = m_factory_impl->release();                  CHECK_RESULT;
     ref_count = m_plugin_configuration_impl->release();     CHECK_RESULT;
+    ref_count = m_plugin_api_impl->release();               CHECK_RESULT;
 
     NEURAY::s_factory = 0;
 
@@ -238,6 +243,7 @@ mi::Sint32 Neuray_impl::start( bool blocking)
     result = m_mdl_impexp_api_impl->start();        CHECK_RESULT;
     result = m_mdle_api_impl->start();              CHECK_RESULT;
     result = m_plugin_configuration_impl->start();  CHECK_RESULT;
+    result = m_plugin_api_impl->start();            CHECK_RESULT;
 #undef CHECK_RESULT
 
     register_api_component<mi::neuraylib::IDatabase>( m_database_impl);
@@ -303,6 +309,7 @@ mi::Sint32 Neuray_impl::shutdown( bool blocking)
     result = m_mdl_compiler_impl->shutdown();           CHECK_RESULT;
     result = m_image_api_impl->shutdown();              CHECK_RESULT;
     result = m_database_impl->shutdown();               CHECK_RESULT;
+    result = m_plugin_api_impl->shutdown();             CHECK_RESULT;
     result = m_plugin_configuration_impl->shutdown();   CHECK_RESULT;
 #undef CHECK_RESULT
 
@@ -372,6 +379,12 @@ mi::base::ILogger* Neuray_impl::get_logger()
 NEURAY::Class_factory* Neuray_impl::get_class_factory()
 {
     return m_class_factory;
+}
+
+NEURAY::Plugin_api_impl* Neuray_impl::get_plugin_api()
+{
+    m_plugin_api_impl->retain();
+    return m_plugin_api_impl;
 }
 
 void Neuray_impl::log_startup_message()

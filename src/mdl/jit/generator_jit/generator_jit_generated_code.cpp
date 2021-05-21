@@ -163,7 +163,7 @@ public:
                 case IType::TK_FUNCTION:
                 case IType::TK_TEXTURE:
                 case IType::TK_BSDF_MEASUREMENT:
-                case IType::TK_INCOMPLETE:
+                case IType::TK_AUTO:
                 case IType::TK_ERROR:
                     MDL_ASSERT(!"unexpected kind");
                     break;
@@ -252,7 +252,7 @@ private:
             MAP_KIND( TK_STRUCT,           VK_STRUCT);
             MAP_KIND( TK_TEXTURE,          VK_TEXTURE);
             MAP_KIND( TK_BSDF_MEASUREMENT, VK_BSDF_MEASUREMENT);
-            MAP_KIND( TK_INCOMPLETE,       VK_BAD);
+            MAP_KIND( TK_AUTO,             VK_BAD);
             MAP_KIND( TK_ERROR,            VK_BAD);
 
             #undef MAP_KIND
@@ -322,7 +322,7 @@ private:
             case IType::TK_EDF:
             case IType::TK_VDF:
             case IType::TK_FUNCTION:
-            case IType::TK_INCOMPLETE:
+            case IType::TK_AUTO:
             case IType::TK_ERROR:
                 MDL_ASSERT(!"unexpected kind");
                 break;
@@ -891,6 +891,7 @@ void Generated_code_jit::add_mapped_string(char const *s, size_t id)
 // Compile a whole module into LLVM-IR.
 void Generated_code_jit::compile_module_to_llvm(
     IModule const      *module,
+    IModule_cache      *module_cache,
     Options_impl const &options)
 {
     Module const *mod = impl_cast<Module>(module);
@@ -901,6 +902,7 @@ void Generated_code_jit::compile_module_to_llvm(
     LLVM_code_generator llvm_generator(
         m_jitted_code.get(),
         compiler.get(),
+        module_cache,
         m_messages,
         llvm_context,
         /*target_language=*/LLVM_code_generator::TL_NATIVE,
@@ -935,6 +937,7 @@ void Generated_code_jit::compile_module_to_llvm(
 // Compile a whole module into PTX.
 void Generated_code_jit::compile_module_to_ptx(
     IModule const      *module,
+    IModule_cache      *module_cache,
     Options_impl const &options)
 {
     Module const *mod = impl_cast<Module>(module);
@@ -946,6 +949,7 @@ void Generated_code_jit::compile_module_to_ptx(
     LLVM_code_generator llvm_generator(
         m_jitted_code.get(),
         compiler.get(),
+        module_cache,
         m_messages,
         llvm_context,
         /*target_language=*/LLVM_code_generator::TL_PTX,
@@ -981,6 +985,7 @@ void Generated_code_jit::compile_module_to_ptx(
 // Compile a whole module into HLSL.
 void Generated_code_jit::compile_module_to_hlsl(
     IModule const      *module,
+    IModule_cache      *module_cache,
     Options_impl const &options)
 {
     Module const *mod = impl_cast<Module>(module);
@@ -993,6 +998,7 @@ void Generated_code_jit::compile_module_to_hlsl(
     LLVM_code_generator llvm_generator(
         m_jitted_code.get(),
         compiler.get(),
+        module_cache,
         m_messages,
         llvm_context,
         /*target_language=*/LLVM_code_generator::TL_HLSL,

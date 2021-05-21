@@ -217,6 +217,7 @@ public:
         KI_STATE_GET_ARG_BLOCK_BOOL,            ///< Kind of state::get_arg_block_bool(int)
         KI_STATE_GET_MEASURED_CURVE_VALUE,      ///< Kind of state::get_measured_curve_value()
         KI_STATE_ADAPT_MICROFACET_ROUGHNESS,    ///< Kind of state::adapt_microfacet_roughness()
+        KI_STATE_ADAPT_NORMAL,                  ///< Kind of state::adapt_normal()
 
         /// Kind of df::bsdf_measurement_resolution(int,int)
         KI_DF_BSDF_MEASUREMENT_RESOLUTION,
@@ -1015,6 +1016,7 @@ public:
         DFSTATE_EVALUATE,   ///< Generating BSDF evaluate functions
         DFSTATE_PDF,        ///< Generating BSDF PDF functions
         DFSTATE_AUXILIARY,  ///< Generating BSDF auxiliary functions
+        DFSTATE_GET_FACTOR, ///< Generating BSDF get_factor helper functions
         DFSTATE_END_STATE
     };
 
@@ -1118,6 +1120,7 @@ public:
     ///
     /// \param jitted_code          the jitted code object
     /// \param compiler             the MDL compiler
+    /// \param module_cache         the module cache if any
     /// \param messages             messages object
     /// \param context              the LLVM context to be used for this generator
     /// \param target_lang          the language that will be targeted
@@ -1137,6 +1140,7 @@ public:
     LLVM_code_generator(
         Jitted_code        *jitted_code,
         MDL                *compiler,
+        IModule_cache      *module_cache,
         Messages_impl      &messages,
         llvm::LLVMContext  &context,
         Target_language    target_lang,
@@ -1312,6 +1316,14 @@ public:
 
     /// Returns true if generated LLVM functions should receive the AlwaysInline attribute.
     bool is_always_inline_enabled() const { return m_always_inline; }
+
+    /// Set the LLVM attributes for generated functions.
+    ///
+    /// \param func  generated LLVM function which should get the attributes
+    ///
+    /// Currently mark the given LLVM function as AlwaysInline if all generated LLVM functions
+    /// should receive the AlwaysInline attribute.
+    void add_generated_attributes(llvm::Function *func) const;
 
     /// Set LLVM function attributes which need to be consistent to avoid loosing
     /// them during inlining (e.g. for fast math).
@@ -1548,13 +1560,53 @@ public:
     /// \returns the function suffix to use for this function, like "_2d"
     char const *get_hlsl_tex_type_func_suffix(IDefinition const *tex_func_def);
 
+    /// Possible promotion rules.
+    enum Promote_rules {
+        PR_NONE           = 0x0,  ///< Do nothing.
+        PR_ADD_ZERO_INT2  = 0x1,  ///< Add int2(0, 0).
+        PR_ADD_ZERO_FLOAT = 0x2,  ///< Add 0.0f.
+    };
+
+    /// If the given definition has the since flags set, find the latest MDL version.
+    ///
+    /// \param[in]  idef     a function definition
+    /// \param[out] promote  bitset of promote rules if any
+    ///
+    /// \return idef if no promotion is necessary
+    static IDefinition const *promote_to_highest_version(
+        IDefinition const *idef,
+        unsigned          &promote);
+
+    /// Add necessary default arguments depending on a promotion bitset.
+    ///
+    /// \param ctx      current function context
+    /// \param promote  bitset of promote rules if any
+    /// \param args     arguments of the function call to create
+    template<unsigned N>
+    void add_promoted_arguments(
+        Function_context                    &ctx,
+        unsigned                            promote,
+        llvm::SmallVector<llvm::Value *, N> &args)
+    {
+        if (promote & PR_ADD_ZERO_INT2) {
+            // add a int2(0)
+            args.push_back(ctx.get_constant(m_type_mapper.get_int2_type(), 0));
+        }
+        if (promote & PR_ADD_ZERO_FLOAT) {
+            // add a 0.0f
+            args.push_back(ctx.get_constant(0.0f));
+        }
+    }
+
     /// Get the intrinsic LLVM function for a MDL function for HLSL code.
     ///
     /// \param def            the definition of the MDL function
     /// \param return_derivs  if true, derivatives will be generated for the return value
     ///
     /// \returns the requested function or NULL if no special handling for HLSL is required
-    llvm::Function *get_hlsl_intrinsic_function(IDefinition const *def, bool return_derivs);
+    llvm::Function *get_hlsl_intrinsic_function(
+        IDefinition const *def,
+        bool              return_derivs);
 
     /// Compile the given module into LLVM-IR code.
     ///
@@ -1815,6 +1867,12 @@ public:
     {
         error(code, str_param.c_str());
     }
+
+    /// Get the current module cache.
+    mi::mdl::IModule_cache *get_module_cache() const { return m_module_cache; }
+
+    /// Set a new module cache.
+    void set_module_cache(mi::mdl::IModule_cache *cache) { m_module_cache = cache; }
 
 private:
     /// Helper to retrieve the allocator.
@@ -2511,13 +2569,36 @@ private:
         DAG_node const                             *arg,
         llvm::SmallVector<llvm::Instruction *, 16> &delete_list);
 
+    /// Returns true, if the given DAG node is a call to diffuse_reflection_bsdf(color(1), 0).
+    bool is_default_diffuse_reflection(DAG_node const *node);
+
+    /// Instantiate a DF from the given DAG node and call the resulting function.
+    llvm::Value *instantiate_and_call_df(
+        Function_context &ctx,
+        DAG_node const *node,
+        Distribution_function_state df_state,
+        llvm::Value *res_pointer,
+        llvm::Value *inherited_normal,
+        llvm::Value *opt_inherited_weight,
+        llvm::Instruction *insertBefore,
+        bool skip_bsdf_call = false);
+
+    // Returns the base BSDF of the given node, if the node is a factor BSDF, otherwise NULL.
+    static DAG_node const *get_factor_base_bsdf(DAG_node const *node);
+
+    /// Returns the common node, if both nodes are either the common node or a factor
+    /// BSDF of the common node, otherwise NULL.
+    static DAG_node const *matches_factor_pattern(DAG_node const *left, DAG_node const *right);
+
     /// Recursively instantiate a DF from the given DAG node from code in the DF library
     /// according to current distribution function state.
     ///
     /// \param node  the DAG call with DF semantics or a DF constant node.
     ///              For a DAG call, the arguments will be used to instantiate the DF.
+    /// \param skip_bsdf_call  if true, any calls to BSDF functions are ignored
     llvm::Function *instantiate_df(
-        DAG_node const *node);
+        DAG_node const *node,
+        bool skip_bsdf_call = false);
 
     /// Recursively instantiate a ternary operator of type DF.
     ///
@@ -3106,8 +3187,10 @@ private:
     /// Load the libbsdf LLVM module.
     ///
     /// \param llvm_context  the context for the loader
+    /// \param hsm           df handle type to use, which will be used to select the libbsdf version
     std::unique_ptr<llvm::Module> load_libbsdf(
-        llvm::LLVMContext &llvm_context, mdl::Df_handle_slot_mode hsm);
+        llvm::LLVMContext        &llvm_context,
+        mdl::Df_handle_slot_mode hsm);
 
     /// Load the libmdlrt LLVM module.
     ///
@@ -3284,6 +3367,9 @@ private:
     /// The MDL compiler.
     mi::base::Handle<MDL> m_compiler;
 
+    /// The MDL module cache if any.
+    IModule_cache *m_module_cache;
+
     /// The messages object.
     Messages_impl &m_messages;
 
@@ -3330,6 +3416,10 @@ private:
     /// If true, use a renderer provided function to adapt microfacet roughness,
     /// otherwise use a function returning roughness unmodified.
     bool m_use_renderer_adapt_microfacet_roughness;
+
+    /// If true, use a renderer provided function to adapt normals,
+    /// otherwise use a function returning normals unmodified.
+    bool m_use_renderer_adapt_normal;
 
     /// If true, we generating code for an intrinsic function.
     bool m_in_intrinsic_generator;
@@ -3680,7 +3770,33 @@ private:
     /// Current main function index.
     size_t m_cur_main_func_index;
 
-    typedef mi::mdl::ptr_hash_map<DAG_node const, llvm::Function *>::Type Instantiated_dfs;
+    struct Instantiated_df {
+        Instantiated_df(DAG_node const *node, bool skip_bsdf_calls)
+            : node(node), skip_bsdf_calls(skip_bsdf_calls)
+        {}
+
+        DAG_node const *node;
+        bool skip_bsdf_calls;
+    };
+
+    struct Instantiated_df_hash {
+        size_t operator()(Instantiated_df const &id) const {
+            Hash_ptr<DAG_node const> hasher;
+            return hasher(id.node) ^ (id.skip_bsdf_calls ? 1103 : 0);
+        }
+    };
+
+    struct Instantiated_df_equal {
+        inline unsigned operator()(Instantiated_df const &a, Instantiated_df const &b) const {
+            return a.node == b.node && a.skip_bsdf_calls == b.skip_bsdf_calls;
+        }
+    };
+
+    typedef mi::mdl::hash_map<
+        Instantiated_df const,
+        llvm::Function *,
+        Instantiated_df_hash,
+        Instantiated_df_equal>::Type Instantiated_dfs;
 
     /// Map of DAG nodes instantiated to LLVM functions per distribution function state.
     mi::mdl::vector<Instantiated_dfs>::Type m_instantiated_dfs;
@@ -3731,6 +3847,9 @@ private:
     /// Function type of the BSDF evaluate function.
     llvm::FunctionType *m_type_bsdf_evaluate_func;
 
+    /// Function type of the BSDF get_factor function.
+    llvm::FunctionType *m_type_bsdf_get_factor_func;
+
     /// Return type of the BSDF evaluate function.
     llvm::Type *m_type_bsdf_evaluate_data;
 
@@ -3754,6 +3873,9 @@ private:
 
     /// Function type of the EDF evaluate function.
     llvm::FunctionType *m_type_edf_evaluate_func;
+
+    /// Function type of the EDF get_factor function.
+    llvm::FunctionType *m_type_edf_get_factor_func;
 
     /// Return type of the EDF evaluate function.
     llvm::Type *m_type_edf_evaluate_data;
@@ -3818,6 +3940,9 @@ private:
 
     /// The internal state::adapt_microfacet_roughness(float2) function, only available for libbsdf.
     Internal_function *m_int_func_state_adapt_microfacet_roughness;
+
+    /// The internal state::adapt_normal(float3) function, only available for libbsdf.
+    Internal_function* m_int_func_state_adapt_normal;
 
     /// The internal df::bsdf_measurement_resolution(int,int) function, only available for libbsdf.
     Internal_function *m_int_func_df_bsdf_measurement_resolution;

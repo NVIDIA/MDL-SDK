@@ -56,6 +56,7 @@
 #include <mdl/codegenerators/generator_dag/generator_dag_dumper.h>
 #include <mdl/jit/generator_jit/generator_jit_libbsdf_data.h>
 #include <mdl/compiler/compilercore/compilercore_streams.h>
+#include <mdl/integration/mdlnr/i_mdlnr.h>
 
 #include "backends_link_unit.h"
 #include "backends_backends.h"
@@ -272,18 +273,26 @@ public:
                 valid, width, height, depth);
 
             if (valid || m_keep_unresolved_resources) {
-               if (!name)
-                   name = resource_to_name(tag_value, tex);
+                if (!name)
+                    name = resource_to_name(tag_value, tex);
+
+                mi::mdl::IValue_texture::gamma_mode gamma_mode = tex->get_gamma_mode();
+                mi::mdl::IType_texture::Shape shape = tex->get_type()->get_shape();
 
                 bool new_entry = true;
                 size_t tex_idx;
                 if (m_resource_index_map != NULL) {
-                    Resource_index_map::const_iterator it(m_resource_index_map->find(name));
+                    std::string resource_key =
+                        std::string(name) + '_' +
+                        std::to_string(unsigned(gamma_mode)) + '_' +
+                        std::to_string(unsigned(shape));
+                    Resource_index_map::const_iterator it(m_resource_index_map->find(resource_key));
                     if (it == m_resource_index_map->end()) {
                         // new entry
                         tex_idx = ++m_tex_idx;
                         new_entry = true;
-                        m_resource_index_map->insert(Resource_index_map::value_type(name, tex_idx));
+                        m_resource_index_map->insert(
+                            Resource_index_map::value_type(resource_key, tex_idx));
                     } else {
                         // known
                         tex_idx = it->second;
@@ -295,10 +304,9 @@ public:
                     new_entry = true;
                 }
 
-                mi::mdl::IType_texture::Shape shape = tex->get_type()->get_shape();
                 if (new_entry) {
-                    float gamma = tex->get_gamma_mode() == mi::mdl::IValue_texture::gamma_default ? 0.0f :
-                        (tex->get_gamma_mode() == mi::mdl::IValue_texture::gamma_linear ? 1.0f : 2.2f);
+                    float gamma = gamma_mode == mi::mdl::IValue_texture::gamma_default ? 0.0f :
+                        (gamma_mode == mi::mdl::IValue_texture::gamma_linear ? 1.0f : 2.2f);
                     m_register.register_texture(
                         tex_idx,
                         is_resolved,
@@ -311,7 +319,7 @@ public:
                 m_lambda->map_tex_resource(
                     tex->get_kind(),
                     tex->get_string_value(),
-                    tex->get_gamma_mode(),
+                    gamma_mode,
                     tex->get_bsdf_data_kind(),
                     shape,
                     tag_value,
@@ -324,7 +332,7 @@ public:
                     m_additional_lambda->map_tex_resource(
                         tex->get_kind(),
                         tex->get_string_value(),
-                        tex->get_gamma_mode(),
+                        gamma_mode,
                         tex->get_bsdf_data_kind(),
                         shape,
                         tag_value,
@@ -656,12 +664,12 @@ static mi::mdl::IType const *convert_type(
             switch (et->get_predefined_id()) {
             case MI::MDL::IType_enum::EID_USER:
                 {
-                    char const             *name = et->get_symbol();
-                    if (mi::mdl::IType_enum const *et = tf->lookup_enum(name))
+                    std::string symbol = MDL::decode_name_without_signature(et->get_symbol());
+                    if (mi::mdl::IType_enum const *et = tf->lookup_enum(symbol.c_str()))
                         return et;
 
                     mi::mdl::ISymbol_table *st   = tf->get_symbol_table();
-                    mi::mdl::ISymbol const *sym  = st->create_user_type_symbol(name);
+                    mi::mdl::ISymbol const *sym  = st->create_user_type_symbol(symbol.c_str());
                     mi::mdl::IType_enum    *e    = tf->create_enum(sym);
 
                     for (size_t i = 0, n = et->get_size(); i < n; ++i) {
@@ -724,12 +732,12 @@ static mi::mdl::IType const *convert_type(
             switch (stp->get_predefined_id()) {
             case MI::MDL::IType_struct::SID_USER:
                 {
-                    char const             *name = stp->get_symbol();
-                    if (mi::mdl::IType_struct const *st = tf->lookup_struct(name))
+                    std::string symbol = MDL::decode_name_without_signature(stp->get_symbol());
+                    if (mi::mdl::IType_struct const *st = tf->lookup_struct(symbol.c_str()))
                         return st;
 
                     mi::mdl::ISymbol_table *st   = tf->get_symbol_table();
-                    mi::mdl::ISymbol const *sym  = st->create_user_type_symbol(name);
+                    mi::mdl::ISymbol const *sym  = st->create_user_type_symbol(symbol.c_str());
                     mi::mdl::IType_struct  *s    = tf->create_struct(sym);
 
                     for (size_t i = 0, n = stp->get_size(); i < n; ++i) {
@@ -863,11 +871,16 @@ public:
         bool type_ok = false;
         mi::mdl::IType_struct const *tex_ret_type = NULL;
 
-        // check for base::texture_return or color return type here
+        // check for base::texture_return compatible or color return type here
         if (mi::mdl::IType_struct const *s_type = mi::mdl::as<mi::mdl::IType_struct>(mdl_type)) {
-            if (strcmp("::base::texture_return", s_type->get_symbol()->get_name()) == 0) {
-                type_ok = true;
-                tex_ret_type = s_type;
+            if (s_type->get_compound_size() == 2) {
+                mi::mdl::IType const *e0_tp = s_type->get_compound_type(0)->skip_type_alias();
+                mi::mdl::IType const *e1_tp = s_type->get_compound_type(1)->skip_type_alias();
+
+                if (mi::mdl::is<mi::mdl::IType_color>(e0_tp) && mi::mdl::is<mi::mdl::IType_float>(e1_tp)) {
+                    type_ok = true;
+                    tex_ret_type = s_type;
+                }
             }
         } else if (mi::mdl::is<mi::mdl::IType_color>(mdl_type)) {
             type_ok = true;
@@ -945,7 +958,7 @@ public:
 
         mi::mdl::DAG_call::Call_argument const *p_arguments = count > 0 ? &mdl_arguments[0] : 0;
         mi::mdl::DAG_node const *body = lambda->create_call(
-            function_call->get_mdl_function_definition(),
+            MDL::decode_name_with_signature(function_call->get_mdl_function_definition()).c_str(),
             function_call->get_mdl_semantic(),
             p_arguments,
             count,
@@ -1159,6 +1172,11 @@ public:
         DB::Access<MI::MDL::Mdl_function_definition> definition(tag, m_db_transaction);
         mi::mdl::IType const *mat_type = definition->get_mdl_return_type(m_db_transaction);
 
+        // disable optimizations to ensure, that the expression paths will stay valid
+        mi::mdl::Lambda_function *root_lambda_impl =
+            mi::mdl::impl_cast<mi::mdl::Lambda_function>(root_lambda.get());
+        bool old_opt = root_lambda_impl->enable_opt(false);
+
         const mi::mdl::DAG_node *material_constructor =
             builder.int_expr_to_mdl_dag_node(mat_type, mat_body.get());
 
@@ -1173,6 +1191,10 @@ public:
             m_calc_derivatives,
             allow_double_expr_lambdas,
             &resolver);
+
+        // restore optimizations after expression paths have been processed
+        root_lambda_impl->enable_opt(old_opt);
+
         switch (ec) {
         case mi::mdl::IDistribution_function::EC_NONE:
             break;
@@ -2107,9 +2129,13 @@ mi::Sint32 Link_unit::add_environment(
     // ... and add it to the compilation unit
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
 
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(m_transaction, mdlc_module->get_module_wait_queue(), {});
+
     size_t arg_block_index = ~0;
     bool res = m_unit->add(
         lambda.get(),
+        &module_cache,
         &resolver,
         mi::mdl::IGenerated_code_executable::FK_ENVIRONMENT,
         &arg_block_index,
@@ -2285,6 +2311,11 @@ mi::Sint32 Link_unit::add_material_single_init(
     DB::Access<MI::MDL::Mdl_function_definition> definition(tag, m_transaction);
     mi::mdl::IType const *mat_type = definition->get_mdl_return_type(m_transaction);
 
+    // disable optimizations to ensure, that the expression paths will stay valid
+    mi::mdl::Lambda_function *root_lambda_impl =
+        mi::mdl::impl_cast<mi::mdl::Lambda_function>(root_lambda.get());
+    bool old_opt = root_lambda_impl->enable_opt(false);
+
     MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
         m_transaction, root_lambda.get(), compiled_material);
 
@@ -2304,6 +2335,9 @@ mi::Sint32 Link_unit::add_material_single_init(
         m_calc_derivatives,
         /*allow_double_expr_lambdas=*/ m_be_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL,
         &resolver);
+
+    // restore optimizations after expression paths have been processed
+    root_lambda_impl->enable_opt(old_opt);
 
     if (ec != mi::mdl::IDistribution_function::EC_NONE) {
         if (context)
@@ -2407,14 +2441,19 @@ mi::Sint32 Link_unit::add_material_single_init(
     // ... and add to link unit
     size_t arg_block_index = ~0;
     std::vector<size_t> main_func_indices(func_list.size());
+
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(m_transaction, mdlc_module->get_module_wait_queue(), {});
+
     if (!m_unit->add(
         dist_func.get(),
+        &module_cache,
         &resolver,
         &arg_block_index,
         main_func_indices.data(),
         main_func_indices.size()))
     {
-        MDL::report_messages(m_unit->access_messages(), context);
+        MDL::convert_and_log_messages(m_unit->access_messages(), context);
         MDL::add_context_error(context,
             "The JIT backend failed to compile the function group.", -300);
         function_descriptions[0].return_code = -300;
@@ -2745,6 +2784,9 @@ mi::Sint32 Link_unit::add_material(
         }
     }
 
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(m_transaction, mdlc_module->get_module_wait_queue(), {});
+
     // now that all expressions are preprocessed and all resources from the bodies are collected,
     // process the arguments and add the expressions to the link unit
     for (mi::Size i = 0; i < description_count; ++i) {
@@ -2768,12 +2810,13 @@ mi::Sint32 Link_unit::add_material(
         if (add_list_items[i].dist_func) {
             if (!m_unit->add(
                 add_list_items[i].dist_func.get(),
+                &module_cache,
                 &resolver,
                 &arg_block_index,
                 &index,
                 1))
             {
-                MDL::report_messages(m_unit->access_messages(), context);
+                MDL::convert_and_log_messages(m_unit->access_messages(), context);
                 MDL::add_context_error(context,
                     "The JIT backend failed to compile the function at index "
                     + std::to_string(i) + ".", -300);
@@ -2786,12 +2829,13 @@ mi::Sint32 Link_unit::add_material(
         } else {
             if (!m_unit->add(
                 add_list_items[i].lambda_func.get(),
+                &module_cache,
                 &resolver,
                 mi::mdl::IGenerated_code_executable::FK_LAMBDA,
                 &arg_block_index,
                 &index))
             {
-                MDL::report_messages(m_unit->access_messages(), context);
+                MDL::convert_and_log_messages(m_unit->access_messages(), context);
                 MDL::add_context_error(
                     context, "The JIT backend failed to compile the function at index" +
                     std::to_string(i), -30);
@@ -3161,6 +3205,24 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             return -2;
         }
         jit_options.set_option(MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS, value);
+        return 0;
+    }
+
+    if (strcmp(name, "use_renderer_adapt_normal") == 0) {
+        // TODO: currently only supported for HLSL backend
+        if (m_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL)
+            return -1;
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+        }
+        else if (strcmp(value, "on") == 0) {
+            value = "true";
+        }
+        else {
+            return -2;
+        }
+        jit_options.set_option(MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL, value);
+        return 0;
     }
 
     if (strcmp(name, "scene_data_names") == 0) {
@@ -3373,6 +3435,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         return NULL;
     }
 
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(transaction, mdlc_module->get_module_wait_queue(), {});
     MDL::Mdl_call_resolver resolver(transaction);
 
     // enumerate resources: must be done before we compile
@@ -3397,6 +3461,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         code = mi::base::make_handle(
             m_jit->compile_into_llvm_ir(
                 lambda.get(),
+                &module_cache,
                 &resolver,
                 m_num_texture_spaces,
                 m_num_texture_results,
@@ -3408,6 +3473,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
             m_jit->compile_into_source(
                 m_code_cache.get(),
                 lambda.get(),
+                &module_cache,
                 &resolver,
                 m_num_texture_spaces,
                 m_num_texture_results,
@@ -3420,6 +3486,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         code = mi::base::make_handle(
             m_jit->compile_into_environment(
                 lambda.get(),
+                &module_cache,
                 &resolver));
         break;
     default:
@@ -3432,10 +3499,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), context);
+    MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        MDL::add_context_error(context, 
+        MDL::add_context_error(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -3496,7 +3563,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         return NULL;
     }
 
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(transaction, mdlc_module->get_module_wait_queue(), {});
     MDL::Mdl_call_resolver resolver(transaction);
+
     if (m_calc_derivatives)
         lambda->initialize_derivative_infos(&resolver);
 
@@ -3524,6 +3594,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         code = mi::base::make_handle(
             m_jit->compile_into_llvm_ir(
                 lambda.get(),
+                &module_cache,
                 &resolver,
                 m_num_texture_spaces,
                 m_num_texture_results,
@@ -3535,6 +3606,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
             m_jit->compile_into_source(
                 m_code_cache.get(),
                 lambda.get(),
+                &module_cache,
                 &resolver,
                 m_num_texture_spaces,
                 m_num_texture_results,
@@ -3547,6 +3619,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         code = mi::base::make_handle(
             m_jit->compile_into_generic_function(
                 lambda.get(),
+                &module_cache,
                 &resolver,
                 m_num_texture_spaces,
                 m_num_texture_results,
@@ -3562,7 +3635,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), context);
+    MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
         MDL::add_context_error(context,
@@ -3639,6 +3712,8 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
 
     mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
 
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(transaction, mdlc_module->get_module_wait_queue(), {});
     MDL::Mdl_call_resolver resolver(transaction);
 
     // ... enumerate resources: must be done before we compile ...
@@ -3682,6 +3757,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         code = mi::base::make_handle(
             m_jit->compile_distribution_function_gpu(
                 dist_func.get(),
+                &module_cache,
                 &resolver,
                 m_num_texture_spaces,
                 m_num_texture_results,
@@ -3694,6 +3770,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         code = mi::base::make_handle(
             m_jit->compile_distribution_function_cpu(
                 dist_func.get(),
+                &module_cache,
                 &resolver,
                 m_num_texture_spaces,
                 m_num_texture_results));
@@ -3708,7 +3785,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), context);
+    MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
         MDL::add_context_error(
@@ -3814,7 +3891,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
         return NULL;
     }
 
-    MDL::report_messages(code->access_messages(), context);
+    MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
         MDL::add_context_error(context,
@@ -3998,44 +4075,18 @@ void Df_data_helper::Df_data_canvas::set_gamma(mi::Float32)
     // gamma cannot be changed.
 }
 
-mi::Uint32 Df_data_helper::Df_data_canvas::get_tile_resolution_x() const
+const mi::neuraylib::ITile* Df_data_helper::Df_data_canvas::get_tile(mi::Uint32 layer) const
 {
-    return m_tiles[0]->get_resolution_x();
-}
-
-mi::Uint32 Df_data_helper::Df_data_canvas::get_tile_resolution_y() const
-{
-    return m_tiles[0]->get_resolution_y();
-}
-
-mi::Uint32 Df_data_helper::Df_data_canvas::get_tiles_size_x() const
-{
-    return 1;
-}
-
-mi::Uint32 Df_data_helper::Df_data_canvas::get_tiles_size_y() const
-{
-    return 1;
-}
-
-const mi::neuraylib::ITile* Df_data_helper::Df_data_canvas::get_tile(
-    mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer) const
-{
-    if (layer >= m_tiles.size() ||
-        pixel_x >= m_tiles[0]->get_resolution_x() ||
-        pixel_y >= m_tiles[0]->get_resolution_y())
+    if (layer >= m_tiles.size())
         return nullptr;
 
     m_tiles[layer]->retain();
     return m_tiles[layer].get();
 }
 
-mi::neuraylib::ITile* Df_data_helper::Df_data_canvas::get_tile(
-    mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer)
+mi::neuraylib::ITile* Df_data_helper::Df_data_canvas::get_tile(mi::Uint32 layer)
 {
-    if (layer >= m_tiles.size() ||
-        pixel_x >= m_tiles[0]->get_resolution_x() ||
-        pixel_y >= m_tiles[0]->get_resolution_y())
+    if (layer >= m_tiles.size())
         return nullptr;
 
     m_tiles[layer]->retain();

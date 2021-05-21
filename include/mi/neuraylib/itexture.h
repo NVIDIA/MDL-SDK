@@ -81,7 +81,11 @@ mi_static_assert( sizeof( Filter_type) == sizeof( Uint32));
 /// #mi::neuraylib::IFunction_definition). The type of such an argument is
 /// #mi::neuraylib::IType_texture or an alias of it.
 ///
+/// Textures may also serve as references to volume data. Note that gamma and compression options
+/// are not available for volume data.
+///
 /// \see #mi::neuraylib::IImage
+/// \if IRAY_API \see #mi::neuraylib::IVolume_data \endif
 class ITexture :
     public base::Interface_declare<0x012c847c,0xaf47,0x4338,0xb7,0xc4,0x78,0x67,0xa3,0x55,0x47,0x18,
                                    neuraylib::IScene_element>
@@ -114,24 +118,33 @@ public:
     ///
     /// The gamma value of the texture is an override for the gamma value of the underlying
     /// image. The special value 0.0 means that the override is not set.
+    ///
+    /// This override value is also used when MDL source code is to be generated:
+    /// - a value of 1.0 is converted to \c "::tex::gamma_linear",
+    /// - a value of 2.2 is converted to \c "::tex::gamma_srgb", and
+    /// - all other values are converted to \c "::tex::gamma_default".
+    /// Therefore, if you want to avoid \c "::tex::gamma_default" in generated MDL source code, it
+    /// makes sense to replicate the gamma value of the underlying image here (instead of not using
+    /// the override).
+    ///
+    /// \see #get_gamma(), #get_effective_gamma()
     virtual void set_gamma( Float32 gamma) = 0;
 
     /// Returns the gamma value of this texture.
     ///
-    /// The gamma value of the texture is an override for the gamma value of the underlying
-    /// image. The special value 0.0 means that the override is not set.
-    ///
-    /// \see #get_effective_gamma()
+    /// \see #set_gamma(), #get_effective_gamma()
     virtual Float32 get_gamma() const = 0;
 
     /// Returns the effective gamma value.
     ///
-    /// \param uvtile_id The id of the uvtile of the texture the gamma value is requested for
-    /// when no override is set.
+    /// \param uvtile_id   The uv-tile id of the texture the gamma value is requested for when no
+    ///                    override is set.
     ///
     /// Returns the gamma value of this texture, unless no override is set. In this case the
     /// gamma value of the underlying image at the given uvtile index is returned. If no such image
-    /// exists 0.0 is returned. 
+    /// exists, 0.0 is returned.
+    ///
+    /// \see #set_gamma(), #get_gamma()
     virtual Float32 get_effective_gamma( Uint32 uvtile_id = 0) const = 0;
 
     //@}
@@ -155,6 +168,27 @@ public:
     ///
     /// \see #mi::neuraylib::Texture_compression
     virtual Texture_compression get_compression() const = 0;
+
+    //@}
+
+    /// \name Methods related to the referenced volume instead of an image.
+    //@{
+
+    /// Sets the referenced volume.
+    ///
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -2: There is no element with that name.
+    ///           - -3: The element can not be referenced because it is in a more private scope
+    ///                 than the texture.
+    ///           - -4: The element is not a volume.
+    virtual Sint32 set_volume( const char* name) = 0;
+
+    /// Returns the referenced volume data.
+    ///
+    /// \return   The referenced volume, or \c NULL if no volume is referenced.
+    virtual const char* get_volume() const = 0;
 
     //@}
 };

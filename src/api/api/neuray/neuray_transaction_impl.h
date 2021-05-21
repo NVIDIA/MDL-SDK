@@ -215,12 +215,12 @@ public:
 
     /// Record the construction of (an API class for) a DB element.
     ///
-    /// Funtionality duplicated from the Db_element_tracker, but in the context of the transaction.
+    /// Functionality duplicated from the Db_element_tracker, but in the context of the transaction.
     void add_element( const Db_element_impl_base* db_element);
 
     /// Record the destruction of (an API class for) a DB element.
     ///
-    /// Funtionality duplicated from the Db_element_tracker, but in the context of the transaction.
+    /// Functionality duplicated from the Db_element_tracker, but in the context of the transaction.
     void remove_element( const Db_element_impl_base* db_element);
 
     /// Returns the MDL type factory for this transaction.

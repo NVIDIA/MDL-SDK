@@ -150,7 +150,7 @@ namespace multiscatter
             compute_lookup_coordinate_z(type, eta));
 
         const float rho1 = 
-            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp).x;
+            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
         // accept glossy sample        
         if (data->xi.w <= w) {
@@ -187,11 +187,11 @@ namespace multiscatter
             // compute weight for diffuse event
             coord.x = compute_lookup_coordinate_x(type, nk2);
             const float rho2 =
-                state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp).x;
+                state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
             coord.x = compute_lookup_coordinate_x_nrm(type);
             const float nrm =
-                state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp).x;
+                state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
             w = (1.0f - rho2) / nrm * (float)M_PI;
 
@@ -229,15 +229,15 @@ namespace multiscatter
             );
 
         const float rho1 = 
-            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp).x;
+            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
         coord.x = compute_lookup_coordinate_x(type, nk2);
         const float rho2 =
-            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp).x;
+            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
         coord.x = compute_lookup_coordinate_x_nrm(type);
         const float nrm = 
-            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp).x;
+            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
         return make<float2>(rho1, (1.0f - rho1) * (1.0f - rho2) / nrm * nk2);
     }
@@ -260,7 +260,7 @@ namespace multiscatter
             compute_lookup_coordinate_z(type, eta));
 
         const float rho1 =
-            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp).x;
+            state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
         return rho1 * pdf + (1.0f - rho1) * (float)(1.0 / M_PI) * nk2;
     }

@@ -197,14 +197,14 @@ public:
     }
 
     /// Accesses the \c i-th spectrum element, <tt>0 <= i < 3</tt>.
-    inline const Float32& operator[]( Size i) const
+    MI_HOST_DEVICE_INLINE const Float32& operator[]( Size i) const
     {
         mi_math_assert_msg( i < SIZE, "precondition");
         return c[i];
     }
 
     /// Accesses the \c i-th spectrum element, <tt>0 <= i < 3</tt>.
-    inline Float32& operator[]( Size i)
+    MI_HOST_DEVICE_INLINE Float32& operator[]( Size i)
     {
         mi_math_assert_msg( i < SIZE, "precondition");
         return c[i];

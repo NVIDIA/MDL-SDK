@@ -680,7 +680,8 @@ public:
         int wrap_u,
         int wrap_v,
         const float2& crop_u,
-        const float2& crop_v) const;
+        const float2& crop_v,
+        float frame) const;
 
     float3 tex_lookup_float3_3d(
         int texture_index,
@@ -690,16 +691,20 @@ public:
         int wrap_w,
         const float2& crop_u,
         const float2& crop_v,
-        const float2& crop_w) const;
+        const float2& crop_w,
+        float frame) const;
 
     unsigned get_bsdf_data_texture_id(Bsdf_data_kind bsdf_data_kind) const;
 
     float2 adapt_microfacet_roughness(const float2& roughness_uv) const;
+    float3 adapt_normal(const float3& normal) const;
 };
 
 #include "libbsdf_runtime.h"
 #include "libbsdf.h"
 
+// Object providing BSDF functionality and some meta information accessors.
+// note: keep in sync with get_df_func_kind() in generator_jit_llvm_df.cpp.
 struct BSDF
 {
     void(*sample)(
@@ -727,6 +732,32 @@ struct BSDF
     // returns true, if the attached BSDF is "bsdf()".
     // note: this is currently unsupported for BSDFs in BSDF_component
     bool(*is_black)();
+
+    // returns true, if the attached BSDF is "diffuse_reflection_bsdf()".
+    // note: this is currently unsupported for BSDFs in BSDF_component
+    bool(*is_default_diffuse_reflection)();
+
+    // select a BSDF to sample based on a condition, allowing to avoid code duplication when
+    // aggressive inlining is used in some cases
+    static void select_sample(
+        bool cond,
+        BSDF_sample_data *data,
+        State *state,
+        const BSDF &true_bsdf,
+        float3 const &true_inherited_normal,
+        const BSDF &false_bsdf,
+        float3 const &false_inherited_normal);
+
+    // select a BSDF to calculate the pdf based on a condition, allowing to avoid code duplication
+    // when aggressive inlining is used in some cases
+    static void select_pdf(
+        bool cond,
+        BSDF_pdf_data *data,
+        State *state,
+        const BSDF &true_bsdf,
+        float3 const &true_inherited_normal,
+        const BSDF &false_bsdf,
+        float3 const &false_inherited_normal);
 };
 
 struct BSDF_component

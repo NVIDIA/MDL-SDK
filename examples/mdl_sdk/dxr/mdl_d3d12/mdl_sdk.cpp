@@ -97,6 +97,9 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     mi::base::Handle<mi::base::ILogger> logger(new Mdl_disabled_logger());
     m_config->set_logger(logger.get());
 
+    // Disable encoded names for now
+    m_config->set_encoded_names_enabled(false);
+
     // search path setup is done during scene loading as the scene folder is added too
     // reconfigure_search_paths();
 
@@ -104,7 +107,8 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
         m_neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
 
-    if (plugin_conf->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
+    log_info("Load 'nv_freeimage' plugin.");
+    if (mi::examples::mdl::load_plugin(m_neuray.get(), "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
     {
         log_error("Failed to load the 'nv_freeimage' plugin.", SRC);
         return;

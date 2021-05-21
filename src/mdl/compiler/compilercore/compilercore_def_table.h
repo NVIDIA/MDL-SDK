@@ -58,6 +58,26 @@ class Definition_table;
 class Module;
 class Printer;
 
+/// Version flags of predefined entities.
+enum Version_flags {
+    SINCE_1_1 = IMDL::MDL_VERSION_1_1,           ///< Exists since MDL 1.1.
+    REMOVED_1_1 = (IMDL::MDL_VERSION_1_1 << 8),  ///< Removed since MDL 1.1.
+    SINCE_1_2 = IMDL::MDL_VERSION_1_2,           ///< Exists since MDL 1.2.
+    REMOVED_1_2 = (IMDL::MDL_VERSION_1_2 << 8),  ///< Removed since MDL 1.2.
+    SINCE_1_3 = IMDL::MDL_VERSION_1_3,           ///< Exists since MDL 1.3.
+    REMOVED_1_3 = (IMDL::MDL_VERSION_1_3 << 8),  ///< Removed since MDL 1.3.
+    SINCE_1_4 = IMDL::MDL_VERSION_1_4,           ///< Exists since MDL 1.4.
+    REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),  ///< Removed since MDL 1.4.
+    SINCE_1_5 = IMDL::MDL_VERSION_1_5,           ///< Exists since MDL 1.5.
+    REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),  ///< Removed since MDL 1.5.
+    SINCE_1_6 = IMDL::MDL_VERSION_1_6,           ///< Exists since MDL 1.6.
+    REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),  ///< Removed since MDL 1.6.
+    SINCE_1_7 = IMDL::MDL_VERSION_1_7,           ///< Exists since MDL 1.7.
+    REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),  ///< Removed since MDL 1.7.
+    SINCE_1_8 = IMDL::MDL_VERSION_1_8,           ///< Exists since MDL 1.8.
+    REMOVED_1_8 = (IMDL::MDL_VERSION_1_8 << 8),  ///< Removed since MDL 1.8.
+};
+
 /// Implementation of a definition.
 class Definition : public IDefinition
 {
@@ -113,21 +133,24 @@ public:
         DEF_IS_CONST_EXPR,          ///< This function is declared const_expr.
         DEF_USES_DERIVATIVES,       ///< This function uses derivatives.
         DEF_IS_DERIVABLE,           ///< This parameter or return type is derivable.
-        DEF_LITERAL_PARAM,          ///< The argument of the first parameter must be a literal.
         DEF_LAST
     };
 
     /// RAII like helper class that temporary set/reset a flag on a definition.
     class Scope_flag {
     public:
+        /// Constructor.
         Scope_flag(Definition &def, Flag flag) : m_def(def), m_flag(flag) {
-            if (!is<IType_error>(m_def.get_type()))
+            if (m_def.get_kind() != Definition::DK_ERROR) {
                 m_def.set_flag(m_flag);
+            }
         }
 
+        /// Destructor.
         ~Scope_flag() {
-            if (!is<IType_error>(m_def.get_type()))
+            if (m_def.get_kind() != Definition::DK_ERROR) {
                 m_def.clear_flag(m_flag);
+            }
         }
     private:
         Definition  &m_def;
@@ -144,6 +167,11 @@ public:
 
     /// Get the type of the definition.
     IType const *get_type() const MDL_FINAL;
+
+    /// Get the declared type of the (function) definition.
+    ///
+    /// \note This is only different from get_type() for functions declared auto return.
+    IType const *get_decl_type() const MDL_FINAL;
 
     /// Get the declaration of the definition.
     IDeclaration const *get_declaration() const MDL_FINAL;
@@ -188,7 +216,12 @@ public:
     ///
     /// For example, if bit 0 is set, a backend supporting derivatives may provide derivative
     /// values as the first parameter of the function.
-    virtual unsigned get_parameter_derivable_mask() const MDL_FINAL;
+    unsigned get_parameter_derivable_mask() const MDL_FINAL;
+
+    /// Return the mask specifying which parameters of a function must be literals.
+    ///
+    /// For example, if bit 0 is set, the first parameter of the function must be a literal value.
+    unsigned get_literal_parameter_mask() const MDL_FINAL;
 
     // Non interface member
 
@@ -198,6 +231,13 @@ public:
     ///
     /// \note Only allowed for variables and auto-typing.
     void set_type(IType const *type);
+
+    /// Set the declaration type of the definition.
+    ///
+    /// \param type  the new type
+    ///
+    /// \note Only allowed for auto-typing.
+    void set_decl_type(IType const *type);
 
     /// Set the (syntactical) declaration of the definition.
     ///
@@ -281,6 +321,11 @@ public:
     ///
     /// \param mask  the bit mask
     void set_parameter_derivable_mask(unsigned mask) { m_parameter_deriv_mask = mask; }
+
+    /// Set the mask specifying which parameters must be literals.
+    ///
+    /// \param mask  the bit mask
+    void set_literal_parameter_mask(unsigned mask) { m_literal_param_mask = mask; }
 
     /// Return the definite definition for this definition (which represents a
     /// declaration in the semantic sense).
@@ -369,6 +414,7 @@ private:
         Definition const &other,
         ISymbol const    *imp_sym,
         IType const      *imp_type,
+        IType const      *imp_decl_type,
         Position const   *imp_pos,
         Scope            *parent_scope,
         Definition       *outer,
@@ -396,7 +442,10 @@ private:
     ISymbol const * const m_sym;
 
     /// The type of this definition.
-    IType const * m_type;
+    IType const *m_type;
+
+    /// The declaration type of this definition (if any).
+    IType const *m_decl_type;
 
     /// The parameter default initializer of this definition if any.
     Initializers *m_parameter_inits;
@@ -451,6 +500,9 @@ private:
 
     /// Mask specifying which parameters of a function may expect derivable values.
     unsigned m_parameter_deriv_mask;
+
+    /// Mask specifying which parameters of a function must be literals.
+    unsigned m_literal_param_mask;
 };
 
 /// An interface for visiting definitions

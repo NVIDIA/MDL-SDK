@@ -46,7 +46,6 @@
 #include <base/data/db/i_db_tag.h>
 #include <base/data/serial/i_serial_serializable.h>
 #include <base/system/stlext/i_stlext_any.h>
-#include <boost/shared_ptr.hpp>
 #include <mi/base/config.h>
 
 #include "i_attr_types.h"
@@ -209,7 +208,7 @@ class Attr_module : public SYSTEM::IModule
 class Attribute;
 
 /// Typedef for convenience only
-typedef std::map<Attribute_id, boost::shared_ptr<Attribute> > Attributes;
+typedef std::map<Attribute_id, std::shared_ptr<Attribute> > Attributes;
 
 
 /// Another Type iterator.
@@ -369,18 +368,18 @@ class Attribute_set : public SERIAL::Serializable
     /// \param attr attribute to attach
     /// \return success or failure
     bool attach(
-        const boost::shared_ptr<Attribute>& attr);
+        const std::shared_ptr<Attribute>& attr);
 
-    /// Detach an attribute, but don't destroy it. The boost::shared_ptr return value
+    /// Detach an attribute, but don't destroy it. The std::shared_ptr return value
     /// takes care of destroying the attribute in the end.
     /// \param id ID of attribute to detach
-    boost::shared_ptr<Attribute> detach(
+    std::shared_ptr<Attribute> detach(
         Attribute_id id);
 
-    /// Detach an attribute, but don't destroy it. The boost::shared_ptr return value
+    /// Detach an attribute, but don't destroy it. The std::shared_ptr return value
     /// takes care of destroying the attribute in the end.
     /// \param name name of attribute to detach
-    boost::shared_ptr<Attribute> detach(
+    std::shared_ptr<Attribute> detach(
         const char* name);
 
     /// Clear the attribute set, i.e. detach and delete all attributes
@@ -473,7 +472,7 @@ class Attribute_set : public SERIAL::Serializable
     /// Attribute_set_impl_helper in api/api/neuray/neuray_attribute_set_impl_helper.cpp
     /// \param id ID of attribute to look up
     /// \return a shared pointer to the attached attribute
-    boost::shared_ptr<Attribute> lookup_shared_ptr(
+    std::shared_ptr<Attribute> lookup_shared_ptr(
         Attribute_id	id) const;
 };
 

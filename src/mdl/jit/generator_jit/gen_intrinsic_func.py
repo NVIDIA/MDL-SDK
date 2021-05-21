@@ -165,6 +165,7 @@ class SignatureParser:
 			"vdf_component[<N>]"        : "UAV",
 			"color_bsdf_component[<N>]" : "UABB",
 			"color_edf_component[<N>]"  : "UAEE",
+			"color_vdf_component[<N>]"  : "UAVV",
 			"color[<N>]"                : "UACC",
 
 			# derived types
@@ -559,7 +560,9 @@ class SignatureParser:
 				name == "fresnel_factor" or
 				name == "measured_factor" or
 				name == "chiang_hair_bsdf" or
-				name == "sheen_bsdf"):
+				name == "sheen_bsdf" or
+				name == "unbounded_mix" or
+				name == "color_unbounded_mix"):
 			self.unsupported_intrinsics[name] = "unsupported"
 			return True;
 		if (name == "light_profile_power" or name == "light_profile_maximum" or
@@ -579,18 +582,30 @@ class SignatureParser:
 		"""Checks if the given tex intrinsic is supported."""
 		ret_type, params = self.split_signature(signature)
 
-		if name == "width" or name == "height":
+		if name == "width" or name == "height" or name == "depth":
 			if (len(params) == 1):
-				# support width(), height() without uv_tile parameter
+				# support width(), height(), depth(), without extra parameters
 				self.intrinsic_modes[name + signature] = "tex::attr_lookup"
 				return True
-			if (params[0] == "T2" and len(params) == 2):
-				# support width(), height() with uv_tile parameter
-				self.intrinsic_modes[name + signature] = "tex::attr_lookup_uvtile"
-				return True
-		elif name == "depth" or name == "texture_isvalid":
+			if params[0] == "T2":
+				if len(params) == 2:
+					# support width(), height() with uv_tile parameter
+					self.intrinsic_modes[name + signature] = "tex::attr_lookup_uvtile"
+					return True
+				if len(params) == 3:
+					# support width(), height() with uv_tile, frame parameters
+					# FIXME: frame ignored so far
+					self.intrinsic_modes[name + signature] = "tex::attr_lookup_uvtile"
+					return True
+			elif params[0] == "T3":
+				if len(params) == 2:
+					# support width(), height() with frame parameter
+					# FIXME: frame ignored so far
+					self.intrinsic_modes[name + signature] = "tex::attr_lookup"
+					return True
+		elif  name == "texture_isvalid":
 			if len(params) == 1:
-				# support depth(), texture_isvalid()
+				# support texture_isvalid()
 				self.intrinsic_modes[name + signature] = "tex::attr_lookup"
 				return True
 		elif name == "lookup_float":
@@ -603,24 +618,58 @@ class SignatureParser:
 			self.intrinsic_modes[name + signature] = "tex::lookup_floatX"
 			return True
 		elif name == "texel_float":
-			if (len(params) == 2):
-				# support texel_float() without uv_tile parameter
+			if len(params) == 2:
+				# support texel_float() without extra parameter
 				self.intrinsic_modes[name + signature] = "tex::texel_float"
 				return True
-			if (params[0] == "T2" and len(params) == 3):
-				# support texel_float(texture_2d) with uv_tile parameter
-				self.intrinsic_modes[name + signature] = "tex::texel_float_uvtile"
-				return True
+			if params[0] == "T2":
+				if len(params) == 3:
+					# support texel_float(texture_2d) with uv_tile parameter
+					self.intrinsic_modes[name + signature] = "tex::texel_float_uvtile"
+					return True
+				if len(params) == 4:
+					# support texel_float(texture_2d) with uv_tile, frame parameter
+					# FIXME: frame ignored so far
+					self.intrinsic_modes[name + signature] = "tex::texel_float_uvtile"
+					return True
+			elif params[0] == "T3":
+				if len(params) == 3:
+					# support texel_float(texture_3d) with frame parameter
+					# FIXME: frame ignored so far
+					self.intrinsic_modes[name + signature] = "tex::texel_float"
+					return True
 		elif (name == "texel_float2" or name == "texel_float3" or
-			 name == "texel_float4" or name == "texel_color"):
+				name == "texel_float4" or name == "texel_color"):
 			if (len(params) == 2):
 				# support texel_float2|3|4|color() without uv_tile parameter
 				self.intrinsic_modes[name + signature] = "tex::texel_floatX"
 				return True
-			if (params[0] == "T2" and len(params) == 3):
-				# support texel_float2|3|4|color(texture_2d) with uv_tile parameter
-				self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile"
-				return True
+			if params[0] == "T2":
+				if len(params) == 3:
+					# support texel_float2|3|4|color(texture_2d) with uv_tile parameter
+					self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile"
+					return True
+				if len(params) == 4:
+					# support texel_float2|3|4|color(texture_2d) with uv_tile, frame parameter
+					# FIXME: frame ignored so far
+					self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile"
+					return True
+			elif params[0] == "T3":
+				if len(params) == 3:
+					# support texel_float2|3|4|color(texture_3d) with frame parameter
+					# FIXME: frame ignored so far
+					self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile"
+					return True
+		elif (name == "width_offset" or name == "height_offset" or
+				name == "depth_offset" or name == "first_frame" or
+				name == "last_frame"):
+			# for now, these return 0
+			self.intrinsic_modes[name + signature] = "tex::zero_return"
+			return True
+		elif name == "grid_to_object_space":
+			# FIXME: for now, these return 0
+			self.intrinsic_modes[name + signature] = "tex::zero_return"
+			return True
 		return False
 
 	def is_scene_supported(self, name, signature):
@@ -1120,8 +1169,7 @@ class SignatureParser:
 		llvm::Value *res;
 
 		func->setLinkage(llvm::GlobalValue::InternalLinkage);
-		if (m_code_gen.is_always_inline_enabled())
-			func->addFnAttr(llvm::Attribute::AlwaysInline);
+		m_code_gen.add_generated_attributes(func);
 		"""
 		self.format_code(f, code % params)
 
@@ -3755,6 +3803,14 @@ class SignatureParser:
 			texture_param = params[0]
 			tex_dim = "3d" if texture_param == "T3" else "2d"
 
+			code = ""
+			if texture_param == "T2" and len(params) == 3:
+				# skip 3. parameter: frame
+				code += "(void)c;\n"
+			elif texture_param == "T3" and len(params) == 2:
+				# skip 2. parameter: frame
+				code += "(void)b;\n"
+
 			# texture attribute
 			code_params = { "intrinsic": intrinsic }
 			if intrinsic == "width":
@@ -3786,7 +3842,7 @@ class SignatureParser:
 				else:
 					code_params["res_proj"] = "1"
 					code_params["comment_name"] = "height"
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_int_2_type();
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_2_type();
@@ -3829,7 +3885,7 @@ class SignatureParser:
 				""" % code_params
 			else:
 				# use resource handler or lookup table
-				code = """
+				code += """
 				llvm::Type  *res_type = ctx.get_non_deriv_return_type();
 
 				llvm::Value *lut      = m_code_gen.get_attribute_table(
@@ -3904,8 +3960,16 @@ class SignatureParser:
 		elif mode == "tex::lookup_float":
 			# texture lookup for texture
 			texture_param = params[0]
+			code = "";
+			if texture_param == "T2" and len(params) == 7:
+				# skip 7. parameter: frame
+				code = "(void)g;\n";
+			if texture_param == "T3" and len(params) == 9:
+				# skip 9. parameter: frame
+				code = "(void)i;\n";
+
 			if texture_param == "T2":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func;
 					llvm::Type     *coord_type;
@@ -3920,7 +3984,7 @@ class SignatureParser:
 
 					llvm::Type  *f2_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *coord;
-				    if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
 						coord = ctx.create_local(coord_type, "coord");
 						ctx.convert_and_store(b, coord);
 					} else {
@@ -3954,7 +4018,7 @@ class SignatureParser:
 					llvm::Type  *crop_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
 					llvm::Value *tmp       = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord;
-				    if (m_code_gen.m_type_mapper.target_supports_pointers()) {
+					if (m_code_gen.m_type_mapper.target_supports_pointers()) {
 						coord = ctx.create_local(coord_type, "coord");
 						ctx.convert_and_store(b, coord);
 					} else {
@@ -3976,7 +4040,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "T3":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_LOOKUP_FLOAT_3D);
 
@@ -4037,7 +4101,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "TC":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_LOOKUP_FLOAT_CUBE);
 
@@ -4083,7 +4147,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "TP":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_LOOKUP_FLOAT_PTEX);
 
@@ -4131,8 +4195,16 @@ class SignatureParser:
 				error("Unsupported tex lookup function '%s'" % intrinsic)
 
 			texture_param = params[0]
+			code = "";
+			if texture_param == "T2" and len(params) == 7:
+				# skip 7. parameter: frame
+				code = "(void)g;\n";
+			if texture_param == "T3" and len(params) == 9:
+				# skip 9. parameter: frame
+				code = "(void)i;\n";
+
 			if texture_param == "T2":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func;
 					llvm::Type     *coord_type;
@@ -4204,7 +4276,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "T3":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_%(func)s_3D);
 
@@ -4266,7 +4338,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "TC":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_%(func)s_CUBE);
 
@@ -4314,7 +4386,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "TP":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_%(func)s_PTEX);
 
@@ -4342,15 +4414,23 @@ class SignatureParser:
 
 		elif mode == "tex::texel_float" or mode == "tex::texel_float_uvtile":
 			# texture lookup_float()
-			code_params = {}
-			if mode == "tex::texel_float_uvtile":
-				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
-			else:
-				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
-
 			texture_param = params[0]
+
+			code_params = {}
+			code = ""
+			if mode == "tex::texel_float":
+				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
+				if (texture_param == "T3" and len(params) == 3):
+					# skip 3. parameter: frame
+					code = "(void)c;\n"
+			else:
+				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
+				if (texture_param == "T2" and len(params) == 4):
+					# skip 4. parameter: frame
+					code = "(void)d;\n"
+
 			if texture_param == "T2":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_TEXEL_FLOAT_2D);
 
@@ -4391,7 +4471,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "T3":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_TEXEL_FLOAT_3D);
 
@@ -4441,6 +4521,7 @@ class SignatureParser:
 		elif mode == "tex::texel_floatX" or mode == "tex::texel_floatX_uvtile":
 			# texture lookup_floatX()
 			code_params = {}
+			code = ""
 			if intrinsic == "texel_float2":
 				code_params["size"] = "2"
 				code_params["func"] = "TEXEL_FLOAT2"
@@ -4456,14 +4537,21 @@ class SignatureParser:
 			else:
 				error("Unsupported tex texel function '%s'" % intrinsic)
 
-			if mode == "tex::texel_floatX_uvtile":
-				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
-			else:
-				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
-
 			texture_param = params[0]
+
+			if mode == "tex::texel_floatX":
+				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
+			else:
+				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
+				if (texture_param == "T2" and len(params) == 4):
+					# skip 4. parameter: frame
+					code += "(void)d;\n"
+				if (texture_param == "T3" and len(params) == 3):
+					# skip 3. parameter: frame
+					code += "(void)c;\n"
+
 			if texture_param == "T2":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_%(func)s_2D);
 
@@ -4504,7 +4592,7 @@ class SignatureParser:
 				}
 				"""
 			elif texture_param == "T3":
-				code = """
+				code += """
 				if (m_has_res_handler) {
 					llvm::Function *lookup_func = get_runtime_func(RT_MDL_TEX_%(func)s_3D);
 
@@ -4551,6 +4639,15 @@ class SignatureParser:
 				res = ctx.get_dual(res);
 			}
 			""")
+
+		elif mode == "tex::zero_return":
+			# suppress unused variable warnings
+			idx = 0
+			for param in params:
+				self.write(f, "(void)%s;\n" % chr(ord('a') + idx))
+				self.write(f, "(void)res_data;\n")
+				idx += 1
+			self.write(f, "res = llvm::Constant::getNullValue(ctx_data->get_return_type());\n")
 
 		elif mode == "scene::data_isvalid":
 			code = """
@@ -5604,63 +5701,71 @@ class SignatureParser:
 		"""Register functions from the C runtime."""
 
 		# note: this section contains only functions supported in the C-runtime of Windows and Linux
-		self.register_runtime_func("absi",   "II_II")
-		self.register_runtime_func("absf",   "FF_FF")
-		self.register_runtime_func("abs",    "DD_DD")
-		self.register_runtime_func("acos",   "DD_DD")
-		self.register_runtime_func("acosf",  "FF_FF")
-		self.register_runtime_func("asin",   "DD_DD")
-		self.register_runtime_func("asinf",  "FF_FF")
-		self.register_runtime_func("atan",   "DD_DD")
-		self.register_runtime_func("atanf",  "FF_FF")
-		self.register_runtime_func("atan2",  "DD_DDDD")
-		self.register_runtime_func("atan2f", "FF_FFFF")
-		self.register_runtime_func("ceil",   "DD_DD")
-		self.register_runtime_func("ceilf",  "FF_FF")
-		self.register_runtime_func("cos",    "DD_DD")
-		self.register_runtime_func("cosf",   "FF_FF")
-		self.register_runtime_func("exp",    "DD_DD")
-		self.register_runtime_func("expf",   "FF_FF")
-		self.register_runtime_func("floor",  "DD_DD")
-		self.register_runtime_func("floorf", "FF_FF")
-		self.register_runtime_func("fmod",   "DD_DDDD")
-		self.register_runtime_func("fmodf",  "FF_FFFF")
-		self.register_runtime_func("log",    "DD_DD")
-		self.register_runtime_func("logf",   "FF_FF")
-		self.register_runtime_func("log10",  "DD_DD")
-		self.register_runtime_func("log10f", "FF_FF")
-		self.register_runtime_func("modf",   "DD_DDdd")
-		self.register_runtime_func("modff",  "FF_FFff")
-		self.register_runtime_func("pow",    "DD_DDDD")
-		self.register_runtime_func("powf",   "FF_FFFF")
-		self.register_runtime_func("powi",   "DD_DDII")
-		self.register_runtime_func("sin",    "DD_DD")
-		self.register_runtime_func("sinf",   "FF_FF")
-		self.register_runtime_func("sqrt",   "DD_DD")
-		self.register_runtime_func("sqrtf",  "FF_FF")
-		self.register_runtime_func("tan",    "DD_DD")
-		self.register_runtime_func("tanf",   "FF_FF")
+		self.register_runtime_func("absi",              "II_II")
+		self.register_runtime_func("absf",              "FF_FF")
+		self.register_runtime_func("abs",               "DD_DD")
+		self.register_runtime_func("acos",              "DD_DD")
+		self.register_runtime_func("acosf",             "FF_FF")
+		self.register_runtime_func("asin",              "DD_DD")
+		self.register_runtime_func("asinf",             "FF_FF")
+		self.register_runtime_func("atan",              "DD_DD")
+		self.register_runtime_func("atanf",             "FF_FF")
+		self.register_runtime_func("atan2",             "DD_DDDD")
+		self.register_runtime_func("atan2f",            "FF_FFFF")
+		self.register_runtime_func("ceil",              "DD_DD")
+		self.register_runtime_func("ceilf",             "FF_FF")
+		self.register_runtime_func("cos",               "DD_DD")
+		self.register_runtime_func("cosf",              "FF_FF")
+		self.register_runtime_func("cosh",              "DD_DD")
+		self.register_runtime_func("coshf",             "FF_FF")
+		self.register_runtime_func("exp",               "DD_DD")
+		self.register_runtime_func("expf",              "FF_FF")
+		self.register_runtime_func("floor",             "DD_DD")
+		self.register_runtime_func("floorf",            "FF_FF")
+		self.register_runtime_func("fmod",              "DD_DDDD")
+		self.register_runtime_func("fmodf",             "FF_FFFF")
+		self.register_runtime_func("log",               "DD_DD")
+		self.register_runtime_func("logf",              "FF_FF")
+		self.register_runtime_func("log10",             "DD_DD")
+		self.register_runtime_func("log10f",            "FF_FF")
+		self.register_runtime_func("modf",              "DD_DDdd")
+		self.register_runtime_func("modff",             "FF_FFff")
+		self.register_runtime_func("pow",               "DD_DDDD")
+		self.register_runtime_func("powf",              "FF_FFFF")
+		self.register_runtime_func("powi",              "DD_DDII")
+		self.register_runtime_func("sin",               "DD_DD")
+		self.register_runtime_func("sinf",              "FF_FF")
+		self.register_runtime_func("sinh",              "DD_DD")
+		self.register_runtime_func("sinhf",             "FF_FF")
+		self.register_runtime_func("sqrt",              "DD_DD")
+		self.register_runtime_func("sqrtf",             "FF_FF")
+		self.register_runtime_func("tan",               "DD_DD")
+		self.register_runtime_func("tanf",              "FF_FF")
+		self.register_runtime_func("tanh",              "DD_DD")
+		self.register_runtime_func("tanhf",             "FF_FF")
 		# used by other functions if supported
-		self.register_runtime_func("copysign",  "DD_DDDD")
-		self.register_runtime_func("copysignf", "FF_FFFF")
+		self.register_runtime_func("copysign",          "DD_DDDD")
+		self.register_runtime_func("copysignf",         "FF_FFFF")
 		# optional supported
-		self.register_runtime_func("sincosf", "VV_FFffff")
-		self.register_runtime_func("exp2f",   "FF_FF")
-		self.register_runtime_func("exp2",    "DD_DD")
-		self.register_runtime_func("fracf",   "FF_FF")
-		self.register_runtime_func("frac",    "DD_DD")
-		self.register_runtime_func("log2f",   "FF_FF")
-		self.register_runtime_func("log2",    "DD_DD")
-		self.register_runtime_func("mini",    "II_IIII")
-		self.register_runtime_func("maxi",    "II_IIII")
-		self.register_runtime_func("minf",    "FF_FFFF")
-		self.register_runtime_func("maxf",    "FF_FFFF")
-		self.register_runtime_func("min",     "DD_DDDD")
-		self.register_runtime_func("max",     "DD_DDDD")
-		self.register_runtime_func("rsqrtf",  "FF_FF")
-		self.register_runtime_func("rsqrt",   "DD_DD")
-		self.register_runtime_func("signf",   "II_FF")
-		self.register_runtime_func("sign",    "II_DD")
+		self.register_runtime_func("sincosf",           "VV_FFffff")
+		self.register_runtime_func("exp2f",             "FF_FF")
+		self.register_runtime_func("exp2",              "DD_DD")
+		self.register_runtime_func("fracf",             "FF_FF")
+		self.register_runtime_func("frac",              "DD_DD")
+		self.register_runtime_func("log2f",             "FF_FF")
+		self.register_runtime_func("log2",              "DD_DD")
+		self.register_runtime_func("mini",              "II_IIII")
+		self.register_runtime_func("maxi",              "II_IIII")
+		self.register_runtime_func("minf",              "FF_FFFF")
+		self.register_runtime_func("maxf",              "FF_FFFF")
+		self.register_runtime_func("min",               "DD_DDDD")
+		self.register_runtime_func("max",               "DD_DDDD")
+		self.register_runtime_func("rsqrtf",            "FF_FF")
+		self.register_runtime_func("rsqrt",             "DD_DD")
+		self.register_runtime_func("signf",             "II_FF")
+		self.register_runtime_func("sign",              "II_DD")
+		self.register_runtime_func("int_bits_to_float", "FF_II")
+		self.register_runtime_func("float_bits_to_int", "II_FF")
 
 	def register_atomic_runtime(self):
 		self.register_mdl_runtime_func("mdl_clampi",      "II_IIIIII")
@@ -5684,6 +5789,8 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_sign",        "DD_DD")
 		self.register_mdl_runtime_func("mdl_smoothstepf", "FF_FFFFFF")
 		self.register_mdl_runtime_func("mdl_smoothstep",  "DD_DDDDDD")
+		self.register_mdl_runtime_func("mdl_int_bits_to_floati", "FF_II")
+		self.register_mdl_runtime_func("mdl_float_bits_to_intf", "II_FF")
 		# from libmdlrt
 		self.register_mdl_runtime_func("mdl_blackbody",        "FA3_FF")
 		self.register_mdl_runtime_func("mdl_emission_color",   "vv_ffffffII")
@@ -6209,6 +6316,8 @@ class SignatureParser:
 		self.write(f, "llvm::Function *create_state_get_thin_walled(Internal_function const *int_func);\n")
 		self.write(f, "/// Generate LLVM IR for state::adapt_microfacet_roughness()\n")
 		self.write(f, "llvm::Function *create_state_adapt_microfacet_roughness(Internal_function const *int_func);\n\n")
+		self.write(f, "/// Generate LLVM IR for state::adapt_normal()\n")
+		self.write(f, "llvm::Function *create_state_adapt_normal(Internal_function const *int_func);\n\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_resolution()\n")
 		self.write(f, "llvm::Function *create_df_bsdf_measurement_resolution(Internal_function const *int_func);\n")
 		self.write(f, "/// Generate LLVM IR for df::bsdf_measurement_evaluate()\n")

@@ -61,7 +61,6 @@
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 
 
@@ -513,12 +512,9 @@ void Impexp_utilities::get_export_elements_internal(
 
         // get references of tag (optimization: consider only MDL module for MDL definitions)
         DB::Tag_set references;
-        if( shortcuts_mdl && class_id == MDL::ID_MDL_MATERIAL_DEFINITION) {
-            DB::Access<MDL::Mdl_material_definition> element( tag, db_transaction);
-            references.insert( element->get_module(db_transaction));
-        } else if( shortcuts_mdl && class_id == MDL::ID_MDL_FUNCTION_DEFINITION) {
+        if( shortcuts_mdl && class_id == MDL::ID_MDL_FUNCTION_DEFINITION) {
             DB::Access<MDL::Mdl_function_definition> element( tag, db_transaction);
-            references.insert( element->get_module(db_transaction));
+            references.insert( element->get_module( db_transaction));
         } else {
             DB::Access<DB::Element_base> element( tag, db_transaction);
             element->get_references( &references);
@@ -534,8 +530,6 @@ void Impexp_utilities::get_export_elements_internal(
     }
 
     // optimization: do not report tags of MDL definitions
-    if( shortcuts_mdl && class_id == MDL::ID_MDL_MATERIAL_DEFINITION)
-        return;
     if( shortcuts_mdl && class_id == MDL::ID_MDL_FUNCTION_DEFINITION)
         return;
 

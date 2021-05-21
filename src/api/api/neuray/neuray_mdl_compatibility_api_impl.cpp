@@ -69,7 +69,7 @@ void handle_messages(Mdl_execution_context_impl* ctx, const mi::mdl::Messages& m
     if(ctx)
         ctx->get_context().add_messages(messages);
     else
-        MDL::report_messages(messages, nullptr);
+        MDL::convert_and_log_messages(messages, nullptr);
 }
 
 

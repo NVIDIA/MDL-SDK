@@ -712,6 +712,12 @@ public:
     /// Leave and enter scopes until the given scope is reached.
     void transition_to_scope(Scope *scope);
 
+    /// Associate a type scope.
+    ///
+    /// \param type   the type
+    /// \param scope  the scope associate with this type
+    void associate_type_scope(Type *type, Scope *scope);
+
     /// Enter a new (entity) definition.
     ///
     /// \param kind       the kind of the definition to enter
@@ -725,6 +731,16 @@ public:
         Type                     *type,
         Def_function::Semantics   semantics,
         Location const           *loc);
+
+    /// Enter a new type definition.
+    ///
+    /// \param symbol     the symbol of the type
+    /// \param type       the type of the type
+    /// \param loc        the location of the type
+    Def_type *enter_type_definition(
+        Symbol         *symbol,
+        Type           *type,
+        Location const *loc);
 
     /// Enter a new function definition.
     ///
@@ -957,8 +973,19 @@ public:
         : m_def_tab(def_tab)
         {
             Scope *scope = m_def_tab.enter_scope(def);
-            if (def != NULL && def->get_kind() == Definition::DK_FUNCTION)
-                cast<Def_function>(def)->set_own_scope(scope);
+            if (def != NULL) {
+                switch (def->get_kind()) {
+                case Definition::DK_TYPE:
+                    cast<Def_type>(def)->set_own_scope(scope);
+                    m_def_tab.associate_type_scope(def->get_type(), scope);
+                   break;
+                case Definition::DK_FUNCTION:
+                    cast<Def_function>(def)->set_own_scope(scope);
+                    break;
+                default:
+                    break;
+                }
+            }
         }
 
         /// Reopen given scope.

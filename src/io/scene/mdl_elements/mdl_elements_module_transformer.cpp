@@ -41,6 +41,8 @@
 #include <mi/mdl/mdl_thread_context.h>
 
 #include <boost/core/ignore_unused.hpp>
+#include <base/lib/config/config.h>
+#include <base/util/registry/i_config_registry.h>
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/data/db/i_db_transaction.h>
 #include <mdl/compiler/compilercore/compilercore_serializer.h>
@@ -95,7 +97,7 @@ private:
 
 /// Upgrades the MDL version of the module including all its call references.
 ///
-/// There must be no weak relative import declarations or weak relative resoure file paths.
+/// There must be no weak relative import declarations or weak relative resource file paths.
 class Version_upgrader : protected mi::mdl::Module_visitor, public mi::mdl::IClone_modifier
 {
 public:
@@ -334,13 +336,13 @@ void Import_declaration_replacer::run()
 
     // Add new alias declarations, remove incorrect alias declarations. We would like to remove all
     // now unused alias declarations, but since this is not easy we remove at least the incorrect
-    // ones (which are ununsed at this point).
+    // ones (which are unused at this point).
 
     std::vector<const mi::mdl::IDeclaration*> declarations;
     declarations.reserve( m_module->get_declaration_count() + m_new_aliases.size());
     mi::mdl::IDeclaration_factory* df = m_module->get_declaration_factory();
 
-    for( mi::Size i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
 
         const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
         switch( decl->get_kind()) {
@@ -441,12 +443,13 @@ void Import_declaration_replacer::do_create_relative_import_declaration(
     // Update \p name.
     name->clear_components();
     name->set_absolute( false);
-    mi::mdl::Symbol_table& st = m_module->get_symbol_table();
     if( len == n_module - 1) {
-        const mi::mdl::ISymbol* symbol = st.get_predefined_symbol( mi::mdl::ISymbol::SYM_DOT);
+        const mi::mdl::ISymbol* symbol
+            = mi::mdl::Symbol_table::get_predefined_symbol( mi::mdl::ISymbol::SYM_DOT);
         name->add_component( m_nf->create_simple_name( symbol));
     } else {
-        const mi::mdl::ISymbol* sym = st.get_predefined_symbol( mi::mdl::ISymbol::SYM_DOTDOT);
+        const mi::mdl::ISymbol* sym
+            = mi::mdl::Symbol_table::get_predefined_symbol( mi::mdl::ISymbol::SYM_DOTDOT);
         for( mi::Size i = len; i < n_module - 1; ++i)
             name->add_component( m_nf->create_simple_name( sym));
     }
@@ -544,7 +547,7 @@ std::vector<std::string> Import_declaration_replacer::create_absolute_name(
                     i == 0 ? was_absolute : dummy1,
                     i == 0 ? was_strict_relative : dummy2);
             } else
-                result.push_back( sym->get_name());
+                result.emplace_back( sym->get_name());
         }
     }
 
@@ -704,11 +707,11 @@ private:
         }
 
         // Apply filters.
-        std::wstring absolute_module_name_wstr
-            = STRING::utf8_to_wchar( absolute_module_name.c_str());
-        if( m_include_regex && !std::regex_match( absolute_module_name_wstr, *m_include_regex))
+        std::string mdl_module_name = MDL::encode_module_name( absolute_module_name);
+        std::wstring mdl_module_name_wstr = STRING::utf8_to_wchar( mdl_module_name.c_str());
+        if( m_include_regex && !std::regex_match( mdl_module_name_wstr, *m_include_regex))
             return;
-        if( m_exclude_regex &&  std::regex_match( absolute_module_name_wstr, *m_exclude_regex))
+        if( m_exclude_regex &&  std::regex_match( mdl_module_name_wstr, *m_exclude_regex))
             return;
 
         create_aliases( absolute_name);
@@ -778,11 +781,11 @@ private:
             return;
 
         // Apply filters.
-        std::wstring absolute_module_name_wstr
-            = STRING::utf8_to_wchar( absolute_module_name.c_str());
-        if( m_include_regex && !std::regex_match( absolute_module_name_wstr, *m_include_regex))
+        std::string mdl_module_name = MDL::encode_module_name( absolute_module_name);
+        std::wstring mdl_module_name_wstr = STRING::utf8_to_wchar( mdl_module_name.c_str());
+        if( m_include_regex && !std::regex_match( mdl_module_name_wstr, *m_include_regex))
             return;
-        if( m_exclude_regex &&  std::regex_match( absolute_module_name_wstr, *m_exclude_regex))
+        if( m_exclude_regex &&  std::regex_match( mdl_module_name_wstr, *m_exclude_regex))
             return;
 
         create_aliases( absolute_name);
@@ -1011,6 +1014,7 @@ const mi::mdl::IValue_resource* Resource_file_path_replacer::create_resource(
                 t->get_type(),
                 s,
                 t->get_gamma_mode(),
+                t->get_selector(),
                 t->get_tag_value(),
                 t->get_tag_version());
         }
@@ -1263,7 +1267,7 @@ Mdl_module_transformer::Mdl_module_transformer(
     const mi::mdl::IQualified_name* name = m_module->get_qualified_name();
     for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
         const mi::mdl::ISimple_name* simple = name->get_component( i);
-        m_module_name.push_back( simple->get_symbol()->get_name());
+        m_module_name.emplace_back( simple->get_symbol()->get_name());
     }
 }
 
@@ -1281,7 +1285,7 @@ mi::Sint32 Mdl_module_transformer::upgrade_mdl_version(
     }
 
     if( to_version == mi::neuraylib::MDL_VERSION_INVALID) {
-        add_error_message( context, "Invalid new MDL version", -6);
+        add_error_message( context, "Invalid new MDL version.", -6);
         return -1;
     }
 
@@ -1458,7 +1462,8 @@ public:
         if( module_name == m_module_name)
             return true;
 
-        std::wstring module_name_wstr = STRING::utf8_to_wchar( module_name.c_str());
+        std::string mdl_module_name = MDL::encode_module_name( module_name);
+        std::wstring module_name_wstr = STRING::utf8_to_wchar( mdl_module_name.c_str());
         if( m_include_regex && !std::regex_match( module_name_wstr, *m_include_regex))
             return false;
         if( m_exclude_regex &&  std::regex_match( module_name_wstr, *m_exclude_regex))
@@ -1534,17 +1539,23 @@ mi::Sint32 Mdl_module_transformer::inline_imported_modules(
 
 void Mdl_module_transformer::analyze_module( MDL::Execution_context* context)
 {
-    // mi::mdl::dump_ast( m_module.get());
+    SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
+    const CONFIG::Config_registry& registry = config_module->get_configuration();
+    bool dump_ast = false;
+    registry.get_value( "mdl_dump_ast_in_module_transformer", dump_ast);
+    if( dump_ast)
+        mi::mdl::dump_ast( m_module.get());
 
     mi::base::Handle<mi::mdl::IThread_context> thread_context(
         MDL::create_thread_context( m_mdl.get(), context));
 
     mi::mdl::Options& options = thread_context->access_options();
     options.set_option( MDL_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, "true");
+    options.set_option( MDL_OPTION_OPT_LEVEL, "0");
 
     m_module->analyze( /*module_cache*/ nullptr, thread_context.get());
     if( !m_module->is_valid()) {
-        report_messages( m_module->access_messages(), context);
+        convert_and_log_messages( m_module->access_messages(), context);
         add_error_message( context, "Module transformation failed.", -4);
     }
 }

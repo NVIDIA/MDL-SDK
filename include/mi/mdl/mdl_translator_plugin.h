@@ -61,6 +61,9 @@ public:
         IThread_context *ctx,
         char const      *module_name,
         IModule_cache   *cache) = 0;
+
+    /// If this translator puts converted modules into a virtual root package, return its name.
+    virtual char const *get_virtual_root_package() const = 0;
 };
 
 } // mdl

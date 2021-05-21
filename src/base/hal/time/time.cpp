@@ -197,19 +197,19 @@ void update_cached_system_time()
     (void)get_cached_system_time(true);
 }
 
-// Suspend current thread for the given time interval
-// Uses high resolution sleep functions (Unix: ::usleep(), Windows: ::Sleep())
+// Suspend current thread for at least the given time interval
+// Uses high resolution sleep functions (Unix: ::usleep(), Windows: ::Sleep(), the latter must rely on timeBeginPeriod(1) being set by the app)
 void sleep(
     const Time time)
 {
 #ifdef WIN_NT
     // The windows version expects milliseconds here.
-    Uint millis = (Uint)(time.get_seconds() * 1000);
-    if (millis == 0)
+    Uint millis = (Uint)(time.get_seconds() * 1000. /*+ 0.5*/); // no rounding on windows as Sleep on the average sleeps too long anyway
+    if (millis == 0) // 0 is usually similar to a yield, but not really defined, so avoid
 	millis = 1;
-    ::Sleep(millis);
+    ::Sleep(millis); // note also that the lowest possible 1ms is usually waiting 2ms 
 #else
-    useconds_t micros = (useconds_t)(time.get_seconds() * 1000000);
+    useconds_t micros = (useconds_t)(time.get_seconds() * 1000000. + 0.5);
     ::usleep((useconds_t) micros);
 #endif
 }

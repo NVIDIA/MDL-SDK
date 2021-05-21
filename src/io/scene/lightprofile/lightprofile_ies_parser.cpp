@@ -963,7 +963,7 @@ static void horizontal_rotate(
         horizontal_angles[i] += Scalar(rotation);
 }
 //
-// Flip representaion: IES normally has clockwise phi, but mi use counter -
+// Flip representation: IES normally has clockwise phi, but mi use counter -
 // clockwise one. Also, flags may overwrite this.
 // [inspired by MENTAL RAY: horz_flip]
 static void horizontal_flip(
@@ -1290,7 +1290,7 @@ static void compute_linear_interpolation(
  * That equation holds for all t with 0 <= t <= 1. Equally, for the derivative.
  * To ensure that the approximation coincides with the given values
  * y(0) and y(1) as well as with the derivatives y'(0) and y'(1) we
- * enforce the following contraints:
+ * enforce the following constraints:
  *
  * c[0] (0) = 1;  c[1] (0) = 0;  c[2] (0) = 0;  c[3] (0) = 0;
  * c[0] (1) = 0;  c[1] (1) = 1;  c[2] (1) = 0;  c[3] (1) = 0;
@@ -1699,7 +1699,7 @@ bool Lightprofile_ies_parser::setup_lightprofile(
         horizontal_flip(m_nb_vertical_angles, horizontal_angles, candela_values);
     }
 
-    // Remember orginal resolution after unfolding symmetries
+    // Remember original resolution after unfolding symmetries
     size_t orig_nb_horizontal_angles = horizontal_angles.size();
     size_t orig_nb_vertical_angles   = vertical_angles.size();
 

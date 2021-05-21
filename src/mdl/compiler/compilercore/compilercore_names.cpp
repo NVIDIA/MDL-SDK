@@ -33,6 +33,7 @@
 #include "compilercore_positions.h"
 #include "compilercore_memory_arena.h"
 #include "compilercore_symbols.h"
+#include "compilercore_assert.h"
 
 namespace mi {
 namespace mdl {
@@ -216,6 +217,12 @@ public:
     /// Mark this as an incomplete array.
     void set_incomplete_array() MDL_FINAL;
 
+    /// Check if this is the "auto" type.
+    virtual bool is_auto_type() const MDL_FINAL;
+
+    /// Mark this as the "auto" type.
+    void set_auto_type() MDL_FINAL;
+
     /// Constructor.
     ///
     /// \param arena           the memory arena to allocate on
@@ -249,6 +256,9 @@ private:
 
     /// The flag to indicate if this is a concrete array.
     bool m_is_concrete_array;
+
+    /// The flag to indicate if this is a "auto" type.
+    bool m_is_auto_type;
 
     /// The concrete array size.
     IExpression const *m_array_size;
@@ -400,6 +410,7 @@ Type_name::Type_name(
 , m_qualified_name(qualified_name)
 , m_is_array(false)
 , m_is_concrete_array(false)
+, m_is_auto_type(false)
 , m_array_size(NULL)
 , m_size_name(NULL)
 , m_type(NULL)
@@ -416,6 +427,7 @@ bool Type_name::is_absolute() const
 // Set the absolute flag of the qualified name.
 void Type_name::set_absolute()
 {
+    MDL_ASSERT(!m_is_auto_type);
     get_qualified_name()->set_absolute();
 }
 
@@ -458,6 +470,7 @@ ISimple_name const *Type_name::get_size_name() const
 // Set a concrete array size.
 void Type_name::set_array_size(IExpression const *size)
 {
+    MDL_ASSERT(!m_is_auto_type);
     m_array_size = size;
     m_is_array = true;
     m_is_concrete_array = true;
@@ -466,6 +479,7 @@ void Type_name::set_array_size(IExpression const *size)
 // Set a size name.
 void Type_name::set_size_name(ISimple_name const *name)
 {
+    MDL_ASSERT(!m_is_auto_type);
     m_size_name = name;
     m_is_array = true;
     m_is_concrete_array = false;
@@ -492,10 +506,24 @@ bool Type_name::is_incomplete_array() const
 // Mark this as an incomplete array.
 void Type_name::set_incomplete_array()
 {
+    MDL_ASSERT(!m_is_auto_type);
     m_is_array          = true;
     m_is_concrete_array = true;
     m_array_size        = NULL;
     m_size_name         = NULL;
+}
+
+// Check if this is the "auto" type.
+bool Type_name::is_auto_type() const
+{
+    return m_is_auto_type;
+}
+
+// Mark this as the "auto" type.
+void Type_name::set_auto_type()
+{
+    MDL_ASSERT(!m_is_array && !m_is_concrete_array);
+    m_is_auto_type = true;
 }
 
 // Access the position.

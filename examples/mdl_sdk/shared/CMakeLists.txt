@@ -34,17 +34,14 @@ set(PROJECT_SOURCES
     "example_cuda_shared.h"
     "example_shared.cpp"
     "example_shared.h"
-    "texture_support_cuda.h"
     "compiled_material_traverser_base.h"
     "compiled_material_traverser_base.cpp"
-    "lpe.cpp"
-    "lpe.h"
     "gui/gui.h"
     "gui/gui.cpp"
-    "gui/gui_api_interface_dx11.h"
-    "gui/gui_api_interface_dx12.h"
     "gui/gui_material_properties.h"
     "gui/gui_material_properties.cpp"
+    "lpe.cpp"
+    "lpe.h"
     "utils/enums.h"
     "utils/io.h"
     "utils/mdl.h"
@@ -52,10 +49,31 @@ set(PROJECT_SOURCES
     "utils/strings.h"
     )
 
+if(MDL_ENABLE_CUDA_EXAMPLES)
+    set(PROJECT_SOURCES
+        ${PROJECT_SOURCES}
+        "texture_support_cuda.h"
+        )
+endif()
+
 if(MDL_ENABLE_OPENGL_EXAMPLES)
     set(PROJECT_SOURCES
         ${PROJECT_SOURCES}
         "utils/gl_display.h"
+        )
+endif()
+
+if(MDL_ENABLE_D3D11_EXAMPLES)
+    set(PROJECT_SOURCES
+        ${PROJECT_SOURCES}
+        "gui/gui_api_interface_dx11.h"
+        )
+endif()
+
+if(MDL_ENABLE_D3D12_EXAMPLES)
+    set(PROJECT_SOURCES
+        ${PROJECT_SOURCES}
+        "gui/gui_api_interface_dx12.h"
         )
 endif()
 
@@ -70,10 +88,19 @@ create_from_base_preset(
 add_library(mdl_sdk::shared ALIAS ${PROJECT_NAME})
 
 # inject the MDL_SAMPLES_ROOT path
-target_compile_definitions(${PROJECT_NAME} 
+target_compile_definitions(${PROJECT_NAME}
     PUBLIC
         "MDL_SAMPLES_ROOT=\"${CMAKE_CURRENT_SOURCE_DIR}/../..\""
     )
+
+if(WINDOWS)
+    # MS deprecated the codecvt_utf8 functions without providing a replacement
+    # the deprecated function will be available until there is such a replacement
+    target_compile_definitions(${PROJECT_NAME}
+        PUBLIC
+            "_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING"
+        )
+endif()
 
 # add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME}

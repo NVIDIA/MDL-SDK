@@ -57,7 +57,7 @@ Mipmap_impl::Mipmap_impl()
     m_nr_of_provided_levels = 1;
     m_levels.resize( m_nr_of_levels);
     m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
-    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile( 0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
     mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
@@ -106,7 +106,7 @@ Mipmap_impl::Mipmap_impl(
     m_nr_of_provided_levels = 0;
     m_levels.resize( m_nr_of_levels);
     m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
-    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile( 0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
     mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
@@ -136,7 +136,7 @@ Mipmap_impl::Mipmap_impl(
     }
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_reading( &reader));
-    if( !image_file.is_valid_interface()) {
+    if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import \"%s\".",
             plugin->get_name(), filename.c_str());
@@ -162,7 +162,7 @@ Mipmap_impl::Mipmap_impl(
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
-    if( canvas_internal.is_valid_interface())
+    if( canvas_internal)
         m_is_cubemap = canvas_internal->get_is_cubemap();
 
     *errors = 0;
@@ -186,7 +186,7 @@ Mipmap_impl::Mipmap_impl(
     m_nr_of_provided_levels = 0;
     m_levels.resize( m_nr_of_levels);
     m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
-    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile( 0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
     mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
@@ -214,7 +214,7 @@ Mipmap_impl::Mipmap_impl(
     }
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_reading( reader));
-    if( !image_file.is_valid_interface()) {
+    if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import \"%s\" in \"%s\".",
             plugin->get_name(), member_filename.c_str(), archive_filename.c_str());
@@ -248,7 +248,7 @@ Mipmap_impl::Mipmap_impl(
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
-    if( canvas_internal.is_valid_interface())
+    if( canvas_internal)
         m_is_cubemap = canvas_internal->get_is_cubemap();
 
     *errors = 0;
@@ -272,7 +272,7 @@ Mipmap_impl::Mipmap_impl(
     m_nr_of_provided_levels = 0;
     m_levels.resize( m_nr_of_levels);
     m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
-    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile( 0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
     mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
@@ -295,7 +295,7 @@ Mipmap_impl::Mipmap_impl(
     }
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_reading( reader));
-    if( !image_file.is_valid_interface()) {
+    if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import a memory-based image with image format "
             "\"%s\".", plugin->get_name(), image_format);
@@ -329,7 +329,7 @@ Mipmap_impl::Mipmap_impl(
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
-    if( canvas_internal.is_valid_interface())
+    if( canvas_internal)
         m_is_cubemap = canvas_internal->get_is_cubemap();
 }
 
@@ -369,7 +369,7 @@ const mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) const
     }
 
     if( level >= m_nr_of_levels)
-        return 0;
+        return nullptr;
 
     SYSTEM::Access_module<Image_module> image_module(false);
     mi::base::Lock::Block block( &m_lock);
@@ -392,7 +392,7 @@ const mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) const
 mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) //-V659 PVS
 {
     if( level >= m_nr_of_levels)
-        return 0;
+        return nullptr;
 
     SYSTEM::Access_module<Image_module> image_module(false);
     mi::base::Lock::Block block( &m_lock);
@@ -410,7 +410,7 @@ mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) //-V659 PVS
     // destroy higher levels if needed
     mi::Uint32 first_level_to_destroy = std::max( level+1, m_nr_of_provided_levels);
     for( mi::Uint32 i = first_level_to_destroy; i <= m_last_created_level; ++i)
-        m_levels[i] = 0;
+        m_levels[i] = nullptr;
     m_last_created_level = first_level_to_destroy - 1;
 
     ASSERT( M_IMAGE, m_last_created_level >= level);
@@ -429,7 +429,7 @@ mi::Size Mipmap_impl::get_size() const
 
     for( mi::Uint32 i = 0; i <= m_last_created_level; ++i) {     // m_level[i]
         mi::base::Handle<ICanvas> canvas_internal( m_levels[i]->get_interface<ICanvas>());
-        if( canvas_internal.is_valid_interface())                // exact memory usage
+        if( canvas_internal)                // exact memory usage
             size += canvas_internal->get_size();
         else  {                                                  // approximate memory usage
             mi::Size width  = m_levels[i]->get_resolution_x();

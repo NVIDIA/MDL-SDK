@@ -94,6 +94,7 @@ public:
 private:
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
     mi::base::Handle<mi::mdl::IMDL_import_result> m_import_result;
+    std::string m_module_name;
 };
 
 class Mdl_resolved_resource_impl
@@ -170,6 +171,7 @@ public:
 
 private:
     mi::base::Handle<mi::neuraylib::IMdl_resolved_module> m_resolved_module;
+    std::string m_core_module_name;
 };
 
 class Core_mdl_resource_set_impl

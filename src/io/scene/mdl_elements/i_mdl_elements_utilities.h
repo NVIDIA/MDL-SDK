@@ -45,12 +45,20 @@
 #include <mi/mdl/mdl_code_generators.h>
 #include <mi/mdl/mdl_messages.h>
 #include <mi/neuraylib/typedefs.h>
+#include <mi/neuraylib/ifunction_definition.h>
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
+#include <mi/neuraylib/imdl_impexp_api.h>
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/data/db/i_db_tag.h>
 
-namespace mi { namespace neuraylib { class IReader; } }
+namespace mi { namespace neuraylib {
+class IDeserialized_module_name;
+class IMdle_serialization_callback;
+class IMdle_deserialization_callback;
+class IReader;
+class ISerialized_function_name;
+} }
 
 namespace mi { namespace mdl {
     class IGenerated_code_dag;
@@ -70,8 +78,11 @@ namespace IMAGE { class IMdl_container_callback; }
 
 namespace MDL {
 
-class IValue;
-class IValue_list;
+class Execution_context;
+class IAnnotation;
+class IAnnotation_block;
+class IAnnotation_list;
+class IDeserialized_function_name;
 class IExpression;
 class IExpression_call;
 class IExpression_constant;
@@ -80,12 +91,12 @@ class IExpression_factory;
 class IExpression_list;
 class IExpression_parameter;
 class IExpression_temporary;
-class IAnnotation;
-class IAnnotation_block;
-class IAnnotation_list;
+class IType;
+class IType_list;
+class IValue;
+class IValue_list;
 class Mdl_compiled_material;
 class Mdl_function_definition;
-class Mdl_material_definition;
 class Mdl_module;
 
 // **********  Computation of references to other DB element ***************************************
@@ -178,7 +189,7 @@ private:
 // Many other functions are declared in the internal header file mdl_elements_utilites.h, but could
 // be moved to this interface header file if necessary.
 
-/// Indicates whether \p name is valid fully-qualified MDL module name (does not support MDLE).
+/// Indicates whether \p name is valid a MDL module name (does not support MDLE).
 bool is_valid_module_name( const std::string& name);
 
 /// Indicates whether the module or definition name is from an MDLE module. MDL or DB names.
@@ -189,20 +200,30 @@ bool is_mdle( const std::string& name);
 /// Indicates whether \p name starts with "::".
 bool starts_with_scope( const std::string& name);
 
-/// Normalizes an MDL module name.
+/// Normalizes an argument to mi::neuraylib::IMdl_impexp_api::load_module().
 ///
-/// For MDLE module names, it makes non-absolute paths absolute, normalizes them, and converts them
-/// to use forward slashes. For all modules, it adds the prefix "::" if there is none yet.
-std::string normalize_mdl_module_name( const std::string& name, bool is_mdle);
+/// Takes a module identifier, normalized it for MDLEs, and return the MDL module name.
+///
+/// For non-MDLE modules, the method adds the prefix "::" if there is none yet, i.e., the method
+/// returns the MDL name. (Non-MDLE module names without leading "::" are deprecated.)
+///
+/// For MDLE module names, the method
+/// - makes non-absolute path absolute w.r.t. the current working directory,
+/// - normalizes them (handling of directory components "." and ".."),
+/// - converts them to use forward slashes,
+/// - adds a slash in front of drive letter (Windows only)
+/// - adds a scope ("::") prefix
+/// - and finally encodes them.
+std::string get_mdl_name_from_load_module_arg( const std::string& name, bool is_mdle);
 
-/// Converts an MDL module or material/function definition name into the name of the corresponding
-/// DB element.
+/// Converts an MDL name of a module, material or function definition into the corresponding
+/// DB name.
 ///
-/// Does not work for annotation definitions, use get_db_name_annotation_definition() instead.
+/// Does not work for annotation definitions, #use get_db_name_annotation_definition() instead.
 ///
-/// For non-MDLE names, it adds the prefix "mdl" or "mdl::", depending on whether \p name starts
-/// already with "::". For MDLE names, it adds the prefix "mdle" or "mdle::", and potentially also
-/// a slash if \p name does not start with "::/" or "/".
+/// For non-MDLE names, it adds the prefix "mdl" (or "mdl::" if \p name does not start with "::").
+///
+/// For MDLE names, it adds the prefix "mdle".
 std::string get_db_name( const std::string& name);
 
 /// Removes owner (module) prefix from resource URLs.
@@ -223,41 +244,249 @@ const char* get_array_constructor_db_name();
 /// Returns the MDL name used for the array constructor.
 const char* get_array_constructor_mdl_name();
 
+/// Returns the DB name used for the index operator.
+const char* get_index_operator_db_name();
+
+/// Returns the MDL name used for the index operator.
+const char* get_index_operator_mdl_name();
+
+/// Returns the DB name used for the array length operator.
+const char* get_array_length_operator_db_name();
+
+/// Returns the MDL name used for the array length operator.
+const char* get_array_length_operator_mdl_name();
+
+/// Returns the DB name used for the ternary operator.
+const char* get_ternary_operator_db_name();
+
+/// Returns the MDL name used for the ternary operator.
+const char* get_ternary_operator_mdl_name();
+
 /// Returns the DB element name used for the cast operator.
 const char* get_cast_operator_db_name();
 
 /// Returns the MDL name used for the cast operator.
 const char* get_cast_operator_mdl_name();
 
-/// Returns the DB element name used for the ternary operator.
-const char* get_ternary_operator_db_name();
+/// Returns the DB name used for the builtins module ("mdl::<builtins>" or "mdl::%3Cbuiltins%3E").
+const char* get_builtins_module_db_name();
 
-/// Returns the MDL name used for the ternary operator.
-const char* get_ternary_operator_mdl_name();
+/// Returns the MDL name used for the builtins module ("::<builtins>" or "::%3Cbuiltins%3E").
+const char* get_builtins_module_mdl_name();
 
-/// Returns the DB element name used for the index operator.
-const char* get_index_operator_db_name();
+/// Returns the simple name used for the builtins module ("<builtins>" or "%3Cbuiltins%3E").
+const char* get_builtins_module_simple_name();
 
-/// Returns the MDL name used for the index operator.
-const char* get_index_operator_mdl_name();
+/// Returns the DB name used for the neuray module ("mdl::<neuray>" or "mdl::%3Cneuray%3E").
+const char* get_neuray_module_db_name();
 
-/// Returns the DB element name used for the array length operator.
-const char* get_array_length_operator_db_name();
+/// Returns the MDL name used for the neuray module ("::<neuray>" or "::%3Cneuray%3E").
+const char* get_neuray_module_mdl_name();
 
-/// Returns the MDL name used for the array length operator.
-const char* get_array_length_operator_mdl_name();
+/// Indicates whether encoded names are enabled. This flag also enables material names with
+/// signatures and removes the extra slash for MDLE names on Windows.
+bool get_encoded_names_enabled();
+
+/// Enabled or disabled encoded names.
+void set_encoded_names_enabled( bool value);
+
+/// Encodes a string with percent-encoding.
+///
+/// Encoded characters are parentheses, angle brackets, comma, colon, dollar, hash, question mark,
+/// at sign, and percent.
+std::string encode( const char* s);
+
+/// Decodes a string with percent-encoding.
+///
+/// Hexadecimal digits need to be upper-case. Exactly the characters mentioned for #encode() must
+/// be encoded. Returns the empty string in case of errors.
+///
+/// If \p strict is \c false, then encoding errors are ignored (useful for error messages, but
+/// otherwise indicates an earlier mistake).
+std::string decode(
+    const std::string& s, bool strict = true, Execution_context* context = nullptr);
+
+/// Decodes a string with percent-encoding for error messages.
+///
+/// In error messages, we do not care about encoding errors and want to emit as much information
+/// as possible. Calls #decode() with \c false for \c strict.
+std::string decode_for_error_msg( const std::string& s);
+
+/// Encodes a module name (no signature, no $ suffix).
+///
+/// Calls #encode() on components delimited by "::".
+std::string encode_module_name( const std::string& s);
+
+/// Decodes a module name (no signature, no $ suffix).
+///
+/// Calls #decode() on components delimited by "::".
+/// Returns the empty string in case of errors.
+std::string decode_module_name( const std::string& s);
+
+/// Encodes a function, material, annotation, or type name (no signature, possibly $ suffix).
+///
+/// Calls #encode() on components delimited by "::" (last component might contain "$").
+std::string encode_name_without_signature( const std::string& s);
+
+/// Decodes a function, material, annotation, or type name (no signature, possibly $ suffix).
+///
+/// Calls #decode() on components delimited by "::" (last component might contain "$").
+/// Returns the empty string in case of errors.
+std::string decode_name_without_signature( const std::string& s);
+
+/// Encodes a name with signature.
+///
+/// \note This function assumes that parentheses, comma, and dollar are always meta-characters and
+///       do not appear as part of a simple name. TODO encoded names: Remove this limitation.
+std::string encode_name_with_signature( const std::string& s);
+
+/// Decodes a name with signature.
+///
+/// \note This function assumes that parentheses, comma, and dollar are always meta-characters and
+///       do not appear as part of a simple name. TODO encoded names: Remove this limitation.
+///
+/// Does not reject invalid input.
+std::string decode_name_with_signature( const std::string& s);
+
+/// Encodes a name plus signature.
+std::string encode_name_plus_signature(
+    const std::string& s, const std::vector<std::string>& parameter_types);
+
+/// Returns an encoded material or function name with signature.
+///
+/// Calls #encode() on components delimited by parentheses and "::". Used to translate
+/// mi::mdl::IGenerated_code_dag.
+///
+/// \note This function assumes that parentheses are always meta-characters and do not appear as
+///       part of a simple name. TODO encoded names: Remove this limitation.
+std::string get_mdl_name(
+    const mi::mdl::IGenerated_code_dag* code_dag, bool is_material, mi::Size index);
+
+/// Returns an encoded annotation name with signature.
+///
+/// Calls #encode() on components delimited by parentheses and"::". Used to translate
+/// mi::mdl::IGenerated_code_dag.
+///
+/// \note This function assumes that parentheses are always meta-characters and do not appear as
+///       part of a simple name. TODO encoded names: Remove this limitation.
+std::string get_mdl_annotation_name(
+    const mi::mdl::IGenerated_code_dag* code_dag, mi::Size index);
+
+/// Encodes a string with or without signature (and adds a missing signature for materials).
+///
+/// Tries to find the name in the code DAG (if not NULL), and uses the DB as fallback.
+///
+/// \note This function assumes that parentheses, comma, and dollar are always meta-characters and
+///       do not appear as part of a simple name. TODO encoded names: Remove this limitation.
+std::string encode_name_add_missing_signature(
+    DB::Transaction* transaction,
+    const mi::mdl::IGenerated_code_dag* m_code_dag,
+    const std::string& name);
+
+/// Returns the serialized function name for the given function definition name.
+///
+/// \note This method re-uses in its return value the interface from the public API since it is
+///       trivial to implement and an internal variant would look identical.
+///
+/// \param definition_name   The DB name of the corresponding function of material definition. This
+///                          name is not checked for correctness or presence in the DB.
+/// \param argument_types    The actual argument types of the function call. Required for
+///                          template-like functions, ignored otherwise.
+/// \param return_type       The actual return type of the function call. Required for the cast
+///                          operator, ignored otherwise.
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          implementing the identity transformation).
+/// \return                  The serialized function definition (and module) name, or \c NULL in
+///                          case of errors. The method always returns \c NULL if encoded
+///                          names are disabled.
+const mi::neuraylib::ISerialized_function_name* serialize_function_name(
+    const char* definition_name,
+    const IType_list* argument_types,
+    const IType* return_type,
+    mi::neuraylib::IMdle_serialization_callback* mdle_callback,
+    Execution_context* context);
+
+/// Returns the deserialized function definition name for the given serialized function name.
+///
+/// Loads the module if necessary. Performs overload resolution.
+///
+/// \param transaction       The DB transaction to use.
+/// \param function_name     The serialized function name.
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          implementing the identity transformation).
+/// \return                  The deserialized function name and argument types, or \c NULL in case
+///                          of errors. The method always returns \c NULL if encoded names are
+///                          disabled.
+const IDeserialized_function_name* deserialize_function_name(
+    DB::Transaction* transaction,
+    const char* function_name,
+    mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+    Execution_context* context);
+
+/// Returns the deserialized function definition name for the given pair of serialized module name
+/// and function name without module name.
+///
+/// Loads the module if necessary. Performs overload resolution.
+///
+/// \param transaction       The DB transaction to use.
+/// \param module_name       The serialized module name.
+/// \param function_name_without_module_name   The serialized function name without module name.
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          implementing the identity transformation).
+/// \return                  The deserialized function name and argument types, or \c NULL in case
+///                          of errors. The method always returns \c NULL if encoded names are
+///                          disabled.
+const IDeserialized_function_name* deserialize_function_name(
+    DB::Transaction* transaction,
+    const char* module_name,
+    const char* function_name_without_module_name,
+    mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+    Execution_context* context);
+
+/// Returns the deserialized module name for the given serialized module name.
+///
+/// Loads the module if necessary. Performs overload resolution.
+///
+/// \param module_name       The serialized module name.
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
+///                          implementing the identity transformation).
+/// \return                  The deserialized module name, or \c NULL in case of errors. The method
+///                          always returns \c NULL if encoded names are disabled.
+const mi::neuraylib::IDeserialized_module_name* deserialize_module_name(
+    const char* module_name,
+    mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+    Execution_context* context);
+
+/// Internal variant of #mi::neuraylib::IDeserialized_function_name (uses MDL::IType_list instead of
+/// mi::neuraylib::IType_list).
+class IDeserialized_function_name : public
+    mi::base::Interface_declare<0x6afc41ef,0x9adf,0x446a,0x80,0x21,0x8f,0x62,0x6c,0x77,0x24,0xb4>
+{
+public:
+    /// Returns the DB name.
+    virtual const char* get_db_name() const = 0;
+
+    /// Returns the corresponding argument types suitable for
+    /// #Mdl_function_definition::create_call(), e.g., two argument types for the cast operator.
+    virtual const IType_list* get_argument_types() const = 0;
+};
 
 /// Returns \c true for builtin modules.
 ///
 /// Builtin modules have no underlying file, e.g., "::state".
 ///
-/// \param module   The name of the module (including leading double colons, e.g., "::state").
+/// \param module   The core name of the module (including leading double colons, e.g., "::state").
 bool is_builtin_module( const std::string& module);
 
 
-/// Checks, if the given call definition is valid for use as a prototype for create_functions
-/// MDLE file or variants.
-bool is_supported_prototype(const Mdl_function_definition *fdef, bool for_variant);
+/// Indicates whether a function of the given semantic is a valid prototype for prototype-based
+/// functions or variants.
+bool is_supported_prototype(
+    mi::neuraylib::IFunction_definition::Semantics sema, bool for_variant);
 
 /// Returns a default compiled material.
 ///
@@ -309,7 +538,7 @@ class Option
 {
 public:
 
-    typedef bool(*Validator)(const boost::any& v);
+    using Validator = bool (*)(const boost::any&);
 
     Option(const std::string& name, const boost::any& default_value, bool is_interface, Validator validator=nullptr)
         : m_name(name)
@@ -382,6 +611,7 @@ private:
 #define MDL_CTX_OPTION_RESOLVE_RESOURCES                  "resolve_resources"
 #define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF                 "fold_ternary_on_df"
 #define MDL_CTX_OPTION_IGNORE_NOINLINE                    "ignore_noinline"
+#define MDL_CTX_OPTION_REMOVE_DEAD_PARAMETERS             "remove_dead_parameters"
 #define MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS           "fold_all_bool_parameters"
 #define MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS           "fold_all_enum_parameters"
 #define MDL_CTX_OPTION_FOLD_PARAMETERS                    "fold_parameters"
@@ -389,7 +619,8 @@ private:
 #define MDL_CTX_OPTION_FOLD_TRANSPARENT_LAYERS            "fold_transparent_layers"
 #define MDL_CTX_OPTION_SERIALIZE_CLASS_INSTANCE_DATA      "serialize_class_instance_data"
 #define MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY        "loading_wait_handle_factory"
-#define MDL_CTX_OPTION_REPLACE_EXISTING                   "replace_existing"
+#define MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING        "replace_existing"
+#define MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE         "target_material_model_mode"
 // Not documented in the API (used by the module transformer, but not for general use).
 #define MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS  "keep_original_resource_file_paths"
 
@@ -485,27 +716,47 @@ private:
 
 };
 
-/// Outputs MDL messages to the logger.
-///
-/// Also adds the messages to \p context (unless \p context is \c NULL).
-void report_messages(const mi::mdl::Messages& in_messages, Execution_context* context);
-
 /// Adds MDL messages to an execution context.
-void convert_messages(const mi::mdl::Messages& in_messages, Execution_context* context);
+void convert_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
+
+/// Logs the messages in an execution context.
+void log_messages( const Execution_context* context);
+
+/// Adds MDL messages to an optional execution context and logs them.
+///
+/// Similar to #convert_messages() followed by #log_messages(), except that context can be \c NULL.
+void convert_and_log_messages( const mi::mdl::Messages& in_messages, Execution_context* context);
 
 /// Adds messages from an execution context to the mi::mdl::Messages.
-void convert_messages(Execution_context* context, mi::mdl::Messages& out_messages);
+void convert_messages( const Execution_context* context, mi::mdl::Messages& out_messages);
+
+/// Adds \p message as message to the context.
+///
+/// If the severity is #mi::base::MESSAGE_SEVERITY_ERROR or #mi::base::MESSAGE_SEVERITY_FATAL, then
+/// the message is also added as error message to the context, and the context result is set to
+/// \p result.
+///
+/// Does nothing if \p context is \c NULL. Returns \p result.
+mi::Sint32 add_message( Execution_context* context, const Message& message, mi::Sint32 result);
 
 /// Adds \p message as message and error message to the context, and sets the result to \p result.
 ///
-/// Does nothing if \p context is \c NULL.
+/// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
+/// Does nothing if \p context is \c NULL. Returns \p result.
 mi::Sint32 add_error_message(
     Execution_context* context, const std::string& message, mi::Sint32 result);
 
-/// Adds \p message as message (not as error message) to the context.
+/// Adds \p message as warning message to the context.
 ///
-/// Does nothing if \p context is \c NULL.
+/// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
+/// Does nothing if \p context is \c NULL. Returns \p result.
 void add_warning_message( Execution_context* context, const std::string& message);
+
+/// Adds \p message as info message to the context.
+///
+/// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
+/// Does nothing if \p context is \c NULL. Returns \p result.
+void add_info_message( Execution_context* context, const std::string& message);
 
 /// Wraps an MDL input stream as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IInput_stream* stream);
@@ -592,7 +843,7 @@ void get_bsdf_measurement_attributes(
 /// \tparam T   Either mi::mdl::IDag_builder or mi::mdl::IGenerated_code_dag::DAG_node_factory.
 ///
 /// \note The class behaves differently for temporaries. If T == IDag_builder, temporaries are
-///       re-converted each time they are encounterd. If T == IGenerated_code_dag::DAG_node_factory,
+///       re-converted each time they are encountered. If T == IGenerated_code_dag::DAG_node_factory,
 ///       temporaries are converted only once, and referenced via DAG_temporary nodes.
 template<class T>
 class Mdl_dag_builder
@@ -659,28 +910,25 @@ private:
         const mi::mdl::IType* mdl_type,
         const IExpression_temporary* expr);
 
-    const mi::mdl::DAG_node* int_material_expr_list_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
-        const Mdl_module* module,
-        mi::Uint32 material_definition_index,
-        const char* material_call_name,
-        const IExpression_list* arguments);
-
-    const mi::mdl::DAG_node* int_function_expr_list_to_mdl_dag_node(
-        const mi::mdl::IType* mdl_type,
-        const Mdl_module* module,
-        mi::Uint32 function_definition_index,
-        const char* function_call_name,
-        const IExpression_list* arguments);
-
     /// Clones a DAG node.
     ///
     /// \param node  The DAG IR node to clone.
     /// \return      The clone of \p node.
-    const mi::mdl::DAG_node* clone_dag_node(
-        const mi::mdl::DAG_node* node);
+    const mi::mdl::DAG_node* clone_dag_node( const mi::mdl::DAG_node* node);
 
 private:
+    /// Shared between #int_expr_call_to_mdl_dag_node() and
+    /// #int_expr_direct_call_to_mdl_dag_node().
+    ///
+    /// \param call_name    DB name of the corresponding function definition.
+    const mi::mdl::DAG_node* int_expr_call_to_mdl_dag_node_shared(
+        const mi::mdl::IType* mdl_type,
+        const Mdl_module* module,
+        bool is_material,
+        mi::Size definition_index,
+        const char* call_name,
+        const IExpression_list* arguments);
+
     /// Adds \p value to m_converted_call_expressions and returns it.
     const mi::mdl::DAG_node* add_cache_entry( DB::Tag tag, const mi::mdl::DAG_node* value);
 
@@ -698,8 +946,8 @@ private:
     std::vector<const mi::mdl::DAG_node*> m_temporaries;
     /// The MDL types of the parameter references.
     std::vector<const mi::mdl::IType*> m_parameter_types;
-    /// Current set of DAG calls in the current trace to check for cycles.
-    std::set<MI::Uint32> m_call_trace;
+    /// Set of indirect calls in the current call stack, used to check for cycles.
+    std::set<DB::Tag> m_set_indirect_calls;
     /// Cache of already converted function calls or material instances.
     std::map<DB::Tag, const mi::mdl::DAG_node*> m_converted_call_expressions;
 };
@@ -720,26 +968,26 @@ public:
 
     /// Finds the owning module of a function definition.
     ///
-    /// \param name   The MDL name of a function definition.
+    /// \param name   The core name of a function definition.
     /// \return       The owning module, or \c NULL in case of failures.
-    const mi::mdl::IModule* get_owner_module(char const* name) const override;
+    const mi::mdl::IModule* get_owner_module(const char* name) const override;
 
     /// Find the owner code DAG of a given entity name.
     /// If the entity name does not contain a colon, you should return the builtins DAG,
-    /// which you can identify by calling its oner module's IModule::is_builtins().
+    /// which you can identify by calling its owner module's IModule::is_builtins().
     ///
     /// \param entity_name    the entity name
     ///
     /// \returns the owning module of this entity if found, NULL otherwise
-    mi::mdl::IGenerated_code_dag const *get_owner_dag(char const *entity_name) const override;
+    const mi::mdl::IGenerated_code_dag* get_owner_dag(const char* entity_name) const override;
 
 private:
-    DB::Tag get_module_tag(char const *entity_name) const;
+    DB::Tag get_module_tag(const char* entity_name) const;
 
 private:
     DB::Transaction* m_transaction;
 
-    typedef std::set<const mi::mdl::IModule*> Module_set;
+    using Module_set = std::set<const mi::mdl::IModule*>;
     mutable Module_set m_resolved_modules;
 };
 
@@ -747,7 +995,7 @@ private:
 /// be in the data base yet).
 class Mdl_call_resolver_ext : public Mdl_call_resolver
 {
-    typedef Mdl_call_resolver Base;
+    using Base = Mdl_call_resolver;
 
 public:
     /// Constructor.
@@ -755,18 +1003,18 @@ public:
     /// \param transaction  the transaction to use for name lookup
     Mdl_call_resolver_ext(
         DB::Transaction* transaction,
-        mi::mdl::IModule const *module);
+        const mi::mdl::IModule* module);
 
     /// Finds the owning module of a function definition.
     ///
-    /// \param name   The MDL name of a function definition.
+    /// \param name   The core name of a function definition.
     /// \return       The owning module, or \c NULL in case of failures.
-    const mi::mdl::IModule* get_owner_module(char const* name) const override;
+    const mi::mdl::IModule* get_owner_module(const char* name) const override;
 
 private:
-    mi::mdl::IModule const *m_module;
+    const mi::mdl::IModule* m_module;
 
-    std::string m_module_name;
+    std::string m_module_core_name;
 };
 
 // **********  Mdl_module_wait_queue  **************************************************************
@@ -831,7 +1079,7 @@ public:
         /// Erases this entry from the parent table and self-destructs.
         void cleanup();
 
-        std::string m_name;
+        std::string m_core_name;
         size_t m_cache_context_id;
         mi::base::Handle<mi::neuraylib::IMdl_loading_wait_handle> m_handle;
         Table* m_parent_table;
@@ -959,11 +1207,15 @@ namespace DETAIL {
 
 /// Returns an absolute MDL file path which can be used to reload the given resource with the
 /// current search paths, or the empty string if this is not possible.
+///
+/// \param module_name    The MDL name of the owning module.
 std::string unresolve_resource_filename(
     const char* filename, const char* module_filename, const char* module_name);
 
 /// Returns an absolute MDL file path which can be used to reload the given resource with the
 /// current search paths, or the empty string if this is not possible.
+///
+/// \param module_name    The MDL name of the owning module.
 std::string unresolve_resource_filename(
     const char* archive_filename,
     const char* archive_membername,
@@ -994,6 +1246,12 @@ std::string uvtile_marker_to_string( const std::string& s, mi::Sint32 u, mi::Sin
 /// \return         The string with the index pattern replaced by the marked (if found), or the
 ///                 empty string in case of errors.
 std::string uvtile_string_to_marker( const std::string& s, const std::string& marker);
+
+/// Returns an absolute MDL file path for the given filename.
+///
+/// Does not check for existence. Returns the empty string on failure.
+std::string get_file_path(
+    std::string filename, mi::neuraylib::IMdl_impexp_api::Search_option option);
 
 } // namespace MDL
 

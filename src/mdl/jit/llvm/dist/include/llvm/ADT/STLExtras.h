@@ -915,12 +915,21 @@ UnaryPredicate for_each(R &&Range, UnaryPredicate P) {
   return std::for_each(adl_begin(Range), adl_end(Range), P);
 }
 
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnoexcept-type"
+#endif
+
 /// Provide wrappers to std::all_of which take ranges instead of having to pass
 /// begin/end explicitly.
 template <typename R, typename UnaryPredicate>
 bool all_of(R &&Range, UnaryPredicate P) {
   return std::all_of(adl_begin(Range), adl_end(Range), P);
 }
+
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic pop
+#endif
 
 /// Provide wrappers to std::any_of which take ranges instead of having to pass
 /// begin/end explicitly.

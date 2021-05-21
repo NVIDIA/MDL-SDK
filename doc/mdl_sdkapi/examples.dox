@@ -66,14 +66,17 @@ Section for a description of how the example programs can be compiled.
 
 - \subpage mi_neuray_example_df_cuda <br>
   Uses compiled material distribution functions in a CUDA based renderer.
-
+  
+- \subpage mi_neuray_example_df_native <br>
+  CPU based renderer using compiled materials and MDL native backend.
+  
 - \subpage mi_neuray_example_derivatives <br>
   Enable automatic derivatives for texture filtering.
 
 \if  MDL_BIN_RELEASE
 - \subpage mi_neuray_example_distilling <br>
   Distilling of compiled materials and baking of material sub-expressions.
-  
+
 - \subpage mi_neuray_example_distilling_unity <br>
   Distilling of compiled materials and baking of material sub-expressions for Unity
 
@@ -83,13 +86,16 @@ Section for a description of how the example programs can be compiled.
 
 - \subpage mi_neuray_example_traversal <br>
   Traversing compiled MDL materials and reconstructing compilable MDL code.
-  
+
+- \subpage mi_neuray_example_create_module <br>
+  Builds a new MDL module.
+
 - \subpage mi_neuray_example_discovery <br>
   Discovers MDL modules in the specified search paths and lists them.
 
 - \subpage mi_neuray_example_mdl_browser <br>
   Example for a material selection dialogue.
-  
+
 - \subpage mi_neuray_example_mdle <br>
   Export and load materials or functions using the MDL encapsulated format.
 

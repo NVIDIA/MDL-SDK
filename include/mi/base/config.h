@@ -44,7 +44,7 @@
  */
 
 // The current copyright year string.
-#define MI_COPYRIGHT_YEARS_STRING "2020"
+#define MI_COPYRIGHT_YEARS_STRING "2021"
 
 // The NVIDIA company name string for copyrights etc.
 #define MI_COPYRIGHT_COMPANY_STRING "NVIDIA Corporation"
@@ -335,7 +335,7 @@
 #endif
 
 #ifdef __CUDACC__
-#define MI_HOST_DEVICE_INLINE __device__ __forceinline__
+#define MI_HOST_DEVICE_INLINE __host__ __device__ __forceinline__
 #else
 #ifdef __cplusplus
 #define MI_HOST_DEVICE_INLINE MI_FORCE_INLINE

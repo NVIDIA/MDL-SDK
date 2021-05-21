@@ -367,6 +367,14 @@ void Util::log_report(const std::string & msg)
     cout << msg << endl;
 }
 
+void Util::log(const mi::neuraylib::IMdl_execution_context* context)
+{
+    for(mi::Size i = 0, n = context->get_messages_count(); i < n; ++i) { \
+        mi::base::Handle<const mi::neuraylib::IMessage> message(context->get_message( i)); \
+        log(message->get_string(), message->get_severity());
+    }
+}
+
 string Util::basename(const string& path)
 {
     return MI::HAL::Ospath::basename(path);

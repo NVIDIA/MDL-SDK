@@ -36,6 +36,12 @@ if(NOT EXISTS ${DUMMY_CPP})
 endif()
 
 # collect sources
+set(PROJECT_HEADERS_TOPLEVEL
+    "${MDL_INCLUDE_FOLDER}/mi/base.h"
+    "${MDL_INCLUDE_FOLDER}/mi/math.h"
+    "${MDL_INCLUDE_FOLDER}/mi/mdl_sdk.h"
+    )
+
 set(PROJECT_HEADERS_BASE
     "${MDL_INCLUDE_FOLDER}/mi/base/assert.h"
     "${MDL_INCLUDE_FOLDER}/mi/base/atom.h"
@@ -57,7 +63,6 @@ set(PROJECT_HEADERS_BASE
     "${MDL_INCLUDE_FOLDER}/mi/base/types.h"
     "${MDL_INCLUDE_FOLDER}/mi/base/uuid.h"
     "${MDL_INCLUDE_FOLDER}/mi/base/version.h"
-    "${MDL_INCLUDE_FOLDER}/mi/base.h"
     )
 
 set(PROJECT_HEADERS_MATH
@@ -69,7 +74,6 @@ set(PROJECT_HEADERS_MATH
     "${MDL_INCLUDE_FOLDER}/mi/math/spectrum.h"
     "${MDL_INCLUDE_FOLDER}/mi/math/vector.h"
     "${MDL_INCLUDE_FOLDER}/mi/math/version.h"
-    "${MDL_INCLUDE_FOLDER}/mi/math.h"
     )
 
 set(PROJECT_HEADERS_MDL
@@ -110,7 +114,6 @@ set(PROJECT_HEADERS_MDL
     )
 
 set(PROJECT_HEADERS_NEURAYLIB
-    "${MDL_INCLUDE_FOLDER}/mi/mdl_sdk.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/annotation_wrapper.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/argument_editor.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/assert.h"
@@ -210,6 +213,7 @@ set(PROJECT_HEADERS_NEURAYLIB
     )
 
 set(PROJECT_SOURCES
+     ${PROJECT_HEADERS_TOPLEVEL}
      ${PROJECT_HEADERS_BASE}
      ${PROJECT_HEADERS_MATH}
      ${PROJECT_HEADERS_MDL}
@@ -230,6 +234,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     )
 
 # group files corresponding to the folder structure
+source_group("" FILES ${PROJECT_HEADERS_TOPLEVEL})
 source_group("base" FILES ${PROJECT_HEADERS_BASE})
 source_group("math" FILES ${PROJECT_HEADERS_MATH})
 source_group("mdl" FILES ${PROJECT_HEADERS_MDL})

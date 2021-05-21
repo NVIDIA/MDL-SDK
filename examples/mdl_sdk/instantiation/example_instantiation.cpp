@@ -35,10 +35,11 @@
 
 #include "example_shared.h"
 
-const char* material_definition_name = "mdl::nvidia::sdk_examples::tutorials::example_material";
+const char* material_definition_name
+    = "mdl::nvidia::sdk_examples::tutorials::example_material(color,float)";
 const char* material_instance_name   = "instance of example_material";
-const char* function_definition_name = 
-    "mdl::nvidia::sdk_examples::tutorials::example_function(color,float)";
+const char* function_definition_name
+    = "mdl::nvidia::sdk_examples::tutorials::example_function(color,float)";
 const char* function_call_name       = "call of example_function";
 
 // Utility function to dump the arguments of a material instance or function call.
@@ -330,38 +331,41 @@ void create_variant( mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransaction
         expression_factory->create_annotation(
             "::anno::hard_range(float,float)", range_args.get()));
 
-    // Add annotations to a annotation block
+    // Add annotations to a annotation block.
     mi::base::Handle<mi::neuraylib::IAnnotation_block> anno_block(
         expression_factory->create_annotation_block());
     anno_block->add_annotation( anno.get());
     anno_block->add_annotation( range_anno.get());
 
-    // Set up variant data: an array with a single element of type Variant_data for variant
-    // name, prototype name, new defaults, and the annotation created above.
-    mi::base::Handle<mi::IArray> variant_data(
-        transaction->create<mi::IArray>( "Variant_data[1]"));
-    mi::base::Handle<mi::IStructure> variant(
-        variant_data->get_value<mi::IStructure>( static_cast<mi::Size>( 0)));
-    mi::base::Handle<mi::IString> variant_name(
-        variant->get_value<mi::IString>( "variant_name"));
-    variant_name->set_c_str( "green_example_material") ;
-    mi::base::Handle<mi::IString> prototype_name(
-        variant->get_value<mi::IString>( "prototype_name"));
-    prototype_name->set_c_str( "mdl::nvidia::sdk_examples::tutorials::example_material");
-    check_success( variant->set_value( "defaults", defaults.get()) == 0);
-    check_success( variant->set_value( "annotations", anno_block.get()) == 0);
-
-    // print the annotations just to illustrate the convince helper
+    // Print the annotations just to illustrate the convince helper.
     print_annotations( type_factory.get(), anno_block.get());
 
+    // Create the module bulder.
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+        mdl_factory->create_execution_context());
+    mi::base::Handle<mi::neuraylib::IMdl_module_builder> module_builder(
+        mdl_factory->create_module_builder(
+            transaction,
+            "mdl::variants",
+            mi::neuraylib::MDL_VERSION_1_0,
+            mi::neuraylib::MDL_VERSION_LATEST,
+            context.get()));
+    check_success( module_builder);
+    
     // Create the variant.
-    check_success( mdl_factory->create_variants(
-        transaction, "::variants", variant_data.get()) == 0);
+    check_success( module_builder->add_variant(
+        "green_example_material",
+        material_definition_name,
+        defaults.get(),
+        anno_block.get(),
+        /*return_annotations*/ nullptr,
+        /*is_exported*/ true,
+        context.get()) == 0);
 
     // Instantiate the material definition of the variant.
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
     transaction->access<mi::neuraylib::IMaterial_definition>(
-        "mdl::variants::green_example_material"));
+        "mdl::variants::green_example_material(color,float)"));
     mi::Sint32 result = 0;
     material_instance = material_definition->create_material_instance( 0, &result);
     check_success( result == 0);

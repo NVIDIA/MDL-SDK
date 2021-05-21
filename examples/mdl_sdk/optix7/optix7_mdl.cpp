@@ -73,6 +73,9 @@
 #define GL_DISPLAY_CUDA
 #include "utils/gl_display.h"
 
+#include "utils/profiling.h"
+using namespace mi::examples::profiling;
+
 #define WINDOW_TITLE "MDL SDK OptiX 7 Example"
 
 
@@ -379,6 +382,8 @@ float build_alias_map(
 
 bool initEnvironmentLight(PathTracerState& state, const std::string& env_path)
 {
+    Timing timing("initialize environment light");
+
     mi::base::Handle<mi::neuraylib::ITransaction> transaction =
         state.mdl_helper->create_transaction();
 
@@ -409,7 +414,7 @@ bool initEnvironmentLight(PathTracerState& state, const std::string& env_path)
         cudaArray_t env_tex_data;
         CUDA_CHECK(cudaMallocArray(&env_tex_data, &channel_desc, rx, ry));
 
-        mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+        mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile());
         const float *pixels = static_cast<const float *>(tile->get_data());
 
         CUDA_CHECK(cudaMemcpy2DToArray(
@@ -813,6 +818,8 @@ void optix_context_log_cb(unsigned int level, const char* tag, const char* messa
 
 void createContext(PathTracerState& state, int cuda_device_id)
 {
+    Timing timing("create OptiX context");
+
     // Ensure that we have a CUDA context
     CUDA_CHECK(cudaSetDevice(cuda_device_id));
     CUDA_CHECK(cudaFree(0));
@@ -919,13 +926,17 @@ void addMDLMaterial(
     // Scope for compile result
     {
         Material_info *mat_info = nullptr;
-        Mdl_helper::Compile_result compile_res(
-            state.mdl_helper->compile_mdl_material(
+        Mdl_helper::Compile_result compile_res;
+
+        {
+            Timing timing("load and compile material");
+            compile_res = state.mdl_helper->compile_mdl_material(
                 transaction.get(),
                 material_name.c_str(),
                 descs,
                 class_compilation,
-                &mat_info));
+                &mat_info);
+        }
 
         if (!compile_res.target_code) {
             exit_failure(
@@ -946,6 +957,7 @@ void addMDLMaterial(
             mat_hit_group = it->second.first;
             callable_base_index = it->second.second;
         } else {
+            Timing timing("prepare OptiX material hit group");
 #ifdef NO_DIRECT_CALL
             // In no-direct-call mode, we create one closest hit program per hash-unique material.
             mat_hit_group = createRadianceClosestHitProgramGroup(
@@ -1035,6 +1047,7 @@ void addMDLMaterial(
 
         // Prepare textures
         if (compile_res.textures.size() > 1) {
+            Timing timing("load textures");
             for (mi::Size i = 1, n = compile_res.textures.size(); i < n; ++i) {
                 state.mdl_helper->prepare_texture(
                     transaction.get(),
@@ -1089,10 +1102,10 @@ void addMDLMaterial(
 
 void initMDL(
     PathTracerState& state,
-    mi::examples::mdl::Configure_options const &configure_options,
-    std::vector<std::string> const &material_names,
-    bool class_compilation)
+    mi::examples::mdl::Configure_options const& configure_options)
 {
+    Timing timing("init MDL SDK");
+
     state.mdl_helper = new Mdl_helper(
         configure_options,
         /*num_texture_spaces=*/  1,
@@ -1106,14 +1119,23 @@ void initMDL(
         mi::examples::io::get_executable_folder() + "/optix7_mdl_closest_hit_radiance.bc",
         /*visible_functions=*/ "__closesthit__radiance");
 #endif
+}
 
-    for (std::string const &material_name : material_names)
+
+void loadMaterials(
+    PathTracerState& state,
+    std::vector<std::string> const& material_names,
+    bool class_compilation)
+{
+    for (std::string const& material_name : material_names)
         addMDLMaterial(state, material_name, class_compilation);
 }
 
 
 void buildMeshAccel(PathTracerState& state, std::string const &model)
 {
+    Timing timing("building mesh acceleration structure");
+
     if (model == "sphere")
         state.mesh = new Sphere(state.context, 1.0f, 128, 128);
     else
@@ -1171,6 +1193,8 @@ void buildScene(PathTracerState& state)
 
 void buildInstanceAccel(PathTracerState& state)
 {
+    Timing timing("building instance acceleration structure");
+
     std::vector<OptixInstance> optix_instances;
     optix_instances.reserve(state.instances.size());
     for (Instance &instance : state.instances) {
@@ -1237,8 +1261,10 @@ void buildInstanceAccel(PathTracerState& state)
 }
 
 
-void createModule(PathTracerState& state)
+void createProgramGroups(PathTracerState& state)
 {
+    Timing timing("creating OptiX module and program groups");
+
     std::string ptx = mi::examples::io::read_text_file(
         mi::examples::io::get_executable_folder() + "/optix7_mdl.ptx");
 
@@ -1254,22 +1280,15 @@ void createModule(PathTracerState& state)
         &sizeof_log,
         &state.ptx_module
     ));
-}
 
-
-void createProgramGroups(PathTracerState& state)
-{
     OptixProgramGroupOptions  program_group_options = {};
-
-    char   log[2048];
-    size_t sizeof_log = sizeof(log);
 
     {
         OptixProgramGroupDesc raygen_prog_group_desc = {};
         raygen_prog_group_desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
         raygen_prog_group_desc.raygen.module = state.ptx_module;
         raygen_prog_group_desc.raygen.entryFunctionName = "__raygen__rg";
-
+        sizeof_log = sizeof(log);
         OPTIX_CHECK_LOG(optixProgramGroupCreate(
             state.context, &raygen_prog_group_desc,
             /*numProgramGroups=*/ 1,
@@ -1329,6 +1348,8 @@ void createProgramGroups(PathTracerState& state)
 
 void createPipeline(PathTracerState& state)
 {
+    Timing timing("setting up ray tracing pipeline");
+
     std::vector<OptixProgramGroup> program_groups;
     program_groups.push_back(state.raygen_prog_group);
     program_groups.push_back(state.radiance_miss_group);
@@ -1980,6 +2001,7 @@ public:
         , m_display_time(0.0)
         , m_last_update_frames(-1)
         , m_last_update_time(std::chrono::steady_clock::now())
+        , m_cur_state_start_time(m_last_update_time)
     {
         m_stats_text[0] = 0;
     }
@@ -2084,6 +2106,8 @@ void printUsageAndExit(const char* argv0)
         << " --fov <fov>            Horizontal field of view angle in degrees (default: 45.0)\n"
         << " --model <name>         Can be \"sphere\" or \"cube\" (default: sphere)\n"
         << " --nocc                 Disable class-compilation for MDL material\n"
+        << " --iterations | -i      Number of iterations in file mode, does not improve\n"
+        << "                        image, just used for performance measurement\n"
         << " --help | -h            Print this usage message\n";
     exit(0);
 }
@@ -2112,6 +2136,7 @@ int main(int argc, char* argv[])
     std::string model = "sphere";
     bool class_compilation = true;
     int cuda_device_id = 0;
+    int iterations = 1;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
@@ -2155,6 +2180,10 @@ int main(int argc, char* argv[])
                     printUsageAndExit(argv[0]);
             } else if (arg == "--nocc") {
                 class_compilation = false;
+            } else if (arg == "--iterations" || arg == "-i") {
+                if (i >= argc - 1)
+                    printUsageAndExit(argv[0]);
+                iterations = atoi(argv[++i]);
             } else {
                 std::cerr << "Unknown option '" << argv[i] << "'\n";
                 printUsageAndExit(argv[0]);
@@ -2178,12 +2207,12 @@ int main(int argc, char* argv[])
         // Set up OptiX state
         //
         createContext(state, cuda_device_id);
-        initMDL(state, configure_options, material_names, class_compilation);
+        initMDL(state, configure_options);
+        loadMaterials(state, material_names, class_compilation);
         initEnvironmentLight(state, env_path);
         buildMeshAccel(state, model);
         buildScene(state);
         buildInstanceAccel(state);
-        createModule(state);
         createProgramGroups(state);
         createPipeline(state);
         createSBT(state);
@@ -2249,13 +2278,19 @@ int main(int argc, char* argv[])
             updateState(nullptr, state);
 
             // render scene
-            launchSubframe(nullptr, state);
+            {
+                Timing timing("rendering");
+                // iterate only to improve timing measurement, not visual quality
+                for (int i = 0; i < iterations; ++i) {
+                    launchSubframe(nullptr, state);
+                }
+            }
 
             // copy rendered image to canvas
             mi::base::Handle<mi::neuraylib::ICanvas> canvas(
                 state.mdl_helper->get_image_api()->create_canvas(
                     "Rgb_fp", state.params.width, state.params.height));
-            mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+            mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
             CUDA_CHECK(cudaMemcpy(
                 tile->get_data(), state.params.accum_buffer,
                 state.params.width * state.params.height * sizeof(float3),

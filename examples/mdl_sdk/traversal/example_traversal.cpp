@@ -52,6 +52,9 @@ static const bool WRTIE_TO_FILE = true;
 std::string g_qualified_module_name = MODULE_TO_TRAVERSE;
 bool g_use_class_compilation = true;
 bool g_keep_compiled_structure = false;
+std::vector<std::string> g_mdl_paths;
+bool g_nostdpath = false;
+
 
 int MAIN_UTF8(int argc, char* argv[])
 {
@@ -64,8 +67,19 @@ int MAIN_UTF8(int argc, char* argv[])
     if (!neuray.is_valid_interface())
         exit_failure("Failed to load the SDK.");
 
+    // Apply the search path setup described on the command line
+    mi::examples::mdl::Configure_options configure_options;
+    configure_options.additional_mdl_paths = g_mdl_paths;
+    if (g_nostdpath)
+    {
+        configure_options.add_admin_space_search_paths = false;
+        configure_options.add_user_space_search_paths = false;
+        configure_options.add_example_search_path = false;
+    }
+
+
     // Configure the MDL SDK
-    if (!mi::examples::mdl::configure(neuray.get()))
+    if (!mi::examples::mdl::configure(neuray.get(), configure_options))
         exit_failure("Failed to initialize the SDK.");
 
     // Start the MDL SDK
@@ -82,8 +96,8 @@ int MAIN_UTF8(int argc, char* argv[])
         transaction = scope->create_transaction();
     }
 
-    // factory to produce default values if not available in the material definition
-    mi::base::Handle<mi::neuraylib::IMdl_factory> factory(
+    // MDL factory to produce default values if not available in the material definition
+    mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
         neuray->get_api_component<mi::neuraylib::IMdl_factory>());
 
     // load the selected module
@@ -95,7 +109,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
         // Create execution context
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
-            factory->create_execution_context());
+            mdl_factory->create_execution_context());
 
         // load the module
         if (mdl_impexp_api->load_module(
@@ -113,7 +127,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
         // get the module from the db
         mi::base::Handle<const mi::IString> db_name(
-            factory->get_db_module_name(g_qualified_module_name.c_str()));
+            mdl_factory->get_db_module_name(g_qualified_module_name.c_str()));
         mdl_module = transaction->access<mi::neuraylib::IModule>(db_name->get_c_str());
         if (!mdl_module)
             exit_failure("Module '%s' not found.", db_name->get_c_str());
@@ -122,149 +136,153 @@ int MAIN_UTF8(int argc, char* argv[])
     // create an example traverser that allows to print mdl code from compiled materials
     Compiled_material_traverser_print printer;
 
-    // setup a user defined context that is passed though while traversing
-
-    // ATTENTION: set the last parameter true to inspect the actual
-    // structure of the compiled material. However, this may result in
-    // invalid mdl code, that can not be compiled.
-    Compiled_material_traverser_print::Context printer_context(
-        transaction.get(),  // used to resolve resources
-        g_keep_compiled_structure); // show compiler output vs. print valid mdl
-
-    // Iterate over all materials exported by the module.
-    mi::Size max_count = mdl_module->get_material_count();
-    for (mi::Size i = 0; i < max_count; ++i)
     {
-        std::string material_name = mdl_module->get_material(i);
-        std::cout << "\n[EXAMPLE] info: Started processing material: "
-            << material_name << "\n";
+        // setup a user defined context that is passed though while traversing
 
-        // Access the material definition
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-            transaction->access<mi::neuraylib::IMaterial_definition>(
-                material_name.c_str()));
+        // ATTENTION: set the last parameter true to inspect the actual
+        // structure of the compiled material. However, this may result in
+        // invalid mdl code, that can not be compiled.
+        Compiled_material_traverser_print::Context printer_context(
+            transaction.get(),  // used to resolve resources
+            mdl_factory.get(),
+            g_keep_compiled_structure); // show compiler output vs. print valid mdl
 
-        // assuming the material has parameters without defaults
-        mi::neuraylib::Definition_wrapper definition_wrapper(
-            transaction.get(), material_name.c_str(), factory.get());
-
-        mi::base::Handle<mi::neuraylib::IScene_element> material_instance_se(
-            definition_wrapper.create_instance(nullptr, &result));
-
-        if (result < 0)
+        // Iterate over all materials exported by the module.
+        mi::Size max_count = mdl_module->get_material_count();
+        for (mi::Size i = 0; i < max_count; ++i)
         {
-            std::cerr << "[EXAMPLE] error: Failed to create material instance of '"
-                << material_name << "'\n";
-            continue;
-        }
+            std::string material_name = mdl_module->get_material(i);
+            std::cout << "\n[EXAMPLE] info: Started processing material: "
+                << material_name << "\n";
 
-        const mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-            material_instance_se->get_interface<mi::neuraylib::IMaterial_instance>());
+            // Access the material definition
+            mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
+                transaction->access<mi::neuraylib::IMaterial_definition>(
+                    material_name.c_str()));
 
-        // Compile the material instance
-        const mi::Uint32 flags = g_use_class_compilation
-            ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
-            : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
+            // assuming the material has parameters without defaults
+            mi::neuraylib::Definition_wrapper definition_wrapper(
+                transaction.get(), material_name.c_str(), mdl_factory.get());
 
-        mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-            material_instance->create_compiled_material(
-                flags));
+            mi::base::Handle<mi::neuraylib::IScene_element> material_instance_se(
+                definition_wrapper.create_instance(nullptr, &result));
 
-        if (!material_instance)
-        {
-            std::cerr << "[EXAMPLE] error: Failed to compile material instance of '"
-                << material_name << "'\n";
-            continue;
-        }
-
-        // generate mdl from a compiled material
-        // since not all information is available anymore, we need to pass them manually
-        std::stringstream s;
-        s << material_definition->get_mdl_simple_name() << "_" << i << "_printed";
-        const std::string printed_material_name = s.str();
-
-        // print mdl string
-        const std::string mdl = printer.print_mdl(
-            compiled_material.get(), // to compiled material to traverse
-            printer_context,         // the context passed through while traversing
-            mdl_module->get_mdl_name(), // the original module path (for include)
-            printed_material_name);  // the name of the output material
-
-        // optional: print directly referenced modules and resources
-        /*
-        std::cout << "\n";
-        std::cout << "Reconstructed Mdl code for '" << material_name << "'\n";
-        std::cout << "Modules directly imported by the module "
-                    << "and used by the material:\n";
-        std::set<std::string>::iterator it = printer_context.get_used_modules().begin();
-        std::set<std::string>::iterator end = printer_context.get_used_modules().end();
-        for (; it != end; ++it)
-            std::cout << " " << it->c_str() << "\n";
-
-        std::cout << "Resources directly imported by the module "
-                    << "and used by the material:\n";
-        it = printer_context.get_used_resources().begin();
-        end = printer_context.get_used_resources().end();
-        for (; it != end; ++it)
-            std::cout << " " << it->c_str() << "\n";
-        std::cout << "\n";
-        */
-
-        // write to file if enabled
-        if (WRTIE_TO_FILE)
-        {
-            // note the extra underscore: this is used to avoid conflicts while loading
-            std::ofstream file_stream;
-            file_stream.open((printed_material_name + "_.mdl").c_str());
-            if (file_stream)
+            if (result < 0)
             {
-                file_stream << mdl;
-                file_stream.close();
+                std::cerr << "[EXAMPLE] error: Failed to create material instance of '"
+                    << material_name << "'\n";
+                continue;
             }
-        }
-        else
-        {
-            // print to console instead
-            std::cout << "\n\n\n" << mdl << "\n\n\n";
-        }
 
-        // if the resulting printed file is known to be invalid,
-        // we do not try to load it.
-        if (!printer_context.get_is_valid_mdl())
-            continue;
+            const mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
+                material_instance_se->get_interface<mi::neuraylib::IMaterial_instance>());
 
-        // check if the result can be loaded again
-        s.str("");
-        s << mdl_module->get_mdl_name() << "_" << i << "_printed";
-        const std::string printed_module_name = s.str();
+            // Compile the material instance
+            const mi::Uint32 flags = g_use_class_compilation
+                ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
+                : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
 
-        // Create execution context
-        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
-            factory->create_execution_context());
+            mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+                material_instance->create_compiled_material(
+                    flags));
 
-        mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
-            neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
 
-        result = mdl_impexp_api->load_module_from_string(
-            transaction.get(), printed_module_name.c_str(), mdl.c_str(), context.get());
+            if (!material_instance)
+            {
+                std::cerr << "[EXAMPLE] error: Failed to compile material instance of '"
+                    << material_name << "'\n";
+                continue;
+            }
 
-        if (result < 0)
-        {
-            std::cerr << "[EXAMPLE] error: Failed to load generated module: '"
-                << printed_module_name << "'\n";
-            print_messages(context.get());
-            continue;
-        }
+            // generate mdl from a compiled material
+            // since not all information is available anymore, we need to pass them manually
+            std::stringstream s;
+            s << material_definition->get_mdl_simple_name() << "_" << i << "_printed";
+            const std::string printed_material_name = s.str();
 
-        const mi::base::Handle<const mi::neuraylib::IModule> module_printed(
-            transaction->access<mi::neuraylib::IModule>(
-            ("mdl" + printed_module_name).c_str()
-                ));
+            // print mdl string
+            const std::string mdl = printer.print_mdl(
+                compiled_material.get(), // to compiled material to traverse
+                printer_context,         // the context passed through while traversing
+                mdl_module->get_mdl_name(), // the original module path (for include)
+                printed_material_name);  // the name of the output material
 
-        if (!module_printed)
-        {
-            std::cerr << "[EXAMPLE] error: Loaded generated module is invalid: '"
-                << printed_module_name << "'\n";
+            // optional: print directly referenced modules and resources
+            /*
+            std::cout << "\n";
+            std::cout << "Reconstructed Mdl code for '" << material_name << "'\n";
+            std::cout << "Modules directly imported by the module "
+                        << "and used by the material:\n";
+            std::set<std::string>::iterator it = printer_context.get_used_modules().begin();
+            std::set<std::string>::iterator end = printer_context.get_used_modules().end();
+            for (; it != end; ++it)
+                std::cout << " " << it->c_str() << "\n";
+
+            std::cout << "Resources directly imported by the module "
+                        << "and used by the material:\n";
+            it = printer_context.get_used_resources().begin();
+            end = printer_context.get_used_resources().end();
+            for (; it != end; ++it)
+                std::cout << " " << it->c_str() << "\n";
+            std::cout << "\n";
+            */
+
+            // write to file if enabled
+            if (WRTIE_TO_FILE)
+            {
+                // note the extra underscore: this is used to avoid conflicts while loading
+                std::ofstream file_stream;
+                file_stream.open((printed_material_name + "_.mdl").c_str());
+                if (file_stream)
+                {
+                    file_stream << mdl;
+                    file_stream.close();
+                }
+            }
+            else
+            {
+                // print to console instead
+                std::cout << "\n\n\n" << mdl << "\n\n\n";
+            }
+
+            // if the resulting printed file is known to be invalid,
+            // we do not try to load it.
+            if (!printer_context.get_is_valid_mdl())
+                continue;
+
+            // check if the result can be loaded again
+            s.str("");
+            s << mdl_module->get_mdl_name() << "_" << i << "_printed";
+            const std::string printed_module_name = s.str();
+
+            // Create execution context
+            mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
+                mdl_factory->create_execution_context());
+
+            mi::base::Handle<mi::neuraylib::IMdl_impexp_api> mdl_impexp_api(
+                neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>());
+
+            result = mdl_impexp_api->load_module_from_string(
+                transaction.get(), printed_module_name.c_str(), mdl.c_str(), context.get());
+
+            if (result < 0)
+            {
+                std::cerr << "[EXAMPLE] error: Failed to load generated module: '"
+                    << printed_module_name << "'\n";
+                print_messages(context.get());
+                continue;
+            }
+
+            const mi::base::Handle<const mi::neuraylib::IModule> module_printed(
+                transaction->access<mi::neuraylib::IModule>(
+                ("mdl" + printed_module_name).c_str()
+                    ));
+
+            if (!module_printed)
+            {
+                std::cerr << "[EXAMPLE] error: Loaded generated module is invalid: '"
+                    << printed_module_name << "'\n";
+            }
         }
     }
 
@@ -274,7 +292,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
     // free all other handles before shutting down neuray
     transaction = nullptr;
-    factory = nullptr;
+    mdl_factory = nullptr;
 
     // Shut down the MDL SDK
     if (neuray->shutdown() != 0)
@@ -294,26 +312,23 @@ int MAIN_UTF8(int argc, char* argv[])
 
 void print_help()
 {
-    std::cerr << std::endl;
-    std::cerr << "-------------------------------------------------------------------------------";
-    std::cerr << std::endl
-              << "Usage: example_traversal <qualified_module_name> [--class|--instance] [--keep]"
-              << std::endl;
-    std::cerr << "-------------------------------------------------------------------------------";
+    std::cerr << R"(
+traversal [options] <qualified_material_name>
 
-    std::cerr << std::endl
-              << "for instance: " << std::endl
-              << "       example_traversal ::example_modules -class" << std::endl
-              << "       example_traversal ::nvidia::core_definitions -instance -keep" << std::endl;
+options:
 
-    std::cerr << std::endl
-              << "The following three calls produce identical results:" << std::endl;
-    std::cerr << "       example_traversal ::example -class" << std::endl;
-    std::cerr << "       example_traversal ::example" << std::endl;
-    std::cerr << "       example_traversal" << std::endl;
-    std::cerr << std::endl;
+  -h|--help                     Prints this usage message and exits.
+  -p|--mdl_path <path>          Adds the given path to the MDL search path.
+  -n|--nostdpath                Prevents adding the MDL system and user search
+                                path(s) to the MDL search path.
+  --class                       Use class compilation (Default).
+  --instance                    Use instance mode instead of class compilation.
+  --keep                        Keep the structure produced by the compiler
+                                (output may not compile!).)";
+
+
+std::cerr << std::endl;
 }
-
 
 bool consume_cmd_options(int argc, char *argv[])
 {
@@ -328,7 +343,7 @@ bool consume_cmd_options(int argc, char *argv[])
                 g_use_class_compilation = false;
                 continue;
             }
-            else if (cmd == "--class")
+            if (cmd == "--class")
             {
                 g_use_class_compilation = true; // also default
                 continue;
@@ -341,6 +356,24 @@ bool consume_cmd_options(int argc, char *argv[])
                 continue;
             }
 
+            // add mdl paths
+            if (cmd == "-p" || cmd == "--mdl_path")
+            {
+                if (i == argc - 1)
+                {
+                    std::cerr << "[EXAMPLE] error: Argument for -p|--mdl_path missing." << std::endl;
+                    return false;
+                }
+                g_mdl_paths.push_back(argv[++i]);
+                continue;
+            }
+
+
+            if (cmd == "-n" || cmd == "--nostdpath")
+            {
+                g_nostdpath = true;
+                continue;
+            }
             if (cmd == "--help" || cmd == "-h")
             {
                 print_help();
@@ -375,3 +408,4 @@ bool consume_cmd_options(int argc, char *argv[])
 
 // Convert command line arguments to UTF8 on Windows
 COMMANDLINE_TO_UTF8
+

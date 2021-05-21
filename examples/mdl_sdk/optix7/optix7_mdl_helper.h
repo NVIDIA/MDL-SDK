@@ -298,6 +298,9 @@ Mdl_helper::Mdl_helper(
     if (!m_mdl_config)
         exit_failure("ERROR: Retrieving MDL configuration failed!");
 
+    // Disable encoded names for now
+    m_mdl_config->set_encoded_names_enabled(false);
+
     // Load additionally required optional plugins for texture support
     mi::base::Handle<mi::neuraylib::IPlugin_configuration> plug_config(
         m_neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
@@ -756,7 +759,7 @@ void Mdl_helper::copy_canvas_to_cuda_array(
     cudaArray_t device_array,
     mi::neuraylib::ICanvas const *canvas)
 {
-    mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile());
     mi::Float32 const *data = static_cast<mi::Float32 const *>(tile->get_data());
     CUDA_CHECK(cudaMemcpy2DToArray(
         device_array, 0, 0, data,
@@ -857,7 +860,7 @@ bool Mdl_helper::prepare_texture(
         // Copy the image data of all layers (the layers are not consecutive in memory)
         for (mi::Uint32 layer = 0; layer < tex_layers; ++layer) {
             mi::base::Handle<const mi::neuraylib::ITile> tile(
-                canvas->get_tile(0, 0, layer));
+                canvas->get_tile(layer));
             float const *data = static_cast<float const *>(tile->get_data());
 
             copy_params.srcPtr = make_cudaPitchedPtr(

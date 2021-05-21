@@ -127,7 +127,7 @@ class IMdl_resolved_module : public
     mi::base::Interface_declare<0xd725c3bb,0xd34d,0x4a1a,0x93,0x5d,0xa3,0x96,0x53,0x9f,0xb1,0x76>
 {
 public:
-    /// Returns the fully qualified MDL name of the module.
+    /// Returns the MDL name of the module.
     virtual const char* get_module_name() const = 0;
 
     /// Returns the absolute resolved filename of the module.

@@ -70,8 +70,6 @@
 #include "neuray_function_definition_impl.h"
 #include "neuray_image_impl.h"
 #include "neuray_lightprofile_impl.h"
-#include "neuray_material_definition_impl.h"
-#include "neuray_material_instance_impl.h"
 #include "neuray_module_impl.h"
 #include "neuray_texture_impl.h"
 
@@ -82,8 +80,6 @@
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/texture/i_texture.h>
 
@@ -262,12 +258,6 @@ void Class_registration::register_classes_part2( Class_factory* factory)
         Image_impl::create_api_class, Image_impl::create_db_element);
     REG( "Lightprofile", LIGHTPROFILE::ID_LIGHTPROFILE,
         Lightprofile_impl::create_api_class, Lightprofile_impl::create_db_element);
-    REG( "__Material_definition", MDL::ID_MDL_MATERIAL_DEFINITION,
-        Material_definition_impl::create_api_class,
-        Material_definition_impl::create_db_element);
-    REG( "__Material_instance", MDL::ID_MDL_MATERIAL_INSTANCE,
-        Material_instance_impl::create_api_class,
-        Material_instance_impl::create_db_element);
     REG( "__Module", MDL::ID_MDL_MODULE,
         Module_impl::create_api_class,
         Module_impl::create_db_element);
@@ -320,6 +310,7 @@ void Class_registration::register_structure_declarations( Class_factory* factory
     decl->add_member( "Interface",  "annotations");
     REG( "Parameter_data", decl.get());
 
+    // deprecated
     decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "String",  "preset_name");
     decl->add_member( "String",  "prototype_name");
@@ -327,6 +318,7 @@ void Class_registration::register_structure_declarations( Class_factory* factory
     decl->add_member( "Interface",  "annotations");
     REG( "Preset_data", decl.get());
 
+    // deprecated
     decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "String",  "variant_name");
     decl->add_member( "String",  "prototype_name");
@@ -378,8 +370,8 @@ void Class_registration::unregister_structure_declarations( Class_factory* facto
     UNREG( "Material_data");
     UNREG( "Create_materials_data");
     UNREG( "Parameter_data");
-    UNREG( "Preset_data");
-    UNREG( "Variant_data");
+    UNREG( "Preset_data");  // deprecated
+    UNREG( "Variant_data"); // deprecated
     UNREG( "Uvtile");
     UNREG( "Uvtile_reader");
     UNREG( "Mdle_data");

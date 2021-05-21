@@ -96,8 +96,18 @@ mi::neuraylib::IMdl_resolved_module* Mdl_entity_resolver_impl::resolve_module(
     std::unique_ptr<mi::mdl::Position_impl> position(
         new mi::mdl::Position_impl( pos_line, pos_column, pos_line, pos_column));
 
+    if( !module_name)
+        return nullptr;
+
+    std::string decoded_module_name = MDL::decode_module_name( module_name);
+    std::string decoded_owner_name
+        = owner_name ? MDL::decode_module_name( owner_name) : std::string();
+
     mi::base::Handle<mi::mdl::IMDL_import_result> result( m_resolver->resolve_module(
-        module_name, owner_file_path, owner_name, position.get()));
+        decoded_module_name.c_str(),
+        owner_file_path,
+        !decoded_owner_name.empty() ? decoded_owner_name.c_str() : nullptr,
+        position.get()));
 
     MDL::Execution_context default_context;
     MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
@@ -118,9 +128,13 @@ mi::neuraylib::IMdl_resolved_resource* Mdl_entity_resolver_impl::resolve_resourc
     std::unique_ptr<mi::mdl::Position_impl> position(
         new mi::mdl::Position_impl( pos_line, pos_column, pos_line, pos_column));
 
+    std::string decoded_owner_name
+        = owner_name ? MDL::decode_module_name( owner_name) : std::string();
     mi::base::Handle<mi::mdl::IMDL_resource_set> result( m_resolver->resolve_resource_file_name(
-        file_path, owner_file_path, owner_name, position.get()));
-
+        file_path,
+        owner_file_path,
+        !decoded_owner_name.empty() ? decoded_owner_name.c_str() : nullptr,
+        position.get()));
 
     MDL::Execution_context default_context;
     MDL::Execution_context* mdl_context = unwrap_and_clear_context( context, default_context);
@@ -135,12 +149,14 @@ Mdl_resolved_module_impl::Mdl_resolved_module_impl(
   : m_mdl( mdl, mi::base::DUP_INTERFACE),
     m_import_result( import_result, mi::base::DUP_INTERFACE)
 {
+    const char* s = m_import_result->get_absolute_name();
+    if( s && s[0])
+        m_module_name = MDL::encode_module_name( s);
 }
 
 const char* Mdl_resolved_module_impl::get_module_name() const
 {
-    const char* s = m_import_result->get_absolute_name();
-    return s && s[0] ? s : nullptr;
+    return !m_module_name.empty() ? m_module_name.c_str() : nullptr;
 }
 
 const char* Mdl_resolved_module_impl::get_filename() const
@@ -232,9 +248,21 @@ mi::mdl::IMDL_import_result* Core_entity_resolver_impl::resolve_module(
     mi::Sint32 pos_line   = pos ? pos->get_start_line()   : 0;
     mi::Sint32 pos_column = pos ? pos->get_start_column() : 0;
 
+    if( !module_name)
+        return nullptr;
+
+    std::string encoded_module_name = MDL::encode_module_name( module_name);
+    std::string encoded_owner_name
+        = owner_name ? MDL::encode_module_name( owner_name) : std::string();
+
     Mdl_execution_context_impl context;
     mi::base::Handle<mi::neuraylib::IMdl_resolved_module> result( m_resolver->resolve_module(
-        module_name, owner_file_path, owner_name, pos_line, pos_column, &context));
+        encoded_module_name.c_str(),
+        owner_file_path,
+        !encoded_owner_name.empty() ? encoded_owner_name.c_str() : nullptr,
+        pos_line,
+        pos_column,
+        &context));
 
     // Sanity check against incorrect implementations of mi::neuraylib::IMdl_resolved_module:
     // Module names have to be valid.
@@ -265,9 +293,17 @@ mi::mdl::IMDL_resource_set* Core_entity_resolver_impl::resolve_resource_file_nam
     mi::Sint32 pos_line   = pos ? pos->get_start_line()   : 0;
     mi::Sint32 pos_column = pos ? pos->get_start_column() : 0;
 
+    std::string encoded_owner_name
+        = owner_name ? MDL::encode_module_name( owner_name) : std::string();
+
     Mdl_execution_context_impl context;
     mi::base::Handle<mi::neuraylib::IMdl_resolved_resource> result( m_resolver->resolve_resource(
-        file_path, owner_file_path, owner_name, pos_line, pos_column, &context));
+        file_path,
+        owner_file_path,
+        !encoded_owner_name.empty() ? encoded_owner_name.c_str() : nullptr,
+        pos_line,
+        pos_column,
+        &context));
 
     // Sanity check against incorrect implementations of mi::neuraylib::IMdl_resolved_resource:
     // The file path mask and file paths have to be valid.
@@ -301,11 +337,14 @@ Core_mdl_import_result_impl::Core_mdl_import_result_impl(
     mi::neuraylib::IMdl_resolved_module* resolved_module)
   : m_resolved_module( resolved_module, mi::base::DUP_INTERFACE)
 {
+    const char* s = m_resolved_module->get_module_name();
+    if( s)
+        m_core_module_name = MDL::decode_module_name( s);
 }
 
 const char* Core_mdl_import_result_impl::get_absolute_name() const
 {
-    return m_resolved_module->get_module_name();
+    return !m_core_module_name.empty() ? m_core_module_name.c_str() : nullptr;
 }
 
 const char* Core_mdl_import_result_impl::get_file_name() const

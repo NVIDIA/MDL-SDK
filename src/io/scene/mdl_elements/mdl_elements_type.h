@@ -81,10 +81,10 @@ private:
     typedef std::map<std::string, mi::Size> Name_index_map;
     Name_index_map m_name_index;
 
-    typedef std::vector<std::string> Index_name_vector;
+    using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
 
-    typedef std::vector<mi::base::Handle<const IType> > Types_vector;
+    using Types_vector = std::vector<mi::base::Handle<const IType> >;
     Types_vector m_types;
 };
 
@@ -146,6 +146,8 @@ public:
     const IType_struct* get_predefined_struct(
         IType_struct::Predefined_id id) const override;
 
+    IType_list* clone( const IType_list* list) const override;
+
     mi::Sint32 compare( const IType* lhs, const IType* rhs) const override;
 
     mi::Sint32 compare( const IType_list* lhs, const IType_list* rhs) const override;
@@ -192,9 +194,15 @@ public:
 
     static std::string get_type_name( const IType* type, bool include_aliased_type = true);
 
+    /// Similar to get_type_name(), except that aliases are skipped and the "enum" and "struct"
+    /// keywords are omitted.
+    static std::string get_serialization_type_name( const IType* type);
+
     mi::Uint32 destroy_enum_type( const IType_enum* e_type);
 
     mi::Uint32 destroy_struct_type( const IType_struct* s_type);
+
+    const IType* create_type( const char* serialization_type_name) const  override;
 
 private:
 

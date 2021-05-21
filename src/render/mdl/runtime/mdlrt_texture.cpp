@@ -303,7 +303,6 @@ static mi::Float32_4 interpolate_biquintic(
     mi::Float32_4 rgba2(0.f,0.f,0.f,1.f);
 
 
-    bool tex_layer_loop;
     for (unsigned int i = 0; i < 2; ++i)
     {
         const unsigned int z_layer = ((i == 0) ? texi1_z : texi0_z) + layer_offset;
@@ -318,8 +317,6 @@ static mi::Float32_4 interpolate_biquintic(
         col = c0 * st.x + c1 * st.y + c2 * st.z + c3 * st.w;
         rgba = mi::Float32_4(col.r, col.g, col.b, col.a);
     
-        tex_layer_loop = false;
-
         // 3D textures loop twice
         if(lerp_z != 0.f)
             rgba2 = rgba;
@@ -383,7 +380,7 @@ Texture_2d::Texture_2d(
         return;
 
     DB::Access<DBIMAGE::Image> image(texture->get_image(), trans);
-    m_is_valid = image->is_valid();
+    m_is_valid = image.is_valid() && image->is_valid();
 
     DB::Access<DBIMAGE::Image_impl> image_impl;
     if (m_is_valid) {

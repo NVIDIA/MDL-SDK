@@ -425,6 +425,45 @@ public:
     /// Creates a copy of the passed tile.
     virtual mi::neuraylib::ITile* copy_tile( const mi::neuraylib::ITile* other) const = 0;
 
+    /// Copies pixel data between two mipmaps.
+    ///
+    /// Source and destination have to agree on all properties (pixel type, width, height, etc.).
+    ///
+    /// \param source   Source of the pixel data.
+    /// \param dest     Destination of the pixel data.
+    /// return
+    ///          -  0: Success.
+    ///          - -1: Different properties.
+    ///          - -2: Invalid pixel type.
+    virtual mi::Sint32 copy_mipmap_data(
+        const IMipmap* source, IMipmap* dest) const = 0;
+
+    /// Copies pixel data between two canvasses.
+    ///
+    /// Source and destination have to agree on all properties (pixel type, width, height, etc.).
+    ///
+    /// \param source   Source of the pixel data.
+    /// \param dest     Destination of the pixel data.
+    /// return
+    ///          -  0: Success.
+    ///          - -1: Different properties.
+    ///          - -2: Invalid pixel type.
+    virtual mi::Sint32 copy_canvas_data(
+        const mi::neuraylib::ICanvas* source, mi::neuraylib::ICanvas* dest) const = 0;
+
+    /// Copies pixel data between two tiles.
+    ///
+    /// Source and destination have to agree on all properties (pixel type, width, height, etc.).
+    ///
+    /// \param source   Source of the pixel data.
+    /// \param dest     Destination of the pixel data.
+    /// return
+    ///          -  0: Success.
+    ///          - -1: Different properties.
+    ///          - -2: Invalid pixel type.
+    virtual mi::Sint32 copy_tile_data(
+        const mi::neuraylib::ITile* source, mi::neuraylib::ITile* dest) const = 0;
+
     // Methods to convert pixel types of mipmaps, canvases, and tiles
     // ==============================================================
 
@@ -537,27 +576,36 @@ public:
 
     /// Exports a canvas to an image file.
     ///
-    /// \param image            The image to export.
-    /// \param output_filename  The filename for the exported image.
-    /// \param quality          The desired quality (from 0 to 100, 100 is best quality), might
-    ///                         not be taken into account depending on the image format.
-    /// \return                 \c true in case of success, \c false in case of failure.
+    /// \param image                 The image to export.
+    /// \param output_filename       The filename for the exported image.
+    /// \param quality               The desired quality (from 0 to 100, 100 is best quality),
+    ///                              might not be taken into account depending on the image format.
+    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
+    ///                              according to the pixel type chosen for export (1.0 for HDR
+    ///                              pixel types, 2.2 for LDR pixel types).
+    /// \return                      \c true in case of success, \c false in case of failure.
+
     virtual bool export_canvas(
         const mi::neuraylib::ICanvas* image,
         const char* output_filename,
-        mi::Uint32 quality = 100) const = 0;
+        mi::Uint32 quality = 100,
+        bool force_default_gamma = false) const = 0;
 
     /// Exports a mipmap to an image file.
     ///
-    /// \param image            The image to export.
-    /// \param output_filename  The filename for the exported image.
-    /// \param quality          The desired quality (from 0 to 100, 100 is best quality), might
-    ///                         not be taken into account depending on the image format.
-    /// \return                 \c true in case of success, \c false in case of failure.
+    /// \param image                 The image to export.
+    /// \param output_filename       The filename for the exported image.
+    /// \param quality               The desired quality (from 0 to 100, 100 is best quality),
+    ///                              might not be taken into account depending on the image format.
+    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
+    ///                              according to the pixel type chosen for export (1.0 for HDR
+    ///                              pixel types, 2.2 for LDR pixel types).
+    /// \return                      \c true in case of success, \c false in case of failure.
     virtual bool export_mipmap(
         const IMipmap* image,
         const char* output_filename,
-        mi::Uint32 quality = 100) const = 0;
+        mi::Uint32 quality = 100,
+        bool force_default_gamma = false) const = 0;
 
     /// Creates a buffer with encoded image data from a canvas.
     ///
@@ -565,18 +613,22 @@ public:
     /// encoded pixel data to a file on disk, but creates a buffer in memory with the encoded pixel
     /// data. This method is the counterpart of #create_canvas(mi::neuraylib::IBuffer,...).
     ///
-    /// \param canvas           The canvas to encode.
-    /// \param image_format     The desired image format ("png", "jpg", etc.).
-    /// \param pixel_type       The desired pixel type. Ignored if the plugin for the file format
-    ///                         does not support the requested pixel type.
-    /// \param quality          The desired quality (from 0 to 100, 100 is best quality), might
-    ///                         not be taken into account depending on the image format.
-    /// \return                 The encoded image, or \c NULL in case of failure.
+    /// \param canvas                The canvas to encode.
+    /// \param image_format          The desired image format ("png", "jpg", etc.).
+    /// \param pixel_type            The desired pixel type. Ignored if the plugin for the file
+    ///                              format does not support the requested pixel type.
+    /// \param quality               The desired quality (from 0 to 100, 100 is best quality),
+    ///                              might not be taken into account depending on the image format.
+    /// \param force_default_gamma   If enabled, adjusts the gamma value of the exported pixel data
+    ///                              according to the pixel type chosen for export (1.0 for HDR
+    ///                              pixel types, 2.2 for LDR pixel types).
+    /// \return                     The encoded image, or \c NULL in case of failure.
     virtual mi::neuraylib::IBuffer* create_buffer_from_canvas(
         const mi::neuraylib::ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
-        mi::Uint32 quality = 100) const = 0;
+        mi::Uint32 quality = 100,
+        bool force_default_gamma = false) const = 0;
 
     // Misc methods
     // ============

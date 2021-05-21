@@ -358,7 +358,7 @@ BSDF_INLINE float custom_curve_factor(
     const float normal_reflectivity,
     const float grazing_reflectivity)
 {
-    const float f = 1.0f - kh;
+    const float f = 1.0f - math::saturate(kh);
     float f5;
     if (exponent == 5.0f) {
         const float f2 = f * f;
@@ -376,7 +376,7 @@ BSDF_INLINE float3 custom_curve_factor(
     const float3 &normal_reflectivity,
     const float3 &grazing_reflectivity)
 {
-    const float f = 1.0f - kh;
+    const float f = 1.0f - math::saturate(kh);
     float f5;
     if (exponent == 5.0f) {
         const float f2 = f * f;
@@ -1000,7 +1000,6 @@ BSDF_INLINE float3 thin_film_factor(
     const bool transmission,
     const bool thin_walled)
 {
-    const float nk1 = math::dot(k1, normal);
     const float nk2 = math::abs(math::dot(k2, normal));
 
     const float3 h = compute_half_vector(
@@ -1107,12 +1106,6 @@ BSDF_INLINE float color_measured_curve_factor_estimate(
         return math::luminance(
             math::saturate(weight) *
             math::saturate(measured_curve_factor(cosine, values, num_values)));
-}
-
-BSDF_INLINE float sinh(float x)
-{
-    float ex = math::exp(x);
-    return 0.5f * (ex - 1.f / ex);
 }
 
 #endif // MDL_LIBBSDF_UTILITIES_H

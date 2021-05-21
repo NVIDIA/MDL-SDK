@@ -323,6 +323,10 @@ void Scanner::set_mdl_version(int major, int minor)
         keywords.set(L"cast", Parser::_CAST);
         keywords.set(L"hair_bsdf", Parser::_HAIR_BSDF);
     }
+    if (HAS_VERSION(1, 7)) {
+        // enable  MDL 1.7 keywords
+        keywords.set(L"auto", Parser::_AUTO);
+    }
 }
 
 namespace {
@@ -523,6 +527,18 @@ MDL::MDL(IAllocator *alloc)
 
         // takes ownership
         register_builtin_module(builtins_mod);
+    }
+
+    // now load nvidia::baking.mdl, which is NOT a stdlib module
+    {
+        mi::base::Handle<Buffer_Input_stream> s(m_builder.create<Encoded_buffer_Input_stream>(
+            m_builder.get_allocator(),
+            mdl_module_nvidia_baking, sizeof(mdl_module_nvidia_baking), ""));
+        Module *baking_mod = load_module(
+            NULL, ctx.get(), "::nvidia::baking", s.get(), Module::MF_IS_OWNED);
+
+        // takes ownership
+        register_builtin_module(baking_mod);
     }
 
     // currently load base.mdl, this must be hashed
@@ -727,6 +743,16 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_MATH_BLACKBODY;
     m_builtin_semantics["::math::emission_color"] =
         IDefinition::DS_INTRINSIC_MATH_EMISSION_COLOR;
+    m_builtin_semantics["::math::cosh"] =
+        IDefinition::DS_INTRINSIC_MATH_COSH;
+    m_builtin_semantics["::math::sinh"] =
+        IDefinition::DS_INTRINSIC_MATH_SINH;
+    m_builtin_semantics["::math::tanh"] =
+        IDefinition::DS_INTRINSIC_MATH_TANH;
+    m_builtin_semantics["::math::float_bits_to_int"] =
+        IDefinition::DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT;
+    m_builtin_semantics["::math::int_bits_to_float"] =
+        IDefinition::DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT;
     m_builtin_semantics["::math::DX"] =
         IDefinition::DS_INTRINSIC_MATH_DX;
     m_builtin_semantics["::math::DY"] =
@@ -813,6 +839,18 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR;
     m_builtin_semantics["::tex::texture_isvalid"] =
         IDefinition::DS_INTRINSIC_TEX_TEXTURE_ISVALID;
+    m_builtin_semantics["::tex::width_offset"] =
+        IDefinition::DS_INTRINSIC_TEX_WIDTH_OFFSET;
+    m_builtin_semantics["::tex::height_offset"] =
+        IDefinition::DS_INTRINSIC_TEX_HEIGHT_OFFSET;
+    m_builtin_semantics["::tex::depth_offset"] =
+        IDefinition::DS_INTRINSIC_TEX_DEPTH_OFFSET;
+    m_builtin_semantics["::tex::first_frame"] =
+        IDefinition::DS_INTRINSIC_TEX_FIRST_FRAME;
+    m_builtin_semantics["::tex::last_frame"] =
+        IDefinition::DS_INTRINSIC_TEX_LAST_FRAME;
+    m_builtin_semantics["::tex::grid_to_object_space"] =
+        IDefinition::DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE;
 
     // df module
     m_builtin_semantics["::df::diffuse_reflection_bsdf"] =
@@ -894,7 +932,10 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_DF_CHIANG_HAIR_BSDF;
     m_builtin_semantics["::df::sheen_bsdf"] =
         IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF;
-
+    m_builtin_semantics["::df::unbounded_mix"] =
+        IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX;
+    m_builtin_semantics["::df::color_unbounded_mix"] =
+        IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX;
 
 
     // scene module
@@ -992,6 +1033,12 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_KEYWORDS_ANNOTATION;
     m_builtin_semantics["::anno::origin"] =
         IDefinition::DS_ORIGIN_ANNOTATION;
+
+    // nvidia::baking module
+    m_builtin_semantics["::nvidia::baking::target_material_model"] =
+        IDefinition::DS_BAKING_TMM_ANNOTATION;
+    m_builtin_semantics["::nvidia::baking::bake_to_texture"] =
+        IDefinition::DS_BAKING_BAKE_TO_TEXTURE_ANNOTATION;
 }
 
 // Create all options (and default values) of the compiler.
@@ -1236,7 +1283,8 @@ Module const *MDL::compile_module(
         m_search_path,
         m_search_path_lock,
         ctx.access_messages_impl(),
-        ctx.get_front_path());
+        ctx.get_front_path(),
+        ctx.get_virtual_root_package());
 
     if (char const *repl_module_name = ctx.get_replacement_module_name()) {
         char const *repl_file_name = ctx.get_replacement_file_name();
@@ -1348,8 +1396,14 @@ Module const *MDL::compile_foreign_module(
     }
 
     // load and translate the foreign module
+    char const *old_vroot  = ctx.get_virtual_root_package();
+    string     old_vroot_s = string(old_vroot != NULL ? old_vroot : "", get_allocator());
+    ctx.set_virtual_root_package(translator.get_virtual_root_package());
+
     Module const *mod =
         impl_cast<Module>(translator.compile_foreign_module(&ctx, module_name, module_cache));
+
+    ctx.set_virtual_root_package(old_vroot == NULL ? NULL : old_vroot_s.c_str());
 
     // notify waiting threads about success or failure
     report_module_loading_result(const_cast<Module *>(mod), cb);
@@ -1379,7 +1433,8 @@ Module const *MDL::compile_module_from_stream(
         m_search_path,
         m_search_path_lock,
         ctx.access_messages_impl(),
-        ctx.get_front_path());
+        ctx.get_front_path(),
+        ctx.get_virtual_root_package());
 
     if (resolver.exists(module_name)) {
         // such a module exists, overwrite is forbidden
@@ -2218,9 +2273,12 @@ bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_
             version = MDL_VERSION_1_6;
             return true;
         case 7:
+            version = MDL_VERSION_1_7;
+            return true;
+        case 8:
             if (!enable_experimental_features)
                 return false;
-            version = MDL_VERSION_1_7;
+            version = MDL_VERSION_1_8;
             return true;
         }
     }

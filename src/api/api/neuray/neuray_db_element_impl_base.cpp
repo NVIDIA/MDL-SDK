@@ -37,10 +37,8 @@
 #include "neuray_transaction_impl.h"
 
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
 #include <io/scene/mdl_elements/mdl_elements_annotation_definition_proxy.h>
 
 // If defined, the destructor of Db_element_impl_base dumps all set journal flags for elements in
@@ -193,19 +191,13 @@ mi::Sint32 Db_element_impl_base::store(
     if( tag) {
         SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
         if(    (class_id == MDL::ID_MDL_MODULE)
-            || (class_id == MDL::ID_MDL_MATERIAL_DEFINITION)
             || (class_id == MDL::ID_MDL_FUNCTION_DEFINITION)
             || (class_id == MDL::ID_MDL_ANNOTATION_DEFINITION_PROXY))
             return -9;
 
-        if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
-            DB::Access<MDL::Mdl_function_call> f_call(tag, db_transaction);
-            if (f_call->is_immutable())
-                return -9;
-        }
-        if (class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
-            DB::Access<MDL::Mdl_material_instance> m_inst(tag, db_transaction);
-            if (m_inst->is_immutable())
+        if( class_id == MDL::ID_MDL_FUNCTION_CALL) {
+            DB::Access<MDL::Mdl_function_call> fc( tag, db_transaction);
+            if( fc->is_immutable())
                 return -9;
         }
     }
@@ -306,8 +298,7 @@ bool Db_element_impl_base::can_reference_tag( DB::Tag tag) const
             ASSERT( M_NEURAY_API, false);
             return false;
         case STATE_ACCESS:
-            ASSERT( M_NEURAY_API, false);
-            // fall through is intended
+            ASSERT( M_NEURAY_API, false); // fallthrough
         case STATE_EDIT: {
             DB::Tag this_tag = get_tag();
             DB::Transaction* db_transaction = get_db_transaction();
@@ -335,7 +326,7 @@ DB::Element_base* Db_element_impl_base::get_db_element_base()
     switch( m_state) {
         case STATE_ACCESS:
             // internal or external programming error (e.g. invalid use of const_cast)
-            return nullptr; 
+            return nullptr;
         case STATE_INVALID:
         case STATE_EDIT:
         case STATE_POINTER:

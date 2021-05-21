@@ -1,0 +1,144 @@
+/******************************************************************************
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_bindings_python MDL Python Bindings
+
+To give Python developers access to the MDL SDK we offer a low-level Python API
+generated from the C++ interfaces using SWIG.
+The usage of the bindings is meant to be very similar to the original native interface in order 
+to offer the same functionality
+and to allow porting of C++ applications and examples easily.
+Furthermore, it allows the developer to refer to the native API documentation to a large extend.
+
+\section mi_neuray_bindings_python_compile Compiling the Binding Module
+
+The binding is generated using a tool called \c SWIG.
+The result of that generation consists of two parts.
+A C++ file \c mdl_python_swig.cpp that needs to be compiled and linked against the Python libraries
+to create the actual binding module.
+And second, a small Python module \c pymdlsdk.py that imports the main binding module.
+It contains documentation, special extension functions that only exist for the Python bindings,
+and it forwards all function calls to the main binding module.
+
+With the MDL SDK, we provide a CMake-based build system that also compiles the generated C++ code
+and links it against given Python development libraries to create the main binding module.
+The reason for compiling this here is that the bindings work only with a specific python version,
+the one that matches the version of the interpreter that runs your application.
+
+Besides the generated \c mdl_python_swig.cpp, additional source and header files are required
+to build the main binding module: \c mdl_python.h and \c mdl_python.cpp.
+These files contain additional utility functions, e.g., to load the native SDK as
+well as plugins.
+
+After building the bindings successfully, the binding will consist of two files:
+
+- \c pymdlsdk.py
+- \c _pymdlsdk.so (or \c _pymdlsdk.pyd on windows)
+
+\section mi_neuray_bindings_python_refcounts Reference Counting
+
+One major difference between the MDL Python bindings and the MDL SDK is the absence of \c mi::Handle
+objects for reference counting.
+Nevertheless, reference counting is also important in Python, but it happens mostly in the background.
+
+All MDL objects returned by the binding implement the context manager pattern.
+It is recommended to hold MDL objects using the \c with statement.
+It guarantees that the object is freed properly when leaving the \c with block:
+
+\code
+with neuray.get_api_component(pymdlsdk.IMdl_configuration) as cfg:
+    cfg.add_mdl_path('/home/user/mdl')
+\endcode
+
+Note, that multiple of those blocks can be combined to improve readability:
+
+\code
+with neuray.get_api_component(pymdlsdk.IMdl_factory) as mdl_factory, \
+    mdl_factory.create_type_factory(transaction) as type_factory, \
+    mdl_factory.create_value_factory(transaction) as value_factory:
+\endcode
+
+The alternative way to make sure MDL objects are disposed properly is to release them manually
+using their \c release() function or by assigning \c None:
+
+\code
+context = mdl_factory.create_execution_context()
+# ...
+context.release() # same as: context = None
+\endcode
+
+Relaying on the fact that Python is taking care of the reference counting is possible as well
+but not recommended. 
+While this works in well to free local objects when leaving the scope of functions, it
+might not work well when garbage collection is required.
+The MDL SDK relies on the disposal of objects in some use cases, for instance when accessing
+database objects and committing or aborting transactions.
+To avoid such problems in general, we advise to thoughtfully deal with the lifetime of MDL objects
+by either using context managers or the manual releasing of objects.
+
+\section mi_neuray_bindings_python_getting_started Getting Started
+
+We provide examples for the use of the MDL Python Bindings that illustrate
+-- in a tutorial manner -- the important interfaces and concepts.
+
+For using the MDL Python bindings the native MDL SDK library as well as the used native plugins need 
+to available.
+The native files can be added to the the system PATH on Windows, the LD_LIBRARY_PATH on Linux, or 
+DYLD_LIBRARY_PATH on MacOS.
+The path to the native libraries can also be passed with the \c load_and_get_ineuray() function.
+Details on that can be found in the documentation for the \ref mi_neuray_example_start_shutdown_python.
+
+After running CMake and building the bindings, we provide several ways to run and debug the Python
+examples.
+
+- In the CMake build directory, a generated \c vscode-workspace file can be found.
+  This can be opened by \c Visual \c Studio \c Code on all platforms.
+  To run an example, the corresponding Python script has to be the currently opened and visible file.
+  Pressing \c F5 on the keyboard will ask for a build configuration.
+  This has to match the version selected while building the bindings.
+  After confirming the selection, the example script will start.
+- Alternatively, generated shell scripts called \c run_example.sh are created in the CMake build
+  directory sub-folders of the individual examples,
+  e.g., \c examples\mdl_python\start_shutdown\run_example.sh.
+  Running the scripts will add the native libraries to the system PATH, add the MDL Python Bindings
+  to the PYTHONPATH, and start the Python interpreter that was selected during \c CMake \c Configure.
+- On Windows, the generated \c Visual \c Studio \c solution will have projects for the Python example 
+  as well.
+  They can also be started from the IDE similar to the native examples.
+  However, these projects will allow to debug the C++ side of the bindings or the SDK
+  whereas VS Code can be used to debug the Python code.
+
+\section mi_neuray_bindings_python_examples Examples
+
+- \subpage mi_neuray_example_start_shutdown_python <br>
+  Starts and shuts down the \neurayApiName using the Python bindings.
+
+- \subpage mi_neuray_example_modules_python <br>
+  Loads an MDL module and inspects its contents.
+
+*/

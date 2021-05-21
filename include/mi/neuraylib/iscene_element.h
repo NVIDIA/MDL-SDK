@@ -70,12 +70,22 @@ enum Element_type
     ELEMENT_TYPE_SUBDIVISION_SURFACE             = 23, ///< #mi::neuraylib::ISubdivision_surface
     ELEMENT_TYPE_FREEFORM_SURFACE                = 24, ///< #mi::neuraylib::IFreeform_surface
     ELEMENT_TYPE_FIBERS                          = 25, ///< #mi::neuraylib::IFibers
+    ELEMENT_TYPE_VOLUME                          = 26, ///< #mi::neuraylib::IVolume
+    ELEMENT_TYPE_VOLUME_DATA                     = 27, ///< #mi::neuraylib::IVolume_data
 #endif // MI_SKIP_WITH_MDL_SDK_DOXYGEN
     ELEMENT_TYPE_MODULE                          = 29, ///< #mi::neuraylib::IModule
-    ELEMENT_TYPE_FUNCTION_DEFINITION             = 30, ///< #mi::neuraylib::IFunction_definition
-    ELEMENT_TYPE_FUNCTION_CALL                   = 31, ///< #mi::neuraylib::IFunction_call
-    ELEMENT_TYPE_MATERIAL_DEFINITION             = 32, ///< #mi::neuraylib::IMaterial_definition
-    ELEMENT_TYPE_MATERIAL_INSTANCE               = 33, ///< #mi::neuraylib::IMaterial_instance
+    /// #mi::neuraylib::IFunction_definition
+    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
+    ELEMENT_TYPE_FUNCTION_DEFINITION             = 30,
+    /// #mi::neuraylib::IFunction_call
+    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
+    ELEMENT_TYPE_FUNCTION_CALL                   = 31,
+    /// #mi::neuraylib::IMaterial_definition
+    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
+    ELEMENT_TYPE_MATERIAL_DEFINITION             = 32,
+    /// #mi::neuraylib::IMaterial_instance
+    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
+    ELEMENT_TYPE_MATERIAL_INSTANCE               = 33,
     ELEMENT_TYPE_COMPILED_MATERIAL               = 34, ///< #mi::neuraylib::ICompiled_material
     ELEMENT_TYPE_BSDF_MEASUREMENT                = 35, ///< #mi::neuraylib::IBsdf_measurement
 #ifndef MI_SKIP_WITH_MDL_SDK_DOXYGEN

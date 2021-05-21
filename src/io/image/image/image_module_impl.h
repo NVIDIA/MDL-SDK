@@ -155,6 +155,15 @@ public:
 
     mi::neuraylib::ITile* copy_tile( const mi::neuraylib::ITile* other) const;
 
+    mi::Sint32 copy_mipmap_data(
+        const IMipmap* source, IMipmap* dest) const;
+
+    mi::Sint32 copy_canvas_data(
+        const mi::neuraylib::ICanvas* source, mi::neuraylib::ICanvas* dest) const;
+
+    mi::Sint32 copy_tile_data(
+        const mi::neuraylib::ITile* source, mi::neuraylib::ITile* dest) const;
+
     IMipmap* convert_mipmap(
         const IMipmap* mipmap, Pixel_type pixel_type, bool only_first_level) const;
 
@@ -185,18 +194,21 @@ public:
     bool export_canvas(
         const mi::neuraylib::ICanvas* canvas,
         const char* output_filename,
-        mi::Uint32 quality) const;
+        mi::Uint32 quality,
+        bool force_default_gamma) const;
 
     bool export_mipmap(
         const IMipmap* mipmap,
         const char* output_filename,
-        mi::Uint32 quality) const;
+        mi::Uint32 quality,
+        bool force_default_gamma) const;
 
     mi::neuraylib::IBuffer* create_buffer_from_canvas(
         const mi::neuraylib::ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
-        mi::Uint32 quality) const;
+        mi::Uint32 quality,
+        bool force_default_gamma) const;
 
     mi::neuraylib::IImage_plugin* find_plugin_for_import(
         const char* extension, mi::neuraylib::IReader* reader) const;

@@ -67,13 +67,15 @@ MDL_zip_container_mdle *MDL_zip_container_mdle::open(
     zip_t* za = MDL_zip_container::open(alloc, path, err, header_info);
 
     // load a pre-released version (0.2) will probably get an error at some point in time
-    if (err != EC_OK && err != EC_PRE_RELEASE_VERSION)
+    if (err != EC_OK && err != EC_PRE_RELEASE_VERSION) {
         return NULL;
+    }
 
     Allocator_builder builder(alloc);
     MDL_zip_container_mdle *mdle = builder.create<MDL_zip_container_mdle>(alloc, path, za);
-    if (mdle != NULL)
+    if (mdle != NULL) {
         mdle->m_header = header_info;
+    }
     return mdle;
 }
 
@@ -95,9 +97,9 @@ MDL_zip_container_mdle::MDL_zip_container_mdle(
 // over the entire content.
 bool MDL_zip_container_mdle::get_hash(unsigned char hash[16]) const
 {
-    if (m_header.major_version_min == 0 && m_header.minor_version_min == 1)
+    if (m_header.major_version_min == 0 && m_header.minor_version_min == 1) {
         return false;
-
+    }
     memcpy(hash, m_header.hash, 16);
     return true;
 }
@@ -280,6 +282,17 @@ void Encapsulate_tool::translate_container_error(
             MDLE_INVALID_MDLE,
             Error_params(get_allocator()).add(mdle_name));
         return;
+    case EC_INVALID_MANIFEST:
+        error(
+            MDLE_MANIFEST_ERROR,
+            Error_params(get_allocator()).add(mdle_name));
+        return;
+    case EC_MANIFEST_PARSER:
+        error(
+            MDLE_MANIFEST_PARSE_ERROR,
+            Error_params(get_allocator()).add(mdle_name));
+        return;
+
     case EC_NOT_FOUND:
         error(
             MDLE_DOES_NOT_CONTAIN_ENTRY,
@@ -350,17 +363,20 @@ zip_int64_t Encapsulate_tool::add_file_uncompressed(
     zip_source_t *src)
 {
     // remove leading "./"
-    if (name[0] == '.' && name[1] == '/')
+    if (name[0] == '.' && name[1] == '/') {
         name += 2;
+    }
 
     // add the file
     zip_int64_t index = zip_file_add(za, name, src, ZIP_FL_ENC_UTF_8);
-    if (index < 0)
+    if (index < 0) {
         return -1;
+    }
 
     // turn off compression
-    if (zip_set_file_compression(za, index, ZIP_CM_STORE, 0) != 0)
+    if (zip_set_file_compression(za, index, ZIP_CM_STORE, 0) != 0) {
         return -1;
+    }
 
     return index;
 }
@@ -378,9 +394,9 @@ namespace
             size_t lb = strlen(b);
 
             int cmp = memcmp(a, b, std::min(la, lb));
-            if (cmp == 0)
+            if (cmp == 0) {
                 return la < lb;
-
+            }
             return cmp < 0;
         }
     };
@@ -549,8 +565,9 @@ bool Encapsulate_tool::create_encapsulated_module(
         char const *target_name = desc.resource_collector->get_mlde_resource_path(f);
 
         // remove leading "./"
-        if (target_name[0] == '.' && target_name[1] == '/')
+        if (target_name[0] == '.' && target_name[1] == '/') {
             target_name += 2;
+        }
 
         if (!add_file_uncompressed(
                 za, reader.get(), target_name, mdle_name, added_zip_sources, hash.data))
@@ -580,7 +597,7 @@ bool Encapsulate_tool::create_encapsulated_module(
         char const *target_name = desc.additional_file_target_paths[i];
 
         if (!add_file_uncompressed(
-            za, reader.get(), target_name, mdle_name, added_zip_sources, hash.data)) 
+            za, reader.get(), target_name, mdle_name, added_zip_sources, hash.data))
         {
             has_error = true;
             break;
@@ -750,8 +767,9 @@ bool Encapsulate_tool::check_integrity(
 
         success = check_file_content_integrity(capsule, file_name, hash.data);
 
-        if (!success)
+        if (!success) {
             break;
+        }
 
         // store the hash to compute the top level hash
         sorted_md5_map[file_name] = hash;
@@ -812,8 +830,9 @@ bool Encapsulate_tool::check_file_content_integrity(
 
     // open the mdle
     MDL_zip_container_mdle *capsule = open_encapsulated_module(mdle_path);
-    if (capsule == NULL)
+    if (capsule == NULL) {
         return false;
+    }
 
     bool success = true;
     success = success && check_file_content_integrity(capsule, file_name, out_hash);
@@ -887,8 +906,9 @@ bool Encapsulate_tool::get_file_content_hash(
             file->get_extra_field(MDLE_EXTRA_FIELD_ID_MD, length);
 
         bool res = stored_hash != NULL && length == 16;
-        if (res)
+        if (res) {
             memcpy(out_hash, stored_hash, 16);
+        }
 
         file->close();
         return res;

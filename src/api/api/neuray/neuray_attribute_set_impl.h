@@ -58,6 +58,7 @@ template <typename T>
 class Attribute_set_impl : public T
 {
 public:
+    using Parent_type = Attribute_set_impl<T>;
 
     /// Constructor.
     Attribute_set_impl();

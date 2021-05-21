@@ -330,27 +330,27 @@ const SERIAL::Serializable* Lightprofile::serialize( SERIAL::Serializer* seriali
 {
     Scene_element_base::serialize( serializer);
 
-    serializer->write( serializer->is_remote() ? "" : m_original_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_container_filename);
-    serializer->write( serializer->is_remote() ? "" : m_resolved_container_membername);
-    serializer->write( serializer->is_remote() ? "" : m_mdl_file_path);
-    serializer->write( HAL::Ospath::sep());
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_original_filename);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_filename);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_filename);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_membername);
+    SERIAL::write(serializer, serializer->is_remote() ? "" : m_mdl_file_path);
+    SERIAL::write(serializer, HAL::Ospath::sep());
 
-    serializer->write( m_impl_tag);
-    serializer->write( m_impl_hash);
+    SERIAL::write(serializer, m_impl_tag);
+    SERIAL::write(serializer, m_impl_hash);
 
-    serializer->write( m_cached_resolution_phi);
-    serializer->write( m_cached_resolution_theta);
-    serializer->write( static_cast<mi::Uint32>( m_cached_degree));
-    serializer->write( m_cached_flags);
-    serializer->write( m_cached_start_phi);
-    serializer->write( m_cached_start_theta);
-    serializer->write( m_cached_delta_phi);
-    serializer->write( m_cached_delta_theta);
-    serializer->write( m_cached_candela_multiplier);
-    serializer->write( m_cached_power);
-    serializer->write( m_cached_is_valid);
+    SERIAL::write(serializer, m_cached_resolution_phi);
+    SERIAL::write(serializer, m_cached_resolution_theta);
+    SERIAL::write(serializer, static_cast<mi::Uint32>( m_cached_degree));
+    SERIAL::write(serializer, m_cached_flags);
+    SERIAL::write(serializer, m_cached_start_phi);
+    SERIAL::write(serializer, m_cached_start_theta);
+    SERIAL::write(serializer, m_cached_delta_phi);
+    SERIAL::write(serializer, m_cached_delta_theta);
+    SERIAL::write(serializer, m_cached_candela_multiplier);
+    SERIAL::write(serializer, m_cached_power);
+    SERIAL::write(serializer, m_cached_is_valid);
 
     return this + 1;
 }
@@ -359,30 +359,30 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
 {
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_original_filename);
-    deserializer->read( &m_resolved_filename);
-    deserializer->read( &m_resolved_container_filename);
-    deserializer->read( &m_resolved_container_membername);
-    deserializer->read( &m_mdl_file_path);
+    SERIAL::read(deserializer, &m_original_filename);
+    SERIAL::read(deserializer, &m_resolved_filename);
+    SERIAL::read(deserializer, &m_resolved_container_filename);
+    SERIAL::read(deserializer, &m_resolved_container_membername);
+    SERIAL::read(deserializer, &m_mdl_file_path);
     std::string serializer_sep;
-    deserializer->read( &serializer_sep);
+    SERIAL::read(deserializer, &serializer_sep);
 
-    deserializer->read( &m_impl_tag);
-    deserializer->read( &m_impl_hash);
+    SERIAL::read(deserializer, &m_impl_tag);
+    SERIAL::read(deserializer, &m_impl_hash);
 
-    deserializer->read( &m_cached_resolution_phi);
-    deserializer->read( &m_cached_resolution_theta);
+    SERIAL::read(deserializer, &m_cached_resolution_phi);
+    SERIAL::read(deserializer, &m_cached_resolution_theta);
     mi::Uint32 degree;
-    deserializer->read( &degree);
+    SERIAL::read(deserializer, &degree);
     m_cached_degree = static_cast<mi::neuraylib::Lightprofile_degree>( degree);
-    deserializer->read( &m_cached_flags);
-    deserializer->read( &m_cached_start_phi);
-    deserializer->read( &m_cached_start_theta);
-    deserializer->read( &m_cached_delta_phi);
-    deserializer->read( &m_cached_delta_theta);
-    deserializer->read( &m_cached_candela_multiplier);
-    deserializer->read( &m_cached_power);
-    deserializer->read( &m_cached_is_valid);
+    SERIAL::read(deserializer, &m_cached_flags);
+    SERIAL::read(deserializer, &m_cached_start_phi);
+    SERIAL::read(deserializer, &m_cached_start_theta);
+    SERIAL::read(deserializer, &m_cached_delta_phi);
+    SERIAL::read(deserializer, &m_cached_delta_theta);
+    SERIAL::read(deserializer, &m_cached_candela_multiplier);
+    SERIAL::read(deserializer, &m_cached_power);
+    SERIAL::read(deserializer, &m_cached_is_valid);
 
     // Adjust m_original_filename and m_resolved_filename for this host.
     if( !m_original_filename.empty()) {
@@ -623,17 +623,18 @@ const SERIAL::Serializable* Lightprofile_impl::serialize( SERIAL::Serializer* se
 {
     Scene_element_base::serialize( serializer);
 
-    serializer->write( m_resolution_phi);
-    serializer->write( m_resolution_theta);
-    serializer->write( static_cast<mi::Uint32>( m_degree));
-    serializer->write( m_flags);
-    serializer->write( m_start_phi);
-    serializer->write( m_start_theta);
-    serializer->write( m_delta_phi);
-    serializer->write( m_delta_theta);
-    SERIAL::write( serializer, m_data);
-    serializer->write( m_candela_multiplier);
-    serializer->write( m_power);
+    SERIAL::write(serializer, m_resolution_phi);
+    SERIAL::write(serializer, m_resolution_theta);
+    SERIAL::write_enum(serializer, m_degree);
+    SERIAL::write(serializer, m_flags);
+    SERIAL::write(serializer, m_start_phi);
+    SERIAL::write(serializer, m_start_theta);
+    SERIAL::write(serializer, m_delta_phi);
+    SERIAL::write(serializer, m_delta_theta);
+
+    SERIAL::write(serializer, m_data);
+    SERIAL::write(serializer, m_candela_multiplier);
+    SERIAL::write(serializer, m_power);
 
     return this + 1;
 }
@@ -642,20 +643,18 @@ SERIAL::Serializable* Lightprofile_impl::deserialize( SERIAL::Deserializer* dese
 {
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_resolution_phi);
-    deserializer->read( &m_resolution_theta);
-    mi::Uint32 degree;
-    deserializer->read( &degree);
-    m_degree = static_cast<mi::neuraylib::Lightprofile_degree>( degree);
-    deserializer->read( &m_flags);
-    deserializer->read( &m_start_phi);
-    deserializer->read( &m_start_theta);
-    deserializer->read( &m_delta_phi);
-    deserializer->read( &m_delta_theta);
+    SERIAL::read(deserializer, &m_resolution_phi);
+    SERIAL::read(deserializer, &m_resolution_theta);
+    SERIAL::read_enum(deserializer, &m_degree);
+    SERIAL::read(deserializer, &m_flags);
+    SERIAL::read(deserializer, &m_start_phi);
+    SERIAL::read(deserializer, &m_start_theta);
+    SERIAL::read(deserializer, &m_delta_phi);
+    SERIAL::read(deserializer, &m_delta_theta);
 
-    SERIAL::read( deserializer, &m_data);
-    deserializer->read( &m_candela_multiplier);
-    deserializer->read( &m_power);
+    SERIAL::read(deserializer, &m_data);
+    SERIAL::read(deserializer, &m_candela_multiplier);
+    SERIAL::read(deserializer, &m_power);
 
     return this + 1;
 }

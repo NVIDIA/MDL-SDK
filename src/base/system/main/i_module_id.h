@@ -94,7 +94,6 @@ enum Module_id {
     M_PATH,		// base/lib/path
     M_PLUG,		// base/lib/plug
     M_RESTRICTIONS,	// base/lib/restrictions
-    M_SPML,		// base/lib/spml
     M_STREAM,           // base/lib/stream
     M_STRING,		// base/lib/string
     M_STRINGID_MOD,     // base/lib/stringid_module
@@ -155,6 +154,7 @@ enum Module_id {
     M_TRAVERSE,		// render/render/traverse
     M_TRAVERSE_API,     // render/render/traverse_api
     M_IRAY,             // render/iray/...
+    M_INDEX,            // render/render/index
     M_BSP,		// some mental ray code
     M_SWRCLIB,		// render/swrc/swrclib
     M_SWRCLIGHT,	// render/swrc/swrclight

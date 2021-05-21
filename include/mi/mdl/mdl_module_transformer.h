@@ -55,7 +55,22 @@ public:
     /// in the interface.
     ///
     /// The annotation "origin(string)" holds the original full qualified name.
+    ///
+    /// Returns the argument if no changes are required.
     virtual IModule const *inline_imports(IModule const *module) = 0;
+
+    /// Inline all imports of a module, creating a new one.
+    ///
+    /// \param module       the module
+    ///
+    /// This function inlines ALL except standard library imports and produces a new module.
+    /// The imported functions, materials, and types are renamed and only exported if visible
+    /// in the interface.
+    ///
+    /// The annotation "origin(string)" holds the original full qualified name.
+    ///
+    /// Returns the argument if no changes are required.
+    virtual IModule *inline_imports(IModule *module) = 0;
 
     /// Inline all MDLE imports of a module, creating a new one.
     ///
@@ -66,7 +81,22 @@ public:
     /// in the interface.
     ///
     /// The annotation "origin(string)" holds the original full qualified name.
+    ///
+    /// Returns the argument if no changes are required.
     virtual IModule const *inline_mdle(IModule const *module) = 0;
+
+    /// Inline all MDLE imports of a module, creating a new one.
+    ///
+    /// \param module       the module
+    ///
+    /// This function inlines ALL MDLE imports and produces a new module.
+    /// The imported functions, materials, and types are renamed and only exported if visible
+    /// in the interface.
+    ///
+    /// The annotation "origin(string)" holds the original full qualified name.
+    ///
+    /// Returns the argument if no changes are required.
+    virtual IModule *inline_mdle(IModule *module) = 0;
 
     /// Access messages of the last operation.
     virtual Messages const &access_messages() const = 0;

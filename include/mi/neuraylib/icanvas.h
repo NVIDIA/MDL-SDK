@@ -125,6 +125,8 @@ public:
 /// canvases and tiles are available from #mi::neuraylib::IImage_api.
 /// \endif
 ///
+/// Note that tiling is deprecated and will be removed in the next major release.
+///
 /// \see #mi::neuraylib::ICanvas_base
 class ICanvas : public
     mi::base::Interface_declare<0x20e5d5de,0x1f61,0x441c,0x88,0x88,0xff,0x85,0x89,0x98,0x7a,0xfa,
@@ -133,16 +135,41 @@ class ICanvas : public
 public:
 
     /// Returns the tile size in x direction.
-    virtual Uint32 get_tile_resolution_x() const = 0;
+    ///
+    /// This function is deprecated.
+    virtual Uint32 get_tile_resolution_x() const { return get_resolution_x(); }
 
     /// Returns the tile size in y direction.
-    virtual Uint32 get_tile_resolution_y() const = 0;
+    ///
+    /// This function is deprecated.
+    virtual Uint32 get_tile_resolution_y() const { return get_resolution_y(); }
 
     /// Returns the number of tiles in x direction.
-    virtual Uint32 get_tiles_size_x() const = 0;
+    ///
+    /// This function is deprecated.
+    virtual Uint32 get_tiles_size_x() const { return 1; }
 
     /// Returns the number of tiles in y direction.
-    virtual Uint32 get_tiles_size_y() const = 0;
+    ///
+    /// This function is deprecated.
+    virtual Uint32 get_tiles_size_y() const { return 1; }
+
+#ifndef MI_NEURAYLIB_DEPRECATED_TILES
+    /// Returns the tile which contains a given pixel.
+    ///
+    /// \param pixel_x   The x coordinate of pixel with respect to the canvas.
+    /// \param pixel_y   The y coordinate of pixel with respect to the canvas.
+    /// \param layer     The layer of the pixel in the canvas.
+    /// \return          The tile that contains the pixel, or \c NULL in case of invalid
+    ///                  parameters.
+    ///
+    /// This function is deprecated.
+    virtual const ITile* deprecated_get_tile( Uint32 pixel_x, Uint32 pixel_y, Uint32 layer = 0) const
+    {
+        (void)pixel_x;
+        (void)pixel_y;
+        return get_tile(layer);
+    }
 
     /// Returns the tile which contains a given pixel.
     ///
@@ -151,6 +178,38 @@ public:
     /// \param layer     The layer of the pixel in the canvas.
     /// \return          The tile that contains the pixel, or \c NULL in case of invalid
     ///                  parameters.
+    ///
+    /// This function is deprecated.
+    virtual ITile* deprecated_get_tile( Uint32 pixel_x, Uint32 pixel_y, Uint32 layer = 0)
+    {
+        (void)pixel_x;
+        (void)pixel_y;
+        return get_tile(layer);
+    }
+
+    /// Returns the tile for the given layer.
+    ///
+    /// \param layer     The layer of the pixel in the canvas.
+    /// \return          The tile that contains the pixel, or \c NULL in case of invalid
+    ///                  parameters.
+    virtual const ITile* get_tile( Uint32 layer = 0) const = 0;
+
+    /// Returns the tile for the given layer.
+    ///
+    /// \param layer     The layer of the pixel in the canvas.
+    /// \return          The tile that contains the pixel, or \c NULL in case of invalid
+    ///                  parameters.
+    virtual ITile* get_tile( Uint32 layer = 0) = 0;
+#else
+    /// Returns the tile which contains a given pixel.
+    ///
+    /// \param pixel_x   The x coordinate of pixel with respect to the canvas.
+    /// \param pixel_y   The y coordinate of pixel with respect to the canvas.
+    /// \param layer     The layer of the pixel in the canvas.
+    /// \return          The tile that contains the pixel, or \c NULL in case of invalid
+    ///                  parameters.
+    ///
+    /// This function is deprecated.
     virtual const ITile* get_tile( Uint32 pixel_x, Uint32 pixel_y, Uint32 layer = 0) const = 0;
 
     /// Returns the tile which contains a given pixel.
@@ -160,7 +219,26 @@ public:
     /// \param layer     The layer of the pixel in the canvas.
     /// \return          The tile that contains the pixel, or \c NULL in case of invalid
     ///                  parameters.
+    ///
+    /// This function is deprecated.
     virtual ITile* get_tile( Uint32 pixel_x, Uint32 pixel_y, Uint32 layer = 0) = 0;
+
+    /// Returns the tile for the given layer.
+    ///
+    /// \param layer     The layer of the pixel in the canvas.
+    /// \return          The tile that contains the pixel, or \c NULL in case of invalid
+    ///                  parameters.
+    virtual const ITile* newapi_get_tile( Uint32 layer = 0) const
+    { return get_tile(0,0,layer); }
+
+    /// Returns the tile for the given layer.
+    ///
+    /// \param layer     The layer of the pixel in the canvas.
+    /// \return          The tile that contains the pixel, or \c NULL in case of invalid
+    ///                  parameters.
+    virtual ITile* newapi_get_tile( Uint32 layer = 0)
+    { return get_tile(0,0,layer); }
+#endif
 };
 
 /*@}*/ // end group mi_neuray_rendering

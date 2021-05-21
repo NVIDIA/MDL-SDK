@@ -72,5 +72,15 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
         "example_execution_cuda_derivatives.cu"
     )
 
-# add tests if available
+# -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
+# -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "examples/mdl_core/execution_cuda"
+    )
+
+# -------------------------------------------------------------------------------------------------
+# Add tests if available
+# -------------------------------------------------------------------------------------------------
 add_tests()

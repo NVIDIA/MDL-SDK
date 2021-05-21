@@ -33,7 +33,7 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
-#include <mi/neuraylib/imodule.h>
+#include <mi/neuraylib/ifunction_definition.h>
 
 namespace mi {
 
@@ -51,6 +51,12 @@ class IMdl_execution_context;
 /// A material definition describes the formal structure of a material instance, i.e. the number,
 /// types, names, and defaults of its parameters. The #create_material_instance() method allows to
 /// create material instances based on this material definition.
+///
+/// \note In order to write code common for functions and materials just once, it is possible to
+///       treat material definitions as if they were function definitions, i.e., via
+///       #mi::neuraylib::IFunction_definition. See
+///       #mi::neuraylib::IMdl_configuration::set_materials_are_functions() for details and
+///       consequences.
 ///
 /// \see #mi::neuraylib::IMaterial_instance, #mi::neuraylib::IModule,
 ///      #mi::neuraylib::Definition_wrapper
@@ -83,6 +89,20 @@ public:
     /// \return         The simple MDL name of the function definition.
     virtual const char* get_mdl_simple_name() const = 0;
 
+    /// Returns the type name of the parameter at \p index.
+    ///
+    /// \note The type names provided here are substrings of the MDL name returned by
+    ///       #get_mdl_name(). They are provided here such that parsing of the MDL name is not
+    ///       necessary. Their main use case is one variant of overload resolution if no actual
+    ///       arguments are given (see
+    ///       #mi::neuraylib::IModule::get_function_overloads(const char*,const IArray*)const. For
+    ///       almost all other use cases it is strongly recommended to use #get_parameter_types()
+    ///       instead.
+    ///
+    /// \param index    The index of the parameter.
+    /// \return         The type name of the parameter, or \c NULL if \p index is out of range.
+    virtual const char* get_mdl_parameter_type_name( Size index) const = 0;
+
     /// Returns the DB name of the prototype, or \c NULL if this material definition is not a
     /// variant.
     virtual const char* get_prototype() const = 0;
@@ -97,8 +117,17 @@ public:
     ///                       mi::neuraylib::MDL_VERSION_INVALID is always returned.
     virtual void get_mdl_version( Mdl_version& since, Mdl_version& removed) const = 0;
 
+    /// Returns the semantic of this material definition.
+    ///
+    /// Right now there are no materials with special semantics, i.e., this method always returns
+    /// #mi::neuraylib::IFunction_definition::DS_UNKNOWN.
+    virtual mi::neuraylib::IFunction_definition::Semantics get_semantic() const = 0;
+
     /// Indicates whether the material definition is exported by its module.
     virtual bool is_exported() const = 0;
+
+    /// Returns the return type (the fixed material type).
+    virtual const IType* get_return_type() const = 0;
 
     /// Returns the number of parameters.
     virtual Size get_parameter_count() const = 0;
@@ -181,42 +210,7 @@ public:
     ///                 after the operation has finished. Can be \c NULL.
     /// \return     - \c true   The definition is valid.
     ///             - \c false  The definition is invalid.
-    virtual bool is_valid(IMdl_execution_context* context) const = 0;
-
-    /// Creates a new material instance.
-    ///
-    /// \param arguments    The arguments of the created material instance. \n
-    ///                     Arguments for parameters without default are mandatory, otherwise
-    ///                     optional. The type of an argument must match the corresponding parameter
-    ///                     type. Any argument missing in \p arguments will be set to the default of
-    ///                     the corresponding parameter. \n
-    ///                     Note that the expressions in \p arguments are copied. This copy
-    ///                     operation is a deep copy, e.g., DB elements referenced in call
-    ///                     expressions are also copied. \n
-    ///                     \c NULL is a valid argument which is handled like an empty expression
-    ///                     list.
-    /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                     written. The error codes have the following meaning:
-    ///                     -  0: Success.
-    ///                     - -1: An argument for a non-existing parameter was provided in
-    ///                           \p arguments.
-    ///                     - -2: The type of an argument in \p arguments does not have the correct
-    ///                           type, see #get_parameter_types().
-    ///                     - -3: A parameter that has no default was not provided with an argument
-    ///                           value.
-    ///                     - -4: The definition can not be instantiated because it is not exported.
-    ///                     - -5: A parameter type is uniform, but the corresponding argument has a
-    ///                           varying return type.
-    ///                     - -6: An argument expression is not a constant nor a call.
-    ///                     - -8: One of the parameter types is uniform, but the corresponding
-    ///                           argument or default is a call expression and the return type of
-    ///                           the called function definition is effectively varying since the
-    ///                           function definition itself is varying.
-    ///                     - -9: The material definition is invalid due to a module reload, see
-    ///                           #is_valid() for diagnostics.
-    /// \return             The created material instance, or \c NULL in case of errors.
-    virtual IMaterial_instance* create_material_instance(
-        const IExpression_list* arguments, Sint32* errors = 0) const = 0;
+    virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
     /// Returns the direct call expression that represents the body of the material.
     virtual const IExpression_direct_call* get_body() const = 0;
@@ -265,6 +259,45 @@ public:
         ptr_iexpression->release();
         return ptr_T;
     }
+
+    /// Creates a new material instance.
+    ///
+    /// \param arguments    The arguments of the created material instance. \n
+    ///                     Arguments for parameters without default are mandatory, otherwise
+    ///                     optional. The type of an argument must match the corresponding parameter
+    ///                     type. Any argument missing in \p arguments will be set to the default of
+    ///                     the corresponding parameter. \n
+    ///                     Note that the expressions in \p arguments are copied. This copy
+    ///                     operation is a deep copy, e.g., DB elements referenced in call
+    ///                     expressions are also copied. \n
+    ///                     \c NULL is a valid argument which is handled like an empty expression
+    ///                     list.
+    /// \param[out] errors  An optional pointer to an #mi::Sint32 to which an error code will be
+    ///                     written. The error codes have the following meaning:
+    ///                     -  0: Success.
+    ///                     - -1: An argument for a non-existing parameter was provided in
+    ///                           \p arguments.
+    ///                     - -2: The type of an argument in \p arguments does not have the correct
+    ///                           type, see #get_parameter_types().
+    ///                     - -3: A parameter that has no default was not provided with an argument
+    ///                           value.
+    ///                     - -4: The definition can not be instantiated because it is not exported.
+    ///                     - -5: A parameter type is uniform, but the corresponding argument has a
+    ///                           varying return type.
+    ///                     - -6: An argument expression is not a constant nor a call.
+    ///                     - -8: One of the parameter types is uniform, but the corresponding
+    ///                           argument or default is a call expression and the return type of
+    ///                           the called function definition is effectively varying since the
+    ///                           function definition itself is varying.
+    ///                     - -9: The material definition is invalid due to a module reload, see
+    ///                           #is_valid() for diagnostics.
+    /// \return             The created material instance, or \c NULL in case of errors.
+    virtual IMaterial_instance* create_material_instance(
+        const IExpression_list* arguments, Sint32* errors = 0) const = 0;
+
+    /// Returns the annotations of the return type of this material definition, or \c NULL if there
+    /// are no such annotations.
+    virtual const IAnnotation_block* get_return_annotations() const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

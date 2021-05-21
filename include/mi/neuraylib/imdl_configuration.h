@@ -230,7 +230,7 @@ public:
     virtual const IString* get_resource_path( Size index) const = 0;
 
     //@}
-    /// \name Miscellaneuous settings
+    /// \name Miscellaneous settings
     //@{
 
     /// Defines whether a cast operator is automatically inserted for compatible argument types.
@@ -276,8 +276,10 @@ public:
 
     /// Configures the behavior of \c df::simple_glossy_bsdf() in MDL modules
     /// of versions smaller than 1.3.
-    /// \note \if IRAY_API Can only be set prior to calling #mi::neuraylib::INeuray::start().
-    ///       \else This function has no effect in the MDL SDK and always returns -1. \endif
+    ///
+    /// \note \if IRAY_API This setting can only be configured before \NeurayProductName has been
+    ///       started. \else This function has no effect in the MDL SDK and always returns -1.
+    ///       \endif
     ///
     /// \param value    \c True to enable the feature, \c false otherwise.
     /// \return
@@ -308,6 +310,112 @@ public:
     /// \note MDL archive creation is not supported with an external entity resolver ( see
     ///       #mi::neuraylib::IMdl_archive_api::create_archive()).
     virtual void set_entity_resolver( IMdl_entity_resolver* resolver) = 0;
+
+    //@}
+    /// \name Miscellaneous settings
+    //@{
+
+    /// Defines whether materials are treated as functions.
+    ///
+    /// From an MDL language point of view [\ref MDLLS], materials look quite similar to functions
+    /// with the \c material struct as return type. However, in the \neurayApiName separate
+    /// interfaces like #mi::neuraylib::IMaterial_definition and #mi::neuraylib::IMaterial_instance
+    /// are used for materials, in contrast to #mi::neuraylib::IFunction_definition and
+    /// #mi::neuraylib::IFunction_call for functions (although these interfaces are quite similar).
+    /// This requires that code that acts in a similar way on both, functions and materials, needs
+    /// to be written twice.
+    ///
+    /// If this feature is enabled, then materials are treated as functions, i.e., it is possible to
+    /// use #mi::neuraylib::IFunction_definition instead of #mi::neuraylib::IMaterial_definition,
+    /// and #mi::neuraylib::IFunction_call instead of #mi::neuraylib::IMaterial_instance. This allows
+    /// to write code that acts on both, functions and materials, just once. The only exception is
+    /// the method #mi::neuraylib::IMaterial_instance::create_compiled_material(), which still
+    /// requires to use the #mi::neuraylib::IMaterial_instance interface.
+    ///
+    /// Enabling this feature comes with a few API changes that need to be takes into account. Code
+    /// shared between different applications, i.e., in plugins, should be able to handle both
+    /// settings.
+    ///
+    /// - <b>Values returned by #mi::neuraylib::IScene_element::get_element_type() (and derived
+    ///   interfaces)</b> \n
+    ///   \n
+    ///   The method mi::neuraylib::IScene_element::get_element_type() returns
+    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION instead of
+    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION. The value
+    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION is only returned by
+    ///   #mi::neuraylib::IMaterial_definition::get_element_type() (for backward compatibility),
+    ///   but no longer by its base class #mi::neuraylib::IScene_element. \n
+    ///   \n
+    ///   Similarly, the method mi::neuraylib::IScene_element::get_element_type() returns
+    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL instead of
+    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE. The value
+    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE is only returned by
+    ///   #mi::neuraylib::IMaterial_instance::get_element_type() (for backward compatibility), but
+    ///   no longer by its base class #mi::neuraylib::IScene_element. \n
+    ///   \n
+    ///   As a consequence, #mi::neuraylib::Definition_wrapper::get_type() and
+    ///   #mi::neuraylib::Definition_wrapper::get_element_type() only return
+    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION. Similarly,
+    ///   #mi::neuraylib::Argument_editor::get_type() and
+    ///   #mi::neuraylib::Argument_editor::get_element_type() only return
+    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL.
+    /// .
+    /// - <b>Interface queries to distinguish functions and materials</b> \n
+    ///   \n
+    ///   Interface queries like
+    ///   #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_definition>() can no longer
+    ///   be used to distinguish functions and materials. Note that such queries might occur inside
+    ///   other template inline methods, e.g., they occur as part of
+    ///   #mi::neuraylib::ITransaction::access<mi::neuraylib::IFunction_definition>(). The
+    ///   recommended way to do this is using #mi::neuraylib::IFunction_definition::is_material().
+    ///   Similarly for #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_call>() and
+    ///   #mi::neuraylib::IFunction_call::is_material().
+    /// .
+    /// - <b>Type names passed to #mi::neuraylib::ITransaction::list_elements()</b> \n
+    ///   \n
+    ///   The method #mi::neuraylib::ITransaction::list_elements() will not return any hits for
+    ///   type names \c "Material_definition" and \c "Material_instance". Use the type names
+    ///   \c "Function_definition" and \c "Function_call" instead, and, if necessary,
+    ///   #mi::neuraylib::IFunction_definition::is_material() and
+    ///   #mi::neuraylib::IFunction_call::is_material() to discriminate the results.
+    ///
+    /// This feature is disabled by default. It will be enabled by default in a future release.
+    ///
+    /// This can only be configured before \neurayProductName has been started.
+    ///
+    /// \see #get_materials_are_functions().
+    virtual Sint32 set_materials_are_functions( bool value) = 0;
+
+    /// Indicates whether materials are treated as functions.
+    ///
+    /// \see #set_materials_are_functions().
+    virtual bool get_materials_are_functions() const = 0;
+
+    /// Defines whether encoded names are enabled.
+    ///
+    /// See \ref mi_mdl_encoded_names for details.
+    ///
+    /// This feature is enabled by default. Support for the disabled feature will be deprecated and
+    /// removed in a future release.
+    ///
+    /// This can only be configured before \neurayProductName has been started.
+    ///
+    /// \note This feature does not yet support module names containing parentheses or commas.
+    ///
+    /// \if IRAY_API \note All hosts in a cluster need to agree on this setting. \endif
+    ///
+    /// \if IRAY_API \note This setting needs to be the identical during export and import of
+    ///                    \c .mib files. \endif
+    ///
+    /// \if IRAY_API \note Support for Iray Bridge requires that this feature is enabled. \endif
+    ///
+    /// \see #get_encoded_names_enabled().
+    virtual Sint32 set_encoded_names_enabled( bool value) = 0;
+
+    /// Indicates whether encoded names are enabled.
+    ///
+    /// \see #set_encoded_names_enabled().
+    virtual bool get_encoded_names_enabled() const = 0;
 
     //@}
 };

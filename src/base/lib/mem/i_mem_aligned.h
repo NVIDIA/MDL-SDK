@@ -103,9 +103,8 @@ struct aligned_allocator : std::allocator<T>
     struct rebind { typedef aligned_allocator<U, alignment> other; };
 
     typedef std::allocator<T> base;
-
-    typedef typename base::pointer pointer;
-    typedef typename base::size_type size_type;
+    typedef typename std::allocator_traits<base>::pointer pointer;
+    typedef typename std::allocator_traits<base>::size_type size_type;
 
     pointer allocate(size_type n)
     {

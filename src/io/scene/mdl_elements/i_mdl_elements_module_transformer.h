@@ -54,6 +54,10 @@ namespace MDL {
 
 class Execution_context;
 
+/// The module transformer allows to apply certain transformations on an MDL module.
+///
+/// All regular expressions related to module names use MDL names. For documentation, see the
+/// counterparts in the public API in <mi/neuraylib/imdl_module_transformer.h>.
 class Mdl_module_transformer : public boost::noncopyable
 {
 public:
@@ -142,7 +146,7 @@ private:
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;
 
     DB::Transaction* m_transaction;
-    std::vector<std::string> m_module_name;
+    std::vector<std::string> m_module_name; ///< Core module name.
 
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
     mi::base::Handle<mi::mdl::Module> m_module;

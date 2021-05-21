@@ -103,6 +103,8 @@ class Lambda_function : public Allocator_interface_implement<ILambda_function>
     typedef Allocator_interface_implement<ILambda_function> Base;
     friend class Allocator_builder;
 
+    typedef ptr_hash_map<DAG_node const, DAG_node const *>::Type Node_cache;
+
 public:
     /// Get the type factory of this function.
     Type_factory *get_type_factory() MDL_FINAL;
@@ -136,7 +138,11 @@ public:
     /// Create a parameter reference.
     /// \param  type        The type of the parameter
     /// \param  index       The index of the parameter.
-    /// \returns            The created parameter reference.
+    ///
+    /// \returns            The created parameter[index] reference.
+    ///
+    /// \note If index was mapped using set_parameter_mapping(index, n),
+    ///       a parameter[n] will be created.
     DAG_parameter const *create_parameter(
         IType const *type,
         int         index) MDL_FINAL;
@@ -155,7 +161,7 @@ public:
     ///
     /// \param expr  the DAG expression to import
     ///
-    /// \return the imported expression
+    /// \return the imported DAG expression
     DAG_node const *import_expr(DAG_node const *expr) MDL_FINAL;
 
     /// Store a DAG (root) expression and returns an index for it.
@@ -318,7 +324,9 @@ public:
 
     /// Set the name of the lambda function.
     ///
-    /// The default name is "lambda".
+    /// \param name  the name of the lambda function
+    ///
+    /// \note: The default name is "lambda".
     void set_name(char const *name) MDL_FINAL;
 
     /// Get the name of the lambda function.
@@ -354,6 +362,10 @@ public:
 
     /// Map material parameter i to lambda parameter j
     ///
+    /// \param i   the material parameter index
+    /// \param j   the lambda function parameter index
+    ///
+    /// \note This mapping will influence the create_parameter() function.
     void set_parameter_mapping(size_t i, size_t j) MDL_FINAL;
 
     /// Initialize the derivative information for this lambda function.
@@ -369,8 +381,7 @@ public:
     /// Sets whether the resource attribute table contains valid attributes.
     void set_has_resource_attributes(bool avail) MDL_FINAL;
 
-    /// Set a tag, version pair for a resource value that might be reachable from this
-    /// function.
+    /// Set a tag for a resource value that might be reachable from this lambda function.
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
@@ -383,6 +394,9 @@ public:
     /// Remap a resource value according to the resource map.
     ///
     /// \param r  the resource
+    ///
+    /// \return if a resource tag was set for this resource using set_resource_tag() this tag,
+    ///         otherwise the tag stored in the value itself
     int get_resource_tag(IValue_resource const *r) const MDL_FINAL;
 
     /// Get the number of entires in the resource map.
@@ -408,6 +422,9 @@ public:
     }
 
     /// Get the return type of the lambda function.
+    ///
+    /// \note switch lambdas return bool here, because their real result is passed by reference
+    ///       as the first parameter
     mi::mdl::IType const *get_return_type() const;
 
     /// Returns true if this lambda function is an entry point.
@@ -465,8 +482,16 @@ public:
     /// Enable common subexpression elimination.
     ///
     /// \param flag  If true, CSE will be enabled, else disabled.
+    ///
     /// \return      The old value of the flag.
     bool enable_cse(bool flag) { return m_node_factory.enable_cse(flag); }
+
+    /// Enable optimization.
+    ///
+    /// \param flag  If true, optimizations in general will be enabled, else disabled.
+    ///
+    /// \return      The old value of the flag.
+    bool enable_opt(bool flag) { return m_node_factory.enable_opt(flag); }
 
     // for debugging only
 
@@ -476,7 +501,7 @@ public:
     /// \param name   the name of the file dump
     void dump(DAG_node const *expr, char const *name) const;
 
-    private:
+ private:
     /// Find the resource tag of a resource.
     ///
     /// \param res_kind        the resource kind
@@ -487,8 +512,7 @@ public:
         Resource_tag_tuple::Kind const res_kind,
         char const                     *res_url) const;
 
-    /// Add tag, version pair for a resource value that might be reachable from this
-    /// function.
+    /// Add a tag for a resource value that might be reachable from this function.
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
@@ -504,6 +528,11 @@ private:
     /// Parameter info for every captured lambda parameter.
     struct Parameter_info {
         /// Constructor.
+        ///
+        /// \param type  the type of the parameter
+        /// \param name  the name of the parameter
+        ///
+        /// \note: it is expected, that the name is stored somewhere else, no copy is made
         Parameter_info(
             IType const *type,
             char const  *name)
@@ -543,11 +572,13 @@ private:
     /// \param sema  a MDL intrinsic function semantic
     static bool is_varying_state_semantic(IDefinition::Semantics sema);
 
-    /// Analyze an expression function.
+    /// Analyze a DAG expression.
     ///
-    /// \param[out] result  the analysis result
+    /// \param[in]  expr      the DAG expression
+    /// \param[in]  resolver  a call name resolver
+    /// \param[out] result    the analysis result
     ///
-    /// \returns true on success.
+    /// \returns true on success, false if the analysis failed.
     bool analyze(
         DAG_node const            *expr,
         ICall_name_resolver const *resolver,
@@ -555,6 +586,15 @@ private:
 
     /// Update the hash value.
     void update_hash() const;
+
+    /// Import (i.e. deep-copy) a DAG expression into this lambda function.
+    ///
+    /// \param expr  the DAG expression to import
+    ///
+    /// \return the imported DAG expression
+    DAG_node const *do_import_expr(
+        DAG_node const *expr,
+        Node_cache     &import_cache);
 
 private:
     /// The mdl compiler.
@@ -639,7 +679,7 @@ private:
     mutable unsigned m_hash_is_valid:1;
 
     /// If true, m_deriv_infos contains valid information.
-    bool m_deriv_infos_calculated;
+    unsigned m_deriv_infos_calculated:1;
 
     /// The derivative analysis information, if requested during initialization.
     Derivative_infos m_deriv_infos;

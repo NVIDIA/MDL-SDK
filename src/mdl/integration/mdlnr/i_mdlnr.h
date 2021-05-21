@@ -90,15 +90,6 @@ public:
     /// The type of the callback used to register MDL types with the API.
     typedef void Register_mdl_type_with_api(const MDL::IType*);
 
-    /// Called whenever a Bridge client connects or a .cb file is loaded to inform about 
-    /// the build and bridge protocol of the client that connects or saved the snapshot. 
-    /// Can be used to implement hacky workarounds.
-    /// \param build The build of the client. NOTE: when loading .cb files saved by a server
-    ///        version that is too old the build will be an empty string since no build number
-    ///        was saved with the snapshot data.
-    ///        
-    virtual void client_build_version(const char* build, const char* bridge_protocol) const = 0;
-
     /// Get the MDL code cache.
     virtual mi::mdl::ICode_cache *get_code_cache() const = 0;
 

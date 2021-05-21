@@ -38,8 +38,6 @@ set(PROJECT_HEADERS
     "mdl_elements/i_mdl_elements_expression.h"
     "mdl_elements/i_mdl_elements_function_call.h"
     "mdl_elements/i_mdl_elements_function_definition.h"
-    "mdl_elements/i_mdl_elements_material_definition.h"
-    "mdl_elements/i_mdl_elements_material_instance.h"
     "mdl_elements/i_mdl_elements_module.h"
     "mdl_elements/i_mdl_elements_module_builder.h"
     "mdl_elements/i_mdl_elements_module_transformer.h"
@@ -62,7 +60,7 @@ set(PROJECT_HEADERS
     "texture/i_texture.h"
     )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "bsdf_measurement/bsdf_measurement.cpp"
     "dbimage/dbimage_image.cpp"
     "lightprofile/lightprofile.cpp"
@@ -74,8 +72,6 @@ set(PROJECT_SOURCES
     "mdl_elements/mdl_elements_expression.cpp"
     "mdl_elements/mdl_elements_function_call.cpp"
     "mdl_elements/mdl_elements_function_definition.cpp"
-    "mdl_elements/mdl_elements_material_definition.cpp"
-    "mdl_elements/mdl_elements_material_instance.cpp"
     "mdl_elements/mdl_elements_module.cpp"
     "mdl_elements/mdl_elements_module_builder.cpp"
     "mdl_elements/mdl_elements_module_transformer.cpp"
@@ -93,14 +89,14 @@ create_from_base_preset(
     )
 
 # additional definitions
-target_compile_definitions(${PROJECT_NAME} 
-    PRIVATE 
+target_compile_definitions(${PROJECT_NAME}
+    PRIVATE
         "_USE_MATH_DEFINES" # to get M_PI
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
     )
 

@@ -75,9 +75,11 @@ function(FIND_FREEIMAGE_EXT)
                 HINTS 
                     ${FREEIMAGE_DIR}
                     ${FREEIMAGE_DIR}/lib64
+                    ${FREEIMAGE_DIR}/lib/aarch64-linux-gnu
                     ${FREEIMAGE_DIR}/lib
                     /usr/lib64
                     /usr/lib/x86_64-linux-gnu
+                    /usr/lib/aarch64-linux-gnu
                     /usr/lib
                     /usr/local/lib
                 )

@@ -1054,6 +1054,7 @@ int Create_mdle::execute()
         Handle<IMdl_impexp_api> mdl_impexp_api(
             mdlm::neuray()->get_api_component<IMdl_impexp_api>());
         mdl_impexp_api->load_module(transaction.get(), module_name.c_str(), context.get());
+        Util::log(context.get());
         if (context->get_error_messages_count() > 0)
             break;
 
@@ -1199,11 +1200,13 @@ int Create_mdle::execute()
 
         // create the mdle
         mdle_api->export_mdle(transaction.get(), m_mdle.c_str(), data.get(), context.get());
+        Util::log(context.get());
         if (context->get_error_messages_count() > 0)
             break;
 
         // check if the created mdle is valid
         mdle_api->validate_mdle(m_mdle.c_str(), context.get());
+        Util::log(context.get());
         if (context->get_error_messages_count() > 0)
             break;
 

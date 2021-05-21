@@ -67,8 +67,9 @@ MDL_zip_container *File_handle::get_container()
 // Get the compressed file handle if this object represents a file inside a MDL archive.
 MDL_zip_container_file *File_handle::get_container_file()
 {
-    if (m_kind == FH_FILE)
+    if (m_kind == FH_FILE) {
         return NULL;
+    }
     return u.z_fp;
 }
 
@@ -196,8 +197,9 @@ File_handle::~File_handle()
 {
     if (m_kind != FH_FILE) {
         u.z_fp->close();
-        if (m_owns_container)
+        if (m_owns_container) {
             m_container->close();
+        }
     } else {
         fclose(u.fp);
     }
@@ -254,7 +256,7 @@ bool File_resource_reader::seek(Sint64 offset, Position origin)
             return m_file->get_container_file()->seek(offset, SEEK_SET) == 0;
         }
     }
-    assert(false);
+    MDL_ASSERT(false);
     return false;
 }
 
@@ -378,8 +380,9 @@ public:
     int read_char() MDL_FINAL
     {
         unsigned char buf;
-        if (m_file->get_container_file()->read(&buf, 1) != 1)
+        if (m_file->get_container_file()->read(&buf, 1) != 1) {
             return -1;
+        }
         return int(buf);
     }
 
@@ -441,8 +444,9 @@ public:
     int read_char() MDL_FINAL
     {
         unsigned char buf;
-        if (m_file->get_container_file()->read(&buf, 1) != 1)
+        if (m_file->get_container_file()->read(&buf, 1) != 1) {
             return -1;
+        }
         return int(buf);
     }
 
@@ -495,7 +499,8 @@ File_resolver::File_resolver(
     mi::base::Handle<IMDL_search_path> const &search_path,
     mi::base::Lock                           &sp_lock,
     Messages_impl                            &msgs,
-    char const                               *front_path)
+    char const                               *front_path,
+    char const                               *vroot)
 : m_alloc(mdl.get_allocator())
 , m_mdl(mdl)
 , m_module_cache(module_cache)
@@ -508,6 +513,7 @@ File_resolver::File_resolver(
 , m_resource_paths(m_alloc)
 , m_killed_packages(String_set::key_compare(), m_alloc)
 , m_front_path(front_path)
+, m_virtual_root_package(vroot)
 , m_resolve_entity(NULL)
 , m_repl_module_name(m_alloc)
 , m_repl_file_name(m_alloc)
@@ -601,9 +607,11 @@ string File_resolver::to_module_name(
 #ifdef MI_PLATFORM_WINDOWS
         char const *q = strchr(input_url, '\\');
 
-        if (q != NULL)
-            if (p == NULL || q < p)
+        if (q != NULL) {
+            if (p == NULL || q < p) {
                 p = q;
+            }
+        }
 #endif
 
         if (p == NULL) {
@@ -627,9 +635,11 @@ string File_resolver::to_archive(
 #ifdef MI_PLATFORM_WINDOWS
         char const *q = strchr(input_url, '\\');
 
-        if (q != NULL)
-            if (p == NULL || q < p)
+        if (q != NULL) {
+            if (p == NULL || q < p) {
                 p = q;
+            }
+        }
 #endif
 
         if (p == NULL) {
@@ -650,8 +660,9 @@ bool File_resolver::is_archive_prefix(
     char const *prefix = archive_name.c_str();
     size_t l = archive_name.length() - 4; // strip ".mdr"
 
-    if (l >= archive_path.size())
+    if (l >= archive_path.size()) {
         return false;
+    }
 
     if (archive_path[l] != '.') {
         // fast check: prefix must be followed by '.'
@@ -711,8 +722,16 @@ bool File_resolver::archive_contains_mask(
 
 // Returns the nesting level of a module, i.e., the number of "::" substrings in the
 // fully-qualified module name minus 1.
-size_t File_resolver::get_module_nesting_level(char const *module_name)
+size_t File_resolver::get_module_nesting_level(char const *module_name) const
 {
+    // skip the virtual root
+    if (m_virtual_root_package != NULL) {
+        size_t l = strlen(m_virtual_root_package);
+        if (strncmp(m_virtual_root_package, module_name, l) == 0) {
+            module_name += l;
+        }
+    }
+
     MDL_ASSERT(module_name[0] == ':' && module_name[1] == ':');
 
     char const *p    = module_name;
@@ -780,13 +799,13 @@ void File_resolver::split_module_file_system_path(
     }
 
     if (container_pos != string::npos) {
-
         // inside an archive
-        if( container_kind == File_handle::FH_ARCHIVE)
+        if (container_kind == File_handle::FH_ARCHIVE) {
             container_pos += 4; // add ".mdr"
                 // inside an archive
-        else if (container_kind == File_handle::FH_MDLE)
+        } else if (container_kind == File_handle::FH_MDLE) {
             container_pos += 5; // add ".mdle"
+        }
 
         string simple_path = module_file_system_path.substr(container_pos + 1);
 
@@ -836,8 +855,9 @@ void File_resolver::split_module_file_system_path(
     csp_is_container = strip_dotdot != 0;
     current_module_path = convert_os_separators_to_slashes(
         current_working_directory.substr(current_search_path.size() + strip_dotdot));
-    if (strip_dotdot)
+    if (strip_dotdot) {
         current_module_path = '/' + current_module_path;
+    }
     MDL_ASSERT(current_module_path.empty() || current_module_path[0] == '/');
 }
 
@@ -846,8 +866,9 @@ bool File_resolver::check_no_dots(
     char const *s)
 {
     bool absolute = is_path_absolute(s);
-    if (absolute)
+    if (absolute) {
         ++s;
+    }
 
     bool start = true;
     for (; s[0] != '\0'; ++s) {
@@ -871,8 +892,9 @@ bool File_resolver::check_no_dots(
             }
             start = false;
         }
-        if (s[0] == '/')
+        if (s[0] == '/') {
             start = true;
+        }
     }
     return true;
 }
@@ -917,8 +939,9 @@ bool File_resolver::check_no_dots_strict_relative(
                 leading = false;
             start = false;
         }
-        if (s[0] == '/')
+        if (s[0] == '/') {
             start = true;
+        }
     }
 
     if (err != NULL) {
@@ -971,8 +994,9 @@ string File_resolver::normalize_file_path(
         }
 
         // reject invalid strict relative file paths
-        if (!check_no_dots_strict_relative(file_path.c_str(), nesting_level))
+        if (!check_no_dots_strict_relative(file_path.c_str(), nesting_level)) {
             return string(m_alloc);
+        }
 
         // reject if file does not exist w.r.t. current working directory
         string file_mask_os = convert_slashes_to_os_separators(file_mask);
@@ -990,8 +1014,9 @@ string File_resolver::normalize_file_path(
     }
 
     // reject invalid weak relative paths
-    if (!check_no_dots(file_path.c_str()))
+    if (!check_no_dots(file_path.c_str())) {
         return string(m_alloc);
+    }
 
     // absolute file paths (note: this is an URL, not a file on the OS file system)
     if (!file_path.empty() && file_path[0] == '/') {
@@ -1002,8 +1027,9 @@ string File_resolver::normalize_file_path(
     // weak relative file paths
 
     // special case (not in spec)
-    if (module_file_system_path.empty())
+    if (module_file_system_path.empty()) {
         return "/" + file_path;
+    }
 
     // if file does not exist w.r.t. current working directory: canonical path is file path
     // prepended with a slash
@@ -1011,8 +1037,9 @@ string File_resolver::normalize_file_path(
     string file = join_path(current_working_directory, file_mask_os);
 
     // if the searched file does not exists locally, assume the weak relative path is absolute
-    if (!file_exists(file.c_str(), file_mask_is_regex))
+    if (!file_exists(file.c_str(), file_mask_is_regex)) {
         return "/" + file_path;
+    }
 
     // otherwise canonical path is the file path resolved w.r.t. the current module path
     return current_module_path + "/" + file_path;
@@ -1029,26 +1056,31 @@ bool File_resolver::is_builtin(string const &canonical_file_path) const
 // Check if the given canonical_file_path names a string based module.
 bool File_resolver::is_string_based(string const &canonical_file_path) const
 {
-    if (!m_module_cache)
+    if (!m_module_cache) {
         return false;
+    }
+
     string module_name = to_module_name(canonical_file_path.c_str());
     MDL_ASSERT(module_name.substr(module_name.size() - 4) == ".mdl");
     module_name = module_name.substr(0, module_name.size() - 4);
 
     // string modules are never built-in
-    if (m_mdl.is_builtin_module(module_name.c_str()))
+    if (m_mdl.is_builtin_module(module_name.c_str())) {
         return false;
+    }
 
     // check the module cache
     mi::base::Handle<const mi::mdl::IModule> module(
         m_module_cache->lookup(module_name.c_str(), NULL));
-    if (!module.is_valid_interface())
+    if (!module.is_valid_interface()) {
         return false;
+    }
 
     // string modules should have no file name
     char const *filename = module->get_filename();
-    if (filename != NULL && filename[0] != '\0')
+    if (filename != NULL && filename[0] != '\0') {
         return false;
+    }
     return true;
 }
 
@@ -1061,8 +1093,9 @@ string File_resolver::consider_search_paths(
 {
     MDL_ASSERT(canonical_file_mask[0] == '/');
 
-    if (!is_resource && is_builtin(canonical_file_mask))
+    if (!is_resource && is_builtin(canonical_file_mask)) {
         return get_builtin_prefix() + canonical_file_mask.substr(1);
+    }
 
     string canonical_file_mask_os = convert_slashes_to_os_separators(canonical_file_mask);
 
@@ -1161,8 +1194,9 @@ bool File_resolver::check_consistency(
     // absolute or weak relative file paths
 
     // skip check for string-based modules (not in spec)
-    if (is_string_module)
+    if (is_string_module) {
         return true;
+    }
 
     // check precondition whether canonical file path exists w.r.t. current search path
     string canonical_file_path_os = convert_slashes_to_os_separators(canonical_file_path);
@@ -1171,21 +1205,25 @@ bool File_resolver::check_consistency(
         // construct an "archive path"
         MDL_ASSERT(canonical_file_path_os[0] == os_separator());
         file = current_search_path + ':' + canonical_file_path_os.substr(1);
-        if (!file_exists(file.c_str(), is_regex))
+        if (!file_exists(file.c_str(), is_regex)) {
             return true;
+        }
     } else {
         file = current_search_path + canonical_file_path_os;
-        if (!file_exists(file.c_str(), is_regex))
+        if (!file_exists(file.c_str(), is_regex)) {
             return true;
+        }
     }
 
     // check precondition whether local file is in current working directory (and not below)
     size_t len = current_working_directory.size();
     string directory = file.substr(0, len + 1);
-    if (directory != current_working_directory + os_separator())
+    if (directory != current_working_directory + os_separator()) {
         return true;
-    if (file.substr(len + 1).find(os_separator()) != string::npos)
+    }
+    if (file.substr(len + 1).find(os_separator()) != string::npos) {
         return true;
+    }
 
     if (!is_resource && is_builtin(canonical_file_path)) {
         // the following check will fail for builtin modules
@@ -1227,10 +1265,11 @@ bool File_resolver::is_killed(
     for (size_t i = 0, n = archive_name.length() - 4; i < n; ++i) {
         char c = archive_name[i];
 
-        if (c == '.')
+        if (c == '.') {
             package.append(os_separator());
-        else
+        } else {
             package.append(c);
+        }
     }
 
     string dir_path(path, m_alloc);
@@ -1361,9 +1400,10 @@ string File_resolver::search_mdl_path(
         if (!m_pathes_read) {
             size_t n = m_search_path->get_search_path_count(IMDL_search_path::MDL_SEARCH_PATH);
             m_paths.reserve(n + (front_path != NULL ? 1 : 0));
-            if (front_path != NULL)
+            if (front_path != NULL) {
                 m_paths.push_back(
-                convert_slashes_to_os_separators(string(front_path, m_alloc)));
+                    convert_slashes_to_os_separators(string(front_path, m_alloc)));
+            }
             for (size_t i = 0; i < n; ++i) {
                 char const *path = m_search_path->get_search_path(
                     IMDL_search_path::MDL_SEARCH_PATH, i);
@@ -1420,10 +1460,12 @@ string File_resolver::search_mdl_path(
                 string e(entry, m_alloc);
                 size_t l = e.size();
 
-                if (l < 5)
+                if (l < 5) {
                     continue;
-                if (e[l - 4] != '.' || e[l - 3] != 'm' || e[l - 2] != 'd' || e[l - 1] != 'r')
+                }
+                if (e[l - 4] != '.' || e[l - 3] != 'm' || e[l - 2] != 'd' || e[l - 1] != 'r') {
                     continue;
+                }
 
                 // remove .mdr
                 archives.insert(String_map::value_type(e.substr(0, l - 4), true));
@@ -1598,11 +1640,12 @@ static bool is_drive_letter(char c)
 /// Check if a given MDL url is absolute.
 static bool is_url_absolute(char const *url)
 {
-    if (url == NULL)
+    if (url == NULL) {
         return false;
-
-    if (url[0] == '/')
+    }
+    if (url[0] == '/') {
         return true;
+    }
 
 #ifdef MI_PLATFORM_WINDOWS
     if (strlen(url) > 1) {
@@ -1739,10 +1782,11 @@ string File_resolver::resolve_filename(
             string module_for_error_msg(m_alloc);
 
             if (m_pos->get_start_line() == 0) {
-                if (!module_file_system_path_str.empty())
+                if (!module_file_system_path_str.empty()) {
                     module_for_error_msg = module_file_system_path_str;
-                else if (module_name != NULL)
+                } else if (module_name != NULL) {
                     module_for_error_msg = module_name;
+                }
             }
 
             error(
@@ -1824,11 +1868,11 @@ string File_resolver::resolve_filename(
             file = convert_slashes_to_os_separators(url_mask);
             file = simplify_path(file, os_separator());
             if (!is_url_absolute(file.c_str())) {
-
                 // skip first slash
                 // TODO fix earlier
-                if (file[0] == os_separator())
+                if (file[0] == os_separator()) {
                     file = file.substr(1);
+                }
 
                 // for MDLE, the current working directory is the MDLE file
                 file = current_working_directory + ':' + file;
@@ -1842,10 +1886,11 @@ string File_resolver::resolve_filename(
             string module_for_error_msg(m_alloc);
 
             if (m_pos->get_start_line() == 0) {
-                if (!module_file_system_path_str.empty())
+                if (!module_file_system_path_str.empty()) {
                     module_for_error_msg = module_file_system_path_str;
-                else if (module_name != NULL)
+                } else if (module_name != NULL) {
                     module_for_error_msg = module_name;
+                }
             }
 
             error(
@@ -1866,8 +1911,9 @@ string File_resolver::resolve_filename(
         // the referenced resource is part of an MDLE
         // Note, this is invalid for mdl modules in the search paths!
         if (resolved_file_system_location.empty() && strstr(file_path, ".mdle:") != NULL) {
-            if (file_exists(file_path, udim_mode != NO_UDIM))
+            if (file_exists(file_path, udim_mode != NO_UDIM)) {
                 resolved_file_system_location = file_path;
+            }
         }
 
         if (resolved_file_system_location.empty()) {
@@ -1875,10 +1921,11 @@ string File_resolver::resolve_filename(
                 string module_for_error_msg(m_alloc);
 
                 if (m_pos->get_start_line() == 0) {
-                    if (!module_file_system_path_str.empty())
+                    if (!module_file_system_path_str.empty()) {
                         module_for_error_msg = module_file_system_path_str;
-                    else if (module_name != NULL)
+                    } else if (module_name != NULL) {
                         module_for_error_msg = module_name;
+                    }
                 }
 
                 error(
@@ -1939,6 +1986,10 @@ void File_resolver::handle_file_error(MDL_zip_container_error_code err)
         return;
     case EC_INVALID_CONTAINER:
         return;
+    case EC_INVALID_MANIFEST:
+        return;
+    case EC_MANIFEST_PARSER:
+        return;
     case EC_NOT_FOUND:
         return;
     case EC_IO_ERROR:
@@ -1984,8 +2035,9 @@ IMDL_import_result *File_resolver::resolve_import(
         import_file[l - 1] == 'e') {
 
         // undo 'to_url' and remove the leading 'module ::' when handling MDLE
-        if (import_name[0] == ':' && import_name[1] == ':')
+        if (import_name[0] == ':' && import_name[1] == ':') {
             import_file = import_name + 2;
+        }
 
         // use forward slashes to detect absolute filenames correctly
         std::replace(import_file.begin(), import_file.end(), '\\', '/');
@@ -1996,10 +2048,12 @@ IMDL_import_result *File_resolver::resolve_import(
         import_file.append(".mdl");
     }
 
-    if (owner_name != NULL && owner_name[0] == '\0')
+    if (owner_name != NULL && owner_name[0] == '\0') {
         owner_name = NULL;
-    if (owner_filename != NULL && owner_filename[0] == '\0')
+    }
+    if (owner_filename != NULL && owner_filename[0] == '\0') {
         owner_filename = NULL;
+    }
 
     if (m_external_resolver.is_valid_interface()) {
         IMDL_import_result *result = m_external_resolver->resolve_module(
@@ -2059,10 +2113,12 @@ IMDL_resource_set *File_resolver::resolve_resource(
 {
     mark_resource_search(import_file);
 
-    if (owner_name != NULL && owner_name[0] == '\0')
+    if (owner_name != NULL && owner_name[0] == '\0') {
         owner_name = NULL;
-    if (owner_filename != NULL && owner_filename[0] == '\0')
+    }
+    if (owner_filename != NULL && owner_filename[0] == '\0') {
         owner_filename = NULL;
+    }
 
     if (m_external_resolver.is_valid_interface()) {
         IMDL_resource_set *result = m_external_resolver->resolve_resource_file_name(
@@ -2089,8 +2145,9 @@ IMDL_resource_set *File_resolver::resolve_resource(
         os_file_name, import_file, /*is_resource=*/true,
         owner_filename_str.c_str(), owner_name, &pos, udim_mode);
 
-    if (abs_file_name.empty())
+    if (abs_file_name.empty()) {
         return NULL;
+    }
 
     if (udim_mode != NO_UDIM) {
         // lookup ALL files for the given mask
@@ -2234,8 +2291,9 @@ Uint64 Buffered_archive_resource_reader::read(void *ptr, Uint64 size)
     }
     size -= prefix_size;
 
-    if (size == 0)
+    if (size == 0) {
         return prefix_size;
+    }
 
     // can we read a big chunk?
     if (size > sizeof(m_buffer)) {
@@ -2639,10 +2697,12 @@ void MDL_resource_set::parse_u_v(
             }
             u *= sign;
 
-            if (*n == '_')
+            if (*n == '_') {
                 ++n;
-            if (*n == 'v')
+            }
+            if (*n == 'v') {
                 ++n;
+            }
 
             if (*n == '-') {
                 sign = -1;
@@ -2696,16 +2756,18 @@ size_t MDL_resource_set::get_count() const
 // Get the i'th file name of the ordered set.
 char const *MDL_resource_set::get_filename(size_t i) const
 {
-    if (i < m_entries.size())
+    if (i < m_entries.size()) {
         return m_entries[i].filename;
+    }
     return NULL;
 }
 
 // Get the i'th MDL url of the ordered set.
 char const *MDL_resource_set::get_mdl_url(size_t i) const
 {
-    if (i < m_entries.size())
+    if (i < m_entries.size()) {
         return m_entries[i].url;
+    }
     return NULL;
 }
 
@@ -2786,13 +2848,28 @@ char const *MDL_import_result::get_file_name() const
     return m_os_file_name.empty() ? NULL : m_os_file_name.c_str();
 }
 
+/// Strip out the MDL archive name if the given fine name names a file inside an archive.
+static string archive_name(string const & os_file_name)
+{
+    size_t off = os_file_name.find(".mdr:");
+    if (off != string::npos) {
+        return os_file_name.substr(0, off + 4);
+    }
+    off = os_file_name.find(".mdle:");
+    if (off != string::npos) {
+        return os_file_name.substr(0, off + 5);
+    }
+    return os_file_name;
+}
+
 // Return an input stream to the given entity if found, NULL otherwise.
 IInput_stream *MDL_import_result::open(IThread_context *context) const
 {
     Thread_context *ctx = impl_cast<Thread_context>(context);
 
-    if (m_os_file_name.empty())
+    if (m_os_file_name.empty()) {
         return NULL;
+    }
 
     IAllocator *alloc = get_allocator();
 
@@ -2818,31 +2895,94 @@ IInput_stream *MDL_import_result::open(IThread_context *context) const
 
         // load a pre-released version (0.2) will probably get an error at some point in time
         case EC_PRE_RELEASE_VERSION:
-        {
-            string msg(ctx->access_messages_impl().format_msg(
-                MDLE_PRE_RELEASE_VERSION, 'E', Error_params(alloc).add(m_os_file_name)));
-            ctx->access_messages_impl().add_warning_message(
-                MDLE_PRE_RELEASE_VERSION, 'E', 0, &zero, msg.c_str());
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    MDR_PRE_RELEASE_VERSION, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_warning_message(
+                    MDR_PRE_RELEASE_VERSION, 'A', 0, &zero, msg.c_str());
+            }
             break;
-        }
 
         case EC_CRC_ERROR:
-        {
-            string msg(ctx->access_messages_impl().format_msg(
-                MDLE_CRC_ERROR, 'E', Error_params(alloc).add(m_os_file_name)));
-            ctx->access_messages_impl().add_error_message(
-                MDLE_CRC_ERROR, 'E', 0, &zero, msg.c_str());
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    CRC_ERROR, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    CRC_ERROR, 'A', 0, &zero, msg.c_str());
+            }
             break;
-        }
 
-        default:
-        {
-            string msg(ctx->access_messages_impl().format_msg(
-                MDLE_IO_ERROR, 'E', Error_params(alloc).add(m_os_file_name)));
-            ctx->access_messages_impl().add_error_message(
-                MDLE_IO_ERROR, 'E', 0, &zero, msg.c_str());
+        case EC_INVALID_MANIFEST:
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    ARCHIVE_HAS_BROKEN_MANIFEST, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    ARCHIVE_HAS_BROKEN_MANIFEST, 'A', 0, &zero, msg.c_str());
+            }
             break;
-        }
+        case EC_MANIFEST_PARSER:
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    ARCHIVE_MANIFEST_PARSE_ERROR, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    ARCHIVE_MANIFEST_PARSE_ERROR, 'A', 0, &zero, msg.c_str());
+            }
+            break;
+        case EC_CONTAINER_NOT_EXIST:
+        case EC_CONTAINER_OPEN_FAILED:
+        case EC_FILE_OPEN_FAILED:
+        case EC_INVALID_CONTAINER:
+        case EC_NOT_FOUND:
+        case EC_IO_ERROR:
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    INVALID_MDL_ARCHIVE, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    INVALID_MDL_ARCHIVE, 'A', 0, &zero, msg.c_str());
+            }
+        case EC_INVALID_PASSWORD:
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    INVALID_PASSWORD, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    INVALID_PASSWORD, 'A', 0, &zero, msg.c_str());
+            }
+            break;
+        case EC_MEMORY_ALLOCATION:
+        case EC_RENAME_ERROR:
+        case EC_INVALID_HEADER:
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    MDR_INVALID_HEADER, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    MDR_INVALID_HEADER, 'A', 0, &zero, msg.c_str());
+            }
+            break;
+        case EC_INVALID_HEADER_VERSION:
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    MDR_INVALID_HEADER_VERSION, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    MDR_INVALID_HEADER_VERSION, 'A', 0, &zero, msg.c_str());
+            }
+            break;
+        case EC_INTERNAL_ERROR:
+            {
+                string arc_name(archive_name(m_os_file_name));
+                string msg(ctx->access_messages_impl().format_msg(
+                    INTERNAL_ARCHIVER_ERROR, 'A', Error_params(alloc).add(arc_name)));
+                ctx->access_messages_impl().add_error_message(
+                    INTERNAL_ARCHIVER_ERROR, 'A', 0, &zero, msg.c_str());
+            }
+            break;
     }
 
     if (file == NULL) {
@@ -2892,7 +3032,8 @@ Entity_resolver::Entity_resolver(
     search_path,
     compiler->get_search_path_lock(),
     m_msg_list,
-    /*front_path=*/NULL)
+    /*front_path=*/NULL,
+    /*vroot=*/NULL)
 {
 }
 
@@ -2903,13 +3044,15 @@ IMDL_resource_set *Entity_resolver::resolve_resource_file_name(
     char const     *owner_name,
     Position const *pos)
 {
-    if (!file_path)
+    if (file_path == NULL) {
         return NULL;
+    }
 
     Position_impl zero(0, 0, 0, 0);
 
-    if (pos == NULL)
+    if (pos == NULL) {
         pos = &zero;
+    }
 
     m_msg_list.clear();
 

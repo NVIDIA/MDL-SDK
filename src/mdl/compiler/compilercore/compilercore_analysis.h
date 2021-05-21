@@ -50,6 +50,7 @@
 #include "compilercore_call_graph.h"
 #include "compilercore_stmt_info.h"
 #include "compilercore_stmt_info.h"
+#include "compilercore_tools.h"
 
 namespace mi {
 namespace mdl {
@@ -66,6 +67,32 @@ class Err_location;
 class Thread_context;
 
 struct Resource_table_key;
+
+/// Returns true for error definitions.
+///
+/// \param def  the definition to check
+extern inline bool is_error(IDefinition const *def)
+{
+    IType const *type = def->get_type();
+    if (is<IType_error>(type))
+        return true;
+    return def->get_symbol()->get_id() == ISymbol::SYM_ERROR;
+}
+
+/// Returns true for error expressions.
+///
+/// \param expr  the expression to check
+extern inline bool is_error(IExpression const *expr)
+{
+    IType const *type = expr->get_type();
+    return is<IType_error>(type);
+}
+
+/// Returns true for error names.
+extern inline bool is_error(ISimple_name const *name)
+{
+    return name->get_symbol()->get_id() == ISymbol::SYM_ERROR;
+}
 
 ///
 /// A base class for all semantic analysis passes.
@@ -211,17 +238,57 @@ public:
         size_t         fname_id,
         IMessage const *msg);
 
+    /// Checks if the given type is allowed for function return types.
+    ///
+    /// \param type         the type to check
+    /// \param mdl_version  the MDL language version
+    /// \param is_std_mod   true if the current module is a standard module
+    ///
+    /// \returns  the forbidden type or NULL if the type is ok
+    static IType const *has_forbidden_function_return_type(
+        IType const *type,
+        unsigned    mdl_version,
+        bool        is_std_mod);
+
+    /// Checks if the given type is allowed for variable types.
+    ///
+    /// \param type         the type to check
+    /// \param mdl_version  the MDL language version
+    ///
+    /// \returns  the forbidden type or NULL if the type is ok
+    static IType const *has_forbidden_variable_type(
+        IType const *type,
+        unsigned    mdl_version);
+
+    /// Checks if the given type is allowed for structure field types.
+    ///
+    /// \param type         the type to check
+    /// \param mdl_version  the MDL language version
+    static bool is_allowed_field_type(
+        IType const *type,
+        unsigned    mdl_version);
+
+    /// Checks if the given type is allowed for array element types.
+    ///
+    /// \param type         the type to check
+    /// \param mdl_version  the MDL language version
+    static bool is_allowed_array_type(
+        IType const *type,
+        unsigned    mdl_version);
+
     /// Get the definition of the base entity in a lvalue.
     ///
     /// \param expr  the expression
     ///
     /// \return the Definition if expr is an lvalue, NULL else
-    static IDefinition const *get_lvalue_base(IExpression const *expr);
+    static IDefinition const *get_lvalue_base(
+        IExpression const *expr);
 
     /// Returns the return type of a function definition.
     ///
     /// \param def  the definition of a function
-    static IType const *get_result_type(IDefinition const *def);
+    static IType const *get_result_type(
+        IDefinition const *def);
 
     /// If true, compile in strict mode.
     bool strict_mode() const { return m_strict_mode; }
@@ -587,7 +654,7 @@ public:
         IType const           *left_tp,
         IType const           *right_tp);
 
-    /// Store an operator definition into the cache
+    /// Store an operator definition into the cache.
     ///
     /// \param op        the operator
     /// \param left_tp   the left argument type
@@ -611,17 +678,18 @@ private:
 class Auto_imports {
 public:
     struct Entry {
-        Definition const *def;       ///< The foreign definition that mustbe auto-imported.
+        Definition const *def;       ///< The foreign definition that must be auto-imported.
         Definition const *imported;  ///< The imported definition of the foreign one.
 
         /// Default constructor.
         Entry()
-            : def(NULL), imported(NULL)
-        {}
+        : def(NULL), imported(NULL)
+        {
+        }
 
         /// Constructor.
         Entry(Definition const *def, Definition const *imp)
-            : def(def), imported(imp)
+        : def(def), imported(imp)
         {
         }
     };
@@ -647,8 +715,8 @@ public:
     ///
     /// \return true  if def was added, false if the definition was already registered
     bool insert(Definition const *def);
-private:
 
+private:
     typedef ptr_hash_map<Definition const, size_t>::Type Index_map;
     typedef vector<Entry>::Type                          Import_vec;
 
@@ -739,6 +807,57 @@ class NT_analysis : public Analysis, ICallgraph_scc_visitor {
         bool                 m_exists;
     };
 
+    /// An entry on the function stack.
+    class Function_entry {
+    public:
+        /// Constructor.
+        /*implicit*/ Function_entry(
+            Definition *def)
+        : m_def(def)
+        , m_deduced_ret_type(NULL)
+        , m_is_auto_return(false)
+        , m_is_error(false)
+        {
+            if (!mi::mdl::is_error(def)) {
+                IType_function const *func_type = cast<IType_function>(def->get_type());
+
+                m_is_auto_return =
+                    is<IType_auto>(func_type->get_return_type()->skip_type_alias());
+            }
+        }
+
+        /// Get the definition.
+        Definition *get_def() { return m_def; }
+
+        /// Get deduced return type of the function if any.
+        IType const *get_deduced_ret_type() { return m_deduced_ret_type; }
+
+        /// Returns true, if this function was declared auto-return.
+        bool is_auto_return() const { return m_is_auto_return; }
+
+        /// Assign a deduced return type.
+        void set_deduced_ret_type(IType const *type) { m_deduced_ret_type = type; }
+
+        /// True, on deduction error.
+        bool is_error() const { return m_is_error; }
+
+        /// Set an deduction error.
+        void set_error() { m_is_error = true; }
+
+    private:
+        /// The definition of the function.
+        Definition *m_def;
+
+        /// The deduced return type of the function if any.
+        IType const *m_deduced_ret_type;
+
+        /// True, if this function was declared auto-return.
+        bool m_is_auto_return;
+
+        /// True, on deduction error.
+        bool m_is_error;
+    };
+
 public:
     /// Returns the definition of a symbol at the at a given scope.
     /// \param sym    the symbol
@@ -769,10 +888,10 @@ private:
     void push_function(Definition *def);
 
     /// Pop the function stack and return the TOS.
-    Definition *pop_function();
+    Function_entry *pop_function();
 
     /// Return the current function on the stack.
-    Definition *tos_function() const;
+    Function_entry *tos_function();
 
     /// Returns true if we are inside a function.
     bool inside_function() const { return m_func_stack_pos > 0; }
@@ -1620,13 +1739,15 @@ private:
 
     /// Process a resource url.
     ///
-    /// \param val       a string or resource value representing the URL
-    /// \param lit       the owning literal expression of the value
-    /// \param res_type  the resource type of the resource
+    /// \param val                 a string or resource value representing the URL
+    /// \param lit                 the owning literal expression of the value
+    /// \param res_type            the resource type of the resource
+    /// \param no_file_path_check  if true, do not check the resource file path
     void handle_resource_url(
         IValue const         *val,
         IExpression_literal  *lit,
-        IType_resource const *res_type);
+        IType_resource const *res_type,
+        bool                 no_file_path_check = false);
 
     /// Add a new resource entry.
     ///
@@ -1778,6 +1899,17 @@ private:
     /// \param cast_expr  the cast expression
     void handle_cast_expression(IExpression_unary *cast_expr);
 
+    /// Handle allowed variable types.
+    ///
+    /// \param var_type  the variable type to check
+    /// \param pos       the position for error reports
+    ///
+    /// \return \c type if is is an allowed variable type, else issue an error and returns the
+    ///         error type
+    IType const *handle_allowed_var_type(
+        IType const    *var_type,
+        Position const &pos);
+
     bool pre_visit(IDeclaration_import *import_decl) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_constant *con_decl) MDL_OVERRIDE;
@@ -1803,16 +1935,15 @@ private:
     bool pre_visit(IStatement_compound *block) MDL_OVERRIDE;
     void post_visit(IStatement_compound *block) MDL_OVERRIDE;
 
-    void post_visit(IStatement_if *if_stmt) MDL_OVERRIDE;
+    bool pre_visit(IStatement_if *if_stmt) MDL_OVERRIDE;
 
     bool pre_visit(IStatement_switch *switch_stmt) MDL_OVERRIDE;
 
-    void post_visit(IStatement_while *while_stmt) MDL_OVERRIDE;
+    bool pre_visit(IStatement_while *while_stmt) MDL_OVERRIDE;
 
-    void post_visit(IStatement_do_while *do_while_stmt) MDL_OVERRIDE;
+    bool pre_visit(IStatement_do_while *do_while_stmt) MDL_OVERRIDE;
 
     bool pre_visit(IStatement_for *for_stmt) MDL_OVERRIDE;
-    void post_visit(IStatement_for *for_stmt) MDL_OVERRIDE;
 
     void post_visit(IStatement_return *ret_stmt) MDL_OVERRIDE;
 
@@ -1905,12 +2036,18 @@ private:
     /// If true, the current module has the array assignment operator.
     bool m_has_array_assignment;
 
+    /// If true, we are inside a function with auto return type.
+    bool m_has_auto_return;
+
 
     /// The current module cache.
     IModule_cache *m_module_cache;
 
     /// The current annotated definition.
     Definition *m_annotated_def;
+
+    /// The deduced return type of a function if any.
+    IType const *m_deduced_type;
 
     /// Index of the next created parameter.
     int m_next_param_idx;
@@ -1922,7 +2059,7 @@ private:
     size_t m_func_stack_pos;
 
     /// The function stack.
-    vector<Definition *>::Type m_func_stack;
+    vector<Function_entry>::Type m_func_stack;
 
     /// A cache for speeding up the operator call resolver.
     Operator_lookup_cache m_op_cache;
@@ -2582,32 +2719,6 @@ private:
     /// Set to true, if errors was found.
     bool m_errors;
 };
-
-/// Returns true for error definitions.
-///
-/// \param def  the definition to check
-extern inline bool is_error(IDefinition const *def)
-{
-    IType const *type = def->get_type();
-    if (is<IType_error>(type))
-        return true;
-    return def->get_symbol()->get_id() == ISymbol::SYM_ERROR;
-}
-
-/// Returns true for error expressions.
-///
-/// \param expr  the expression to check
-extern inline bool is_error(IExpression const *expr)
-{
-    IType const *type = expr->get_type();
-    return is<IType_error>(type);
-}
-
-/// Returns true for error names.
-extern inline bool is_error(ISimple_name const *name)
-{
-    return name->get_symbol()->get_id() == ISymbol::SYM_ERROR;
-}
 
 /// Returns true for error names.
 bool is_error(IQualified_name const *name);

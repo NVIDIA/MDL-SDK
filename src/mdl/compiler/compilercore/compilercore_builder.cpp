@@ -84,9 +84,9 @@ namespace mdl {
     ptype = m_tc.type##_type;               \
     arr                                     \
     psym = get_predef_symbol(#name);        \
-    m_params[arg_num].p_type = ptype;       \
-    m_params[arg_num].p_sym  = psym;        \
-    m_inits[arg_num]         = NULL;
+    m_params[arg_num].p_type   = ptype;     \
+    m_params[arg_num].p_sym    = psym;      \
+    m_inits[arg_num]           = NULL;
 
 // declare an uniform parameter for every argument in the specification
 #define UARG(type, name, arr)                \
@@ -94,9 +94,9 @@ namespace mdl {
     ptype = m_tc.decorate_type(m_tc.type##_type, IType::MK_UNIFORM);    \
     arr                                     \
     psym = get_predef_symbol(#name);        \
-    m_params[arg_num].p_type = ptype;       \
-    m_params[arg_num].p_sym  = psym;        \
-    m_inits[arg_num]         = NULL;
+    m_params[arg_num].p_type   = ptype;     \
+    m_params[arg_num].p_sym    = psym;      \
+    m_inits[arg_num]           = NULL;      \
 
 // declare a parameter for every argument in the specification with an default argument
 #define DEFARG(type, name, arr, expr)       \
@@ -107,6 +107,12 @@ namespace mdl {
 #define UDEFARG(type, name, arr, expr)      \
     UARG(type, name, arr)                   \
     expr
+
+// declare an uniform  parameter for every argument in the specification with an default argument
+// that must be a literal
+#define CDEFARG(type, name, arr, expr)      \
+    UDEFARG(type, name, arr, expr)          \
+    m_literal_param_msk |= 1u << arg_num;
 
 // a literal expression
 #define EXPR_LITERAL(value)                             \
@@ -150,6 +156,7 @@ namespace mdl {
 #define _FUNCTION(kind, ret, name, args, flags)                 \
     sym = get_predef_symbol(#name);                             \
     arg_num = -1;                                               \
+    m_literal_param_msk = 0;                                    \
     args                                                        \
     func_type = m_tc.create_function(m_tc.ret##_type,           \
         Type_cache::Function_parameters(m_params, num_args));   \
@@ -157,25 +164,6 @@ namespace mdl {
     if (has_initializers) set_initializers(def, num_args);      \
     def->set_flag(Definition::DEF_IS_PREDEFINED);               \
     def->set_version_flags(VERSION(flags));
-
-
-/// Version flags of predefined entities.
-enum Version_flags {
-    SINCE_1_1   = IMDL::MDL_VERSION_1_1,
-    REMOVED_1_1 = (IMDL::MDL_VERSION_1_1 << 8),
-    SINCE_1_2   = IMDL::MDL_VERSION_1_2,
-    REMOVED_1_2 = (IMDL::MDL_VERSION_1_2 << 8),
-    SINCE_1_3   = IMDL::MDL_VERSION_1_3,
-    REMOVED_1_3 = (IMDL::MDL_VERSION_1_3 << 8),
-    SINCE_1_4   = IMDL::MDL_VERSION_1_4,
-    REMOVED_1_4 = (IMDL::MDL_VERSION_1_4 << 8),
-    SINCE_1_5   = IMDL::MDL_VERSION_1_5,
-    REMOVED_1_5 = (IMDL::MDL_VERSION_1_5 << 8),
-    SINCE_1_6   = IMDL::MDL_VERSION_1_6,
-    REMOVED_1_6 = (IMDL::MDL_VERSION_1_6 << 8),
-    SINCE_1_7   = IMDL::MDL_VERSION_1_7,
-    REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),
-};
 
 // compilercore_known_defs.h is too big to be compiled in one function, use this class to split
 // things up.
@@ -198,6 +186,7 @@ public:
     , m_state_sym(m_sym_tab.get_predefined_symbol(ISymbol::SYM_CNST_STATE))
     , m_tex_sym(m_sym_tab.get_predefined_symbol(ISymbol::SYM_CNST_TEX))
     , m_mod_version(module.get_version())
+    , m_literal_param_msk(0)
     , m_build_predefined_types(build_predefined_types)
     {
     }
@@ -221,6 +210,9 @@ private:
 
     /// The version of the current module.
     unsigned m_mod_version;
+
+    /// The mask of literal parameters.
+    unsigned m_literal_param_msk;
 
     /// if true, fields of predefined type are entered
     bool m_build_predefined_types;
@@ -252,6 +244,9 @@ private:
         m_module.allocate_initializers(def, num_args);
         for (size_t i = 0; i < num_args; ++i) {
             def->set_default_param_initializer(i, m_inits[i]);
+        }
+        if (m_literal_param_msk != 0) {
+            def->set_literal_parameter_mask(m_literal_param_msk);
         }
     }
 
@@ -565,12 +560,14 @@ public:
             sym = m_sym_tab.get_operator_symbol(ops[i]);
 
 // declare operators
-#define EQ_OPERATORS(args, flags)                                       \
-            arg_num = -1;                                               \
-            args                                                        \
-            func_type = m_tc.create_function(bool_type,                 \
-                Type_cache::Function_parameters(m_params, num_args));   \
-            m_def_tab.enter_operator_definition(ops[i], sym, func_type);
+#define EQ_OPERATORS(args, flags)                                           \
+            if (available(flags)) {                                         \
+                arg_num = -1;                                               \
+                args                                                        \
+                func_type = m_tc.create_function(bool_type,                 \
+                    Type_cache::Function_parameters(m_params, num_args));   \
+                m_def_tab.enter_operator_definition(ops[i], sym, func_type);\
+             }
 
 #include "compilercore_known_defs.h"
         }
@@ -695,14 +692,16 @@ public:
         sym = m_sym_tab.get_operator_symbol(IExpression::OK_ASSIGN);
 
 // declare operators
-#define ASSIGN_OPERATOR(ret, args, flags)                       \
-        arg_num = -1;                                           \
-        args                                                    \
-        func_type = m_tc.create_function(m_tc.ret##_type,       \
-            Type_cache::Function_parameters(m_params, num_args)); \
-        def = m_def_tab.enter_operator_definition(              \
-            IExpression::OK_ASSIGN, sym, func_type);            \
-            def->set_flag(Definition::DEF_OP_LVALUE);
+#define ASSIGN_OPERATOR(ret, args, flags)                           \
+        if (available(flags)) {                                     \
+            arg_num = -1;                                           \
+            args                                                    \
+            func_type = m_tc.create_function(m_tc.ret##_type,       \
+                Type_cache::Function_parameters(m_params, num_args)); \
+            def = m_def_tab.enter_operator_definition(              \
+                IExpression::OK_ASSIGN, sym, func_type);            \
+                def->set_flag(Definition::DEF_OP_LVALUE);           \
+        }
 
 #include "compilercore_known_defs.h"
     }

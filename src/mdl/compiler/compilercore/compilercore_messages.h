@@ -224,6 +224,14 @@ public:
 
     /// Add a message.
     ///
+    /// \param msg            the message
+    ///
+    /// \returns The index of the added message.
+    size_t add_message(
+        Message &msg);
+
+    /// Add a message.
+    ///
     /// \param sev            severity of the message to add
     /// \param code           error code of the message
     /// \param msg_class      the class of the message
@@ -326,15 +334,25 @@ public:
     /// Set a file name into the file name table.
     void set_fname(size_t id, char const *s);
 
-    /// Add an imported message to a message.
+    /// Add an imported message as a note to the current message.
     ///
     /// \param message_index  the index of the message this note will be added
     /// \param fname_id       the id for the file name of the imported message
     /// \param msg            the message to add
     /// 
     /// \returns The index of the added msg.
-    size_t add_imported(
+    size_t add_imported_msg_as_note(
         size_t         message_index,
+        size_t         fname_id,
+        IMessage const *msg);
+
+    /// Add an imported message.
+    ///
+    /// \param fname_id       the id for the file name of the imported message
+    /// \param msg            the message to add
+    /// 
+    /// \returns The index of the added msg.
+    size_t add_imported_msg(
         size_t         fname_id,
         IMessage const *msg);
 

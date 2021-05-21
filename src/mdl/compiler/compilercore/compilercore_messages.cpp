@@ -231,6 +231,17 @@ size_t Messages_impl::add_note(
 
 // Add a message.
 size_t Messages_impl::add_message(
+    Message &msg)
+{
+    if (msg.get_severity() == Message::MS_ERROR) {
+        insert_message(m_err, &msg);
+    }
+    int index = insert_message(m_msgs, &msg);
+    return index;
+}
+
+// Add a message.
+size_t Messages_impl::add_message(
     IMessage::Severity sev,
     int                code,
     char               msg_class,
@@ -239,11 +250,7 @@ size_t Messages_impl::add_message(
     char const         *str)
 {
     Message *msg = m_builder.create<Message>(this, sev, code, msg_class, mod_id, pos, str);
-
-    if (sev == Message::MS_ERROR)
-        insert_message(m_err,msg);
-    int index = insert_message(m_msgs,msg);
-    return index;
+    return add_message(*msg);
 }
 
 // Add a note to a message.
@@ -295,15 +302,24 @@ size_t Messages_impl::add_info_message(
     return add_message(Message::MS_INFO, code, msg_class, mod_id, pos, str);
 }
 
-// Add an imported message to a message.
-size_t Messages_impl::add_imported(
-     size_t         message_index,
-     size_t         fname_id,
-     IMessage const *msg)
+// Add an imported message as a note to the current message.
+size_t Messages_impl::add_imported_msg_as_note(
+    size_t         message_index,
+    size_t         fname_id,
+    IMessage const *msg)
 {
     Message *note = m_builder.create<Message>(this, msg, fname_id);
     m_msgs.at(message_index)->add_note(note);
     return 0;
+}
+
+// Add an imported message.
+size_t Messages_impl::add_imported_msg(
+    size_t         fname_id,
+    IMessage const *msg)
+{
+    Message *nmsg = m_builder.create<Message>(this, msg, fname_id);
+    return add_message(*nmsg);
 }
 
 // Format a message.

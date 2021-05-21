@@ -872,7 +872,7 @@ using std::isnan;
 #endif
 
 
-#ifndef __CUDACC__
+#ifndef __CUDA_ARCH__
 inline float uint_as_float(const unsigned v)
 { return base::binary_cast<float>(v);}
 

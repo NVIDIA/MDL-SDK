@@ -86,6 +86,11 @@ define_property(TARGET PROPERTY VS_DEBUGGER_COMMAND_ARGUMENTS
     FULL_DOCS "List of arguments that are passed the debugging command in Visual Studio. Usually added by dependency scripts. Requires a call to 'set_property' after adding all dependencies."
     )
 
+define_property(TARGET PROPERTY VS_DEBUGGER_WORKING_DIRECTORY
+    BRIEF_DOCS "Working directory that is used when running the debugging command in Visual Studio."
+    FULL_DOCS "Working directory that is used when running the debugging command in Visual Studio. Usually added by dependency scripts. Requires a call to 'set_property' after adding all dependencies."
+    )
+
 # set platform variable
 set(WINDOWS FALSE)
 set(LINUX FALSE)
@@ -93,14 +98,24 @@ set(MACOSX FALSE)
 
 if(WIN32 AND NOT UNIX)
     set(WINDOWS TRUE)
+    set(_PLATFORM_NAME "nt-x86-64")
 elseif(UNIX AND NOT WIN32 AND NOT APPLE)
     set(LINUX TRUE)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64.*|AARCH64.*)")
+        set(_PLATFORM_NAME "linux-aarch64")
+    else()
+        set(_PLATFORM_NAME "linux-x86-64")
+    endif()
 elseif(APPLE AND UNIX)
     set(MACOSX TRUE)
+    set(_PLATFORM_NAME "macosx-x86-64")
 else()
     MESSAGE(AUTHOR_WARNING "System is currently not supported explicitly. Assuming Linux.")
     set(LINUX TRUE)
+    set(_PLATFORM_NAME "linux-x86-64")
 endif()
+
+set(MI_PLATFORM_NAME ${_PLATFORM_NAME} CACHE INTERNAL "Name of the platform in the MI build system." FORCE)
 
 # remove the /MD flag cmake sets by default
 set(CompilerFlags
@@ -137,6 +152,7 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] WINDOWS:                            " ${WINDOWS})
     MESSAGE(STATUS "[INFO] LINUX:                              " ${LINUX})
     MESSAGE(STATUS "[INFO] MACOSX:                             " ${MACOSX})
+    MESSAGE(STATUS "[INFO] MI_PLATFORM_NAME:                   " ${MI_PLATFORM_NAME})
     MESSAGE(STATUS "[INFO] CMAKE_BUILD_TYPE:                   " ${CMAKE_BUILD_TYPE})
     MESSAGE(STATUS "[INFO] CMAKE_GENERATOR:                    " ${CMAKE_GENERATOR})
     get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
@@ -166,9 +182,10 @@ option(MDL_ENABLE_QT_EXAMPLES "Enable examples that require Qt." ON)
 option(MDL_ENABLE_D3D12_EXAMPLES "Enable examples that require Direct3D and DirectX 12." ${WINDOWS})
 option(MDL_ENABLE_OPTIX7_EXAMPLES "Enable examples that require OptiX 7." OFF)
 option(MDL_ENABLE_MATERIALX "Enable MaterialX in examples that support it." OFF)
+option(MDL_ENABLE_PYTHON_BINDINGS "Enable the generation of python bindings." OFF)
 
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/tests/CMakeLists.txt)
-    option(MDL_ENABLE_TESTS "Generates unit and example tests." ON)
+    option(MDL_ENABLE_TESTS "Generates unit and example tests." OFF)
 else()
     set(MDL_ENABLE_TESTS OFF CACHE INTERNAL "Generates unit and example tests." FORCE)
 endif()
@@ -176,8 +193,10 @@ endif()
 # list of tests that can be defined only after all other targets are setup (clear that list here)
 set(MDL_TEST_LIST_POST "" CACHE INTERNAL "list of test directories to add after regular targets are defined")
 
-include(${MDL_BASE_FOLDER}/cmake/find/find_cuda_ext.cmake)
-find_cuda_ext()
+if(MDL_ENABLE_CUDA_EXAMPLES AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_cuda_ext.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_cuda_ext.cmake)
+    find_cuda_ext()
+endif()
 
 if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_CUDA_COMPILER_ID:             " ${CMAKE_CUDA_COMPILER_ID})
@@ -185,22 +204,6 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_CUDA_COMPILER:                " ${CMAKE_CUDA_COMPILER})
 endif()
 
-include(${MDL_BASE_FOLDER}/cmake/find/find_opengl_ext.cmake)
-find_opengl_ext()
-
-include(${MDL_BASE_FOLDER}/cmake/find/find_qt_ext.cmake)
-find_qt_ext()
-
-include(${MDL_BASE_FOLDER}/cmake/find/find_d3d12_ext.cmake)
-find_d3d12_ext()
-
-include(${MDL_BASE_FOLDER}/cmake/find/find_optix7_ext.cmake)
-find_optix7_ext()
-
-include(${MDL_BASE_FOLDER}/cmake/find/find_arnoldsdk_ext.cmake)
-find_arnoldsdk_ext()
-
-# examples could potentially use FreeImage directly
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
     include(${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
     find_freeimage_ext()
@@ -211,9 +214,39 @@ if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_boost_ext.cmake)
     find_boost_ext()
 endif()
 
+if(MDL_ENABLE_OPENGL_EXAMPLES AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_opengl_ext.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_opengl_ext.cmake)
+    find_opengl_ext()
+endif()
+
+if(MDL_ENABLE_QT_EXAMPLES AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_qt_ext.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_qt_ext.cmake)
+    find_qt_ext()
+endif()
+
+if(MDL_ENABLE_D3D12_EXAMPLES AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_d3d12_ext.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_d3d12_ext.cmake)
+    find_d3d12_ext()
+endif()
+
+if(MDL_ENABLE_OPTIX7_EXAMPLES AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_optix7_ext.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_optix7_ext.cmake)
+    find_optix7_ext()
+endif()
+
+if(MDL_BUILD_ARNOLD_PLUGIN AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_arnoldsdk_ext.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_arnoldsdk_ext.cmake)
+    find_arnoldsdk_ext()
+endif()
+
 if(MDL_ENABLE_MATERIALX AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_materialx.cmake)
-include(${MDL_BASE_FOLDER}/cmake/find/find_materialx.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_materialx.cmake)
     find_materialx()
+endif()
+
+if(MDL_ENABLE_PYTHON_BINDINGS AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_python_dev_ext.cmake)
+    include(${MDL_BASE_FOLDER}/cmake/find/find_python_dev_ext.cmake)
+    find_python_dev_ext()
 endif()
 
 if(MDL_LOG_PLATFORM_INFOS)
@@ -222,5 +255,7 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_ENABLE_D3D12_EXAMPLES:          " ${MDL_ENABLE_D3D12_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_OPTIX7_EXAMPLES:         " ${MDL_ENABLE_OPTIX7_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_QT_EXAMPLES:             " ${MDL_ENABLE_QT_EXAMPLES})
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_MATERIALX:               " ${MDL_ENABLE_MATERIALX})
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_PYTHON_BINDINGS:         " ${MDL_ENABLE_PYTHON_BINDINGS})
     MESSAGE(STATUS "[INFO] MDL_ENABLE_TESTS:                   " ${MDL_ENABLE_TESTS})
 endif()

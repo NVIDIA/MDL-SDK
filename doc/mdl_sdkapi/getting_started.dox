@@ -79,8 +79,8 @@ The example source code requires a C++11 compiler. Some examples require additio
 The build with the following x64-platform-compiler combinations has been 
 successfully tested:
 
--   **Windows 10**:     Microsoft Visual Studio 2015 (msvc v140) 
--   **Ubuntu 18.04**:   gcc/g++6 and gcc/g++7 
+-   **Windows 10**:     Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142)
+-   **Ubuntu 18.04**:   GCC 7, GCC 8, or GCC 9 (on x86-64 or aarch64)
 -   **Mac OS X 10.13:** Xcode 8.3.3 (Apple Clang 8.1)
 
 The versions listed with the following dependencies have been
@@ -112,9 +112,16 @@ The following third-party libraries are required:
     - To build the DXR example, Windows 10 version 1809 and the corresponding 
     SDK 10.0.17763.0 as well as the optional *Graphic Tools* feature are required.
     
+-   **DirectX Raytracing support**
+    Building the DXR example requires:
+
+    - Windows 10 version 1909 and the corresponding SDK 10.0.18362.0
+
+    Additionally the optional *Graphic Tools* feature has to be installed.
+
 \subsection mi_neuray_getting_started_windows_build Building on Windows
 
-1.  Before generating the Visual Studio 2015 solution, be sure to
+1.  Before generating the Visual Studio solution, be sure to
     download and extract or install the third-party libraries listed
     above.  The following steps assume you have extracted the pre-compiled 
     binaries to a common third-party directory that is:
@@ -127,12 +134,12 @@ The following third-party libraries are required:
     example binaries.
 
     It is recommended that you build into a subdirectory, not into the example root.
-    C:/projects/mdl-sdk/examples/build/vs2015 for example is fine, assuming you extracted the mdl-sdk to:
+    C:/projects/mdl-sdk/examples/build/vs2017 for example is fine, assuming you extracted the mdl-sdk to:
 
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the
-    Generator. Select `Visual Studio 14 2015 Win64` and click
+    Generator. Select `Visual Studio 14 2017 Win64` and click
     `Finish`. CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 
@@ -155,7 +162,7 @@ The following third-party libraries are required:
         for example: *C:/projects/thirdparty/glfw-3.2.1.bin.WIN64*
 
     -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer)  
-        for example: *C:/Qt/5.10.1/msvc2015_64*
+        for example: *C:/Qt/5.10.1/msvc2017_64*
 
 
 6.  When all dependencies have been resolved or the corresponding examples 
@@ -186,8 +193,8 @@ The following third-party libraries are required:
     your make files and switch to that directory. It is recommended 
     that you build into a subdirectory, not the example root folder: 
 
-        mkdir ~/mdl-sdk/examples/build/linux-x64-gcc
-        cd ~/mdl-sdk/examples/build/linux-x64-gcc
+        mkdir $HOME/mdl-sdk/examples/build
+        cd $HOME/mdl-sdk/examples/build
 
 3.  To generate your build files, run CMake with the path to the top-level 
     *CMakeLists.txt* as the last argument.
@@ -196,13 +203,13 @@ The following third-party libraries are required:
         should complete the configuration without any further interactions necessary.
         In this case, you can continue with step 4.
 
-            cmake ../../
+            cmake ../..
 
     2.  Optionally, you can use CMake options and the *-D* flags to customize your build.
 
         One or multiple of these flags can be used to enable and disable examples, for example:
 
-            cmake -DMDL_ENABLE_QT_EXAMPLES=OFF ../../
+            cmake -DMDL_ENABLE_QT_EXAMPLES=OFF ../..
 
         You can also use the flags to point CMake to custom installation directories 
         for third party libraries. Please refer to 
@@ -213,13 +220,13 @@ The following third-party libraries are required:
         libraries. For a custom build of the GLEW library for example, the 
         call to CMake could look as follows:
 
-            cmake -DGLEW_DIR=~/thirdparty/glew-2.1.0 ../../
+            cmake -DGLEW_DIR=$HOME/thirdparty/glew-2.1.0 ../..
 
         For builds using a different compiler version, you need to pass the 
         compiler names when calling CMake as follows:
 
-            sudo apt-get install gcc-6 g++-6 g++-6-multilib
-            cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-6 -DCMAKE_CXX_COMPILER=/usr/bin/g++-6 ../../
+            sudo apt-get install gcc-7 g++-7
+            cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-7 -DCMAKE_CXX_COMPILER=/usr/bin/g++-7 ../..
 
     3.  In case CMake is not able to find a working CUDA compiler for the 
         examples, make sure the *nvcc* is reachable through the system PATH 
@@ -231,11 +238,11 @@ The following third-party libraries are required:
         rather than installing Qt on your system, you can optionally set 
         an additional environment variable before calling CMake:
 
-            export Qt5_DIR=~/Qt/5.10.1/gcc_64
+            export Qt5_DIR=$HOME/Qt/5.10.1/gcc_64
 
         or pass the Qt5_DIR as CMake option:
 
-            cmake -DQt5_DIR=~/Qt/5.10.1/gcc_64 ../../
+            cmake -DQt5_DIR=$HOME/Qt/5.10.1/gcc_64 ../..
 
 4.  After a successful configuration, you can run make from within the
     specified build directory or any subdirectory that corresponds to a
@@ -246,14 +253,18 @@ The following third-party libraries are required:
 5.  Because the different MDL SDK libraries are loaded at runtime, the 
     location has to be provided in order to run an example. Therefore, 
     specify the paths to the built MDL SDK library and 
-    the image plugins using the `LD_LIBRARAY_PATH` variable:
+    the image plugins using the `LD_LIBRARY_PATH` variable (on x86-64):
 
-        export LD_LIBRARY_PATH=~/mdl-sdk/linux-x86-64/lib:${LD_LIBRARY_PATH}
+        export LD_LIBRARY_PATH=$HOME/mdl-sdk/linux-x86-64/lib:${LD_LIBRARY_PATH}
+
+    or (on aarch64):
+
+        export LD_LIBRARY_PATH=$HOME/mdl-sdk/linux-aarch64/lib:${LD_LIBRARY_PATH}
 
     To run the MDL SDK Modules example for instance use:
 
-        cd ~/mdl-sdk/examples/build/linux-x64-gcc/mdl_sdk/modules
-        ./mdl_sdk_example-modules
+        cd $HOME/mdl-sdk/examples/build/examples/mdl_sdk/modules/Debug
+        ./modules
   
 \subsection mi_neuray_getting_started_macosx_build Building on Mac OS X
 
@@ -268,7 +279,7 @@ The following third-party libraries are required:
     the following CMake option needs to be specified:
 
     -   **Qt5_DIR** in Ungrouped Entries,  
-        for example: *~/Qt/5.10.1/clang_64*
+        for example: *$HOME/Qt/5.10.1/clang_64*
 
 3.  After successfully configuring and generating make files, switch to the selected build directory and run make:
 
@@ -277,15 +288,15 @@ The following third-party libraries are required:
 4.  Because the different MDL SDK libraries are loaded at runtime, the 
     location has to be provided in order to run an example. Therefore, 
     specify the paths to the built MDL SDK library and 
-    the image plugins using the `DYLD_LIBRARAY_PATH` variable:
+    the image plugins using the `DYLD_LIBRARY_PATH` variable:
 
-        export Qt5_DIR=~/Qt/5.10.1/clang_64
-        export DYLD_LIBRARAY_PATH=~/mdl-sdk/macosx-x86-64/lib:${Qt5_DIR}/lib:${Qt5_DIR}/plugins/imageformats${DYLD_LIBRARAY_PATH:+:${DYLD_LIBRARAY_PATH}}
+        export Qt5_DIR=$HOME/Qt/5.10.1/clang_64
+        export DYLD_LIBRARY_PATH=$HOME/mdl-sdk/macosx-x86-64/lib:${Qt5_DIR}/lib:${Qt5_DIR}/plugins/imageformats:${DYLD_LIBRARY_PATH}
         
     To run the MDL SDK Modules example for instance use:
 
-        cd ~/mdl-sdk/examples/build/macosx-x64-gcc/mdl_sdk/modules
-        ./mdl_sdk_example-modules
+        cd $HOME/mdl-sdk/examples/build/examples/mdl_sdk/modules/Debug
+        ./modules
 
 \subsection mi_neuray_getting_started_cmake_options Additional CMake Options
 

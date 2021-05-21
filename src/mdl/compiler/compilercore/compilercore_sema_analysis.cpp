@@ -198,8 +198,9 @@ bool Sema_analysis::check_exported_type(
         return true;
     }
 
-    if (IType_array const *a_type = as<IType_array>(type))
+    if (IType_array const *a_type = as<IType_array>(type)) {
         type = a_type->get_element_type()->skip_type_alias();
+    }
 
     Scope *scope = m_def_tab->get_type_scope(type);
     MDL_ASSERT(scope != NULL);
@@ -246,8 +247,7 @@ void Sema_analysis::check_exported_function_completeness(
     Bad_type_set bad_types(
         0, Bad_type_set::hasher(), Bad_type_set::key_equal(), m_module.get_allocator());
 
-    IType_name const *rt_name = func_decl->get_return_type_name();
-    IType const      *r_type  = rt_name->get_type();
+    IType const *r_type  = cast<IType_function>(func_def->get_type())->get_return_type();
 
     bool is_valid = check_exported_type(func_def, r_type, bad_types);
 
@@ -2326,30 +2326,40 @@ IExpression *Sema_analysis::post_visit(IExpression_call *expr)
             Definition const *def = impl_cast<Definition>(ref->get_definition());
 
             if (!is_error(def)) {
-                if (def->has_flag(Definition::DEF_LITERAL_PARAM)) {
-                    IArgument const   *arg  = expr->get_argument(0);
-                    IExpression const *expr = arg->get_argument_expr();
+                unsigned lit_param_msk = def->get_literal_parameter_mask();
+                if (lit_param_msk != 0) {
+                    IType_function const *f_type = cast<IType_function>(def->get_type());
 
-                    if (!is<IExpression_literal>(expr)) {
-                        // the first argument should be a literal: try to const-fold
-                        bool is_invalid = false;
-                        if (is_const_expression(expr, is_invalid)) {
-                            IValue const *val =
-                                expr->fold(&m_module, m_module.get_value_factory(), NULL);
+                    for (int i = 0, n = f_type->get_parameter_count(); i < n; ++i) {
+                        if ((lit_param_msk & (1u << i)) != 0) {
+                            IArgument const   *lit_arg  = expr->get_argument(i);
+                            IExpression const *lit_expr = lit_arg->get_argument_expr();
 
-                            if (!is<IValue_bad>(val)) {
-                                Position const *pos = &expr->access_position();
-                                expr = m_module.create_literal(val, pos);
-                                const_cast<IArgument *>(arg)->set_argument_expr(expr);
-                            } else {
-                                MDL_ASSERT(is_invalid && "Const fold failed for valid const_expr");
+                            if (!is<IExpression_literal>(lit_expr)) {
+                                // the i'th argument should be a literal: try to const-fold
+                                bool is_invalid = false;
+                                if (is_const_expression(lit_expr, is_invalid)) {
+                                    IValue const *val =
+                                        expr->fold(&m_module, m_module.get_value_factory(), NULL);
+
+                                    if (!is<IValue_bad>(val)) {
+                                        Position const *pos = &lit_expr->access_position();
+                                        lit_expr = m_module.create_literal(val, pos);
+                                        const_cast<IArgument *>(lit_arg)->set_argument_expr(expr);
+                                    } else {
+                                        MDL_ASSERT(
+                                            is_invalid && "Const fold failed for valid const_expr");
+                                    }
+                                } else {
+                                    // count arguments from 1
+                                    error(
+                                        CONST_EXPR_ARGUMENT_REQUIRED,
+                                        lit_expr->access_position(),
+                                        Error_params(*this)
+                                            .add_signature(def)
+                                            .add_numword(1 + i));
+                                }
                             }
-                        } else {
-                            error(
-                                CONST_EXPR_ARGUMENT_REQUIRED,
-                                expr->access_position(),
-                                Error_params(*this)
-                                .add_signature(def));
                         }
                     }
                 }

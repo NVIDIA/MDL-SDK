@@ -347,7 +347,7 @@ static IType const *needs_uniform_condition(IType const *type)
         case IType::TK_COLOR:
         case IType::TK_FUNCTION:
         case IType::TK_TEXTURE:
-        case IType::TK_INCOMPLETE:
+        case IType::TK_AUTO:
         case IType::TK_ERROR:
             return NULL;
 
@@ -1040,17 +1040,25 @@ bool AT_analysis::pre_visit(IDeclaration_function *decl)
     // create the dependence graph and enter it
     m_dg = m_builder.create<Dependence_graph>(&m_arena, fkt_def->get_sym()->get_name());
 
+#ifdef ENABLE_ASSERT
     Dependence_graph::Node *node = NULL;
+#endif
 
     // create the return node, it has always the ID <return_value_id>
     IType_function const *fkt_type = cast<IType_function>(fkt_def->get_type());
     IType const          *ret_type = fkt_type->get_return_type();
 
-    node = m_dg->create_aux_node(Dependence_graph::Node::NK_RETURN_VALUE, ret_type);
+#ifdef ENABLE_ASSERT
+    node =
+#endif
+    m_dg->create_aux_node(Dependence_graph::Node::NK_RETURN_VALUE, ret_type);
     MDL_ASSERT(node->get_id() == return_value_id);
 
     // create the one and only variadic call node
-    node = m_dg->create_aux_node(Dependence_graph::Node::NK_VARYING_CALL, NULL);
+#ifdef ENABLE_ASSERT
+    node =
+#endif
+    m_dg->create_aux_node(Dependence_graph::Node::NK_VARYING_CALL, NULL);
     MDL_ASSERT(node->get_id() == varying_call_id);
 
     if (fkt_def->has_flag(Definition::DEF_IS_UNIFORM)) {
@@ -1070,7 +1078,7 @@ bool AT_analysis::pre_visit(IDeclaration_function *decl)
         ISimple_name const *sname = param->get_name();
         Definition const   *p_def = impl_cast<Definition>(sname->get_definition());
 
-        node = m_dg->create_param_node(const_cast<Definition *>(p_def));
+        m_dg->create_param_node(const_cast<Definition *>(p_def));
     }
 
     // visit children

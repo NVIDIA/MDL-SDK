@@ -652,11 +652,18 @@ class Type_factory : public IType_factory
                     // should be NEVER inside the type hash
                     MDL_ASSERT(!"function search key in type cache detected");
                     return false;
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
                 case KEY_ALIAS:
                     return
                         a.type == b.type &&
                         a.u.alias.sym == b.u.alias.sym &&
                         a.u.alias.mod == b.u.alias.mod;
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic pop
+#endif
                 case KEY_SIZED_ARRAY:
                     return
                         a.type == b.type &&
@@ -687,8 +694,8 @@ public:
     /// Create a new type error instance.
     IType_error const *create_error() MDL_FINAL;
 
-    /// Create a new type incomplete instance.
-    IType_incomplete const *create_incomplete() MDL_FINAL;
+    /// Create a new type auto (non-deduced incomplete type) instance.
+    IType_auto const *create_auto() MDL_FINAL;
 
     /// Create a new type bool instance.
     IType_bool const *create_bool() MDL_FINAL;
@@ -820,6 +827,13 @@ public:
 
     // Non interface methods
 public:
+
+    /// Lookup an imported type by its absolute type symbol.
+    ///
+    /// \param sym  the type symbol
+    ///
+    /// \returns the type or NULL if no type of the given name was imported
+    IType const *find_imported_user_type(ISymbol const *sym) const;
 
     /// Get the equivalent type for a given type in our type factory or return NULL if
     /// type is not imported.
@@ -985,6 +999,22 @@ public:
         int                   end_line = 0,
         int                   end_column = 0) MDL_FINAL;
 
+    /// Create a new enable_if annotation.
+    ///
+    /// \param qname         the qualified name of the annotation
+    /// \param start_line    start line in the input
+    /// \param start_column  start column in the input
+    /// \param end_line      end line in the input
+    /// \param end_column    end column in the input
+    ///
+    /// \return the newly created annotation
+    IAnnotation_enable_if *create_enable_if_annotation(
+        IQualified_name const *qname,
+        int                   start_line = 0,
+        int                   start_column = 0,
+        int                   end_line = 0,
+        int                   end_column = 0) MDL_FINAL;
+
     /// Create a new annotation block.
     ///
     /// \param start_line    start line of the annotation block
@@ -1128,12 +1158,14 @@ public:
     /// \param type            The type of the texture.
     /// \param value           The string value of the texture, NULL is not allowed.
     /// \param gamma           The gamma override value of the texture.
+    /// \param selector        The channel selector of the texture, NULL is not allowed.
     /// \param tag_value       The tag value of the texture.
     /// \param tag_version     The version of the tag value.
     IValue_texture const *create_texture(
         IType_texture const            *type,
         char const                     *value,
         IValue_texture::gamma_mode     gamma,
+        char const                     *selector,
         int                            tag_value,
         unsigned                       tag_version) MDL_FINAL;
 

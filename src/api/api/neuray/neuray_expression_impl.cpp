@@ -36,9 +36,9 @@
 #include <base/data/db/i_db_transaction.h>
 #include <io/scene/mdl_elements/i_mdl_elements_expression.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_instance.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
-#include <io/scene/mdl_elements/i_mdl_elements_material_definition.h>
+#include <io/scene/mdl_elements/mdl_elements_utilities.h> // for get_db_name_annotation_definition
+
 #include "neuray_expression_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_value_impl.h"
@@ -199,26 +199,18 @@ mi::Sint32 Expression_call::set_call( const char* name)
     mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
 
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    mi::base::Handle<const MDL::IType> actual_type;
-    if( class_id == MDL::Mdl_function_call::id) {
-        DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
-        if (call->is_immutable())
-            return -5; // prevent user-calls to default functions
-        MDL::Execution_context context;
-        if (!call->is_valid(db_transaction, &context))
-            return -6; // prevent user-calls to invalid functions
-        actual_type = call->get_return_type();
-    } else if( class_id == MDL::Mdl_material_instance::id) { //-V547 PVS
-        DB::Access<MDL::Mdl_material_instance> m(tag, db_transaction);
-        if (m->is_immutable())
-            return -5; // prevent user-calls to default materials
-        MDL::Execution_context context;
-        if (!m->is_valid(db_transaction, &context))
-            return -6; // prevent user-calls to invalid materials
-        actual_type = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
-    } else
+    if( class_id != MDL::Mdl_function_call::id)
         return -3;
 
+    DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
+    if( call->is_immutable())
+        return -5; // prevent user-calls to default functions
+
+    MDL::Execution_context context;
+    if( !call->is_valid(db_transaction, &context))
+        return -6; // prevent user-calls to invalid functions
+
+    mi::base::Handle<const MDL::IType> actual_type( call->get_return_type());
     mi::base::Handle<const MDL::IType> expected_type( m_expr->get_type());
     if( tf->compare( actual_type.get(), expected_type.get()) != 0)
         return -4;
@@ -317,21 +309,32 @@ mi::neuraylib::IAnnotation_definition::Semantics Annotation_definition::get_sema
     return m_anno_def->get_semantic();
 }
 
+bool Annotation_definition::is_exported() const
+{
+    return m_anno_def->is_exported();
+}
+
+void Annotation_definition::get_mdl_version(
+    mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const
+{
+    m_anno_def->get_mdl_version( since, removed);
+}
+
 mi::Size Annotation_definition::get_parameter_count() const
 {
     return m_anno_def->get_parameter_count();
 }
 
-const char* Annotation_definition::get_parameter_name(mi::Size index) const
+const char* Annotation_definition::get_parameter_name( mi::Size index) const
 {
-    return m_anno_def->get_parameter_name(index);
+    return m_anno_def->get_parameter_name( index);
 }
 
-mi::Size Annotation_definition::get_parameter_index(const char* name) const
+mi::Size Annotation_definition::get_parameter_index( const char* name) const
 {
-    if (!name)
-        return mi::Size(-1);
-    return m_anno_def->get_parameter_index(name);
+    if( !name)
+        return mi::Size( -1);
+    return m_anno_def->get_parameter_index( name);
 }
 
 const mi::neuraylib::IType_list* Annotation_definition::get_parameter_types() const
@@ -344,11 +347,6 @@ const mi::neuraylib::IExpression_list* Annotation_definition::get_defaults() con
 {
     mi::base::Handle<const MDL::IExpression_list> result_int(m_anno_def->get_defaults());
     return m_ef->create_expression_list(result_int.get(), m_owner.get());
-}
-
-bool Annotation_definition::is_exported() const
-{
-    return m_anno_def->is_exported();
 }
 
 const mi::neuraylib::IAnnotation_block* Annotation_definition::get_annotations() const
@@ -518,28 +516,18 @@ mi::neuraylib::IExpression_call* Expression_factory::create_call( const char* na
         return nullptr;
 
     SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    mi::base::Handle<const MDL::IType> type_int;
-    if( class_id == MDL::Mdl_function_call::id) {
-        DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
-        if( call->is_immutable())
-            return nullptr; // prevent user-calls to default functions
-        MDL::Execution_context context;
-        if (!call->is_valid(db_transaction, &context))
-            return nullptr; // prevent user-calls to invalid functions
-        type_int = call->get_return_type();
-    } else if( class_id == MDL::Mdl_material_instance::id) { //-V547 PVS
-        DB::Access<MDL::Mdl_material_instance> m(tag, db_transaction);
-        if( m->is_immutable())
-            return nullptr; // prevent user-calls to default materials
-        MDL::Execution_context context;
-        if (!m->is_valid(db_transaction, &context))
-            return nullptr; // prevent user-calls to invalid materials
-        mi::base::Handle<MDL::IValue_factory> vf( m_ef->get_value_factory());
-        mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
-        type_int = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
-    } else
+    if( class_id != MDL::Mdl_function_call::id)
         return nullptr;
 
+    DB::Access<MDL::Mdl_function_call> call( tag, db_transaction);
+    if( call->is_immutable())
+        return nullptr; // prevent user-calls to default functions
+
+    MDL::Execution_context context;
+    if( !call->is_valid( db_transaction, &context))
+        return nullptr; // prevent user-calls to invalid functions
+
+    mi::base::Handle<const MDL::IType> type_int( call->get_return_type());
     mi::base::Handle<MDL::IExpression_call> result_int(
         m_ef->create_call( type_int.get(), tag));
     return new Expression_call( this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
@@ -558,48 +546,43 @@ mi::neuraylib::IExpression_parameter* Expression_factory::create_parameter(
 }
 
 mi::neuraylib::IExpression_direct_call* Expression_factory::create_direct_call(
-    const char* name, mi::neuraylib::IExpression_list* arguments) const
+    const char* name, mi::neuraylib::IExpression_list* arguments, mi::Sint32* errors) const
 {
-    if( !name || !arguments)
+    if( !name) {
+        if( errors)
+            *errors = -7;
         return nullptr;
+    }
 
     DB::Transaction* db_transaction = get_db_transaction();
     DB::Tag tag = db_transaction->name_to_tag( name);
-    if( !tag)
+    if( !tag) {
+        if( errors)
+            *errors = -7;
         return nullptr;
+    }
 
-    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-    mi::base::Handle<const MDL::IType> type_int;
-    DB::Tag module_tag;
-    MDL::Mdl_ident def_ident;
-    if( class_id == MDL::Mdl_function_definition::id) {
-        DB::Access<MDL::Mdl_function_definition> def( tag, db_transaction);
-        type_int = def->get_return_type();
-        module_tag = def->get_module(db_transaction);
-        def_ident = def->get_ident();
-    } else if( class_id == MDL::Mdl_material_definition::id) { //-V547 PVS
-        mi::base::Handle<MDL::IValue_factory> vf( m_ef->get_value_factory());
-        mi::base::Handle<MDL::IType_factory> tf( vf->get_type_factory());
-        type_int = tf->get_predefined_struct( MDL::IType_struct::SID_MATERIAL);
-
-        DB::Access<MDL::Mdl_material_definition> def(tag, db_transaction);
-        module_tag = def->get_module(db_transaction);
-        def_ident = def->get_ident();
-    } else
-        return nullptr;
-
-    // TODO Check arguments against the parameters of the definition, reject array constructor;
-    // TODO but the function is currently not exposed in the API.
-    ASSERT( M_SCENE, false);
+    // Note that this method does not directly invoke the internal counterpart, but invokes
+    // methods on the DB elements that add additional checks and fill in defaults.
 
     mi::base::Handle<MDL::IExpression_list> arguments_int(
         get_internal_expression_list( arguments));
-    mi::base::Handle<MDL::IExpression_direct_call> result_int(
-        m_ef->create_direct_call(
-            type_int.get(), module_tag,
-            MDL::Mdl_tag_ident(tag, def_ident), name , arguments_int.get()));
 
-    return new Expression_direct_call( this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
+    SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
+    if( class_id != MDL::Mdl_function_definition::id) {
+        if( errors)
+            *errors = -7;
+        return nullptr;
+    }
+
+    DB::Access<MDL::Mdl_function_definition> def( tag, db_transaction);
+    mi::base::Handle<MDL::IExpression_direct_call> result_int(
+        def->create_direct_call( db_transaction, arguments_int.get(), errors));
+    if( !result_int)
+        return nullptr;
+
+    return new Expression_direct_call(
+        this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IExpression_temporary* Expression_factory::create_temporary(
@@ -623,6 +606,16 @@ mi::neuraylib::IExpression_list* Expression_factory::create_expression_list() co
 mi::neuraylib::IAnnotation* Expression_factory::create_annotation(
     const char* name, const mi::neuraylib::IExpression_list* arguments) const
 {
+    // The name should be checked in the MDL integration, but this requires other changes first.
+    if( !name)
+        return nullptr;
+    const std::string& db_name = MDL::get_db_name_annotation_definition( name);
+    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+    DB::Tag definition_proxy_tag = db_transaction->name_to_tag( db_name.c_str());
+    if( !definition_proxy_tag)
+        return nullptr;
+
     mi::base::Handle<const MDL::IExpression_list> arguments_int(
         get_internal_expression_list( arguments));
     mi::base::Handle<MDL::IAnnotation> result_int(

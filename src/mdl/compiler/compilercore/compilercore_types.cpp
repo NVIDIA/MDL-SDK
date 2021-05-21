@@ -199,13 +199,13 @@ public:
     }
 };
 
-/// Implementation of the incomplete type.
-class Type_incomplete : public Type_base<IType_incomplete>
+/// Implementation of the auto (placeholder incomplete) type.
+class Type_auto : public Type_base<IType_auto>
 {
-    typedef Type_base<IType_incomplete> Base;
+    typedef Type_base<IType_auto> Base;
 public:
     /// Constructor.
-    explicit Type_incomplete()
+    explicit Type_auto()
     : Base()
     {
     }
@@ -1114,12 +1114,12 @@ IType_error const *Type_factory::create_error()
     return &the_error_type;
 }
 
-// Create a new type incomplete instance.
-IType_incomplete const *Type_factory::create_incomplete()
+// Create a new type auto (non-deduced incomplete type) instance.
+IType_auto const *Type_factory::create_auto()
 {
     if (m_compiler_factory)
-        return m_compiler_factory->create_incomplete();
-    return &the_incomplete_type;
+        return m_compiler_factory->create_auto();
+    return &the_auto_type;
 }
 
 // Create a new type bool instance.
@@ -1394,6 +1394,9 @@ IType const *Type_factory::find_any_deferred_array(IType const *element_type) co
     if (m_compiler_factory == NULL)
         return NULL;
 
+    // skip any aliases
+    element_type = element_type->skip_type_alias();
+
     // FIXME: slow linear search here, because I cannot guess the hash value ...
     // for now it is only used from get_overload_by_signature() neuray helper, so it is fine
     // for me
@@ -1403,7 +1406,7 @@ IType const *Type_factory::find_any_deferred_array(IType const *element_type) co
     {
         Type_cache_key const &key = it->first;
         if (key.kind == Type_cache_key::KEY_ABSTRACT_ARRAY) {
-            if (key.type == element_type) {
+            if (key.type->skip_type_alias() == element_type) {
                 // found it
                 return it->second;
             }
@@ -1705,8 +1708,8 @@ IType const *Type_factory::import(IType const *type)
         }
     case IType::TK_BSDF_MEASUREMENT:
         return create_bsdf_measurement();
-    case IType::TK_INCOMPLETE:
-        return create_incomplete();
+    case IType::TK_AUTO:
+        return create_auto();
     case IType::TK_ERROR:
         return create_error();
     }
@@ -1772,6 +1775,19 @@ IType_enum *Type_factory::get_predefined_enum(IType_enum::Predefined_id part)
 Symbol_table *Type_factory::get_symbol_table()
 {
     return m_symtab;
+}
+
+// Lookup an imported type by its absolute type symbol.
+IType const *Type_factory::find_imported_user_type(
+    ISymbol const *sym) const
+{
+    Type_import_map::const_iterator it =
+        m_imported_types_cache.find(sym->get_name());
+    if (it != m_imported_types_cache.end()) {
+        // We have this name;
+        return it->second;
+    }
+    return NULL;
 }
 
 // Get the equivalent type for a given type in our type factory or return NULL if
@@ -1899,8 +1915,8 @@ IType const *Type_factory::get_equal(IType const *type) const
         }
     case IType::TK_BSDF_MEASUREMENT:
         return safe->create_bsdf_measurement();
-    case IType::TK_INCOMPLETE:
-        return safe->create_incomplete();
+    case IType::TK_AUTO:
+        return safe->create_auto();
     case IType::TK_ERROR:
         return safe->create_error();
     }
@@ -2071,9 +2087,10 @@ void Type_factory::deserialize(Factory_deserializer &deserializer)
 {
     register_builtins(deserializer);
 
-    Tag_t t;
-
-    t = deserializer.read_section_tag();
+#ifdef ENABLE_ASSERT
+    Tag_t t =
+#endif
+    deserializer.read_section_tag();
     MDL_ASSERT(t == Serializer::ST_TYPE_TABLE);
 
     // register this type factory
@@ -2087,9 +2104,11 @@ void Type_factory::deserialize(Factory_deserializer &deserializer)
 
     // the symbol table must be already serialized at this moment
     Tag_t symtab_tag = deserializer.read_encoded_tag();
-    Symbol_table const *symtab;
 
-    symtab = deserializer.get_symbol_table(symtab_tag);
+#ifdef ENABLE_ASSERT
+    Symbol_table const *symtab =
+#endif
+    deserializer.get_symbol_table(symtab_tag);
     MDL_ASSERT(symtab == m_symtab);
 
     DOUT(("using symtab %u\n", unsigned(symtab_tag)));
@@ -2142,23 +2161,38 @@ void Type_factory::register_builtins(Factory_serializer &serializer) const
 {
     // register all builtin types. When this happens, the type
     // tag set must be empty, check that.
+#ifdef ENABLE_ASSERT
     Tag_t t, check = Tag_t(0);
 
 #define BUILTIN_TYPE(type, name, args) \
     t = serializer.register_type(&name); ++check; MDL_ASSERT(t == check);
+#else
+#define BUILTIN_TYPE(type, name, args) \
+        serializer.register_type(&name);
+#endif
 #include "compilercore_builtin_types.h"
 
     // register predefined structs
     for (int i = 0, n = IType_struct::SID_LAST; i <= n; ++i) {
         IType_struct const *predef =
             const_cast<Type_factory *>(this)->get_predefined_struct(IType_struct::Predefined_id(i));
-        t = serializer.register_type(predef); ++check; MDL_ASSERT(t == check);
+#ifdef ENABLE_ASSERT
+        ++check;
+        t =
+#endif
+        serializer.register_type(predef);
+        MDL_ASSERT(t == check);
     }
     // register predefined enums
     for (int i = 0, n = IType_enum::EID_LAST; i <= n; ++i) {
         IType_enum const *predef =
             const_cast<Type_factory *>(this)->get_predefined_enum(IType_enum::Predefined_id(i));
-        t = serializer.register_type(predef); ++check; MDL_ASSERT(t == check);
+#ifdef ENABLE_ASSERT
+        ++check;
+        t =
+#endif
+        serializer.register_type(predef);
+        MDL_ASSERT(t == check);
     }
 }
 

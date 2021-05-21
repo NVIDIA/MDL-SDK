@@ -260,6 +260,9 @@ public:
     /// \param name  an absolute MDL module name
     virtual void add_import(char const *name) = 0;
 
+    /// Add a namespace alias declaration at the end of all other namespace aliases.
+    virtual void add_namespace_alias(char const *alias_name, char const *namespace_name) = 0;
+
     /// Get the name factory of this module.
     virtual IName_factory *get_name_factory() const = 0;
 

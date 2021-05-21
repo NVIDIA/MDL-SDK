@@ -41,6 +41,7 @@ namespace mdl {
 
 class IDag_builder;
 class IModule;
+class IModule_cache;
 class ISerializer;
 class IDeserializer;
 class IValue_texture;
@@ -844,6 +845,7 @@ public:
     /// to already map the resources of the default arguments of the used material instance.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param kind                 the kind of the lambda function
     /// \param arg_block_index      this variable will receive the index of the target argument
@@ -854,6 +856,7 @@ public:
     /// \return true on success
     virtual bool add(
         ILambda_function const                    *lambda,
+        IModule_cache                             *module_cache,
         ICall_name_resolver const                 *name_resolver,
         IGenerated_code_executable::Function_kind  kind,
         size_t                                    *arg_block_index,
@@ -871,6 +874,7 @@ public:
     /// to already map the resources of the default arguments of the used material instance.
     ///
     /// \param dist_func                  the distribution function to compile
+    /// \param module_cache               the module cache if any
     /// \param name_resolver              the call name resolver
     /// \param arg_block_index            variable receiving the index of the target argument block
     ///                                   used for this distribution function or ~0 if none is used
@@ -881,6 +885,7 @@ public:
     /// \return true on success
     virtual bool add(
         IDistribution_function const  *dist_func,
+        IModule_cache                 *module_cache,
         ICall_name_resolver const     *name_resolver,
         size_t                        *arg_block_index,
         size_t                        *main_function_indices,
@@ -971,6 +976,9 @@ public:
 
     /// The name of the option that exposes names of let expressions as named temporaries.
     #define MDL_CG_DAG_OPTION_EXPOSE_NAMES_OF_LET_EXPRESSIONS "expose_names_of_let_expressions"
+
+    /// The name of the option that enables target material mode compilation.
+    #define MDL_CG_DAG_OPTION_TARGET_MATERIAL_MODE "target_material_mode"
 
     /// Compile a module.
     /// \param      module  The module to compile.
@@ -1070,6 +1078,10 @@ class ICode_generator_jit : public
     #define MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS \
         "jit_use_renderer_adapt_microfacet_roughness"
 
+    /// The name of the option to enable using a renderer provided function to adapt normals.
+    #define MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL \
+        "jit_use_renderer_adapt_normal"
+
     /// The name of the option specifying a comma-separated list of names for which scene data
     /// may be available in the renderer.
     /// For names not in the list, scene::data_isvalid will always return false and
@@ -1101,8 +1113,9 @@ public:
 public:
     /// Compile a whole module.
     ///
-    /// \param module  The module to compile.
-    /// \param mode    The compilation mode
+    /// \param module        The module to compile.
+    /// \param module_cache  The module cache if any.
+    /// \param mode          The compilation mode.
     ///
     /// \note This method is not used currently for code generation, just
     ///       by the unit tests to test various aspects of the code generator.
@@ -1110,6 +1123,7 @@ public:
     /// \returns The generated code.
     virtual IGenerated_code_executable *compile(
         IModule const    *module,
+        IModule_cache    *module_cache,
         Compilation_mode mode) = 0;
 
     /// Compile a lambda function using the JIT into an environment (shader) of a scene.
@@ -1117,11 +1131,13 @@ public:
     /// The generated function will have the signature #mi::mdl::Lambda_environment_function.
     ///
     /// \param lambda         the lambda function to compile
+    /// \param module_cache   the module cache if any
     /// \param name_resolver  the call name resolver
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_lambda_function *compile_into_environment(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver) = 0;
 
     /// Compile a lambda function using the JIT into a constant function.
@@ -1129,6 +1145,7 @@ public:
     /// The generated function will have the signature #mi::mdl::Lambda_const_function.
     ///
     /// \param lambda           the lambda function to compile
+    /// \param module_cache     the module cache if any
     /// \param name_resolver    the call name resolver
     /// \param attr             an interface to retrieve resource attributes
     /// \param world_to_object  the world-to-object transformation matrix for this function
@@ -1137,7 +1154,8 @@ public:
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_lambda_function *compile_into_const_function(
-        ILambda_function const    *lambda,
+        ILambda_function const     *lambda,
+        IModule_cache              *module_cache,
         ICall_name_resolver const  *name_resolver,
         ILambda_resource_attribute *attr,
         Float4_struct const        world_to_object[4],
@@ -1150,6 +1168,7 @@ public:
     /// The generated function will have the signature #mi::mdl::Lambda_switch_function.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -1157,6 +1176,7 @@ public:
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_lambda_function *compile_into_switch_function(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results) = 0;
@@ -1168,6 +1188,7 @@ public:
     ///
     /// \param code_cache           If non-NULL, a code cache
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -1177,6 +1198,7 @@ public:
     virtual IGenerated_code_executable *compile_into_switch_function_for_gpu(
         ICode_cache               *code_cache,
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -1187,6 +1209,7 @@ public:
     /// The generated function will have the signature #mi::mdl::Lambda_generic_function.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -1197,6 +1220,7 @@ public:
     /// \note the lambda function must have only one root expression.
     virtual IGenerated_code_lambda_function *compile_into_generic_function(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -1208,6 +1232,7 @@ public:
     /// #mi::mdl::Lambda_switch_function depending on the type of the lambda.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -1216,6 +1241,7 @@ public:
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_into_llvm_ir(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -1228,6 +1254,7 @@ public:
     ///
     /// \param code_cache           If non-NULL, a code cache
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -1240,6 +1267,7 @@ public:
     virtual IGenerated_code_executable *compile_into_source(
         ICode_cache               *code_cache,
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -1263,6 +1291,7 @@ public:
     /// to already map the resources of the default arguments of the used material instance.
     ///
     /// \param dist_func            the distribution function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -1270,6 +1299,7 @@ public:
     /// \return the compiled distribution function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_distribution_function_cpu(
         IDistribution_function const *dist_func,
+        IModule_cache                *module_cache,
         ICall_name_resolver const    *name_resolver,
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results) = 0;
@@ -1290,6 +1320,7 @@ public:
     /// to already map the resources of the default arguments of the used material instance.
     ///
     /// \param dist_func            the distribution function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -1301,6 +1332,7 @@ public:
     /// \return the compiled distribution function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_distribution_function_gpu(
         IDistribution_function const *dist_func,
+        IModule_cache                *module_cache,
         ICall_name_resolver const    *name_resolver,
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results,
@@ -1326,9 +1358,9 @@ public:
     /// \returns                true if there is data for this semantic (BSDF)
     virtual bool get_libbsdf_multiscatter_data_resolution(
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
-        size_t &theta,
-        size_t &roughness,
-        size_t &ior) const = 0;
+        size_t                         &theta,
+        size_t                         &roughness,
+        size_t                         &ior) const = 0;
 
     /// Get access to the libbsdf multi-scattering lookup table data.
     ///

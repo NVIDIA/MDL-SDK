@@ -1445,7 +1445,7 @@ void Example_dxr::render(const Render_args& args)
             static_cast<mi::Uint32>(args.backbuffer_width),
             static_cast<mi::Uint32>(args.backbuffer_height)));
 
-        mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+        mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
 
         // download texture and save to output file
         if (args.back_buffer->download(tile->get_data()))

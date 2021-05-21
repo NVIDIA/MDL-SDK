@@ -34,7 +34,9 @@
 #ifndef BASE_LIB_CONT_BITSET_H
 #define BASE_LIB_CONT_BITSET_H
 
+#include "i_cont_number.h"
 #include <base/lib/math/i_math.h>
+
 
 namespace MI {
 namespace CONT {
@@ -46,7 +48,7 @@ namespace DETAIL {
 template <typename T>
 struct Bit_sizeof
 {
-    enum { value = sizeof(T) * CHAR_BIT };
+    enum : std::size_t { value = sizeof(T) * CHAR_BIT };
 };
 
 
@@ -54,7 +56,7 @@ struct Bit_sizeof
 template <typename T, size_t bit_count>
 struct Data_count
 {
-    enum { value = (Bit_sizeof<T>::value + bit_count - 1) / Bit_sizeof<T>::value };
+    enum : std::size_t { value = (Bit_sizeof<T>::value + bit_count - 1) / Bit_sizeof<T>::value };
 };
 
 
@@ -62,37 +64,37 @@ struct Data_count
 
  This class stores an array of \c count integral elements of type \p T.
  */
-template <typename T, size_t count>
+template <typename T, std::size_t count>
 class Bitset_storage_base
 {
 public:
     typedef T Data_t;
 
-    Bitset_storage_base();
-    Bitset_storage_base(T data);
-    bool equals(const Bitset_storage_base& rhs) const;
-    void set(size_t bit);
-    void unset(size_t bit);
-    bool is_set(size_t bit) const;
-    bool any(const Bitset_storage_base& data) const;
-    bool any() const;
-    bool all(const Bitset_storage_base& data) const;
+    constexpr Bitset_storage_base() = default;
+    constexpr explicit Bitset_storage_base(T data);
+    constexpr bool equals(const Bitset_storage_base& rhs) const;
+    void set(std::size_t bit);
+    void unset(std::size_t bit);
+    constexpr bool is_set(std::size_t bit) const;
+    constexpr bool any(const Bitset_storage_base& data) const;
+    constexpr bool any() const;
+    constexpr bool all(const Bitset_storage_base& data) const;
     void do_and(const Bitset_storage_base& rhs);
     void do_or(const Bitset_storage_base& rhs);
     void do_xor(const Bitset_storage_base& rhs);
-    void flip();
-    T& data(size_t bit);
-    T mask(size_t bit);
-    const T* begin() const;
-    const T* end() const;
+    constexpr void flip();
+    constexpr T& data(std::size_t bit);
+    T mask(std::size_t bit);
+    constexpr const T* begin() const;
+    constexpr const T* end() const;
     T* begin();
     T* end();
 
 private:
-    static size_t index(size_t bit);
-    static size_t subbit(size_t bit);
+    static std::size_t index(std::size_t bit);
+    static std::size_t subbit(std::size_t bit);
 
-    T m_data[count];
+    T m_data[count] = {};
 };
 
 
@@ -102,44 +104,38 @@ class Bitset_storage_base<T,1> {
 public:
     typedef T Data_t;
 
-    Bitset_storage_base();
-    Bitset_storage_base(T data);
-    bool equals(const Bitset_storage_base& rhs) const;
-    void set(size_t bit);
-    void unset(size_t bit);
-    bool is_set(size_t bit) const;
-    bool any(T data) const;
-    bool any() const;
-    bool all(T data) const;
+    constexpr Bitset_storage_base() = default;
+    constexpr explicit Bitset_storage_base(T data);
+    constexpr bool equals(const Bitset_storage_base& rhs) const;
+    void set(std::size_t bit);
+    void unset(std::size_t bit);
+    constexpr bool is_set(std::size_t bit) const;
+    constexpr bool any(T data) const;
+    constexpr bool any() const;
+    constexpr bool all(T data) const;
     void do_and(const Bitset_storage_base& rhs);
     void do_or(const Bitset_storage_base& rhs);
     void do_xor(const Bitset_storage_base& rhs);
-    void flip();
-    T& data(size_t);
-    T mask(size_t bit);
-    const T* begin() const;
-    const T* end() const;
+    constexpr void flip();
+    constexpr T& data(std::size_t);
+    T mask(std::size_t bit);
+    constexpr const T* begin() const;
+    constexpr const T* end() const;
     T* begin();
     T* end();
-    operator T() const;
+    constexpr operator T() const;
     operator T&();
 
 private:
-    T m_data;
+    T m_data = {0};
 };
 
 
 #define MI_MAKE_STORAGE(T,c) \
-: public Bitset_storage_base<T,c> { \
-public: \
-    Bitset_storage() {} \
-    Bitset_storage(T v) : Bitset_storage_base<T,c>(v) {} \
-}
+: public Bitset_storage_base<T,c> { public: using Bitset_storage_base<T,c>::Bitset_storage_base; }
 
-#define MI_TEMP_COUNT Data_count<Uint64,byte_count*CHAR_BIT>::value
-template <size_t byte_count>
-struct Bitset_storage MI_MAKE_STORAGE(Uint64,MI_TEMP_COUNT);
-#undef MI_TEMP_COUNT
+template <std::size_t byte_count>
+struct Bitset_storage MI_MAKE_STORAGE(Uint64,(Data_count<Uint64,byte_count*CHAR_BIT>::value));
 
 template <>
 struct Bitset_storage<1> MI_MAKE_STORAGE(Uint8,1);
@@ -158,6 +154,10 @@ struct Bitset_storage<8> MI_MAKE_STORAGE(Uint64,1);
 }
 
 
+template <typename T>
+struct is_index { static const auto value = std::is_enum<T>::value || std::is_integral<T>::value; };
+
+
 /** \brief A statically sized collection of bits.
 
  This class is close to STL's \c bitset in design and functionality. However, the storage
@@ -171,98 +171,116 @@ struct Bitset_storage<8> MI_MAKE_STORAGE(Uint64,1);
  Note that none of the operation on this class are range checked in release mode. However,
  most operations contain assertions about index validity.
  */
-template <size_t bit_count>
+template <std::size_t bit_count>
 class Bitset
 {
 private:
     typedef DETAIL::Bitset_storage<
             bit_count<=64 ?
-            (size_t)MATH::Round_up_pow2<DETAIL::Data_count<char,(Uint32)bit_count>::value>::value :
-            (size_t)DETAIL::Data_count<char,bit_count>::value
+            (std::size_t)MATH::Round_up_pow2<DETAIL::Data_count<char,bit_count>::value>::value :
+                                             DETAIL::Data_count<char,bit_count>::value
             > Storage;
     class Bit;
 
+    template <typename T> using if_index = std::enable_if_t<is_index<T>::value>;
+
 public:
-    typedef typename Storage::Data_t Data_t;
+    using Base_data_type = typename Storage::Data_t;
+    using Data_type = Wrapped_data<Base_data_type>;
 
 
     /** \brief Sets all bits to 0. */
-    Bitset();
+    constexpr Bitset() = default;
 
 
     /** \brief Sets the lowest \c bit_count bits to those provided in \p value. */
-    explicit Bitset(Data_t value);
+    explicit constexpr Bitset(Data_type value);
+
+
+    /** \brief Sets the bits at the provided indices */
+    template <typename T, typename=if_index<T>>
+    Bitset(std::initializer_list<T> indices);
 
 
     /** \brief Accesses the \p bit_index'th bit. */
-    bool operator[](size_t bit_index) const;
+    template <typename T, typename=if_index<T>>
+    constexpr bool operator[](T bit_index) const;
 
 
     /** \brief Accesses the \p bit_index'th bit. */
-    Bit operator[](size_t bit_index);
+    template <typename T, typename=if_index<T>>
+    Bit operator[](T bit_index);
 
 
     /** \brief Accesses the \p bit_index'th bit. */
-    bool is_set(size_t bit_index) const;
+    template <typename T, typename=if_index<T>>
+    constexpr bool is_set(T bit_index) const;
 
 
     /** \brief Sets the \p bit_index'th bit to \c true. */
-    Bitset& set(size_t bit_index);
+    template <typename T, typename=if_index<T>>
+    Bitset& set(T bit_index);
 
 
     /** \brief Sets the \p bit_index'th bit to \c false. */
-    Bitset& unset(size_t bit_index);
+    template <typename T, typename=if_index<T>>
+    Bitset& unset(T bit_index);
 
 
     /** \brief Sets the \p bit_index'th bit to \p value. */
-    Bitset& set(size_t bit_index, bool value);
+    template <typename T, typename=if_index<T>>
+    Bitset& set(T bit_index, bool value);
+
+
+    /** \brief Clears all bits. */
+    Bitset& clear();
 
 
     /** \brief Checks if all of the bits present in \p mask are present in this set.
 
      This function checks if this set is a superset of \p mask.
      */
-    bool all(const Bitset& mask) const;
-    bool all(Data_t mask) const;
+    constexpr bool all(const Bitset& mask) const;
+    constexpr bool all(Data_type mask) const;
 
 
     /** \brief Checks if any of the bits present in \p mask are present in this set.
 
      This function checks if this and \p mask are not disjoint.
      */
-    bool any(const Bitset& mask) const;
-    bool any(Data_t mask) const;
+    constexpr bool any(const Bitset& mask) const;
+    constexpr bool any(Data_type mask) const;
 
 
     /** \brief Checks if any bit is set in this set. */
-    bool any() const;
+    constexpr bool any() const;
 
 
     /** \brief Checks that none of the bits present in \p mask are present in this set.
 
      This function checks if this and \p mask are disjoint.
      */
-    bool none(const Bitset& mask) const;
-    bool none(Data_t mask) const;
+    constexpr bool none(const Bitset& mask) const;
+    constexpr bool none(Data_type mask) const;
 
 
     /** \brief Checks if no bit is set in this set. */
-    bool none() const;
+    constexpr bool none() const;
 
 
     /** \brief Flips all bits in this set.
 
      This function turns this set into its complement.
      */
-    Bitset& flip();
+    constexpr Bitset& flip();
 
 
     /** \brief Checks if this and \p rhs contain exactly the same bits. */
-    bool operator==(const Bitset& rhs) const;
+    constexpr bool operator==(const Bitset& rhs) const;
 
 
     /** \brief Checks if this and \p rhs contain different bits. */
-    bool operator!=(const Bitset& rhs) const;
+    constexpr bool operator!=(const Bitset& rhs) const;
 
 
     /** \brief Turns this set into the intersection of itself with \p rhs. */
@@ -278,68 +296,82 @@ public:
 
 
     /** \brief Returns the complement of this set. */
-    Bitset operator~() const;
+    constexpr Bitset operator~() const;
 
 
     /** \brief See \c Bitset::any. */
-    operator bool() const;
+    constexpr operator bool() const;
 
 
     /** \brief See \c Bitset::none. */
-    bool operator!() const;
+    constexpr bool operator!() const;
 
 
     /** \brief Starting iterator for internal data access. */
-    const Data_t* begin_data() const;
+    constexpr const Base_data_type* begin_data() const;
 
 
     /** \brief End iterator for internal data access. */
-    const Data_t* end_data() const;
+    constexpr const Base_data_type* end_data() const;
 
 
     /** \brief Starting iterator for internal data access. */
-    Data_t* begin_data();
+    Base_data_type* begin_data();
 
 
     /** \brief End iterator for internal data access. */
-    Data_t* end_data();
+    Base_data_type* end_data();
 
 
 private:
     class Bit
     {
     public:
-        Bit(Storage& data, size_t index);
+        template <typename T, typename=if_index<T>>
+        constexpr Bit(Storage& data, T index);
+        Bit(Bit&&) = default;
+        Bit& operator=(Bit&&) = default;
         Bit& operator=(const Bit& val);
         Bit& operator=(bool val);
-        operator bool() const;
-        bool operator~() const;
-        Bit& flip();
+        constexpr operator bool() const;
+        constexpr bool operator~() const;
+        constexpr bool operator!() const;
+        constexpr Bit& flip();
 
     private:
-        const Data_t    m_mask;
-        Data_t&         m_data;
+        Bit(const Bit&) = delete;
+
+        const Base_data_type    m_mask;
+        Base_data_type&         m_data;
     };
 
-    Storage m_data;
+    Storage m_data{};
 
-    void clean();
+    constexpr void clean();
 };
 
 
 /** \brief See \c Bitset::operator&=() */
-template <size_t bit_count>
+template <std::size_t bit_count>
 Bitset<bit_count> operator&(Bitset<bit_count> lhs, const Bitset<bit_count>& rhs);
 
 
 /** \brief See \c Bitset::operator|=() */
-template <size_t bit_count>
+template <std::size_t bit_count>
 Bitset<bit_count> operator|(Bitset<bit_count> lhs, const Bitset<bit_count>& rhs);
 
 
 /** \brief See \c Bitset::operator^=() */
-template <size_t bit_count>
+template <std::size_t bit_count>
 Bitset<bit_count> operator^(Bitset<bit_count> lhs, const Bitset<bit_count>& rhs);
+
+
+/** \brief Converts an enumerator to its underlying integral value. */
+template <typename T, std::enable_if_t<std::is_enum<T>::value,bool> = true>
+constexpr auto to_underlying(const T val) { return std::underlying_type_t<T>(val); }
+
+template <typename T, std::enable_if_t<std::is_integral<T>::value,bool> = true>
+constexpr auto to_underlying(const T val) { return val; }
 
 
 }}

@@ -215,7 +215,7 @@ public:
 
     /// Print type name.
     /// \param  name    The name to print.
-    void print(IType_name const *name) MDL_FINAL;
+    void print(IType_name const *name) MDL_OVERRIDE;
 
     /// Print type.
     /// \param  type    The type to print.

@@ -538,14 +538,16 @@ MDL_binary_serializer::MDL_binary_serializer(
 {
     // register all builtin modules. When this happens, the module
     // tag set must be empty, check that.
-    Tag_t t, check;
-
-    check = Tag_t(0);
+#ifdef ENABLE_ASSERT
+    Tag_t t, check(0);
+#endif
 
     for (size_t i = 0, n = compiler->get_builtin_module_count(); i < n; ++i) {
         Module const *builtin_mod = compiler->get_builtin_module(i);
-
-        t = register_module(builtin_mod);
+#ifdef ENABLE_ASSERT
+        t =
+#endif
+        register_module(builtin_mod);
         MDL_ASSERT(t == ++check);
     }
 }
@@ -631,7 +633,7 @@ void Factory_serializer::dfs_type(IType const *type, bool is_child_type)
     case IType::TK_COLOR:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         // these types are builtin, no need to serialize them
         break;
@@ -810,7 +812,7 @@ struct IType_less {
             case IType::TK_VDF:
             case IType::TK_COLOR:
             case IType::TK_BSDF_MEASUREMENT:
-            case IType::TK_INCOMPLETE:
+            case IType::TK_AUTO:
             case IType::TK_ERROR:
                 // these types are singletons, so it should never happen
                 // that two instances are compared
@@ -1460,6 +1462,8 @@ void Factory_serializer::write_value(IValue const *v)
             write_db_tag(rv->get_tag_value());
             write_unsigned(rv->get_tag_version());
             write_int(rv->get_gamma_mode());
+            char const *vs = rv->get_selector();
+            write_cstring(vs);
             write_int(rv->get_bsdf_data_kind());
         }
         DEC_SCOPE();
@@ -1538,7 +1542,7 @@ void Factory_serializer::write_type(IType const *type)
     case IType::TK_COLOR:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         {
             // these types are builtin, no need to serialize them, just reference its tag
@@ -2225,53 +2229,59 @@ void Module_serializer::write_name(IType_name const *tname)
     write_unsigned(q);
     DOUT(("qualifier %u\n", unsigned(q)));
 
-    bool arr   = tname->is_array();
-    bool c_arr = tname->is_concrete_array();
+    bool is_auto = tname->is_auto_type();
+    write_bool(is_auto);
+    DOUT(("is_auto %u\n", unsigned(is_auto)));
 
-    unsigned code = 0;
+    if (!is_auto) {
+        bool arr   = tname->is_array();
 
-    // encode 4 cases into 2 bools to maintain compatibility with previous protocol version
-    if (arr) {
-        if (c_arr) {
-            if (tname->is_incomplete_array()) {
-                code = 0x01;
+        unsigned code = 0;
+
+        // encode 4 cases into 2 bools to maintain compatibility with previous protocol version
+        if (arr) {
+            bool c_arr = tname->is_concrete_array();
+            if (c_arr) {
+                if (tname->is_incomplete_array()) {
+                    code = 0x01;
+                } else {
+                    code = 0x03;
+                }
             } else {
-                code = 0x03;
+                code = 0x02;
             }
         } else {
-            code = 0x02;
+            code = 0x00;
         }
-    } else {
-        code = 0x00;
-    }
 
-    write_bool((code & 0x02) != 0);
-    DOUT(("is_array %u\n", unsigned(arr)));
+        write_bool((code & 0x02) != 0);
+        DOUT(("is_array %u\n", unsigned(arr)));
 
-    write_bool((code & 0x01) != 0);
-    DOUT(("is_concreate_array %u\n", unsigned(c_arr)));
+        write_bool((code & 0x01) != 0);
+        DOUT(("is_concreate_array %u\n", unsigned(c_arr)));
 
-    switch (code) {
-    case 0x00:
-        // no array
-        break;
-    case 0x01:
-        // incomplete array
-        break;
-    case 0x02:
-        // array size symbol
-        {
-            ISimple_name const *size = tname->get_size_name();
-            write_name(size);
+        switch (code) {
+        case 0x00:
+            // no array
+            break;
+        case 0x01:
+            // incomplete array
+            break;
+        case 0x02:
+            // array size symbol
+            {
+                ISimple_name const *size = tname->get_size_name();
+                write_name(size);
+            }
+            break;
+        case 0x03:
+            // array with size expression
+            {
+                IExpression const *size = tname->get_array_size();
+                write_expr(size);
+            }
+            break;
         }
-        break;
-    case 0x03:
-        // array with size expression
-        {
-            IExpression const *size = tname->get_array_size();
-            write_expr(size);
-        }
-        break;
     }
 
     if (IType const *type = tname->get_type()) {
@@ -2508,6 +2518,9 @@ void Module_serializer::write_anno(IAnnotation const *anno)
     DOUT(("anno\n"));
     INC_SCOPE();
 
+    bool is_enable_if = is<IAnnotation_enable_if>(anno);
+    write_bool(is_enable_if);
+
     IQualified_name const *qname = anno->get_name();
     write_name(qname);
 
@@ -2519,6 +2532,16 @@ void Module_serializer::write_anno(IAnnotation const *anno)
     for (int i = 0; i < a_count; ++i) {
         IArgument const *arg = anno->get_argument(i);
         write_argument(arg);
+    }
+    if (is_enable_if) {
+        IAnnotation_enable_if const *enable_if = cast<IAnnotation_enable_if>(anno);
+        IExpression const *expr = enable_if->get_expression();
+        if (expr == NULL) {
+            write_bool(false);
+        } else {
+            write_bool(true);
+            write_expr(expr);
+        }
     }
     DEC_SCOPE();
 
@@ -2951,7 +2974,7 @@ IType const *Factory_deserializer::read_type(Type_factory &tf)
     case IType::TK_COLOR:
     case IType::TK_TEXTURE:
     case IType::TK_BSDF_MEASUREMENT:
-    case IType::TK_INCOMPLETE:
+    case IType::TK_AUTO:
     case IType::TK_ERROR:
         {
             // these types are builtin, no need to deserialize them, just reference its tag
@@ -3342,15 +3365,16 @@ IValue const *Factory_deserializer::read_value(Value_factory &vf)
 
             IType_texture const *rt = cast<IType_texture>(get_type(type_tag));
 
-            char const *vv     = read_cstring();
+            string vv(read_cstring(), get_allocator());
             unsigned    vv_tag = read_db_tag();
             unsigned    vv_ver = read_unsigned();
             IValue_texture::gamma_mode gamma = IValue_texture::gamma_mode(read_int());
+            string vs(read_cstring(), get_allocator());
             IValue_texture::Bsdf_data_kind bsdf_data_kind =
                 IValue_texture::Bsdf_data_kind(read_int());
             IValue const *v = rt->get_shape() == IType_texture::TS_BSDF_DATA ?
                 vf.create_bsdf_data_texture(bsdf_data_kind, vv_tag, vv_ver) :
-                vf.create_texture(rt, vv, gamma, vv_tag, vv_ver);
+                vf.create_texture(rt, vv.c_str(), gamma, vs.c_str(), vv_tag, vv_ver);
 
             register_value(value_tag, v);
             DEC_SCOPE();
@@ -3902,36 +3926,43 @@ IType_name const *Module_deserializer::read_tname(Module &mod)
     tname->set_qualifier(q);
     DOUT(("qualifier %u\n", unsigned(q)));
 
-    bool high_bit = read_bool();
-    bool low_bit  = read_bool();
+    bool is_auto = read_bool();
+    DOUT(("is_auto %u\n", unsigned(is_auto)));
 
-    unsigned code = (high_bit ? 0x02 : 0) | (low_bit ? 0x01 : 0);
+    if (is_auto) {
+        tname->set_auto_type();
+    } else {
+        bool high_bit = read_bool();
+        bool low_bit  = read_bool();
 
-    DOUT(("is_array %u\n", code != 0));
-    DOUT(("is_concreate_array %u\n", code & 0x01));
+        unsigned code = (high_bit ? 0x02 : 0) | (low_bit ? 0x01 : 0);
 
-    switch (code) {
-    case 0x00:
-        // no array
-        break;
-    case 0x01:
-        // incomplete array
-        tname->set_array_size(NULL);
-        break;
-    case 0x02:
-        // array size symbol
-        {
-            ISimple_name const *size = read_sname(mod);
-            tname->set_size_name(size);
+        DOUT(("is_array %u\n", code != 0));
+        DOUT(("is_concreate_array %u\n", code & 0x01));
+
+        switch (code) {
+        case 0x00:
+            // no array
+            break;
+        case 0x01:
+            // incomplete array
+            tname->set_array_size(NULL);
+            break;
+        case 0x02:
+            // array size symbol
+            {
+                ISimple_name const *size = read_sname(mod);
+                tname->set_size_name(size);
+            }
+            break;
+        case 0x03:
+            // array with size expression
+            {
+                IExpression const *size = read_expr(mod);
+                tname->set_array_size(size);
+            }
+            break;
         }
-        break;
-    case 0x03:
-        // array with size expression
-        {
-            IExpression const *size = read_expr(mod);
-            tname->set_array_size(size);
-        }
-        break;
     }
 
     if (read_bool()) {
@@ -4167,9 +4198,13 @@ IAnnotation const *Module_deserializer::read_anno(Module &mod)
     DOUT(("anno\n"));
     INC_SCOPE();
 
+    bool is_enable_if = read_bool();
+
     IQualified_name const *qname = read_qname(mod);
 
-    IAnnotation *anno = mod.get_annotation_factory()->create_annotation(qname);
+    IAnnotation *anno = is_enable_if ?
+        mod.get_annotation_factory()->create_enable_if_annotation(qname) :
+        mod.get_annotation_factory()->create_annotation(qname);
 
     int a_count = read_unsigned();
     DOUT(("#args %d\n", a_count));
@@ -4179,6 +4214,12 @@ IAnnotation const *Module_deserializer::read_anno(Module &mod)
         IArgument const *arg = read_argument(mod);
 
         anno->add_argument(arg);
+    }
+    if (is_enable_if) {
+        IAnnotation_enable_if *enable_if = cast<IAnnotation_enable_if>(anno);
+        if (read_bool()) {
+            enable_if->set_expression(read_expr(mod));
+        }
     }
     DEC_SCOPE();
 

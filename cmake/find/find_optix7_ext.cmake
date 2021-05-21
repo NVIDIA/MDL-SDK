@@ -39,7 +39,7 @@ function(FIND_OPTIX7_EXT)
         set(MDL_OPTIX7_FOUND ON CACHE INTERNAL "")
     else()
         message(STATUS "OPTIX7_DIR: ${OPTIX7_DIR}")
-        message(FATAL_ERROR "The dependency \"OptiX7\" could not be resolved. Please specify 'OPTIX7_DIR'.")
+        message(FATAL_ERROR "The dependency \"OptiX7\" could not be resolved. Please specify 'OPTIX7_DIR' or disbale 'MDL_ENABLE_OPTIX7_EXAMPLES'.")
     endif()
 
     if(MDL_LOG_DEPENDENCIES)

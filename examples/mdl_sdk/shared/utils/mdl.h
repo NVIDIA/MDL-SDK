@@ -35,13 +35,15 @@
 
 #ifdef IRAY_SDK
     #include <mi/neuraylib.h>
-    #include "authentication.h"
 #else
     #include <mi/mdl_sdk.h>
 #endif
 
+#include <fstream>
+
 #include "io.h"
 #include "os.h"
+#include "strings.h"
 
 #ifdef MI_PLATFORM_WINDOWS
     #include <direct.h>
@@ -80,6 +82,15 @@ namespace mi { namespace examples { namespace mdl
 
     /// Unloads the MDL SDK.
     bool unload();
+
+    /// Loads a neuray plugin.
+    ///
+    /// This convenience functions loads a plugin e.g. for texture format support.
+    /// In general this is simple and does not require a lot of logic, but since these examples
+    /// are used with different kinds of build setups and binary packaging, it makes sense to wrap
+    /// the handing of special cases to support the different packagings in one function.
+    /// </summary>
+    mi::Sint32 load_plugin(mi::neuraylib::INeuray* neuray, const char* path);
 
     /// Get the path specified in the MDL_SAMPLES_ROOT environment variable or if not defined,
     /// the path of the directory where the SDK examples expect their example content.
@@ -143,6 +154,37 @@ namespace mi { namespace examples { namespace mdl
         std::string& out_material_name,
         bool prepend_colons_if_missing = true);
 
+    /// Adds a missing signature to a material name.
+    ///
+    /// If encoded names are enabled, then material names include the signature. Specifying these
+    /// signatures on the command-line can be tedious. Hence, this convenience method is used to
+    /// add the missing signature. Since there are no overloads for materials, we can simply search
+    /// the module for the given material -- or simpler, let the overload resolution handle that.
+    ///
+    /// If encoded names are disabled, then input and output are identical, and there is no reason
+    /// to call this method.
+    ///
+    /// \param module                       the module containing the material
+    /// \param material_name                the DB name of the material without signature
+    /// \return                             the DB name of the material including signature (if
+    ///                                     encoded name are enabled), or the empty string in case
+    ///                                     of errors.
+    inline std::string add_missing_material_signature(
+        const mi::neuraylib::IModule* module,
+        const std::string& material_name);
+
+#ifdef IRAY_SDK
+    /// This is a placeholder for a real authentication key. It is used to
+    /// allow easy integration of the authentication code in the examples. If
+    /// your variant of the neuray library requires an authentication key you need
+    /// to replace this file with a file that contains a valid authentication key.
+    ///
+    /// Alternatively, you can keep this file and put the key into a file named
+    /// "examples.lic" (two lines, first line contains the vendor key, second line
+    /// contains the secret key).
+    inline mi::Sint32 authenticate(mi::neuraylib::INeuray* neuray);
+#endif
+
     // --------------------------------------------------------------------------------------------
     // Implementations
     // --------------------------------------------------------------------------------------------
@@ -177,6 +219,11 @@ namespace mi { namespace examples { namespace mdl
         #ifdef MI_PLATFORM_WINDOWS
             HMODULE handle = LoadLibraryA(filename);
             if( !handle) {
+                // fall back to libraries in a relative lib folder, relevant for install targets
+                std::string fallback = std::string("../../../lib/") + filename;
+                handle = LoadLibraryA(fallback.c_str());
+            }
+            if( !handle) {
                 LPTSTR buffer = 0;
                 LPCTSTR message = TEXT("unknown failure");
                 DWORD error_code = GetLastError();
@@ -206,6 +253,11 @@ namespace mi { namespace examples { namespace mdl
         #else // MI_PLATFORM_WINDOWS
             void* handle = dlopen( filename, RTLD_LAZY);
             if( !handle) {
+                // fall back to libraries in a relative lib folder, relevant for install targets
+                std::string fallback = std::string("../../../lib/") + filename;
+                handle = dlopen(fallback.c_str(), RTLD_LAZY);
+            }
+            if( !handle) {
                 fprintf( stderr, "%s\n", dlerror());
                 return 0;
             }
@@ -230,14 +282,19 @@ namespace mi { namespace examples { namespace mdl
             return 0;
         }
     #ifdef IRAY_SDK
-        check_success(authenticate(neuray) == 0);
+        if (authenticate(neuray) != 0)
+        {
+            fprintf(stderr, "Error: Authentication failed.\n");
+            unload();
+            return 0;
+        }
+
     #endif
         return neuray;
     }
 
     // --------------------------------------------------------------------------------------------
 
-    // Unloads the MDL SDK.
     inline bool unload()
     {
     #ifdef MI_PLATFORM_WINDOWS
@@ -264,6 +321,74 @@ namespace mi { namespace examples { namespace mdl
         }
         return true;
     #endif
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    inline mi::Sint32 load_plugin(mi::neuraylib::INeuray* neuray, const char* path)
+    {
+        // Load the FreeImage plugin.
+        mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
+            neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
+
+        // try to load the requested plugin before adding any special handling
+        mi::Sint32 res = plugin_conf->load_plugin_library(path);
+        if (res == 0)
+        {
+            fprintf(stderr, "Successfully loaded the plugin library '%s'\n", path);
+            return 0;
+        }
+
+        // Special handling for free image in the open source release.
+        // In the open source version of the plugin we are linking against a dynamic
+        // vanilla freeimage library. In the binary release, you can download from the MDL website,
+        // freeimage is linked statically and thereby requires no special handling.
+        #if defined(MI_PLATFORM_WINDOWS) && defined(MDL_SOURCE_RELEASE)
+            if (strstr(path, "nv_freeimage" MI_BASE_DLL_FILE_EXT) != nullptr)
+            {
+                // load the freeimage (without nv_ prefix) first
+                std::string freeimage_3rd_party_path = mi::examples::strings::replace(
+                    path, "nv_freeimage" MI_BASE_DLL_FILE_EXT, "freeimage" MI_BASE_DLL_FILE_EXT);
+                HMODULE handle_tmp = LoadLibraryA(freeimage_3rd_party_path.c_str());
+                if (!handle_tmp)
+                {
+                    LPTSTR buffer = 0;
+                    LPCTSTR message = TEXT("unknown failure");
+                    DWORD error_code = GetLastError();
+                    if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                        FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
+                        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&buffer, 0, 0))
+                        message = buffer;
+                    fprintf(stderr, "Failed to pre-load library '%s' (%u): " FMT_LPTSTR,
+                        freeimage_3rd_party_path.c_str(), error_code, message);
+                }
+                else
+                {
+                    fprintf(stderr, "Successfully pre-loaded library '%s'\n",
+                        freeimage_3rd_party_path.c_str());
+                }
+
+                // try to load the plugin itself now
+                res = plugin_conf->load_plugin_library(path);
+                if (res == 0)
+                {
+                    fprintf(stderr, "Successfully loaded the plugin library '%s'\n", path);
+                    return 0;
+                }
+            }
+        #endif
+
+        // fall back to libraries in a relative lib folder, relevant for install targets
+        if (strstr(path, "../../../lib/") != path)
+        {
+            std::string fallback = std::string("../../../lib/") + path;
+            fprintf(stderr, "Falling back to load the plugin library: '%s'\n", fallback.c_str());
+            return load_plugin(neuray, fallback.c_str());
+        }
+
+        // return the failure code
+        fprintf(stderr, "Failed to load the plugin library '%s'\n", path);
+        return res;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -358,7 +483,7 @@ namespace mi { namespace examples { namespace mdl
             mdl_paths.push_back(example_search_paths);
         }
 
-        // ignore if any of these do not exists
+        // ignore if any of these do not exist
         mdl_paths.insert(mdl_paths.end(), options.additional_mdl_paths.begin(), options.additional_mdl_paths.end());
 
         // add mdl and resource paths to allow the neuray API to resolve relative textures
@@ -374,13 +499,12 @@ namespace mi { namespace examples { namespace mdl
         // load plugins if not skipped
         if (options.skip_loading_plugins)
             return true;
-        mi::base::Handle<mi::neuraylib::IPlugin_configuration> plug_config(
-            neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
-        if (plug_config->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
+        if (load_plugin(neuray, "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
         {
             fprintf(stderr, "Fatal: Failed to load the nv_freeimage plugin.\n");
             return false;
         }
+
         return true;
     }
 
@@ -414,7 +538,10 @@ namespace mi { namespace examples { namespace mdl
     {
         out_module_name = "";
         out_material_name = "";
-        std::size_t p_last = argument.rfind("::");
+        std::size_t p_left_paren = argument.rfind('(');
+        if (p_left_paren == std::string::npos)
+            p_left_paren = argument.size();
+        std::size_t p_last = argument.rfind("::", p_left_paren-1);
 
         bool starts_with_colons = argument.length() > 2 && argument[0] == ':' && argument[1] == ':';
 
@@ -470,6 +597,59 @@ namespace mi { namespace examples { namespace mdl
         return true;
     }
 
+    // --------------------------------------------------------------------------------------------
+
+    inline std::string add_missing_material_signature(
+        const mi::neuraylib::IModule* module,
+        const std::string& material_name)
+    {
+        // Return input if it already contains a signature.
+        if (material_name.back() == ')')
+            return material_name;
+
+        mi::base::Handle<const mi::IArray> result(
+            module->get_function_overloads(material_name.c_str()));
+        if (!result || result->get_length() != 1)
+            return std::string();
+        
+        mi::base::Handle<const mi::IString> overloads(
+            result->get_element<mi::IString>(static_cast<mi::Size>(0)));
+        return overloads->get_c_str();
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+#ifdef IRAY_SDK
+    inline mi::Sint32 authenticate(mi::neuraylib::INeuray* neuray)
+    {
+        auto fix_line_ending = [](std::string& s)
+        {
+            size_t length = s.length();
+            if (length > 0 && s[length - 1] == '\r')
+                s.erase(length - 1, 1);
+        };
+
+        std::ifstream file("examples.lic");
+        if (!file.is_open())
+            return -1;
+
+        std::string vendor_key;
+        std::string secret_key;
+        getline(file, vendor_key);
+        getline(file, secret_key);
+        fix_line_ending(vendor_key);
+        fix_line_ending(secret_key);
+
+        return mi::neuraylib::ILibrary_authenticator::authenticate(
+            neuray,
+            vendor_key.c_str(),
+            vendor_key.size(),
+            secret_key.c_str(),
+            secret_key.size());
+    }
+#endif
+
 }}}
 
 #endif
+

@@ -717,6 +717,9 @@ public:
     /// Returns a registered struct type, or \c NULL if \p id is unknown.
     virtual const IType_struct* get_predefined_struct( IType_struct::Predefined_id id) const = 0;
 
+    /// Clones the given type list.
+    virtual IType_list* clone( const IType_list* type_list) const = 0;
+
     /// Compares two instances of #mi::neuraylib::IType.
     ///
     /// The comparison operator for instances of #mi::neuraylib::IType is defined as follows:
@@ -759,7 +762,7 @@ public:
 
     /// Checks, if two instances of #mi::neuraylib::IType are compatible, meaning that \p src
     /// can be casted to \p dst.
-    /// 
+    ///
     /// \p src is compatible with and therefore can be casted to \p dst, if
     /// - \p src and \p dst are of identical type (see #mi::neuraylib::IType_factory::compare()).
     /// - \p src and \p dst are of type #mi::neuraylib::IType_struct, have the same number of
@@ -770,7 +773,7 @@ public:
     ///   do not matter.
     /// - \p src and \p dst are of type #mi::neuraylib::IType_array, both arrays have the same size
     ///   and their element types are compatible.
-    /// 
+    ///
     /// \param src The source type.
     /// \param dst the target type to which src is intended to be compatible.
     /// \return

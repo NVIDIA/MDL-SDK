@@ -199,7 +199,14 @@ endif()
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
 # -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
 # -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "examples/mdl_sdk/dxr"
+    )
 
-# add tests if available
+# -------------------------------------------------------------------------------------------------
+# Add tests if available
+# -------------------------------------------------------------------------------------------------
 add_tests()

@@ -302,11 +302,9 @@ D3D12_CPU_DESCRIPTOR_HANDLE Window_win32::get_back_buffer_rtv() const
 
 bool Window_win32::present_back_buffer()
 {
-    if (FAILED(m_swap_chain->Present(m_vsync ? 1 : 0, 0)))
-    {
-        log_error("Failed to present back buffer.", SRC);
+    if (log_on_failure(m_swap_chain->Present(m_vsync ? 1 : 0, 0),
+        "Failed to present back buffer.", SRC))
         return false;
-    }
 
     auto fence = m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT)->get_fence();
     m_swap_fence_handles[m_swap_buffer_index] = fence->signal();

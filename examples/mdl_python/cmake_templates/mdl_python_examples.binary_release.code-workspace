@@ -1,0 +1,61 @@
+/***************************************************************************************************
+ * Copyright 2021 NVIDIA Corporation. All rights reserved.
+ **************************************************************************************************/
+
+@IGNORE_THE_FOLLOWING_COMMENT@
+// This file is generated during CMake Configuration.
+// If you want to regenerate it, delete this file and run CMake Configure again.
+
+{
+	"folders": [
+		{
+			"name": "MDL Python Examples",
+			"path": "@CMAKE_CURRENT_SOURCE_DIR@"
+		},
+		{
+			"name": "MDL Example Content",
+			"path": "@CMAKE_CURRENT_SOURCE_DIR@/../mdl"
+		}
+	],
+	"settings": {
+		"python.pythonPath": "@MDL_DEPENDENCY_PYTHON_DEV_EXE@",
+		"files.exclude": {
+			"cmake_templates": true,
+			"**/CMakeLists.txt": true
+		}
+	},
+	"launch": {
+		"configurations": [
+			{
+				"name": "Python: Current File",
+				"type": "python",
+				"request": "launch",
+				"program": "${file}",
+				"cwd": "@CMAKE_CURRENT_BINARY_DIR@/${relativeFileDirname:MDL Python Examples}/${input:CMAKE_BUILD_CONFIGURATION}",
+				"console": "integratedTerminal",
+				"env" : {
+					// Library Path to load the MDL SDK and plugins from
+					"PATH": "@CMAKE_CURRENT_SOURCE_DIR@/../../@MI_PLATFORM_NAME@/lib@ENV_SEP@${env:PATH}",
+					// Path from which python modules are loaded from (i.e. pymdlsdk)
+					"PYTHONPATH": "@BINDING_MODULE_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@${env:PYTHONPATH}",
+					// Path of the examples to access the example content
+					"MDL_SAMPLES_ROOT": "@CMAKE_CURRENT_SOURCE_DIR@/../"
+				}
+			}
+		],
+		"inputs": [
+			{
+				"id": "CMAKE_BUILD_CONFIGURATION",
+				"type": "pickString",
+				"description": "Select the build configuration to test",
+				"options": [
+					"Debug",
+					"Release",
+					"RelWithDebInfo"
+				],
+				"default": "Debug"
+			}
+		],
+		"compounds": []
+	}
+}

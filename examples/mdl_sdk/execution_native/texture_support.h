@@ -56,7 +56,7 @@ struct Texture
         // for now, we only support floating point rgba
         check_success(strcmp(canvas->get_type(), "Color") == 0);
 
-        mi::base::Handle < const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+        mi::base::Handle < const mi::neuraylib::ITile> tile(canvas->get_tile());
 
         size.x = canvas->get_resolution_x();
         size.y = canvas->get_resolution_y();

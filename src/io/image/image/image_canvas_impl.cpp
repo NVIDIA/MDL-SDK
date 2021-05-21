@@ -110,14 +110,14 @@ Canvas_impl::Canvas_impl(
     m_filename = filename;
 
     m_nr_of_tiles = 0;
-    m_tiles = 0;
+    m_tiles = nullptr;
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
     mi::base::Handle<DISK::File_reader_impl> reader;
 
     if( image_file) {
         image_file2 = make_handle_dup( image_file);
-        image_file = 0; // only use image_file2 below
+        image_file = nullptr; // only use image_file2 below
     } else {
         reader = new DISK::File_reader_impl;
         if( !reader->open( m_filename.c_str())) {
@@ -145,7 +145,7 @@ Canvas_impl::Canvas_impl(
         }
 
         image_file2 = plugin->open_for_reading( reader.get());
-        if( !image_file2.is_valid_interface()) {
+        if( !image_file2) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin \"%s\" failed to import \"%s\".",
                 plugin->get_name(), m_filename.c_str());
@@ -197,7 +197,7 @@ Canvas_impl::Canvas_impl(
 
     m_tiles = new mi::neuraylib::ITile*[m_nr_of_tiles];
     for( mi::Uint32 i = 0; i < m_nr_of_tiles; ++i)
-        m_tiles[i] = 0;
+        m_tiles[i] = nullptr;
 
     *errors = 0;
 }
@@ -227,12 +227,12 @@ Canvas_impl::Canvas_impl(
     m_member_filename  = member_filename;
 
     m_nr_of_tiles = 0;
-    m_tiles = 0;
+    m_tiles = nullptr;
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
     if( image_file) {
         image_file2 = make_handle_dup( image_file);
-        image_file = 0; // only use image_file2 below
+        image_file = nullptr; // only use image_file2 below
     } else {
         std::string root, extension;
         HAL::Ospath::splitext( member_filename, root, extension);
@@ -252,7 +252,7 @@ Canvas_impl::Canvas_impl(
         }
 
         image_file2 = plugin->open_for_reading( reader);
-        if( !image_file2.is_valid_interface()) {
+        if( !image_file2) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin \"%s\" failed to import \"%s\" in \"%s\".",
                 plugin->get_name(), member_filename.c_str(), archive_filename.c_str());
@@ -307,7 +307,7 @@ Canvas_impl::Canvas_impl(
     if( supports_lazy_loading()) {
         m_tiles = new mi::neuraylib::ITile*[m_nr_of_tiles];
         for( mi::Uint32 i = 0; i < m_nr_of_tiles; ++i)
-            m_tiles[i] = 0;
+            m_tiles[i] = nullptr;
         *errors = 0;
         return;
     }
@@ -366,12 +366,12 @@ Canvas_impl::Canvas_impl(
         : std::string( "a memory-based image with image format \"") + image_format + "\"";
 
     m_nr_of_tiles = 0;
-    m_tiles = 0;
+    m_tiles = nullptr;
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
     if( image_file) {
         image_file2 = make_handle_dup( image_file);
-        image_file = 0; // only use image_file2 below
+        image_file = nullptr; // only use image_file2 below
     } else {
         SYSTEM::Access_module<Image_module> image_module( false);
         mi::neuraylib::IImage_plugin* plugin
@@ -385,7 +385,7 @@ Canvas_impl::Canvas_impl(
         }
 
         image_file2 = plugin->open_for_reading( reader);
-        if( !image_file2.is_valid_interface()) {
+        if( !image_file2) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin failed to import %s.", log_identifier.c_str());
             *errors = -5;
@@ -508,11 +508,11 @@ void Canvas_impl::set_gamma( mi::Float32 gamma)
     m_gamma = gamma;
 }
 
-const mi::neuraylib::ITile* Canvas_impl::get_tile(
+const mi::neuraylib::ITile* Canvas_impl::deprecated_get_tile(
     mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer) const
 {
     if( pixel_x >= m_width || pixel_y >= m_height || layer >= m_nr_of_layers)
-        return 0;
+        return nullptr;
 
     mi::Uint32 tile_x = pixel_x / m_tile_width;
     mi::Uint32 tile_y = pixel_y / m_tile_height;
@@ -521,7 +521,7 @@ const mi::neuraylib::ITile* Canvas_impl::get_tile(
 
     mi::base::Lock::Block block( &m_lock);
 
-    if( m_tiles[index] == 0) {
+    if( m_tiles[index] == nullptr) {
         ASSERT( M_IMAGE, supports_lazy_loading());
 #ifdef MI_IMAGE_LOAD_ONLY_REQUESTED_TILE
         m_tiles[index] = create_tile( m_pixel_type, m_tile_width, m_tile_height);
@@ -531,7 +531,7 @@ const mi::neuraylib::ITile* Canvas_impl::get_tile(
             ASSERT( M_IMAGE, !m_tiles[i]);
             m_tiles[i] = create_tile( m_pixel_type, m_tile_width, m_tile_height);
         }
-        load_tile( 0, 0, 0, 0);
+        load_tile( nullptr, 0, 0, 0);
 #endif
     }
 
@@ -539,11 +539,11 @@ const mi::neuraylib::ITile* Canvas_impl::get_tile(
     return m_tiles[index];
 }
 
-mi::neuraylib::ITile* Canvas_impl::get_tile(
+mi::neuraylib::ITile* Canvas_impl::deprecated_get_tile(
     mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer)
 {
     if( pixel_x >= m_width || pixel_y >= m_height || layer >= m_nr_of_layers)
-        return 0;
+        return nullptr;
 
     mi::Uint32 tile_x = pixel_x / m_tile_width;
     mi::Uint32 tile_y = pixel_y / m_tile_height;
@@ -552,7 +552,7 @@ mi::neuraylib::ITile* Canvas_impl::get_tile(
 
     mi::base::Lock::Block block( &m_lock);
 
-    if( m_tiles[index] == 0) {
+    if( m_tiles[index] == nullptr) {
 
         ASSERT( M_IMAGE, supports_lazy_loading());
 #ifdef MI_IMAGE_LOAD_ONLY_REQUESTED_TILE
@@ -563,12 +563,22 @@ mi::neuraylib::ITile* Canvas_impl::get_tile(
             ASSERT( M_IMAGE, !m_tiles[i]);
             m_tiles[i] = create_tile( m_pixel_type, m_tile_width, m_tile_height);
         }
-        load_tile( 0, 0, 0, 0);
+        load_tile( nullptr, 0, 0, 0);
 #endif
     }
 
     m_tiles[index]->retain();
     return m_tiles[index];
+}
+
+const mi::neuraylib::ITile* Canvas_impl::get_tile( mi::Uint32 layer) const
+{
+    return deprecated_get_tile( 0, 0, layer);
+}
+
+mi::neuraylib::ITile* Canvas_impl::get_tile( mi::Uint32 layer)
+{
+    return deprecated_get_tile( 0, 0, layer);
 }
 
 mi::Size Canvas_impl::get_size() const
@@ -580,7 +590,7 @@ mi::Size Canvas_impl::get_size() const
     for( mi::Uint32 i = 0; i < m_nr_of_tiles; ++i)          // m_tiles[i]
         if( m_tiles[i]) {
             mi::base::Handle<ITile> tile_internal( m_tiles[i]->get_interface<ITile>());
-            if( tile_internal.is_valid_interface())         // exact memory usage
+            if( tile_internal)         // exact memory usage
                 size += tile_internal->get_size();
             else                                            // approximate memory usage
                 size +=   static_cast<size_t>( m_tile_width)
@@ -589,6 +599,21 @@ mi::Size Canvas_impl::get_size() const
         }
 
     return size;
+}
+
+bool Canvas_impl::release_tiles() const
+{
+    if (!supports_lazy_loading())
+        return false;
+
+    mi::base::Lock::Block block( &m_lock);
+    for (size_t i = 0; i < m_nr_of_tiles; ++i) {
+        if (m_tiles[i]) {
+            m_tiles[i]->release();
+            m_tiles[i] = nullptr;
+        }
+    }
+    return true;
 }
 
 bool Canvas_impl::supports_lazy_loading() const
@@ -607,7 +632,7 @@ bool Canvas_impl::supports_lazy_loading() const
 
     SYSTEM::Access_module<Image_module> image_module( false);
     mi::base::Handle<IMdl_container_callback> callback( image_module->get_mdl_container_callback());
-    return callback.is_valid_interface();
+    return callback;
 }
 
 void Canvas_impl::load_tile(
@@ -636,7 +661,7 @@ void Canvas_impl::load_tile(
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file(
         plugin->open_for_reading( reader.get()));
-    if( !image_file.is_valid_interface()) {
+    if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import \"%s\".",
             plugin->get_name(), log_identifier.c_str());
@@ -685,7 +710,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) co
         if( !reader->open( m_filename.c_str())) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                  "Failed to open image file \"%s\".", log_identifier.c_str());
-            return 0;
+            return nullptr;
         }
 
         reader->retain();
@@ -706,7 +731,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) co
         if( !reader) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                  "Failed to open image file \"%s\".", log_identifier.c_str());
-            return 0;
+            return nullptr;
         }
 
         reader->retain();
@@ -714,7 +739,7 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) co
     }
 
     ASSERT( M_IMAGE, false);
-    return 0;
+    return nullptr;
 }
 
 void Canvas_impl::set_default_pink_dummy_canvas()
@@ -743,7 +768,7 @@ void Canvas_impl::set_default_pink_dummy_canvas()
     for( mi::Uint32 i = 0; i < m_nr_of_tiles; ++i)
         m_tiles[i] = create_tile( m_pixel_type, m_tile_width, m_tile_height);
 
-    mi::base::Handle<mi::neuraylib::ITile> tile( get_tile( 0, 0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile( get_tile());
     mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
 }

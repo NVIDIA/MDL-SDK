@@ -33,7 +33,7 @@
 #ifndef API_API_NEURAY_NEURAY_TYPE_UTILITIES_H
 #define API_API_NEURAY_NEURAY_TYPE_UTILITIES_H
 
-#include <boost/unordered_map.hpp>
+#include <unordered_map>
 #include <string>
 
 #include <mi/base/lock.h>
@@ -296,10 +296,10 @@ private:
     };
 
     /// The type of s_map_name_code.
-    typedef boost::unordered_map<std::string, ATTR::Type_code> Map_name_code;
+    typedef std::unordered_map<std::string, ATTR::Type_code> Map_name_code;
 
     /// The type of s_map_name_code.
-    typedef boost::unordered_map<
+    typedef std::unordered_map<
         ATTR::Type_code, std::string, hash<ATTR::Type_code> > Map_code_name;
 
     /// The map for the mapping from type name to type code.

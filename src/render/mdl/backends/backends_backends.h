@@ -495,19 +495,9 @@ private:
 
         // methods of mi::neuraylib::ICanvas
 
-        mi::Uint32 get_tile_resolution_x() const final;
+        const mi::neuraylib::ITile* get_tile(mi::Uint32 layer = 0) const final;
 
-        mi::Uint32 get_tile_resolution_y() const final;
-
-        mi::Uint32 get_tiles_size_x() const final;
-
-        mi::Uint32 get_tiles_size_y() const final;
-
-        const mi::neuraylib::ITile* get_tile(
-            mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0) const final;
-
-        mi::neuraylib::ITile* get_tile(
-            mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer = 0) final;
+        mi::neuraylib::ITile* get_tile(mi::Uint32 layer = 0) final;
 
     private:
 

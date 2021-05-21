@@ -198,19 +198,6 @@ public:
     typedef std::list<Region *> WorkList;
     typedef std::set<Region *>  NodeSet;
 
-    enum PatternRule {
-        PR_NONE,
-        PR_RETURN,
-        PR_SEQUENCE,
-        PR_IF_THEN_ELSE,
-        PR_IF_THEN,
-        PR_IF_THEN_JUMP,
-        PR_DO_WHILE,
-        PR_WHILE,
-        PR_BREAK,
-        PR_CONTINUE
-    };
-
 public:
     /// Constructor.
     ///
@@ -237,23 +224,6 @@ public:
 
     size_t nodes_size() const {
         return m_work_list.size();
-    }
-
-    /// Get the name of a pattern rule.
-    static char const *get_pattern_rule_name(PatternRule rule) {
-        switch (rule) {
-        case PR_NONE: return "none";
-        case PR_RETURN: return "return";
-        case PR_SEQUENCE: return "sequence";
-        case PR_IF_THEN_ELSE: return "if-then-else";
-        case PR_IF_THEN: return "if-then";
-        case PR_IF_THEN_JUMP: return "if-then-jump";
-        case PR_DO_WHILE: return "do-while";
-        case PR_WHILE: return "while";
-        case PR_BREAK: return "break";
-        case PR_CONTINUE: return "continue";
-        }
-        return "unknown";
     }
 
 private:
@@ -930,8 +900,6 @@ BasicBlock *RegionBuilder::processLoop(
     BasicBlock          *head,
     Region              *&region)
 {
-    typedef std::map<BasicBlock *, Region *> RegionMap;
-
     Region *bodyRegion = discoverRegion(ctx, /*processLoopBody=*/true, head);
 
     region = m_func.createNaturalLoopRegion(bodyRegion);

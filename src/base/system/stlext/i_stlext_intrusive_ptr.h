@@ -92,13 +92,13 @@ enum take_ownership_tag { take_ownership };
 /**
  * \brief An intrusive, reference-counting smart pointer.
  *
- * Reference-counting smart pointers such as \c boost::shared_ptr by nature introduce
+ * Reference-counting smart pointers such as \c std::shared_ptr by nature introduce
  * a certain amount of run-time overhead compared to an ordinary pointer. One
  * particularly expensive operation is creating a shared pointer, because it
  * requires the creation of a "shared object state" on the heap.
  *
  * In cases where this overhead is too expensive, \c Intrusive_ptr might be an
- * alternative. Unlike \c boost::shared_ptr, intrusive pointers cannot store arbitrary
+ * alternative. Unlike \c std::shared_ptr, intrusive pointers cannot store arbitrary
  * types \c T, because \c Intrusive_ptr requires the \em object to provide the
  * reference counter. That reference counter is accessed through the following
  * a free-function API:
@@ -117,7 +117,7 @@ enum take_ownership_tag { take_ownership };
  * How an object stored in \c Intrusive_ptr is going to be deleted is
  * determined by the \c decrement_ref_count_and_release() function. In other
  * words, the object's \em type determines the deleter. As a consequence,
- * intrusive pointers don't support casting, like boost::shared_ptr does.
+ * intrusive pointers don't support casting, like std::shared_ptr does.
  *
  * On the other hand, intrusive pointers have a capability that shared pointers
  * do not: since the reference count resides in the object, it is possible to

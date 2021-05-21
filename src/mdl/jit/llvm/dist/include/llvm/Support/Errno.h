@@ -30,6 +30,11 @@ std::string StrError();
 /// Like the no-argument version above, but uses \p errnum instead of errno.
 std::string StrError(int errnum);
 
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnoexcept-type"
+#endif
+
 template <typename FailT, typename Fun, typename... Args>
 inline auto RetryAfterSignal(const FailT &Fail, const Fun &F,
                              const Args &... As) -> decltype(F(As...)) {
@@ -40,6 +45,10 @@ inline auto RetryAfterSignal(const FailT &Fail, const Fun &F,
   } while (Res == Fail && errno == EINTR);
   return Res;
 }
+
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic pop
+#endif
 
 }  // namespace sys
 }  // namespace llvm

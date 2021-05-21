@@ -27,7 +27,7 @@
 #*****************************************************************************
 
 # name of the target and the resulting example
-set(PROJECT_NAME examples-mdle)
+set(PROJECT_NAME examples-mdl_sdk-mdle)
 
 # collect sources
 set(PROJECT_SOURCES
@@ -54,5 +54,15 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
-# add tests if available
+# -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
+# -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "examples/mdl_sdk/mdle"
+    )
+
+# -------------------------------------------------------------------------------------------------
+# Add tests if available
+# -------------------------------------------------------------------------------------------------
 add_tests()

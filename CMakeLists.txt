@@ -46,12 +46,17 @@ set(MDL_EXAMPLES_FOLDER ${CMAKE_SOURCE_DIR}/examples CACHE PATH "The folder that
 # configuration options
 option(MDL_BUILD_SDK_EXAMPLES "Adds MDL SDK examples to the build." ON)
 option(MDL_BUILD_CORE_EXAMPLES "Adds MDL Core examples to the build." ON)
-option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." ON)
+option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." OFF)
 option(MDL_LOG_PLATFORM_INFOS "Prints some infos about the current build system (relevant for error reports)." ON)
-option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." ON)
-option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." ON)
+option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." OFF)
+option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." OFF)
 set(MDL_ADDITIONAL_COMPILER_DEFINES "MDL_SOURCE_RELEASE" CACHE STRING "Additional compile defines that are passed to each of the projects")
 set(MDL_ADDITIONAL_COMPILER_OPTIONS "" CACHE STRING "Additional compile options that are passed to each of the projects")
+
+# set the default installation path
+if(NOT DEFINED CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "..." FORCE)
+endif()
 
 # -------------------------------------------------------------------------------------------------
 # general setup
@@ -60,6 +65,7 @@ include(${MDL_BASE_FOLDER}/cmake/setup.cmake)
 if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_BUILD_SDK_EXAMPLES:             " ${MDL_BUILD_SDK_EXAMPLES})
     MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:            " ${MDL_BUILD_CORE_EXAMPLES})
+    MESSAGE(STATUS "[INFO] MDL_BUILD_ARNOLD_PLUGIN:            " ${MDL_BUILD_ARNOLD_PLUGIN})
 endif()
 
 # enable tests if available
@@ -145,9 +151,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/freeimage)
 #--------------------------------------------------------------------------------------------------
 
 # third party
-if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_D3D11_EXAMPLES OR MDL_ENABLE_D3D12_EXAMPLES OR MDL_ENABLE_OPTIX7_EXAMPLES)
-    add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/imgui)
-endif()
+add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/imgui)
 add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/tinyxml2)
 
 # MDL SDK
@@ -157,6 +161,7 @@ if(MDL_BUILD_SDK_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/calls)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/code_gen)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/compilation)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/create_module)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/discovery)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_native)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/generate_mdl_identifier)
@@ -165,6 +170,10 @@ if(MDL_BUILD_SDK_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/modules)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/start_shutdown)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/traversal)
+
+    if(MDL_ENABLE_OPENGL_EXAMPLES)
+        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/df_native)
+    endif()
 
     if(MDL_ENABLE_CUDA_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_cuda)
@@ -201,6 +210,11 @@ if(MDL_BUILD_CORE_EXAMPLES)
     endif()
 endif()
 
+# Example Content
+if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl)
+endif()
+
 # MDL SDK libs/products and
 # PLUGINS FOR EXTERNAL APPLICATIONS that use the MDL SDK and mdl_sdk::shared
 #--------------------------------------------------------------------------------------------------
@@ -208,7 +222,13 @@ endif()
 if(MDL_BUILD_ARNOLD_PLUGIN)
     add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_arnold)
 endif()
-
+# Language Bindings
+if(MDL_ENABLE_PYTHON_BINDINGS)
+    add_subdirectory(${MDL_SRC_FOLDER}/prod/bindings/mdl_python)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/modules)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/start_shutdown)
+endif()
 
 # add tests with the POST option; there require all regular targets to be defined already
 foreach(_TEST_POST ${MDL_TEST_LIST_POST})

@@ -111,6 +111,13 @@ public:
     /// Releases the registers class factories for user-defined classes.
     ~Class_factory();
 
+    /// Caches the value of IMdl_configuration::get_materials_are_functions(), to be passed to
+    /// some API classes.
+    void set_materials_are_functions( bool value);
+
+    /// Returns the cached value of IMdl_configuration::get_materials_are_functions().
+    bool get_materials_are_functions() const;
+
     // class registration
 
     /// The type of factory methods for API classes.
@@ -192,6 +199,19 @@ public:
         const char* class_name,
         const mi::base::Uuid& uuid,
         mi::neuraylib::IUser_class_factory* factory);
+
+    /// Unregisters a class factory for a class name and class UUID.
+    ///
+    /// Used to unregister user-defined classes derived from #mi::neuraylib::IUser_class.
+    ///
+    /// \param class_name           The class name to unregister.
+    /// \param uuid                 The UUID to register.
+    /// \return                     -  0: Success.
+    ///                             - -1: There is no registered under the name \p class_name and
+    ///                                   the UUID \p uuid.
+    mi::Sint32 unregister_class(
+        const char* class_name,
+        const mi::base::Uuid& uuid);
 
     /// Checks whether a DB class has been registered.
     ///
@@ -645,44 +665,49 @@ private:
 
     /// Maps class IDs to API class factories.
     ///
-    /// Not locked since it is modified only before startup.
+    /// Not locked since it is modified only before startup. No reference counting.
     std::map<SERIAL::Class_id, Api_class_factory> m_map_id_api_class_factory;
 
     /// Maps class names to API class factories.
     ///
-    /// Not locked since it is modified only before startup.
+    /// Not locked since it is modified only before startup. No reference counting.
     std::map<std::string, Api_class_factory> m_map_name_api_class_factory;
 
     /// Maps class names to DB element factories.
     ///
-    /// Not locked since it is modified only before startup.
+    /// Not locked since it is modified only before startup. No reference counting.
     std::map<std::string, Db_element_factory> m_map_name_db_element_factory;
 
     /// Maps class names to user class factories.
     ///
-    /// Not locked since it is modified only before startup.
-    std::map<std::string, mi::neuraylib::IUser_class_factory*> m_map_name_user_class_factory;
+    /// Not locked since it is modified only before startup/after shutdown.
+    std::map<std::string, mi::base::Handle<mi::neuraylib::IUser_class_factory>>
+        m_map_name_user_class_factory;
 
     /// Maps class UUIDs to user class factories.
     ///
-    /// Not locked since it is modified only before startup.
-    std::map<mi::base::Uuid, mi::neuraylib::IUser_class_factory*> m_map_uuid_user_class_factory;
+    /// Not locked since it is modified only before startup/after shutdown.
+    std::map<mi::base::Uuid, mi::base::Handle<mi::neuraylib::IUser_class_factory>>
+        m_map_uuid_user_class_factory;
 
     /// Maps class names to structure declarations.
     ///
     /// \note Any access needs to be protected by #m_map_name_structure_decl_lock.
-    std::map<std::string, const mi::IStructure_decl*> m_map_name_structure_decl;
+    std::map<std::string, mi::base::Handle<const mi::IStructure_decl>> m_map_name_structure_decl;
 
     /// Maps class names to enum declarations.
     ///
     /// \note Any access needs to be protected by #m_map_name_enum_decl_lock.
-    std::map<std::string, const mi::IEnum_decl*> m_map_name_enum_decl;
+    std::map<std::string, mi::base::Handle<const mi::IEnum_decl>> m_map_name_enum_decl;
 
     /// The lock that protects the map #m_map_name_structure_decl.
     mutable mi::base::Lock m_map_name_structure_decl_lock;
 
     /// The lock that protects the map #m_map_name_enum_decl.
     mutable mi::base::Lock m_map_name_enum_decl_lock;
+
+    /// Value of IMdl_configuration::get_materials_are_functions().
+    bool m_materials_are_functions;
 };
 
 } // namespace NEURAY

@@ -319,8 +319,9 @@ void Optimizer::remove_unused_functions()
         if (IDeclaration_function const *fdecl = as<IDeclaration_function>(decl)) {
             Definition const *def     = impl_cast<Definition>(fdecl->get_definition());
             Definition const *def_def = def->get_definite_definition();
-            if (def_def != NULL)
+            if (def_def != NULL) {
                 def = def_def;
+            }
 
             if (!def->has_flag(Definition::DEF_IS_USED)) {
                 // remove the reference
@@ -330,8 +331,9 @@ void Optimizer::remove_unused_functions()
         }
         n_decls[j++] = decl;
     }
-    if (j != n)
+    if (j != n) {
         m_module.replace_declarations(n_decls.data(), j);
+    }
 }
 
 // Remove dead code from functions.
@@ -375,12 +377,15 @@ void Optimizer::remove_dead_code(IStatement *stmt)
         return;
     case IStatement::SK_IF:
         {
-            IStatement_if *if_stmt = cast<IStatement_if>(stmt);
+            IStatement_if *if_stmt   = cast<IStatement_if>(stmt);
+
             IStatement *then_stmt = const_cast<IStatement *>(if_stmt->get_then_statement());
             remove_dead_code(then_stmt);
+
             IStatement *else_stmt = const_cast<IStatement *>(if_stmt->get_else_statement());
-            if (else_stmt)
+            if (else_stmt != NULL) {
                 remove_dead_code(else_stmt);
+            }
         }
         return;
 
@@ -458,6 +463,122 @@ IDeclaration const *Optimizer::local_opt(IDeclaration const *c_decl)
     return decl;
 }
 
+/// Check if the given operator contains an assignment.
+static bool is_assign_operator(IExpression_binary::Operator op)
+{
+    switch (op) {
+    case IExpression_binary::OK_ASSIGN:
+    case IExpression_binary::OK_MULTIPLY_ASSIGN:
+    case IExpression_binary::OK_DIVIDE_ASSIGN:
+    case IExpression_binary::OK_MODULO_ASSIGN:
+    case IExpression_binary::OK_PLUS_ASSIGN:
+    case IExpression_binary::OK_MINUS_ASSIGN:
+    case IExpression_binary::OK_SHIFT_LEFT_ASSIGN:
+    case IExpression_binary::OK_SHIFT_RIGHT_ASSIGN:
+    case IExpression_binary::OK_UNSIGNED_SHIFT_RIGHT_ASSIGN:
+    case IExpression_binary::OK_BITWISE_AND_ASSIGN:
+    case IExpression_binary::OK_BITWISE_XOR_ASSIGN:
+    case IExpression_binary::OK_BITWISE_OR_ASSIGN:
+        return true;
+    default:
+        return false;
+    }
+}
+
+/// Check if the given expression has a side-effect (and cannot just be removed).
+static bool has_side_effect(IExpression const *expr)
+{
+    switch (expr->get_kind()) {
+    case IExpression::EK_INVALID:
+        // should not happen, but if it does, do not optimize away
+        return true;
+    case IExpression::EK_LITERAL:
+    case IExpression::EK_REFERENCE:
+        return false;
+    case IExpression::EK_UNARY:
+        {
+            IExpression_unary const *unary = cast<IExpression_unary>(expr);
+            switch (unary->get_operator()) {
+            case IExpression_unary::OK_BITWISE_COMPLEMENT:
+            case IExpression_unary::OK_LOGICAL_NOT:
+            case IExpression_unary::OK_POSITIVE:
+            case IExpression_unary::OK_NEGATIVE:
+            case IExpression_unary::OK_CAST:
+                return has_side_effect(unary->get_argument());
+            case IExpression_unary::OK_PRE_INCREMENT:
+            case IExpression_unary::OK_PRE_DECREMENT:
+            case IExpression_unary::OK_POST_INCREMENT:
+            case IExpression_unary::OK_POST_DECREMENT:
+                return true;
+            }
+            MDL_ASSERT(!"unsupported unary expression kind");
+            return true;
+        }
+    case IExpression::EK_BINARY:
+        {
+            IExpression_binary const *binary = cast<IExpression_binary>(expr);
+            IExpression_binary::Operator op = binary->get_operator();
+
+            if (is_assign_operator(op)) {
+                // assignments have always an effect
+                return true;
+            }
+
+            IExpression const *lhs = binary->get_left_argument();
+            if (has_side_effect(lhs)) {
+                return true;
+            }
+            IExpression const *rhs = binary->get_right_argument();
+            return has_side_effect(rhs);
+        }
+    case IExpression::EK_CONDITIONAL:
+        {
+            IExpression_conditional const *c_expr = cast<IExpression_conditional>(expr);
+            IExpression const *cond = c_expr->get_condition();
+            if (has_side_effect(cond)) {
+                return true;
+            }
+            IExpression const *t_ex = c_expr->get_true();
+            if (has_side_effect(t_ex)) {
+                return true;
+            }
+            IExpression const *f_ex = c_expr->get_false();
+            return has_side_effect(f_ex);
+        }
+
+    case IExpression::EK_CALL:
+        // in MDL, calls do not have a side effect
+        return false;
+    case IExpression::EK_LET:
+        // by definition, assignments are NOT allowed in let expressions
+        return false;
+    }
+    MDL_ASSERT(!"unsupported expression kind");
+    return true;
+}
+
+// If expr is a sequence, remove useless subexpressions.
+IExpression const *Optimizer::remove_useless_sequence(IExpression const *expr)
+{
+    for (;;) {
+        if (IExpression_binary const *bin_expr = as<IExpression_binary>(expr)) {
+            if (bin_expr->get_operator()== IExpression_binary::OK_SEQUENCE) {
+                IExpression const *lhs = bin_expr->get_left_argument();
+                IExpression const *rhs = bin_expr->get_right_argument();
+                if (!has_side_effect(rhs)) {
+                    expr = lhs;
+                    continue;
+                }
+                if (!has_side_effect(lhs)) {
+                    expr = rhs;
+                    continue;
+                }
+            }
+        }
+        return expr;
+    }
+}
+
 // Run local optimizations
 IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
 {
@@ -488,8 +609,9 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
                 IStatement const *n = local_opt(s);
 
                 changed |= n != s;
-                if (n != NULL)
+                if (n != NULL) {
                     n_stmts[j++] = n;
+                }
             }
             if (changed) {
                 c_smtm->replace_statements(n_stmts.data(), j);
@@ -512,16 +634,18 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
             IStatement const  *else_stmt = if_stmt->get_else_statement();
 
             IExpression const *n_cond = local_opt(cond);
-            if (n_cond != cond)
+            if (n_cond != cond) {
                 if_stmt->set_condition(n_cond);
+            }
 
             if (IExpression_literal const *lit = as<IExpression_literal>(n_cond)) {
                 IValue_bool const *val = cast<IValue_bool>(lit->get_value());
 
-                if (val->get_value())
+                if (val->get_value()) {
                     return local_opt(then_stmt);
-                else
+                } else {
                     return else_stmt != NULL ? local_opt(else_stmt) : NULL;
+                }
             }
             IStatement const *n_then = local_opt(then_stmt);
             IStatement const *n_else = else_stmt != NULL ? local_opt(else_stmt) : NULL;
@@ -683,8 +807,10 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
                 }
 
                 IExpression const *n_expr = local_opt(expr);
-                if (n_expr != expr)
+                n_expr = remove_useless_sequence(n_expr);
+                if (n_expr != expr) {
                     e_stmt->set_expression(n_expr);
+                }
             } else {
                 // useless
                 return NULL;
@@ -698,10 +824,12 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
             IDeclaration const     *decl      = decl_stmt->get_declaration();
             IDeclaration const     *n_decl    = local_opt(decl);
 
-            if (n_decl == NULL)
+            if (n_decl == NULL) {
                 return NULL;
-            if (n_decl != decl)
+            }
+            if (n_decl != decl) {
                 decl_stmt->set_declaration(n_decl);
+            }
             return decl_stmt;
         }
 
@@ -715,9 +843,9 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
             IExpression const *expr = r_stmt->get_expression();
 
             IExpression const *n_expr = local_opt(expr);
-            if (n_expr != expr)
+            if (n_expr != expr) {
                 r_stmt->set_expression(n_expr);
-
+            }
             return r_stmt;
         }
     }
@@ -737,102 +865,10 @@ static bool should_be_folded(IExpression const *expr)
         }
     }
     for (int i = 0, n = expr->get_sub_expression_count(); i < n; ++i) {
-        if (!is<IExpression_literal>(expr->get_sub_expression(i)))
-            return false;
-    }
-    return true;
-}
-
-/// Check if the given operator contains an assignment.
-static bool is_assign_operator(IExpression_binary::Operator op)
-{
-    switch (op) {
-    case IExpression_binary::OK_ASSIGN:
-    case IExpression_binary::OK_MULTIPLY_ASSIGN:
-    case IExpression_binary::OK_DIVIDE_ASSIGN:
-    case IExpression_binary::OK_MODULO_ASSIGN:
-    case IExpression_binary::OK_PLUS_ASSIGN:
-    case IExpression_binary::OK_MINUS_ASSIGN:
-    case IExpression_binary::OK_SHIFT_LEFT_ASSIGN:
-    case IExpression_binary::OK_SHIFT_RIGHT_ASSIGN:
-    case IExpression_binary::OK_UNSIGNED_SHIFT_RIGHT_ASSIGN:
-    case IExpression_binary::OK_BITWISE_AND_ASSIGN:
-    case IExpression_binary::OK_BITWISE_XOR_ASSIGN:
-    case IExpression_binary::OK_BITWISE_OR_ASSIGN:
-        return true;
-    default:
-        return false;
-    }
-}
-
-/// Check if the given expression has a side-effect (and cannot just be removed).
-static bool has_side_effect(IExpression const *expr)
-{
-    switch (expr->get_kind()) {
-    case IExpression::EK_INVALID:
-        // should not happen, but if it does, do not optimize away
-        return true;
-    case IExpression::EK_LITERAL:
-    case IExpression::EK_REFERENCE:
-        return false;
-    case IExpression::EK_UNARY:
-        {
-            IExpression_unary const *unary = cast<IExpression_unary>(expr);
-            switch (unary->get_operator()) {
-            case IExpression_unary::OK_BITWISE_COMPLEMENT:
-            case IExpression_unary::OK_LOGICAL_NOT:
-            case IExpression_unary::OK_POSITIVE:
-            case IExpression_unary::OK_NEGATIVE:
-            case IExpression_unary::OK_CAST:
-                return has_side_effect(unary->get_argument());
-            case IExpression_unary::OK_PRE_INCREMENT:
-            case IExpression_unary::OK_PRE_DECREMENT:
-            case IExpression_unary::OK_POST_INCREMENT:
-            case IExpression_unary::OK_POST_DECREMENT:
-                return true;
-            }
-            MDL_ASSERT(!"unsupported unary expression kind");
-            return true;
-        }
-    case IExpression::EK_BINARY:
-        {
-            IExpression_binary const *binary = cast<IExpression_binary>(expr);
-            IExpression_binary::Operator op = binary->get_operator();
-
-            if (is_assign_operator(op))
-                return true;
-
-            IExpression const *lhs = binary->get_left_argument();
-            if (has_side_effect(lhs))
-                return true;
-            IExpression const *rhs = binary->get_right_argument();
-            if (has_side_effect(rhs))
-                return true;
+        if (!is<IExpression_literal>(expr->get_sub_expression(i))) {
             return false;
         }
-    case IExpression::EK_CONDITIONAL:
-        {
-            IExpression_conditional const *c_expr = cast<IExpression_conditional>(expr);
-            IExpression const *cond = c_expr->get_condition();
-            if (has_side_effect(cond))
-                return true;
-            IExpression const *t_ex = c_expr->get_true();
-            if (has_side_effect(t_ex))
-                return true;
-            IExpression const *f_ex = c_expr->get_false();
-            if (has_side_effect(f_ex))
-                return true;
-            return false;
-        }
-
-    case IExpression::EK_CALL:
-        // in MDL, calls do not have a side effect
-        return false;
-    case IExpression::EK_LET:
-        // by definition, assignments are NOT allowed in let expressions
-        return false;
     }
-    MDL_ASSERT(!"unsupported expression kind");
     return true;
 }
 
@@ -847,8 +883,9 @@ IExpression const *Optimizer::promote(IExpression const *expr, IType const *type
     IType const *e_type = expr->get_type()->skip_type_alias();
     type = type->skip_type_alias();
 
-    if (e_type == type)
+    if (e_type == type) {
         return expr;
+    }
 
     // otherwise add a conversion
     IExpression const *res = m_nt_ana.convert_to_type_explicit(expr, type);
@@ -864,8 +901,9 @@ IExpression const *Optimizer::promote(IExpression const *expr, IType const *type
 static IExpression const *skip_array_copy_constructor(
     IExpression_call *arr_constr)
 {
-    if (arr_constr->get_argument_count() != 1)
+    if (arr_constr->get_argument_count() != 1) {
         return NULL;
+    }
     IArgument const   *arg  = arr_constr->get_argument(0);
     IExpression const *expr = arg->get_argument_expr();
 
@@ -1091,8 +1129,9 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                 }
                 break;
             case IExpression_binary::OK_SEQUENCE:
-                if (!has_side_effect(lhs))
+                if (!has_side_effect(lhs)) {
                     return rhs;
+                }
                 break;
             default:
                 break;
@@ -1232,10 +1271,11 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
             if (IExpression_literal const *lit = as<IExpression_literal>(cond)) {
                 IValue_bool const *b = cast<IValue_bool>(lit->get_value());
 
-                if (b->get_value())
+                if (b->get_value()) {
                     return local_opt(c_expr->get_true());
-                else
+                } else {
                     return local_opt(c_expr->get_false());
+                }
             }
 
             IExpression const *t_ex = local_opt(c_expr->get_true());
@@ -1298,8 +1338,9 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                     IType_array const *a_type =
                         cast<IType_array>(call->get_type()->skip_type_alias());
 
-                    if (IExpression const *arg = skip_array_copy_constructor(call))
+                    if (IExpression const *arg = skip_array_copy_constructor(call)) {
                         return arg;
+                    }
 
                     if (all_const) {
                         // an array constructor with all elements constant.
@@ -1357,8 +1398,9 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
                         }
                     }
                     // try inlining
-                    if (IExpression const *inlined_expr = do_inline(call))
+                    if (IExpression const *inlined_expr = do_inline(call)) {
                         return inlined_expr;
+                    }
                 }
             }
             break;
@@ -1401,16 +1443,19 @@ IExpression const *Optimizer::do_inline(IExpression_call *call)
 {
     // FIXME: set the inline level to 3 (one above the default 2) to
     // disabled it in the default case because of bug 11154 ...
-    if (m_opt_level < 3)
+    if (m_opt_level < 3) {
         return NULL;
+    }
 
     // Very simple inliner yet.
     IExpression_reference const *ref = as<IExpression_reference>(call->get_reference());
-    if (ref == NULL)
+    if (ref == NULL) {
         return NULL;
+    }
 
-    if (ref->is_array_constructor())
+    if (ref->is_array_constructor()) {
         return NULL;
+    }
 
     Definition const *def = impl_cast<Definition>(ref->get_definition());
     if (def->has_flag(Definition::DEF_NO_INLINE)) {
@@ -1419,24 +1464,29 @@ IExpression const *Optimizer::do_inline(IExpression_call *call)
     }
 
     IDeclaration const *idecl = m_module.get_original_definition(def)->get_declaration();
-    if (idecl == NULL)
+    if (idecl == NULL) {
         return NULL;
+    }
     IDeclaration_function const *fdecl = as<IDeclaration_function>(idecl);
-    if (fdecl == NULL)
+    if (fdecl == NULL) {
         return NULL;
+    }
 
     IStatement const *body = fdecl->get_body();
-    if (body == NULL)
+    if (body == NULL) {
         return NULL;
+    }
 
     IStatement_compound const *block = as<IStatement_compound>(body);
 
-    if (block == NULL || block->get_statement_count() != 1)
+    if (block == NULL || block->get_statement_count() != 1) {
         return NULL;
+    }
 
     IStatement_return const *ret_stmt = as<IStatement_return>(block->get_statement(0));
-    if (ret_stmt == NULL)
+    if (ret_stmt == NULL) {
         return NULL;
+    }
 
     IExpression const *expr = ret_stmt->get_expression();
     switch (expr->get_kind()) {
@@ -1447,8 +1497,9 @@ IExpression const *Optimizer::do_inline(IExpression_call *call)
     case IExpression::EK_REFERENCE:
         {
             IExpression_reference const *ref = cast<IExpression_reference>(expr);
-            if (ref->is_array_constructor())
+            if (ref->is_array_constructor()) {
                 return NULL;
+            }
 
             IDefinition const *def = ref->get_definition();
 
@@ -1459,8 +1510,9 @@ IExpression const *Optimizer::do_inline(IExpression_call *call)
                     for (int i = 0, n = fdecl->get_parameter_count(); i < n; ++i) {
                         IParameter const   *param = fdecl->get_parameter(i);
                         ISimple_name const *p_name = param->get_name();
-                        if (p_name->get_definition() == def)
+                        if (p_name->get_definition() == def) {
                             return call->get_argument(i)->get_argument_expr();
+                        }
                     }
                 }
                 return NULL;

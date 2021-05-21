@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2020 NVIDIA Corporation. All rights reserved.
+ * Copyright 2021 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,7 +43,7 @@ export material carpaint_red(
     ]]
 ) [[
     anno::copyright_notice (
-    "Copyright 2020 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2021 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Measured carpaint, red"),
     anno::description("The measured brdf of a physical carpaint combined with an analytical clear coat component")
@@ -68,7 +68,7 @@ export material carpaint_green(
     ]]
 ) [[
     anno::copyright_notice (
-    "Copyright 2020 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2021 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Measured carpaint, green"),
     anno::description("The measured brdf of a physical carpaint combined with an analytical clear coat component")
@@ -93,7 +93,7 @@ export material carpaint_blue(
     ]]
 ) [[
     anno::copyright_notice (
-    "Copyright 2020 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2021 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Measured carpaint, blue"),
     anno::description("The measured brdf of a physical carpaint combined with an analytical clear coat component")

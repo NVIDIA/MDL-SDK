@@ -88,15 +88,12 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 if(WINDOWS)
     set(_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/lib)
     set(_SHARED_SUFFIX ${CMAKE_SHARED_LIBRARY_SUFFIX})
-    set(_PLATFORM "nt-x86-64")
 elseif(MACOSX)
-    set(_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
+    set(_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/lib)
     set(_SHARED_SUFFIX ".so")
-    set(_PLATFORM "macosx-x86-64")
 else() # LINUX
-    set(_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
+    set(_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/lib)
     set(_SHARED_SUFFIX ".so")
-    set(_PLATFORM "linux-x86-64")
 endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -152,21 +149,36 @@ else()
     # TODO remove this from the binary release
     if(MDL_INTERNAL_BUILD)
         # copy and rename libraries from the internal build output
-        set(_SDK_BINARY_DIR $<$<CONFIG:Debug>:${MI_OBJ_G}>$<$<CONFIG:Release>:${MI_OBJ_O}>$<$<CONFIG:RelWithDebInfo>:${MI_OBJ_O_G}>)
-        if(WINDOWS)
-            set(_FREEIMAGE_BINARY_DIR ${_SDK_BINARY_DIR})
-            set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR})
-            set(_SDK_BINARY_DIR ${_SDK_BINARY_DIR})
+        if (CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(_SDK_BINARY_DIR ${MI_OBJ_O})
+        elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set(_SDK_BINARY_DIR ${MI_OBJ_G})
+        elseif (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+            set(_SDK_BINARY_DIR ${MI_OBJ_O_G})
         else()
+            set(_SDK_BINARY_DIR $<$<CONFIG:Debug>:${MI_OBJ_G}>$<$<CONFIG:Release>:${MI_OBJ_O}>$<$<CONFIG:RelWithDebInfo>:${MI_OBJ_O_G}>)
+        endif()
+
+        set(_FREEIMAGE_BINARY_DIR ${_SDK_BINARY_DIR})
+        set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR})
+
+        # prefer the src structure over the tape structure
+        if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/freeimage/nv_freeimage${_SHARED_SUFFIX} )
             set(_FREEIMAGE_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/freeimage)
+        endif()
+
+        if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/dds/dds${_SHARED_SUFFIX}  )
             set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/dds)
+        endif()
+
+        if(EXISTS ${_SDK_BINARY_DIR}/prod/lib/mdl_sdk/libmdl_sdk${_SHARED_SUFFIX} )
             set(_SDK_BINARY_DIR ${_SDK_BINARY_DIR}/prod/lib/mdl_sdk)
         endif()
     else()
         # copy and rename libraries shipped in the release bundle
-        set(_FREEIMAGE_BINARY_DIR ${MDL_BASE_FOLDER}/../${_PLATFORM}/lib/)
-        set(_DDS_BINARY_DIR ${MDL_BASE_FOLDER}/../${_PLATFORM}/lib/)
-        set(_SDK_BINARY_DIR ${MDL_BASE_FOLDER}/../${_PLATFORM}/lib/)
+        set(_FREEIMAGE_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
+        set(_DDS_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
+        set(_SDK_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
     endif()
 
     list(APPEND _COMANDS
@@ -181,14 +193,22 @@ else()
     )
 endif()
 
-# copy the files collected
-add_custom_command(
-    OUTPUT copied_files.d
-    DEPENDS ${_DEPENDS}
-    COMMAND ${CMAKE_COMMAND} -E echo "Copy SDK libraries and additional files to the binary folder..."
-    ${_COMANDS}
-    COMMAND ${CMAKE_COMMAND} -E touch copied_files.d
-)
+# copy the files collected, if not stated otherwise
+if(NOT DEFINED MDL_BUILD_ARNOLD_COPY_ADDITIONAL_FILES OR MDL_BUILD_ARNOLD_COPY_ADDITIONAL_FILES)
+    add_custom_command(
+        OUTPUT copied_files.d
+        DEPENDS ${_DEPENDS}
+        COMMAND ${CMAKE_COMMAND} -E echo "Copy SDK libraries and additional files to the binary folder..."
+        ${_COMANDS}
+        COMMAND ${CMAKE_COMMAND} -E touch copied_files.d
+    )
+else()
+    add_custom_command(
+        OUTPUT copied_files.d
+        COMMAND ${CMAKE_COMMAND} -E echo "\"SDK libraries and additional files are NOT copied to the binary folder (disabled by MDL_BUILD_ARNOLD_COPY_ADDITIONAL_FILES) ...\""
+        COMMAND ${CMAKE_COMMAND} -E touch copied_files.d
+    )
+endif()
 
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 set(_VS_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$(Configuration)/lib)

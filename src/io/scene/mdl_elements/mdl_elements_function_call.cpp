@@ -30,9 +30,9 @@
 
 #include "i_mdl_elements_function_call.h"
 
+#include "i_mdl_elements_compiled_material.h"
 #include "i_mdl_elements_expression.h"
 #include "i_mdl_elements_function_definition.h"
-#include "i_mdl_elements_material_instance.h"
 #include "i_mdl_elements_module.h"
 #include "i_mdl_elements_type.h"
 #include "i_mdl_elements_utilities.h"
@@ -44,6 +44,7 @@
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_symbols.h>
 #include <mi/mdl/mdl_code_generators.h>
+#include <mi/neuraylib/iarray.h>
 #include <mi/neuraylib/istring.h>
 #include <base/system/main/access_module.h>
 #include <base/lib/log/i_log_logger.h>
@@ -54,7 +55,6 @@
 #include <base/util/registry/i_config_registry.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
-
 
 namespace MI {
 
@@ -72,6 +72,7 @@ Mdl_function_call::Mdl_function_call()
 , m_mdl_semantic(mi::mdl::IDefinition::DS_UNKNOWN)
 , m_definition_name()
 , m_immutable(false) // avoid ubsan warning with swap() and temporaries
+, m_is_material(false)
 , m_parameter_types()
 , m_return_type()
 , m_arguments()
@@ -94,6 +95,7 @@ Mdl_function_call::Mdl_function_call(
     const char* module_db_name,
     DB::Tag definition_tag,
     Mdl_ident definition_ident,
+    bool is_material,
     IExpression_list* arguments,
     mi::mdl::IDefinition::Semantics semantic,
     const char* definition_name,
@@ -112,6 +114,7 @@ Mdl_function_call::Mdl_function_call(
 , m_definition_name(check_non_null(definition_name))
 , m_definition_db_name(get_db_name(m_definition_name))
 , m_immutable(immutable)
+, m_is_material(is_material)
 , m_parameter_types(parameter_types, mi::base::DUP_INTERFACE)
 , m_return_type(return_type, mi::base::DUP_INTERFACE)
 , m_arguments(arguments, mi::base::DUP_INTERFACE)
@@ -132,6 +135,7 @@ Mdl_function_call::Mdl_function_call( const Mdl_function_call& other)
 , m_definition_name(other.m_definition_name)
 , m_definition_db_name(other.m_definition_db_name)
 , m_immutable(other.m_immutable)
+, m_is_material(other.m_is_material)
 , m_parameter_types(other.m_parameter_types)
 , m_return_type(other.m_return_type)
 , m_arguments(m_ef->clone(
@@ -142,9 +146,9 @@ Mdl_function_call::Mdl_function_call( const Mdl_function_call& other)
 
 DB::Tag Mdl_function_call::get_function_definition(DB::Transaction *transaction) const
 {
-    if (!is_valid_function_definition(
-        transaction, m_module_tag, m_module_db_name, m_definition_ident, m_definition_db_name))
+    if( !is_valid_definition( transaction))
         return DB::Tag();
+
     return  m_definition_tag;
 }
 
@@ -186,7 +190,6 @@ const IExpression_list* Mdl_function_call::get_arguments() const
     return m_arguments.get();
 }
 
-// Get the list of enable_if conditions.
 const IExpression_list* Mdl_function_call::get_enable_if_conditions() const
 {
     m_enable_if_conditions->retain();
@@ -194,62 +197,50 @@ const IExpression_list* Mdl_function_call::get_enable_if_conditions() const
 }
 
 bool Mdl_function_call::is_valid(
-    DB::Transaction* transaction,
-    Execution_context* context) const
+    DB::Transaction* transaction, Execution_context* context) const
 {
     DB::Tag_set tags_seen;
     return is_valid(transaction, tags_seen, context);
 }
 
 bool Mdl_function_call::is_valid(
-    DB::Transaction* transaction,
-    DB::Tag_set& tags_seen,
-    Execution_context* context) const
+    DB::Transaction* transaction, DB::Tag_set& tags_seen, Execution_context* context) const
 {
-    DB::Tag module_tag = m_module_tag;
-    if (!module_tag.is_valid()) {
-        ASSERT(M_SCENE, m_immutable);
-        // immutable calls do not store their module tag, get it from
-        // the transaction
-        module_tag = transaction->name_to_tag(m_module_db_name.c_str());
-    }
-
+    DB::Tag module_tag = get_module( transaction);
     DB::Access<Mdl_module> module(module_tag, transaction);
     if (!module->is_valid(transaction, context))
         return false;
-    if (module->has_function_definition(m_definition_db_name, m_definition_ident) != 0) {
+
+    if (module->has_definition(m_is_material,m_definition_db_name, m_definition_ident) != 0) {
         add_context_error(
             context, "The function definition '" + m_definition_db_name + "' "
             "does no longer exist or has interface changes.", -1);
         return false;
     }
+
     for (mi::Size i = 0, n = m_arguments->get_size(); i < n; ++i) {
         mi::base::Handle<const IExpression> arg(m_arguments->get_expression(i));
         if (arg->get_kind() == IExpression::EK_CALL) {
             mi::base::Handle<const IExpression_call> arg_call(
                 arg->get_interface<IExpression_call>());
             DB::Tag call_tag = arg_call->get_call();
-            if (!call_tag.is_valid())
+            if (!call_tag)
                 continue;
             if (!tags_seen.insert(call_tag).second)
                 return false; // cycle in graph, always invalid.
             SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
-            if (class_id == ID_MDL_FUNCTION_CALL) {
-                DB::Access<Mdl_function_call> fcall(call_tag, transaction);
-                if (!fcall->is_valid(transaction, tags_seen, context)) {
-                    add_context_error(
-                        context, "The function call attached to parameter '"
-                        + std::string(m_arguments->get_name(i)) + "' is invalid.", -1);
-                    return false;
-                }
-            } else if (class_id == ID_MDL_MATERIAL_INSTANCE) {
-                DB::Access<Mdl_material_instance> minst(call_tag, transaction);
-                if (!minst->is_valid(transaction, tags_seen, context)) {
-                    add_context_error(
-                        context, "The material instance attached to parameter '"
-                        + std::string(m_arguments->get_name(i)) + "' is invalid.", -1);
-                    return false;
-                }
+            if (class_id != ID_MDL_FUNCTION_CALL) {
+                add_context_error(
+                    context, "The function call attached to parameter '"
+                    + std::string(m_arguments->get_name(i)) + "' has a wrong element type.", -1);
+                return false;
+            }
+            DB::Access<Mdl_function_call> fcall(call_tag, transaction);
+            if (!fcall->is_valid(transaction, tags_seen, context)) {
+                add_context_error(
+                    context, "The function call attached to parameter '"
+                    + std::string(m_arguments->get_name(i)) + "' is invalid.", -1);
+                return false;
             }
             tags_seen.erase(call_tag);
         }
@@ -270,9 +261,10 @@ mi::Sint32 Mdl_function_call::repair(
     ASSERT(M_SCENE, m_module_tag);
     DB::Access<Mdl_module> module(m_module_tag, transaction);
     // cannot restore if we refer to an invalid module
-    if (!module->is_valid(transaction, context)) return -1;
+    if (!module->is_valid(transaction, context))
+        return -1;
 
-    mi::Sint32 ret = module->has_function_definition(m_definition_db_name, m_definition_ident);
+    mi::Sint32 ret = module->has_definition(m_is_material, m_definition_db_name, m_definition_ident);
     if (ret == -1) {
         // a definition of that name does no longer exist
         m_definition_tag = DB::Tag();
@@ -285,13 +277,61 @@ mi::Sint32 Mdl_function_call::repair(
     else if (ret == -2) {
 
         if (level == 0 || repair_invalid_calls) {
-            mi::Size index = module->get_function_definition_index(m_definition_db_name, Mdl_ident(-1));
+
+            mi::Size index = module->get_definition_index(
+                m_is_material, m_definition_db_name, Mdl_ident(-1));
             ASSERT(M_SCENE, index != mi::Size(-1));
-            DB::Tag def_tag = module->get_function(index);
+            DB::Tag def_tag = module->get_definition(m_is_material, index);
+            DB::Access<Mdl_function_definition> fdef(def_tag, transaction);
+
+            if( fdef->is_material()) {
+
+            // compare argument types with new parameter types
+            if (m_arguments->get_size() != fdef->get_parameter_count()) {
+                // for now, we cannot adapt to this.
+                m_definition_tag = DB::Tag();
+                m_definition_ident = -1;
+                add_context_error(
+                    context, "The parameter count of definition '" + m_definition_db_name +
+                    "' has changed.", -1);
+                return -1;
+            }
+
+            mi::base::Handle<const IType_list> param_types(fdef->get_parameter_types());
+            for (mi::Size i = 0, n = fdef->get_parameter_count(); i < n; ++i) {
+
+                const char* param_name = fdef->get_parameter_name(i);
+                const char* arg_name = m_arguments->get_name(i);
+                if (strcmp(param_name, arg_name) == 0) {
+
+                    mi::base::Handle<const IType> ptype(param_types->get_type(i));
+                    mi::base::Handle<const IExpression> arg(m_arguments->get_expression(i));
+                    mi::base::Handle<const IType> atype(arg->get_type());
+
+                    bool needs_cast;
+                    if (!argument_type_matches_parameter_type(
+                        m_tf.get(),
+                        atype.get(),
+                        ptype.get(),
+                        /*allow_cast=*/false,
+                        needs_cast)) {
+
+                        m_definition_tag = DB::Tag();
+                        m_definition_ident = -1;
+                        return -1;
+                    }
+                }
+                else {
+                    m_definition_tag = DB::Tag();
+                    m_definition_ident = -1;
+                    return -1;
+                }
+            }
+
+            } else {
 
             // in this case, parameter types must match (part of signature)
             // does the return type match, too?
-            DB::Access<Mdl_function_definition> fdef(def_tag, transaction);
             mi::base::Handle<const IType> def_ret_type(fdef->get_return_type());
 
             bool needs_cast;
@@ -309,6 +349,8 @@ mi::Sint32 Mdl_function_call::repair(
                     context, "The return type of definition '" + m_definition_db_name +
                     "' has changed.", -1);
                 return -1;
+            }
+
             }
             m_definition_tag = def_tag;
             m_definition_ident = fdef->get_ident();
@@ -394,7 +436,7 @@ mi::Sint32 Mdl_function_call::set_argument(
             transaction,
             argument_copy.get(),
             expected_type.get(),
-            /*db_element_name=*/nullptr,
+            /*db_element_name*/nullptr,
             /*force_cast=*/false,
             /*direct_call=*/false,
             &errors);
@@ -414,20 +456,18 @@ mi::Sint32 Mdl_function_call::set_argument(
     return set_argument( transaction, index, argument);
 }
 
-void Mdl_function_call::make_mutable(DB::Transaction* transaction) {
-
-    if (!is_valid_function_definition(
-        transaction, m_module_tag, m_module_db_name, m_definition_ident, m_definition_db_name))
+void Mdl_function_call::make_mutable(DB::Transaction* transaction)
+{
+    if( !is_valid_definition( transaction))
         return;
 
-    // function calls, which are defaults in their own module, do not
-    // keep a reference to their module, get it now
-    if (!m_module_tag.is_valid()) {
-        DB::Access<Mdl_function_definition> definition(m_definition_tag, transaction);
-        m_module_tag = definition->get_module(transaction);
-        ASSERT(M_SCENE, m_module_tag.is_valid());
-    }
+    // Immutable calls do not store the module tag if it points to the same module to avoid cyclic
+    // references.
+    ASSERT( M_SCENE, m_immutable || m_module_tag);
+    if( !m_module_tag)
+        m_module_tag = get_module( transaction);
     m_immutable = false;
+    ASSERT( M_SCENE, m_immutable || m_module_tag);
 }
 
 mi::mdl::IDefinition::Semantics Mdl_function_call::get_mdl_semantic() const
@@ -437,54 +477,70 @@ mi::mdl::IDefinition::Semantics Mdl_function_call::get_mdl_semantic() const
 
 const mi::mdl::IType* Mdl_function_call::get_mdl_return_type( DB::Transaction* transaction) const
 {
-    if (!is_valid_function_definition(
-        transaction, m_module_tag, m_module_db_name, m_definition_ident, m_definition_db_name))
+    if( !is_valid_definition( transaction))
         return nullptr;
 
-    // for ternary operators, the return type has to be taken from the function call
-    if (m_mdl_semantic == mi::mdl::operator_to_semantic(mi::mdl::IExpression::OK_TERNARY)) {
+    // For template-like functions the MDL return type has to be calculated from the internal
+    // return type (of the call, not the definition). DS_INTRINSIC_DAG_ARRAY_LENGTH is
+    // template-like, but the return type is fixed.
+    mi::neuraylib::IFunction_definition::Semantics semantic
+        = mdl_semantics_to_ext_semantics( m_mdl_semantic);
+    if(    semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR
+        || semantic == mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX
+        || semantic == mi::neuraylib::IFunction_definition::DS_CAST
+        || semantic == mi::neuraylib::IFunction_definition::DS_TERNARY) {
 
-        DB::Tag module_tag = m_module_tag;
-        if (!module_tag.is_valid()) {
-            DB::Access<Mdl_function_definition> definition(m_definition_tag, transaction);
-            module_tag = definition->get_module(transaction);
-        }
-        DB::Access<Mdl_module> module(module_tag, transaction);
-        mi::base::Handle<mi::mdl::IModule const> mdl_module(module->get_mdl_module());
-        mi::mdl::IType_factory *mdl_tf = mdl_module->get_type_factory();
-        return int_type_to_mdl_type(m_return_type.get(), *mdl_tf);
+        DB::Tag module_tag = get_module( transaction);
+        DB::Access<Mdl_module> module( module_tag, transaction);
+        mi::base::Handle<const mi::mdl::IModule> mdl_module( module->get_mdl_module());
+        mi::mdl::IType_factory* tf = mdl_module->get_type_factory();
+        return int_type_to_mdl_type( m_return_type.get(), *tf);
     }
 
-    DB::Access<Mdl_function_definition> definition(m_definition_tag, transaction);
-    return definition.is_valid() ? definition->get_mdl_return_type(transaction) : nullptr;
+    DB::Access<Mdl_function_definition> definition( m_definition_tag, transaction);
+    return definition->get_mdl_return_type( transaction);
 }
 
 const mi::mdl::IType* Mdl_function_call::get_mdl_parameter_type(
     DB::Transaction* transaction, mi::Uint32 index) const
 {
-    if (!is_valid_function_definition(
-        transaction, m_module_tag, m_module_db_name, m_definition_ident, m_definition_db_name))
+    if( !is_valid_definition( transaction))
         return nullptr;
 
-    // for ternary operators, the parameter types have to be taken from the function call
-    if (m_mdl_semantic == mi::mdl::operator_to_semantic(mi::mdl::IExpression::OK_TERNARY)) {
-        DB::Tag module_tag = m_module_tag;
-        if (!module_tag.is_valid()) {
-            DB::Access<Mdl_function_definition> definition(m_definition_tag, transaction);
-            module_tag = definition->get_module(transaction);
-        }
-        DB::Access<Mdl_module> module(module_tag, transaction);
-        mi::base::Handle<mi::mdl::IModule const> mdl_module(module->get_mdl_module());
-        mi::mdl::IType_factory *mdl_tf = mdl_module->get_type_factory();
-        return int_type_to_mdl_type(m_parameter_types->get_type(index), *mdl_tf);
+    // For template-like functions the MDL parameter type has to be calculated from the internal
+    // parameter type (of the call, not the definition).
+    mi::neuraylib::IFunction_definition::Semantics semantic
+        = mdl_semantics_to_ext_semantics( m_mdl_semantic);
+    if(     semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR
+        ||  semantic == mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH
+        || (semantic == mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX && index == 0)
+        ||  semantic == mi::neuraylib::IFunction_definition::DS_CAST
+        || (semantic == mi::neuraylib::IFunction_definition::DS_TERNARY && index > 0)) {
+
+        mi::base::Handle<const IType> parameter_type( m_parameter_types->get_type( index));
+        DB::Tag module_tag = get_module( transaction);
+        DB::Access<Mdl_module> module( module_tag, transaction);
+        mi::base::Handle<const mi::mdl::IModule> mdl_module( module->get_mdl_module());
+        mi::mdl::IType_factory* tf = mdl_module->get_type_factory();
+        return int_type_to_mdl_type( parameter_type.get(), *tf);
     }
 
-    DB::Access<Mdl_function_definition> definition(m_definition_tag, transaction);
-    return definition.is_valid() ? definition->get_mdl_parameter_type(transaction, index) : nullptr;
+    DB::Access<Mdl_function_definition> definition( m_definition_tag, transaction);
+    return definition->get_mdl_parameter_type( transaction, index);
 }
 
-DB::Tag Mdl_function_call::get_module() const {
-    return m_module_tag;
+DB::Tag Mdl_function_call::get_module( DB::Transaction* transaction) const
+{
+    // Immutable calls do not store the module tag if it points to the same module to avoid cyclic
+    // references.
+    ASSERT( M_SCENE, m_immutable || m_module_tag);
+    return m_module_tag ? m_module_tag : transaction->name_to_tag( m_module_db_name.c_str());
+}
+
+bool Mdl_function_call::is_valid_definition( DB::Transaction* transaction) const
+{
+    DB::Access<Mdl_module> module( get_module( transaction), transaction);
+    return module->has_definition( m_is_material, m_definition_db_name, m_definition_ident) == 0;
 }
 
 void Mdl_function_call::swap( Mdl_function_call& other)
@@ -500,14 +556,14 @@ void Mdl_function_call::swap( Mdl_function_call& other)
     m_definition_db_name.swap( other.m_definition_db_name);
 
     std::swap( m_immutable, other.m_immutable);
+    std::swap( m_is_material, other.m_is_material);
     std::swap( m_parameter_types, other.m_parameter_types);
     std::swap( m_return_type, other.m_return_type);
     std::swap( m_arguments, other.m_arguments);
     std::swap( m_enable_if_conditions, other.m_enable_if_conditions);
 }
 
-mi::mdl::IGenerated_code_lambda_function*
-Mdl_function_call::create_jitted_function(
+mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_function(
     DB::Transaction* transaction,
     bool environment_context,
     mi::Float32 mdl_meters_per_scene_unit,
@@ -515,6 +571,8 @@ Mdl_function_call::create_jitted_function(
     mi::Float32 mdl_wavelength_max,
     Sint32* errors) const
 {
+    ASSERT( M_SCENE, !m_is_material);
+
     mi::Sint32 dummy_errors;
     if( !errors)
         errors = &dummy_errors;
@@ -564,7 +622,7 @@ Mdl_function_call::create_jitted_function(
     }
 
     // get code DAG
-    ASSERT(M_SCENE, m_module_tag.is_valid());
+    ASSERT(M_SCENE, m_module_tag);
     DB::Access<Mdl_module> module(m_module_tag, transaction);
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
 
@@ -589,7 +647,7 @@ Mdl_function_call::create_jitted_function(
         options.set_option( MDL_JIT_OPTION_FAST_MATH, jit_fast_math ? "true" : "false");
     }
 
-    int function_index = int(module->get_function_definition_index(
+    int function_index = int(module->get_definition_index( m_is_material,
         m_definition_db_name, m_definition_ident));
     if (function_index == -1) {
         *errors = -5;
@@ -624,7 +682,7 @@ Mdl_function_call::create_jitted_function(
     // create DAG node for the environment function
     const mi::mdl::DAG_node* call = lambda_func->create_call(
         m_definition_name.c_str(), function_definition->get_mdl_semantic(),
-        n_params > 0 ? &mdl_arguments[0] : nullptr, int( n_params), return_type);
+        mdl_arguments.data(), int( n_params), return_type);
 
     // if return type is a struct type assume it is ::base::texture_return (see above) and wrap
     // DAG node by a select to extract the tint field
@@ -661,13 +719,17 @@ Mdl_function_call::create_jitted_function(
     }
 
     // compile the environment lambda function
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(transaction, mdlc_module->get_module_wait_queue(), {});
     Mdl_call_resolver resolver( transaction);
     mi::mdl::IGenerated_code_lambda_function* jitted_func;
-    if( !environment_context )
+    if( !environment_context ) {
         jitted_func = generator_jit->compile_into_switch_function(
-            lambda_func.get(), &resolver, 1, 0);
-    else
-        jitted_func = generator_jit->compile_into_environment( lambda_func.get(), &resolver);
+            lambda_func.get(), &module_cache, &resolver, 1, 0);
+    } else {
+        jitted_func = generator_jit->compile_into_environment(
+            lambda_func.get(), &module_cache, &resolver);
+    }
     if( !jitted_func) {
         *errors = -4;
         return nullptr;
@@ -677,18 +739,235 @@ Mdl_function_call::create_jitted_function(
     return jitted_func;
 }
 
+Mdl_compiled_material* Mdl_function_call::create_compiled_material(
+    DB::Transaction* transaction,
+    bool class_compilation,
+    Execution_context* context) const
+{
+    ASSERT( M_SCENE, m_is_material);
+
+    if( !is_valid( transaction, context)) {
+        add_error_message( context, "The material instance is invalid.", -1);
+        return nullptr;
+    }
+
+    mi::base::Handle<const mi::mdl::IGenerated_code_dag::IMaterial_instance> instance(
+        create_dag_material_instance(
+            transaction,
+            /*use_temporaries*/ true,
+            class_compilation,
+            context));
+    if( !instance.is_valid_interface())
+        return nullptr;
+
+    ASSERT(M_SCENE, m_module_tag);
+    DB::Access<Mdl_module> module( m_module_tag, transaction);
+    const char* module_filename = module->get_filename();
+    const char* module_name = module->get_mdl_name();
+
+    mi::Float32 mdl_meters_per_scene_unit = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
+    mi::Float32 mdl_wavelength_min = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MIN);
+    mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MAX);
+    bool load_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
+
+    return new Mdl_compiled_material(
+        transaction, instance.get(), module_filename, module_name,
+        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, load_resources);
+}
+
+const mi::mdl::IGenerated_code_dag::IMaterial_instance*
+Mdl_function_call::create_dag_material_instance(
+    DB::Transaction* transaction,
+    bool use_temporaries,
+    bool class_compilation,
+    Execution_context* context) const
+{
+    ASSERT( M_SCENE, m_is_material);
+    ASSERT( M_SCENE, context);
+
+    // get code DAG
+    DB::Access<Mdl_module> module( m_module_tag, transaction);
+    mi::base::Handle<const mi::mdl::IGenerated_code_dag> code_dag( module->get_code_dag());
+
+    // create new MDL material instance
+    mi::mdl::IGenerated_code_dag::Error_code error_code;
+
+    int material_index = int(module->get_definition_index(
+        m_is_material, m_definition_db_name, m_definition_ident));
+    if (material_index == -1)
+        return nullptr;
+
+    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance> instance(
+        code_dag->create_material_instance(material_index, &error_code));
+    ASSERT( M_SCENE, error_code == 0);
+    ASSERT( M_SCENE, instance.is_valid_interface());
+
+    bool fold_meters_per_scene_unit = context->get_option<bool>(
+        MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT);
+    mi::Float32 mdl_meters_per_scene_unit = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
+    mi::Float32 mdl_wavelength_min = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_WAVELENGTH_MIN);
+    mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(
+        MDL_CTX_OPTION_WAVELENGTH_MAX);
+    bool fold_ternary_on_df = context->get_option<bool>(
+        MDL_CTX_OPTION_FOLD_TERNARY_ON_DF);
+    bool remove_dead_parameters = context->get_option<bool>(
+        MDL_CTX_OPTION_REMOVE_DEAD_PARAMETERS);
+    bool fold_all_bool_parameters = context->get_option<bool>(
+        MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS);
+    bool fold_all_enum_parameters = context->get_option<bool>(
+        MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS);
+    mi::base::Handle<const mi::IArray> fold_parameters(
+        context->get_interface_option<const mi::IArray>( MDL_CTX_OPTION_FOLD_PARAMETERS));
+    bool fold_trivial_cutout_opacity = context->get_option<bool>(
+        MDL_CTX_OPTION_FOLD_TRIVIAL_CUTOUT_OPACITY);
+    bool fold_transparent_layers = context->get_option<bool>(
+        MDL_CTX_OPTION_FOLD_TRANSPARENT_LAYERS);
+    bool ignore_noinline = context->get_option<bool>(MDL_CTX_OPTION_IGNORE_NOINLINE);
+
+    // convert fold_parameters to array of const char*
+    std::vector<const char*> fold_parameters_converted;
+    mi::Size n_fold = fold_parameters ? fold_parameters->get_length() : 0;
+    for( size_t i = 0; i < n_fold; ++i) {
+
+        mi::base::Handle<const mi::IString> element( fold_parameters->get_element<mi::IString>( i));
+        if( !element) {
+            add_error_message( context,
+                "An element in the array for the context option \"fold_parameters\" does not have "
+                "the type mi::IString.", -1);
+            return nullptr;
+        }
+
+        fold_parameters_converted.push_back( element->get_c_str());
+    }
+
+    // convert m_arguments to DAG nodes
+    Mdl_dag_builder<mi::mdl::IDag_builder> builder(
+        transaction, instance.get(), /*compiled_material*/ nullptr);
+    mi::Size n = code_dag->get_material_parameter_count( material_index);
+    std::vector<const mi::mdl::DAG_node*> mdl_arguments( n);
+
+    for( mi::Size i = 0; i < n; ++i) {
+        const mi::mdl::IType* parameter_type
+            = code_dag->get_material_parameter_type( material_index, i);
+        mi::base::Handle<const IExpression> argument( m_arguments->get_expression( i));
+        mdl_arguments[i] = builder.int_expr_to_mdl_dag_node( parameter_type, argument.get());
+        if( !mdl_arguments[i]) {
+            add_error_message( context,
+                "Type mismatch, call of an unsuitable DB element, or call cycle in a graph rooted "
+                "at the material definition \"" + m_definition_db_name + "\".", -1);
+            return nullptr;
+        }
+    }
+
+    bool resolve_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
+
+    // initialize MDL material instance
+    Call_evaluator<mi::mdl::IGenerated_code_dag> call_evaluator(
+        code_dag.get(), transaction, resolve_resources);
+    Mdl_call_resolver resolver(transaction);
+
+    mi::Uint32 flags = 0;
+    if( class_compilation) {
+        flags = mi::mdl::IGenerated_code_dag::IMaterial_instance::CLASS_COMPILATION
+              | mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_RESOURCE_SHARING
+              | mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_ARGUMENT_INLINE;
+        if( fold_ternary_on_df)
+            flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_TERNARY_ON_DF;
+        if ( remove_dead_parameters)
+            flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_DEAD_PARAMS;
+        if( fold_all_bool_parameters)
+            flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_BOOL_PARAMS;
+        if( fold_all_enum_parameters)
+            flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_ENUM_PARAMS;
+        if( fold_trivial_cutout_opacity)
+            flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_TRIVIAL_CUTOUT_OPACITY;
+        if( fold_transparent_layers)
+            flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::NO_TRANSPARENT_LAYERS;
+    } else {
+        flags =  mi::mdl::IGenerated_code_dag::IMaterial_instance::INSTANCE_COMPILATION;
+    }
+    if (ignore_noinline)
+        flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::IGNORE_NOINLINE;
+    if (context->get_option<bool>(MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE))
+        flags |= mi::mdl::IGenerated_code_dag::IMaterial_instance::TARGET_MATERIAL_MODEL;
+
+    error_code = instance->initialize(
+        &resolver,
+        /*resource_modifier=*/ nullptr,
+        code_dag.get(),
+        n,
+        mdl_arguments.data(),
+        use_temporaries,
+        flags,
+        class_compilation ? nullptr : &call_evaluator,
+        fold_meters_per_scene_unit,
+        mdl_meters_per_scene_unit,
+        mdl_wavelength_min,
+        mdl_wavelength_max,
+        fold_parameters_converted.data(),
+        fold_parameters_converted.size());
+
+    switch( error_code) {
+
+        case mi::mdl::IGenerated_code_dag::EC_NONE:
+            break;
+
+        case mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH: {
+            add_message( context, Message( mi::base::MESSAGE_SEVERITY_ERROR,
+                "Type mismatch for an argument in a graph rooted at the material "
+                "definition \"" + m_definition_db_name + "\".",
+                 mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH,
+                 Message::MSG_COMPILER_DAG), -1);
+            return nullptr;
+        }
+
+        case mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED: {
+            add_message( context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
+                "The thin-walled material instance rooted of the material definition \""
+                + m_definition_db_name + "\" has "
+                "different transmission for surface and backface.",
+                mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED,
+                Message::MSG_COMPILER_DAG), -2);
+            return nullptr;
+        }
+
+        case mi::mdl::IGenerated_code_dag::EC_INSTANTIATION_ERROR:
+        case mi::mdl::IGenerated_code_dag::EC_INVALID_INDEX:
+        case mi::mdl::IGenerated_code_dag::EC_MATERIAL_HAS_ERROR:
+        case mi::mdl::IGenerated_code_dag::EC_TOO_FEW_ARGUMENTS:
+        case mi::mdl::IGenerated_code_dag::EC_TOO_MANY_ARGUMENTS:
+            ASSERT( M_SCENE, false);
+            break;
+    }
+
+    const mi::mdl::Messages& msgs = instance->access_messages();
+    convert_and_log_messages( msgs, context);
+
+    if( msgs.get_error_message_count() > 0) {
+        context->set_result( -3);
+        return nullptr;
+    }
+
+    instance->retain();
+    return instance.get();
+}
+
 const SERIAL::Serializable* Mdl_function_call::serialize( SERIAL::Serializer* serializer) const
 {
     Scene_element_base::serialize( serializer);
 
-    serializer->write( m_module_tag);
-    serializer->write( m_definition_tag);
-    serializer->write( m_definition_ident);
-    serializer->write( static_cast<mi::Uint32>( m_mdl_semantic));
-    serializer->write( m_module_db_name);
-    serializer->write( m_definition_name);
-    serializer->write( m_definition_db_name);
-    serializer->write( m_immutable);
+    SERIAL::write( serializer, m_module_tag);
+    SERIAL::write( serializer, m_definition_tag);
+    SERIAL::write( serializer, m_definition_ident);
+    SERIAL::write_enum( serializer, m_mdl_semantic);
+    SERIAL::write( serializer, m_module_db_name);
+    SERIAL::write( serializer, m_definition_name);
+    SERIAL::write( serializer, m_definition_db_name);
+    SERIAL::write( serializer, m_immutable);
+    SERIAL::write( serializer, m_is_material);
 
     m_tf->serialize_list( serializer, m_parameter_types.get());
     m_tf->serialize( serializer, m_return_type.get());
@@ -702,16 +981,15 @@ SERIAL::Serializable* Mdl_function_call::deserialize( SERIAL::Deserializer* dese
 {
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_module_tag);
-    deserializer->read( &m_definition_tag);
-    deserializer->read( &m_definition_ident);
-    mi::Uint32 semantic;
-    deserializer->read( &semantic);
-    m_mdl_semantic = static_cast<mi::mdl::IDefinition::Semantics>( semantic);
-    deserializer->read( &m_module_db_name);
-    deserializer->read( &m_definition_name);
-    deserializer->read( &m_definition_db_name);
-    deserializer->read( &m_immutable);
+    SERIAL::read( deserializer, &m_module_tag);
+    SERIAL::read( deserializer, &m_definition_tag);
+    SERIAL::read( deserializer, &m_definition_ident);
+    SERIAL::read_enum( deserializer, &m_mdl_semantic);
+    SERIAL::read( deserializer, &m_module_db_name);
+    SERIAL::read( deserializer, &m_definition_name);
+    SERIAL::read( deserializer, &m_definition_db_name);
+    SERIAL::read( deserializer, &m_immutable);
+    SERIAL::read( deserializer, &m_is_material);
 
     m_parameter_types = m_tf->deserialize_list( deserializer);
     m_return_type = m_tf->deserialize( deserializer);
@@ -736,6 +1014,7 @@ void Mdl_function_call::dump( DB::Transaction* transaction) const
     tmp = m_ef->dump( transaction, m_arguments.get(), /*name*/ nullptr);
     s << "Arguments: " << tmp->get_c_str() << std::endl;
     s << "Immutable: " << m_immutable << std::endl;
+    s << "Is material: " << m_is_material << std::endl;
     tmp = m_ef->dump( transaction, m_enable_if_conditions.get(), /*name*/ nullptr);
     s << "Enable_if conditions: " << tmp->get_c_str() << std::endl;
 
@@ -768,11 +1047,12 @@ Uint Mdl_function_call::bundle( DB::Tag* results, Uint size) const
 
 void Mdl_function_call::get_scene_element_references( DB::Tag_set* result) const
 {
-    // default arguments are held by the module, avoid cycle.
-    if( !m_immutable) {
-        ASSERT( M_SCENE, m_module_tag);
+    // Immutable calls do not store the module tag if it points to the same module to avoid cyclic
+    // references.
+    ASSERT( M_SCENE, m_immutable || m_module_tag);
+    if( m_module_tag)
         result->insert( m_module_tag);
-    }
+
     collect_references( m_arguments.get(), result);
     collect_references( m_enable_if_conditions.get(), result);
 }

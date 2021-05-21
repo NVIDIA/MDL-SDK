@@ -66,6 +66,7 @@ void create_textured_material(Material_compiler &mc, bool use_class_compilation)
         tf->create_texture(mi::mdl::IType_texture::TS_2D),
         "/nvidia/sdk_examples/resources/example.png",
         mi::mdl::IValue_texture::gamma_default,
+        /*selector=*/ "",        
         /*tag=*/ 0,
         /*tag_version=*/ 0);
 

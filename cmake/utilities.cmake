@@ -66,7 +66,7 @@ function(TARGET_BUILD_SETUP)
     #---------------------------------------------------------------------------------------
 
     # specify the c++ standard to use
-    set_property(TARGET ${TARGET_BUILD_SETUP_TARGET} PROPERTY CXX_STANDARD 11)
+    set_property(TARGET ${TARGET_BUILD_SETUP_TARGET} PROPERTY CXX_STANDARD 17)
     set_property(TARGET ${TARGET_BUILD_SETUP_TARGET} PROPERTY C_STANDARD 11)
 
     target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
@@ -90,7 +90,7 @@ function(TARGET_BUILD_SETUP)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
             PUBLIC
-                "MI_PLATFORM=\"nt-x86-64-vc14\""
+                "MI_PLATFORM=\"${MI_PLATFORM_NAME}-vc\"" #todo fix version number
                 "MI_PLATFORM_WINDOWS"
                 "WIN_NT"
             PRIVATE
@@ -132,35 +132,35 @@ function(TARGET_BUILD_SETUP)
     # LINUX
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-            target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
-                PUBLIC
-                    "MI_PLATFORM=\"linux-x86-64-gcc\"" #todo add major version number
-                    "MI_PLATFORM_UNIX"
-                )
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
+            PUBLIC
+                "MI_PLATFORM=\"${MI_PLATFORM_NAME}-gcc\"" #todo add major version number
+                "MI_PLATFORM_UNIX"
+                "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:AARCH64>"
+                "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:HAS_SSE>"
+            )
 
-            target_compile_options(${TARGET_BUILD_SETUP_TARGET}
-                PRIVATE
-                    "-fPIC"   # position independent code since we will build a shared object
-                    "-m64"    # sets int to 32 bits and long and pointer to 64 bits and generates code for x86-64 architecture
-                    "-fno-strict-aliasing"
-                    "-march=nocona"
-                    "-DHAS_SSE"
-                    "$<$<CONFIG:DEBUG>:-gdwarf-3>"
-                    "$<$<CONFIG:DEBUG>:-gstrict-dwarf>"
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
+            PRIVATE
+                "-fPIC"   # position independent code since we will build a shared object
+                "-fno-strict-aliasing"
+                "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:-march=nocona>"
+                "$<$<CONFIG:DEBUG>:-gdwarf-3>"
+                "$<$<CONFIG:DEBUG>:-gstrict-dwarf>"
 
-                    # enable additional warnings
-                    "-Wall"
-                    "-Wvla"
+                # enable additional warnings
+                "-Wall"
+                "-Wvla"
 
-                    "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
-                    "-Wno-parentheses"
-                    "-Wno-sign-compare"
-                    "-Wno-narrowing"
-                    "-Wno-unused-but-set-variable"
-                    "-Wno-unused-local-typedefs"
-                    "-Wno-deprecated-declarations"
-                    "-Wno-unknown-pragmas"
-                )
+                "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
+                "-Wno-parentheses"
+                "-Wno-sign-compare"
+                "-Wno-narrowing"
+                "-Wno-unused-but-set-variable"
+                "-Wno-unused-local-typedefs"
+                "-Wno-deprecated-declarations"
+                "-Wno-unknown-pragmas"
+            )
     endif()
 
     # MACOSX
@@ -168,7 +168,7 @@ function(TARGET_BUILD_SETUP)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
             PUBLIC
-                "MI_PLATFORM=\"macosx-x86-64-clang900\""
+                "MI_PLATFORM=\"${MI_PLATFORM_NAME}-clang900\""
                 "MI_PLATFORM_MACOSX"
                 "MACOSX"
             )
@@ -179,7 +179,6 @@ function(TARGET_BUILD_SETUP)
                 "-fPIC"
                 "-m64"
                 "-stdlib=libc++"
-                "$<$<COMPILE_LANGUAGE:CXX>:-std=c++11>"
                 "$<$<CONFIG:DEBUG>:-gdwarf-2>"
                 "-fvisibility-inlines-hidden"
                 "-fdiagnostics-fixit-info"
@@ -193,8 +192,7 @@ function(TARGET_BUILD_SETUP)
                 "-Wmissing-field-initializers"
                 "-Wno-covered-switch-default"
                 "-Wno-non-virtual-dtor"
-                "-fdiagnostics-fixit-info"
-                "-fdiagnostics-parseable-fixits"
+                "-Wno-unusable-partial-specialization"
             )
     endif()
 
@@ -324,16 +322,18 @@ function(TARGET_PRINT_LOG_HEADER)
     if(NOT TARGET_PRINT_LOG_HEADER_TYPE)
         get_target_property(TARGET_PRINT_LOG_HEADER_TYPE ${TARGET_PRINT_LOG_HEADER_TARGET} TYPE)
     endif()
-    MESSAGE(STATUS "")
-    MESSAGE(STATUS "---------------------------------------------------------------------------------")
-    MESSAGE(STATUS "PROJECT_NAME:     ${TARGET_PRINT_LOG_HEADER_TARGET}   (${TARGET_PRINT_LOG_HEADER_TYPE})")
-    
-    if(TARGET_PRINT_LOG_HEADER_VERSION)
-    MESSAGE(STATUS "VERSION:          ${TARGET_PRINT_LOG_HEADER_VERSION}")
+    if(MDL_LOG_DEPENDENCIES)
+        MESSAGE(STATUS "")
+        MESSAGE(STATUS "---------------------------------------------------------------------------------")
     endif()
-
-    MESSAGE(STATUS "SOURCE DIR:       ${CMAKE_CURRENT_SOURCE_DIR}")
-    MESSAGE(STATUS "BINARY DIR:       ${CMAKE_CURRENT_BINARY_DIR}")
+    MESSAGE(STATUS "[PROJECT] ${TARGET_PRINT_LOG_HEADER_TARGET}   (${TARGET_PRINT_LOG_HEADER_TYPE})")
+    if(MDL_LOG_DEPENDENCIES)
+        if(TARGET_PRINT_LOG_HEADER_VERSION)
+            MESSAGE(STATUS "VERSION:          ${TARGET_PRINT_LOG_HEADER_VERSION}")
+        endif()
+        MESSAGE(STATUS "SOURCE DIR:       ${CMAKE_CURRENT_SOURCE_DIR}")
+        MESSAGE(STATUS "BINARY DIR:       ${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
 
 endfunction()
 
@@ -426,7 +426,7 @@ function(__TARGET_ADD_DEPENDENCY)
     endif()
 
     # log dependency
-     if(MDL_LOG_DEPENDENCIES)
+    if(MDL_LOG_DEPENDENCIES)
         message(STATUS "- depends on:     " ${__TARGET_ADD_DEPENDENCY_DEPENDS})
     endif()
 
@@ -622,7 +622,7 @@ endfunction()
 # the reduce the redundant code in the base library projects, we can bundle several repeated tasks
 #
 function(CREATE_FROM_BASE_PRESET)
-    set(options WIN32 WINDOWS_UNICODE EXAMPLE)
+    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -631,8 +631,12 @@ function(CREATE_FROM_BASE_PRESET)
     if(CREATE_FROM_BASE_PRESET_EXAMPLE)
         set(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE ON)           # enable unicode
         if(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES)
-            list(APPEND BUILD_SETUP_OPTIONS DYNAMIC_MSVC_RUNTIME) # runtime linking
+            set(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME ON)  # runtime linking
         endif()
+    endif()
+
+    if(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME)
+        list(APPEND BUILD_SETUP_OPTIONS DYNAMIC_MSVC_RUNTIME) # runtime linking
     endif()
 
     if(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE)
@@ -686,6 +690,17 @@ function(CREATE_FROM_BASE_PRESET)
         message(FATAL_ERROR "Unexpected Type for target '${CREATE_FROM_BASE_PRESET_TARGET}': ${CREATE_FROM_BASE_PRESET_TYPE}.")
     endif()
 
+    # change the output directory for non-multi-config-generators as well
+    get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+    if(NOT _GENERATOR_IS_MULTI_CONFIG)
+        set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}
+            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}
+            ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}
+            PDB_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}
+        )
+    endif()
+
     # adjust output file name if requested
     if(CREATE_FROM_BASE_PRESET_OUTPUT_NAME)
         set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES OUTPUT_NAME ${CREATE_FROM_BASE_PRESET_OUTPUT_NAME})
@@ -714,7 +729,9 @@ function(CREATE_FROM_BASE_PRESET)
 
     # includes used .rc in case of MDL SDK libraries
     if(CREATE_FROM_BASE_PRESET_EMBED_RC AND WINDOWS AND CREATE_FROM_BASE_PRESET_TYPE STREQUAL "SHARED")
-        message(STATUS "- embedding:      ${CREATE_FROM_BASE_PRESET_EMBED_RC}")
+        if(MDL_LOG_FILE_DEPENDENCIES)
+            message(STATUS "- embedding:      ${CREATE_FROM_BASE_PRESET_EMBED_RC}")
+        endif()
         target_sources(${CREATE_FROM_BASE_PRESET_TARGET}
             PRIVATE
                 ${CREATE_FROM_BASE_PRESET_EMBED_RC}
@@ -758,20 +775,21 @@ function(TARGET_ADD_CUDA_PTX_RULE)
     # - TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES
     # - TARGET_ADD_CUDA_PTX_RULE_DEPENDS
 
+    # options
+    if(NOT TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH)
+        set(TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH "sm_50")
+    endif()
+
+    # policy CMP0104, we use the '-arch' flag to pass the sm version
+    # string(SUBSTRING ${TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH} 3 -1 CUDA_ARCH_VERSION) # potential alternative
+    set(CUDA_ARCH_VERSION OFF)
+
     # create PTX target
     add_library(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX OBJECT ${TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES})
     set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX PROPERTIES 
         CUDA_PTX_COMPILATION ON
+        CUDA_ARCHITECTURES ${CUDA_ARCH_VERSION}
         )
-
-    if(NOT TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH)
-        set(TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH "sm_30")
-    endif()
-
-    # options
-    if(NOT TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH)
-        set(TARGET_ADD_CUDA_PTX_RULE_CUDA_ARCH "sm_30")
-    endif()
 
     # flags set per project
     target_compile_options(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX
@@ -813,6 +831,7 @@ function(TARGET_ADD_CUDA_PTX_RULE)
         )
 
     # post build
+    get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
     foreach(_SRC ${TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES})
 
         # copy ptx to example binary folder
@@ -823,19 +842,23 @@ function(TARGET_ADD_CUDA_PTX_RULE)
             MESSAGE(STATUS "- file to copy:   ${_SRC_NAME}.ptx")
         endif()
 
-        if(MSVC AND MSVC_IDE) # additional config folder for multi config generators
+        if(_GENERATOR_IS_MULTI_CONFIG)
             set(_CONFIG_FOLDER /$<CONFIG>)
+            set(_PTX_CONFIG_FOLDER /$<CONFIG>)
+            set(_CMAKEFILES_FOLDER "")
         else()
+            set(_CONFIG_FOLDER /${CMAKE_BUILD_TYPE})
+            set(_PTX_CONFIG_FOLDER "")
             set(_CMAKEFILES_FOLDER /CMakeFiles)
         endif()
-
 
         list(APPEND MOVE_COMMANDS 
             COMMAND ${CMAKE_COMMAND} -E echo "Copy ${_SRC_NAME}.ptx to binary dir..."
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${CMAKE_CURRENT_BINARY_DIR}${_CMAKEFILES_FOLDER}/${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX.dir${_CONFIG_FOLDER}/${_SRC_NAME}.ptx    # resulting ptx file
-                ${CMAKE_CURRENT_BINARY_DIR}${_CONFIG_FOLDER}                                                                # to binary dir
+                ${CMAKE_CURRENT_BINARY_DIR}${_CMAKEFILES_FOLDER}/${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX.dir${_PTX_CONFIG_FOLDER}/${_SRC_NAME}.ptx   # resulting ptx file
+                ${CMAKE_CURRENT_BINARY_DIR}${_CONFIG_FOLDER}                                                                                        # to binary dir
         )
+
     endforeach()
 
     # due to a bug visual studio 2017 does not detect changes in cu files, so for now we compile ptx files every time
@@ -961,7 +984,7 @@ endfunction()
 function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
     set(options)
     set(oneValueArgs TARGET)
-    set(multiValueArgs PATHS PATHS_DEBUG PATHS_RELEASE)
+    set(multiValueArgs PATHS PATHS_DEBUG PATHS_RELEASE PATHS_RELWITHDEBINFO)
     cmake_parse_arguments(TARGET_ADD_VS_DEBUGGER_ENV_PATH "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
     # provides the following variables:
     # - TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET
@@ -1036,6 +1059,7 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_VAR)
     get_property(_ENV_VARS TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_VAR_TARGET} PROPERTY VS_DEBUGGER_ENV_VARS)
     
     foreach(_VAR ${TARGET_ADD_VS_DEBUGGER_ENV_VAR_VARS})
+        string(REPLACE "%3B" ";" _VAR ${_VAR})
         if(MDL_LOG_DEPENDENCIES)
             message(STATUS "- add property:   Visual Studio Debugger Environment Variable: ${_VAR}")
         endif()
@@ -1078,6 +1102,7 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
     get_property(_ENV_VARS TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_ENV_VARS)
     get_property(_COMMAND_ARGUMENTS TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_COMMAND_ARGUMENTS)
     get_property(_COMMAND TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_COMMAND)
+    get_property(_COMMAND_CWD TARGET ${TARGET_CREATE_VS_USER_SETTINGS_TARGET} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY)
     if(_COMMAND)
     else()
         set(_COMMAND "$(TargetPath)")
@@ -1088,6 +1113,7 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
         "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n"
         "   <PropertyGroup Condition=\"'$(Configuration)'=='Debug'\">\n"
         "       <LocalDebuggerCommand>${_COMMAND}</LocalDebuggerCommand>\n"
+        "       <LocalDebuggerWorkingDirectory>${_COMMAND_CWD}</LocalDebuggerWorkingDirectory>\n"
         "       <LocalDebuggerCommandArguments>${_COMMAND_ARGUMENTS}</LocalDebuggerCommandArguments>\n"
         "       <LocalDebuggerEnvironment>\nPATH=${_ENV_PATHS_DEBUG};${_ENV_PATHS};%PATH%\n${_ENV_VARS}\n"
         "       </LocalDebuggerEnvironment>\n"
@@ -1095,6 +1121,7 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
         "   </PropertyGroup>\n"
         "   <PropertyGroup Condition=\"'$(Configuration)'=='Release'\">\n"
         "       <LocalDebuggerCommand>${_COMMAND}</LocalDebuggerCommand>\n"
+        "       <LocalDebuggerWorkingDirectory>${_COMMAND_CWD}</LocalDebuggerWorkingDirectory>\n"
         "       <LocalDebuggerCommandArguments>${_COMMAND_ARGUMENTS}</LocalDebuggerCommandArguments>\n"
         "       <LocalDebuggerEnvironment>\nPATH=${_ENV_PATHS_RELEASE};${_ENV_PATHS};%PATH%\n${_ENV_VARS}\n"
         "       </LocalDebuggerEnvironment>\n"
@@ -1102,6 +1129,7 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
         "   </PropertyGroup>\n"
         "   <PropertyGroup Condition=\"'$(Configuration)'=='RelWithDebInfo'\">\n"
         "       <LocalDebuggerCommand>${_COMMAND}</LocalDebuggerCommand>\n"
+        "       <LocalDebuggerWorkingDirectory>${_COMMAND_CWD}</LocalDebuggerWorkingDirectory>\n"
         "       <LocalDebuggerCommandArguments>${_COMMAND_ARGUMENTS}</LocalDebuggerCommandArguments>\n"
         "       <LocalDebuggerEnvironment>\nPATH=${_ENV_PATHS_RELWITHDEBINFO};${_ENV_PATHS};%PATH%\n${_ENV_VARS}\n"
         "       </LocalDebuggerEnvironment>\n"
@@ -1109,6 +1137,109 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
         "   </PropertyGroup>\n"
         "</Project>\n"
         )
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
+# basic install logic to copy the entire output folder
+
+function(ADD_TARGET_INSTALL)
+    set(options)
+    set(oneValueArgs TARGET DESTINATION)
+    set(multiValueArgs)
+    cmake_parse_arguments(ADD_TARGET_INSTALL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - ADD_TARGET_INSTALL_TARGET
+    # - ADD_TARGET_INSTALL_DESTINATION
+
+    install(DIRECTORY $<TARGET_FILE_DIR:${ADD_TARGET_INSTALL_TARGET}>/
+        DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
+        USE_SOURCE_PERMISSIONS
+        FILES_MATCHING
+        PATTERN "*"
+        PATTERN "*.d" EXCLUDE
+    )
+
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
+# python binding examples
+
+function(CREATE_FROM_PYTHON_PRESET)
+    set(oneValueArgs TARGET MAIN)
+    set(multiValueArgs SOURCES)
+    cmake_parse_arguments(CREATE_FROM_PYTHON_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - CREATE_FROM_PYTHON_PRESET_TARGET
+    # - CREATE_FROM_PYTHON_PRESET_MAIN
+    # - CREATE_FROM_PYTHON_PRESET_SOURCES
+    
+    # add dummy-source to create a dummy-lib
+    set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
+    if(NOT EXISTS ${DUMMY_CPP})
+        file(WRITE ${DUMMY_CPP} "")
+    endif()
+
+    # create target from template
+    create_from_base_preset(
+        TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET}
+        SOURCES
+            ${CREATE_FROM_PYTHON_PRESET_SOURCES}
+            ${DUMMY_CPP}
+        )
+
+    # add dependencies
+    target_add_dependencies(TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET}
+    DEPENDS
+        mdl::mdl_python
+        mdl::mdl_sdk
+    )
+
+    # create working directories for each configuration
+    # and also a shell script for running the script (usually in unix environments)
+    get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+    if(_GENERATOR_IS_MULTI_CONFIG)
+        foreach(_CONFIG ${CMAKE_CONFIGURATION_TYPES})
+            file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG})
+            configure_file(
+                ${MDL_EXAMPLES_FOLDER}/mdl_python/cmake_templates/run_example.sh
+                ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG}/run_example.sh
+                @ONLY)
+        endforeach()
+    else()
+        set(_CONFIG ${CMAKE_BUILD_TYPE})
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG})
+        configure_file(
+            ${MDL_EXAMPLES_FOLDER}/mdl_python/cmake_templates/run_example.sh
+            ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG}/run_example.sh
+            @ONLY)
+    endif()
+
+    # customize name
+    set_target_properties(${CREATE_FROM_PYTHON_PRESET_TARGET} PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/cpp.debugging
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/cpp.debugging
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/cpp.debugging
+        PREFIX ""
+        OUTPUT_NAME "cpp.debugging"
+        SUFFIX ".d"
+    )
+
+    # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
+    set_target_properties(${CREATE_FROM_PYTHON_PRESET_TARGET}
+        PROPERTIES
+            VS_DEBUGGER_COMMAND             ${MDL_DEPENDENCY_PYTHON_DEV_EXE}
+            VS_DEBUGGER_COMMAND_ARGUMENTS   "${CMAKE_CURRENT_SOURCE_DIR}/${CREATE_FROM_PYTHON_PRESET_MAIN}"
+        )
+
+    get_property(BINDING_MODULE_PATH TARGET "mdl::mdl_python" PROPERTY BINARY_DIR)
+    target_add_vs_debugger_env_var(TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET}
+        VARS
+            "PYTHONPATH=${BINDING_MODULE_PATH}/$(Configuration)%3B%PYTHONPATH%"
+            "MDL_SAMPLES_ROOT=${MDL_EXAMPLES_FOLDER}"
+        )
+
+    target_create_vs_user_settings(TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET})
+
 endfunction()
 
 # -------------------------------------------------------------------------------------------------

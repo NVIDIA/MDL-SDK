@@ -152,6 +152,14 @@ namespace math
     double2 cos(double2 const &a);
     double3 cos(double3 const &a);
     double4 cos(double4 const &a);
+    float cosh(float a);
+    float2 cosh(float2 const &a);
+    float3 cosh(float3 const &a);
+    float4 cosh(float4 const &a);
+    double cosh(double a);
+    double2 cosh(double2 const &a);
+    double3 cosh(double3 const &a);
+    double4 cosh(double4 const &a);
     float3 cross(float3 const &a, float3 const &b);
     double3 cross(double3 const &a, double3 const &b);
     float degrees(float a);
@@ -436,6 +444,14 @@ namespace math
     double2 sin(double2 const &a);
     double3 sin(double3 const &a);
     double4 sin(double4 const &a);
+    float sinh(float a);
+    float2 sinh(float2 const &a);
+    float3 sinh(float3 const &a);
+    float4 sinh(float4 const &a);
+    double sinh(double a);
+    double2 sinh(double2 const &a);
+    double3 sinh(double3 const &a);
+    double4 sinh(double4 const &a);
     void sincos(float a, float* res_0, float* res_1);
     void sincos(float2 const &a, float2* res_0, float2* res_1);
     void sincos(float3 const &a, float3* res_0, float3* res_1);
@@ -483,6 +499,14 @@ namespace math
     double2 tan(double2 const &a);
     double3 tan(double3 const &a);
     double4 tan(double4 const &a);
+    float tanh(float a);
+    float2 tanh(float2 const &a);
+    float3 tanh(float3 const &a);
+    float4 tanh(float4 const &a);
+    double tanh(double a);
+    double2 tanh(double2 const &a);
+    double3 tanh(double3 const &a);
+    double4 tanh(double4 const &a);
     // float2x2 transpose(float2x2 a);  (not supported yet)
     // float2x3 transpose(float3x2 a);  (not supported yet)
     // float3x2 transpose(float2x3 a);  (not supported yet)

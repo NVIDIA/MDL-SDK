@@ -125,7 +125,10 @@ public:
         MARK_GENERATED_ENTITIES         = 0x0004,
         /// If set, allow unsafe math optimizations.
         UNSAFE_MATH_OPTIMIZATIONS       = 0x0008,
-        EXPOSE_NAMES_OF_LET_EXPRESSIONS = 0x0020,
+        /// If set, names of let expressions are preserved.
+        EXPOSE_NAMES_OF_LET_EXPRESSIONS = 0x0010,
+        /// If set, target material model compilation mode is used.
+        TARGET_MATERIAL_MODEL_MODE      = 0x0020,
     };
 
     /// Bit set of compile options.
@@ -256,6 +259,7 @@ public:
         , m_cloned(alloc)
         , m_parameters(alloc)
         , m_annotations(alloc)
+        , m_return_annos(alloc)
         , m_temporaries(alloc)
         , m_temporary_names(alloc)
         , m_body(NULL)
@@ -270,6 +274,9 @@ public:
 
         /// Add an annotation.
         void add_annotation(DAG_node const *anno) { m_annotations.push_back(anno); }
+
+        /// Add a return annotation.
+        void add_return_annotation(DAG_node const *anno) { m_return_annos.push_back(anno); }
 
         /// Add a temporary.
         size_t add_temporary(DAG_node const *temp, char const *name) {
@@ -311,6 +318,12 @@ public:
         /// Get the annotation at index.
         DAG_node const *get_annotation(size_t idx) const { return m_annotations[idx]; }
 
+        /// Get the return annotation count.
+        size_t get_return_annotation_count() const { return m_return_annos.size(); }
+
+        /// Get the return annotation at index.
+        DAG_node const *get_return_annotation(size_t idx) const { return m_return_annos[idx]; }
+
         /// Get the temporary count.
         size_t get_temporary_count() const { return m_temporaries.size(); }
 
@@ -318,7 +331,9 @@ public:
         DAG_node const *get_temporary(size_t idx) const { return m_temporaries[idx]; }
 
         /// Get the temporary name at index.
-        char const *get_temporary_name(size_t idx) const { return m_temporary_names[idx].c_str(); }
+        char const *get_temporary_name(size_t idx) const {
+            return m_temporary_names[idx].empty() ? NULL : m_temporary_names[idx].c_str();
+        }
 
         /// Get the material body.
         DAG_node const *get_body() const { return m_body; }
@@ -330,6 +345,7 @@ public:
         string         m_cloned;          ///< The name of the cloned material or "".
         Param_vector   m_parameters;      ///< The material parameters.
         Dag_vector     m_annotations;     ///< The material annotations.
+        Dag_vector     m_return_annos;    ///< The return annotations of the material.
         Dag_vector     m_temporaries;     ///< The material temporaries.
         String_vector  m_temporary_names; ///< The material temporary names.
         DAG_node const *m_body;           ///< The IR body of the material.
@@ -459,7 +475,9 @@ public:
         DAG_node const *get_temporary(size_t idx) const { return m_temporaries[idx]; }
 
         /// Get the temporary name at index.
-        char const *get_temporary_name(size_t idx) const { return m_temporary_names[idx].c_str(); }
+        char const *get_temporary_name(size_t idx) const {
+            return m_temporary_names[idx].empty() ? NULL : m_temporary_names[idx].c_str();
+        }
 
         /// Get the material body.
         DAG_node const *get_body() const { return m_body; }
@@ -483,7 +501,7 @@ public:
         string                m_simple_name;     ///< The simple name of the function.
         string                m_original_name;   ///< If this is an alias, the original name, else "".
         string                m_cloned;          ///< The name of the cloned function or "".
-        Param_vector          m_parameters;      ///< The material parameters.
+        Param_vector          m_parameters;      ///< The function parameters.
         Dag_vector            m_annotations;     ///< The annotations of the function.
         Dag_vector            m_return_annos;    ///< The return annotations of the function.
         Dag_vector            m_temporaries;     ///< The function temporaries.
@@ -759,6 +777,7 @@ public:
         typedef Allocator_interface_implement<IMaterial_instance> Base;
         friend class Allocator_builder;
         friend class Rule_engine;
+        friend class Distiller_plugin_api_impl;
         friend class Instance_cloner;
         friend class MI::MDL::Mdl_material_instance_builder;
 
@@ -1084,10 +1103,21 @@ public:
         Generated_code_dag::Error_code check_argument(
             DAG_node const *arg) const;
 
+        struct Path_entry {
+            Path_entry(char const *s, Path_entry const *prev) : path(s), prev(prev) {}
+
+            char const       *path;
+            Path_entry const *prev;
+        };
+
+        /// Creates an access path string.
+        string create_path(Path_entry const *e);
+
         /// Compute the type of a expression taking uniform rules into account.
         IType const *compute_type(
             ICall_name_resolver &resolver,
-            DAG_node const      *arg);
+            DAG_node const      *arg,
+            Path_entry const    *e);
 
         /// Check that thin walled materials have the same transmission on both sides.
         bool check_thin_walled_material();
@@ -1101,10 +1131,11 @@ public:
         /// \param enable  if true, set the property, else remove it
         void set_property(Property p, bool enable)
         {
-            if (enable)
+            if (enable) {
                 m_properties |= p;
-            else
+            } else {
                 m_properties &= ~p;
+            }
         }
 
         /// Creates a new error message.
@@ -1286,10 +1317,13 @@ public:
                 DAG_parameter  *inline_params[]);
 
             /// Check that every parameter is still used after optimization and remove
-            /// dead ones.
+            /// dead and forced inline parameters.
             ///
-            /// \param node  The root DAG IR node of the instance DAG.
-            DAG_node const *renumber_parameter(DAG_node const *node);
+            /// \param node                The root DAG IR node of the instance DAG.
+            /// \param remove_dead_params  If true, remove dead parameters.
+            DAG_node const *renumber_parameter(
+                DAG_node const *node,
+                bool           remove_dead_params);
 
             /// Analyze a created call for dependencies.
             ///
@@ -1303,12 +1337,10 @@ public:
             void analyze_function_ast(
                 Module const *owner, IDefinition const *def);
 
-            /// Set/reset property.
-            void set_property(Property prop, bool enable) {
+            /// Set property if enable is true.
+            void add_property(Property prop, bool enable) {
                 if (enable)
                     m_properties |= prop;
-                else
-                    m_properties &= ~prop;
             }
 
             /// Skip temporaries.
@@ -1354,7 +1386,7 @@ public:
             /// Elimination is done by putting the replacement node in m_replacement_map. Parameters
             /// that affect the decision are put into m_visits_map.
             void handle_transparent_layers(DAG_call const *call);
-            
+
             /// Return whether the expression qualifies for elimination by
             /// #handle_transparent_layers().
             ///
@@ -1696,6 +1728,16 @@ public:
         size_t material_index,
         size_t parameter_index) const MDL_FINAL;
 
+    /// Get the parameter type name of the parameter at parameter_index
+    /// of the material at material_index.
+    ///
+    /// \param material_index   The index of the material.
+    /// \param parameter_index  The index of the parameter.
+    /// \returns                The type name of the parameter.
+    char const *get_material_parameter_type_name(
+        size_t material_index,
+        size_t parameter_index) const MDL_FINAL;
+
     /// Get the parameter name of the parameter at parameter_index
     /// of the material at material_index.
     ///
@@ -1860,6 +1902,20 @@ public:
     /// \param annotation_index    The index of the annotation.
     /// \returns                   The annotation.
     DAG_node const *get_material_annotation(
+        size_t material_index,
+        size_t annotation_index) const MDL_FINAL;
+
+    /// Get the number of annotations of the material return type at material_index.
+    /// \param material_index      The index of the material.
+    /// \returns                   The number of annotations.
+    size_t get_material_return_annotation_count(
+        size_t material_index) const MDL_FINAL;
+
+    /// Get the annotation at annotation_index of the material return type at material_index.
+    /// \param material_index      The index of the material.
+    /// \param annotation_index    The index of the annotation.
+    /// \returns                   The annotation.
+    DAG_node const *get_material_return_annotation(
         size_t material_index,
         size_t annotation_index) const MDL_FINAL;
 
@@ -2431,7 +2487,8 @@ private:
     /// Build the DAG for the builtin material constructor.
     ///
     /// \param def                      The definition.
-    DAG_node const *build_material_dag(IDefinition const *def);
+    DAG_node const *build_material_dag(
+        IDefinition const *def);
 
     /// Compile a user defined type.
     ///
@@ -2563,6 +2620,12 @@ private:
         IModule const         *module,
         DAG_builder           &dag_builder,
         Dependence_node const *f_node);
+
+    /// Compute the control dependencies for enable_if conditions of a function or material.
+    ///
+    /// \param info  the function or material info
+    template<typename I>
+    void compute_control_dependencies(I &info);
 
     /// Compile a material.
     ///

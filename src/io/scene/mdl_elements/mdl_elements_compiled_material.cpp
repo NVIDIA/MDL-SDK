@@ -31,7 +31,6 @@
 #include "i_mdl_elements_compiled_material.h"
 
 #include "i_mdl_elements_utilities.h"
-#include "i_mdl_elements_material_instance.h"
 #include "i_mdl_elements_function_call.h"
 #include "i_mdl_elements_module.h"
 #include "mdl_elements_utilities.h"
@@ -103,6 +102,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         m_ef.get(),
         transaction,
         instance->get_resource_tagger(),
+        /*code_dag*/ nullptr,
         /*immutable*/ true,
         /*create_direct_calls*/ true,
         module_filename,
@@ -149,7 +149,7 @@ Mdl_compiled_material::Mdl_compiled_material(
     }
 
     for( size_t i = 0, n = instance->get_referenced_scene_data_count(); i < n; ++i) {
-        m_referenced_scene_data.push_back(instance->get_referenced_scene_data_name(i));
+        m_referenced_scene_data.emplace_back(instance->get_referenced_scene_data_name(i));
     }
 
     m_opacity = instance->get_opacity();
@@ -268,7 +268,7 @@ mi::base::Uuid Mdl_compiled_material::get_hash() const
 
 mi::base::Uuid Mdl_compiled_material::get_slot_hash( mi::Uint32 slot) const
 {
-    typedef mi::mdl::IGenerated_code_dag::IMaterial_instance T;
+    using T = mi::mdl::IGenerated_code_dag::IMaterial_instance;
 
     switch( slot) {
         case mi::neuraylib::SLOT_THIN_WALLED:
@@ -376,18 +376,16 @@ namespace {
 template<class T>
 DB::Tag get_next_call(const T* mdl_instance, const std::string& parameter_name)
 {
-    const DB::Tag invalid;
-
     mi::Size p_index = mdl_instance->get_parameter_index(parameter_name.c_str());
     if (p_index == static_cast<mi::Size>(-1))
-        return invalid;
+        return DB::Tag();
+
     mi::base::Handle<const IExpression_list> arguments(mdl_instance->get_arguments());
     mi::base::Handle<const IExpression> expr(arguments->get_expression(p_index));
     mi::base::Handle<const IExpression_call> expr_call(
         expr->get_interface<const IExpression_call>());
-
     if (!expr_call)
-        return invalid;
+        return DB::Tag();
 
     return expr_call->get_call();
 }
@@ -399,7 +397,7 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     DB::Tag material_instance_tag,
     const std::string& parameter_name) const
 {
-    DB::Access<Mdl_material_instance> material_instance(material_instance_tag, transaction);
+    DB::Access<Mdl_function_call> material_instance(material_instance_tag, transaction);
     ASSERT(M_SCENE, material_instance.is_valid());
 
     std::vector <std::string> path_tokens;
@@ -413,14 +411,7 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     for (std::size_t i = 0; i < path_tokens.size() - 1; ++i)
     {
         SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
-        if (class_id == MDL::ID_MDL_MATERIAL_INSTANCE) {
-
-            DB::Access<Mdl_material_instance> mdl_instance(call_tag, transaction);
-            ASSERT(M_SCENE, mdl_instance.is_valid());
-
-            call_tag = get_next_call(mdl_instance.get_ptr(), path_tokens[i]);
-        }
-        else if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
+        if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
 
             DB::Access<Mdl_function_call> mdl_instance(call_tag, transaction);
             ASSERT(M_SCENE, mdl_instance.is_valid());
@@ -469,35 +460,32 @@ const SERIAL::Serializable* Mdl_compiled_material::serialize(
     m_vf->serialize_list( serializer, m_arguments.get());
 
     size_t n = m_resource_tag_map.size();
-    serializer->write( static_cast<mi::Uint32>(n));
+    SERIAL::write(serializer,  static_cast<mi::Uint32>(n));
     for (size_t i = 0; i < n; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
-        serializer->write(unsigned(e.m_kind));
-        serializer->write(e.m_url);
-        serializer->write(e.m_tag);
+        SERIAL::write_enum(serializer, e.m_kind);
+        SERIAL::write(serializer, e.m_url);
+        SERIAL::write(serializer, e.m_tag);
     }
 
     write( serializer, m_hash);
     for( int i = 0; i < mi::mdl::IGenerated_code_dag::IMaterial_instance::MS_LAST+1; ++i)
         write( serializer, m_slot_hashes[i]);
 
-    serializer->write( m_mdl_meters_per_scene_unit);
-    serializer->write( m_mdl_wavelength_min);
-    serializer->write( m_mdl_wavelength_max);
-    serializer->write( m_properties);
+    SERIAL::write(serializer,  m_mdl_meters_per_scene_unit);
+    SERIAL::write(serializer,  m_mdl_wavelength_min);
+    SERIAL::write(serializer,  m_mdl_wavelength_max);
+    SERIAL::write(serializer,  m_properties);
 
-    n = m_referenced_scene_data.size();
-    serializer->write( static_cast<mi::Uint32>(n));
-    for (size_t i = 0; i < n; ++i)
-        serializer->write( m_referenced_scene_data[i]);
+    SERIAL::write(serializer,  m_referenced_scene_data);
 
-    serializer->write( m_internal_space);
-    serializer->write( static_cast<mi::Uint32>( m_opacity));
-    serializer->write( static_cast<mi::Uint32>( m_surface_opacity));
-    serializer->write( m_cutout_opacity);
-    serializer->write( m_has_cutout_opacity);
-    serializer->write(m_module_idents);
+    SERIAL::write(serializer,  m_internal_space);
+    SERIAL::write_enum(serializer, m_opacity);
+    SERIAL::write_enum(serializer, m_surface_opacity);
+    SERIAL::write(serializer,  m_cutout_opacity);
+    SERIAL::write(serializer,  m_has_cutout_opacity);
+    SERIAL::write(serializer, m_module_idents);
     return this + 1;
 }
 
@@ -512,7 +500,7 @@ SERIAL::Serializable* Mdl_compiled_material::deserialize(
     m_arguments   = m_vf->deserialize_list( deserializer);
 
     mi::Uint32 n = 0;
-    deserializer->read(&n);
+    SERIAL::read(deserializer, &n);
 
     m_resource_tag_map.clear();
     m_resource_tag_map.reserve(n);
@@ -520,12 +508,9 @@ SERIAL::Serializable* Mdl_compiled_material::deserialize(
     for (size_t i = 0; i < n; ++i) {
         Resource_tag_tuple e;
 
-        unsigned k;
-        deserializer->read(&k);
-        deserializer->read(&e.m_url);
-        deserializer->read(&e.m_tag);
-
-        e.m_kind = mi::mdl::Resource_tag_tuple::Kind(k);
+        SERIAL::read_enum(deserializer, &e.m_kind);
+        SERIAL::read(deserializer, &e.m_url);
+        SERIAL::read(deserializer, &e.m_tag);
 
         m_resource_tag_map.push_back(e);
     }
@@ -534,27 +519,20 @@ SERIAL::Serializable* Mdl_compiled_material::deserialize(
     for( int i = 0; i < mi::mdl::IGenerated_code_dag::IMaterial_instance::MS_LAST+1; ++i)
         read( deserializer, &m_slot_hashes[i]);
 
-    deserializer->read( &m_mdl_meters_per_scene_unit);
-    deserializer->read( &m_mdl_wavelength_min);
-    deserializer->read( &m_mdl_wavelength_max);
-    deserializer->read( &m_properties);
+    SERIAL::read(deserializer,  &m_mdl_meters_per_scene_unit);
+    SERIAL::read(deserializer,  &m_mdl_wavelength_min);
+    SERIAL::read(deserializer,  &m_mdl_wavelength_max);
+    SERIAL::read(deserializer,  &m_properties);
 
-    deserializer->read( &n);
-    m_referenced_scene_data.clear();
-    m_referenced_scene_data.resize(n);
-    for( size_t i = 0; i < n; ++i)
-        deserializer->read( &m_referenced_scene_data[i]);
+    SERIAL::read(deserializer,  &m_referenced_scene_data);
 
-    deserializer->read( &m_internal_space);
+    SERIAL::read(deserializer,  &m_internal_space);
 
-    mi::Uint32 opacity_as_uint32;
-    deserializer->read(&opacity_as_uint32);
-    m_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
-    deserializer->read(&opacity_as_uint32);
-    m_surface_opacity = static_cast<mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity>(opacity_as_uint32);
-    deserializer->read( &m_cutout_opacity);
-    deserializer->read( &m_has_cutout_opacity);
-    deserializer->read( &m_module_idents);
+    SERIAL::read_enum(deserializer, &m_opacity);
+    SERIAL::read_enum(deserializer, &m_surface_opacity);
+    SERIAL::read(deserializer,  &m_cutout_opacity);
+    SERIAL::read(deserializer,  &m_has_cutout_opacity);
+    SERIAL::read(deserializer,  &m_module_idents);
 
     return this + 1;
 }
@@ -592,11 +570,11 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
     s << "Properties: " << m_properties << std::endl;
     s << "Internal space: " << m_internal_space << std::endl;
 
-    const char *opacity_str = m_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE ?
+    const char* opacity_str = m_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE ?
         "opaque" : ( m_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT ? "transparent" : "unknown");
     s << "Opacity: " << opacity_str << std::endl;
 
-    const char *surf_opacity_str = m_surface_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE ?
+    const char* surf_opacity_str = m_surface_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE ?
         "opaque" : (m_surface_opacity == mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_TRANSPARENT ? "transparent" : "unknown");
     s << "Surface opacity: " << surf_opacity_str << std::endl;
 

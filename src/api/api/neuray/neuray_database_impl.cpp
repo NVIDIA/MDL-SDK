@@ -197,9 +197,10 @@ mi::Sint32 Database_impl::unlock( mi::Uint32 lock_id)
     return m_database->unlock( DB::Tag( lock_id)) ? 0 : -1;
 }
 
-void Database_impl::garbage_collection()
+void Database_impl::garbage_collection(
+    mi::neuraylib::IDatabase::Garbage_collection_priority priority)
 {
-    m_database->garbage_collection();
+    m_database->garbage_collection( static_cast<int>( priority));
 }
 
 mi::Sint32 Database_impl::start( DB::Database* database)

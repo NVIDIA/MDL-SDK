@@ -261,8 +261,9 @@ bool Texture::create()
             init_with_clear_value = false;
         }
 
+        auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
         if (log_on_failure(m_app->get_device()->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+            &heap_properties,
             D3D12_HEAP_FLAG_NONE,
             &resource_desc,
             static_cast<D3D12_RESOURCE_STATES>(m_latest_scheduled_state),
@@ -325,10 +326,12 @@ bool Texture::upload(D3DCommandList* command_list, const uint8_t* data, size_t d
     // create a resource that allows to upload data
     if (!m_resource_upload)
     {
+        auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+        auto resource_desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
         if (log_on_failure(m_app->get_device()->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+            &heap_properties,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(buffer_size),
+            &resource_desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
             IID_PPV_ARGS(&m_resource_upload)),
@@ -375,10 +378,12 @@ bool Texture::download(void* data)
     // create a resource that allows to download data
     if (!m_resource_download)
     {
+        auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+        auto resource_desc = CD3DX12_RESOURCE_DESC::Buffer(buffer_size);
         if (log_on_failure(m_app->get_device()->CreateCommittedResource(
-            &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK),
+            &heap_properties,
             D3D12_HEAP_FLAG_NONE,
-            &CD3DX12_RESOURCE_DESC::Buffer(buffer_size),
+            &resource_desc,
             D3D12_RESOURCE_STATE_COPY_DEST,
             nullptr,
             IID_PPV_ARGS(&m_resource_download)),
@@ -443,8 +448,9 @@ void Texture::transition_to(D3DCommandList* command_list, D3D12_RESOURCE_STATES 
     if (m_latest_scheduled_state == state)
         return;
 
-    command_list->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(
-        m_resource.Get(), m_latest_scheduled_state, state));
+    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_resource.Get(), m_latest_scheduled_state, state);
+    command_list->ResourceBarrier(1, &resource_barrier);
 
     m_latest_scheduled_state = state;
 }
@@ -594,7 +600,7 @@ bool Environment::create(const std::string& file_path)
         if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
             canvas = m_app->get_mdl_sdk().get_image_api().convert(canvas.get(), "Color");
 
-        mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+        mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile());
         const float *pixels = static_cast<const float *>(tile->get_data());
 
         // create a command list for uploading data to the GPU

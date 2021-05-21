@@ -50,6 +50,31 @@ class Link_unit_jit : public Allocator_interface_implement<ILink_unit>
 {
     typedef Allocator_interface_implement<ILink_unit> Base;
     friend class Allocator_builder;
+
+    //  RAII-like helper class to handle module cache scopes.
+    class Module_cache_scope {
+    public:
+        /// Constructor.
+        Module_cache_scope(
+            Link_unit_jit          &unit,
+            mi::mdl::IModule_cache *cache)
+        : m_unit(unit)
+         , m_cache(unit.get_module_cache())
+        {
+            unit.set_module_cache(cache);
+        }
+
+        /// Destructor.
+        ~Module_cache_scope()
+        {
+            m_unit.set_module_cache(m_cache);
+        }
+
+    private:
+        Link_unit_jit          &m_unit;
+        mi::mdl::IModule_cache *m_cache;
+    };
+
 public:
     /// Possible targets for the generated code.
     enum Target_kind {
@@ -64,6 +89,7 @@ public:
     /// Add a lambda function to this link unit.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param kind                 the kind of the lambda function
     /// \param arg_block_index      on success, this parameter will receive the index of the target
@@ -74,6 +100,7 @@ public:
     /// \return true on success
     bool add(
         ILambda_function const                    *lambda,
+        IModule_cache                             *module_cache,
         ICall_name_resolver const                 *name_resolver,
         IGenerated_code_executable::Function_kind  kind,
         size_t                                    *arg_block_index,
@@ -87,6 +114,7 @@ public:
     /// and \c "_pdf", respectively.
     ///
     /// \param dist_func                  the distribution function to compile
+    /// \param module_cache               the module cache if any
     /// \param name_resolver              the call name resolver
     /// \param arg_block_index            variable receiving the index of the target argument block
     ///                                   used for this distribution function or ~0 if none is used
@@ -96,6 +124,7 @@ public:
     /// \return true on success
     bool add(
         IDistribution_function const *dist_func,
+        IModule_cache                *module_cache,
         ICall_name_resolver const    *name_resolver,
         size_t                       *arg_block_index,
         size_t                       *main_function_indices,
@@ -154,7 +183,7 @@ public:
     /// \return The prototype or NULL if \p index is out of bounds or \p lang cannot be used
     ///         for this target code.
     const char* get_function_prototype(
-        size_t index,
+        size_t                                         index,
         IGenerated_code_executable::Prototype_language lang) const MDL_FINAL;
 
     /// Get the target kind.
@@ -188,6 +217,12 @@ public:
 
     /// Get the resource tag map of this unit.
     Resource_tag_map const *get_resource_tag_map() const { return &m_resource_tag_map; }
+
+    /// Get the current module cache.
+    mi::mdl::IModule_cache *get_module_cache() const { return m_code_gen.get_module_cache(); }
+
+    /// Set a new module cache.
+    void set_module_cache(mi::mdl::IModule_cache *cache) { m_code_gen.set_module_cache(cache); }
 
 private:
     /// Constructor.
@@ -339,8 +374,9 @@ public:
 
     /// Compile a whole module.
     ///
-    /// \param module  The module to compile.
-    /// \param mode    The compilation mode
+    /// \param module        The module to compile.
+    /// \param module_cache  The module cache if any.
+    /// \param mode          The compilation mode
     ///
     /// \note This method is not used currently for code generation, just
     ///       by the unit tests to test various aspects of the code generator.
@@ -348,21 +384,25 @@ public:
     /// \returns The generated code.
     IGenerated_code_executable *compile(
         IModule const    *module,
+        IModule_cache    *module_cache,
         Compilation_mode mode) MDL_FINAL;
 
     /// Compile a lambda function using the JIT into an environment (shader) of a scene.
     ///
     /// \param lambda         the lambda function to compile
+    /// \param module_cache   the module cache if any
     /// \param name_resolver  the call name resolver
     ///
     /// \return the compiled function or NULL on compilation errors
     IGenerated_code_lambda_function *compile_into_environment(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver) MDL_FINAL;
 
     /// Compile a lambda function using the JIT into a constant function.
     ///
     /// \param lambda           the lambda function to compile
+    /// \param module_cache     the module cache if any
     /// \param name_resolver    the call name resolver
     /// \param attr             an interface to retrieve resource attributes
     /// \param world_to_object  the world-to-object transformation matrix for this function
@@ -371,7 +411,8 @@ public:
     ///
     /// \return the compiled function or NULL on compilation errors
     IGenerated_code_lambda_function *compile_into_const_function(
-        ILambda_function const    *lambda,
+        ILambda_function const     *lambda,
+        IModule_cache              *module_cache,
         ICall_name_resolver const  *name_resolver,
         ILambda_resource_attribute *attr,
         Float4_struct const        world_to_object[4],
@@ -382,6 +423,7 @@ public:
     /// function computing one of the root expressions.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -389,6 +431,7 @@ public:
     /// \return the compiled function or NULL on compilation errors
     IGenerated_code_lambda_function *compile_into_switch_function(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results) MDL_FINAL;
@@ -398,6 +441,7 @@ public:
     ///
     /// \param code_cache           If non-NULL, a code cache
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -407,6 +451,7 @@ public:
     IGenerated_code_executable *compile_into_switch_function_for_gpu(
         ICode_cache               *code_cache,
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -415,6 +460,7 @@ public:
     /// Compile a lambda function into a generic function using the JIT.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -425,6 +471,7 @@ public:
     /// \note the lambda function must have only one root expression.
     IGenerated_code_lambda_function *compile_into_generic_function(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -433,6 +480,7 @@ public:
     /// Compile a lambda function into a LLVM-IR using the JIT.
     ///
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -441,6 +489,7 @@ public:
     /// \return the compiled function or NULL on compilation errors
     IGenerated_code_executable *compile_into_llvm_ir(
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -450,7 +499,9 @@ public:
     ///
     /// \param code   the code object to fill
     /// \param entry  the code cache entry
-    void fill_code_from_cache(Generated_code_source *code, ICode_cache::Entry const *entry);
+    void fill_code_from_cache(
+        Generated_code_source    *code,
+        ICode_cache::Entry const *entry);
 
     /// Enter a code object into the code cache.
     ///
@@ -459,8 +510,8 @@ public:
     /// \param cache_key   the key to use when entering the code object into the cache
     void enter_code_into_cache(
         Generated_code_source *code,
-        ICode_cache *code_cache,
-        unsigned char const cache_key[16]);
+        ICode_cache           *code_cache,
+        unsigned char const   cache_key[16]);
 
     /// Compile a lambda function into PTX or HLSL using the JIT.
     ///
@@ -469,6 +520,7 @@ public:
     ///
     /// \param code_cache           If non-NULL, a code cache
     /// \param lambda               the lambda function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -481,6 +533,7 @@ public:
     virtual IGenerated_code_executable *compile_into_source(
         ICode_cache               *code_cache,
         ILambda_function const    *lambda,
+        IModule_cache             *module_cache,
         ICall_name_resolver const *name_resolver,
         unsigned                  num_texture_spaces,
         unsigned                  num_texture_results,
@@ -496,6 +549,7 @@ public:
     /// and \c "_pdf", respectively.
     ///
     /// \param dist_func            the distribution function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -503,6 +557,7 @@ public:
     /// \return the compiled distribution function or NULL on compilation errors
     IGenerated_code_executable *compile_distribution_function_cpu(
         IDistribution_function const *dist_func,
+        IModule_cache                *module_cache,
         ICall_name_resolver const    *name_resolver,
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results) MDL_FINAL;
@@ -515,6 +570,7 @@ public:
     /// and \c "_pdf", respectively.
     ///
     /// \param dist_func            the distribution function to compile
+    /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
@@ -526,6 +582,7 @@ public:
     /// \return the compiled distribution function or NULL on compilation errors
     IGenerated_code_executable *compile_distribution_function_gpu(
         IDistribution_function const *dist_func,
+        IModule_cache                *module_cache,
         ICall_name_resolver const    *name_resolver,
         unsigned                     num_texture_spaces,
         unsigned                     num_texture_results,
@@ -550,9 +607,9 @@ public:
     /// \returns                true if there is data for this semantic (BSDF)
     bool get_libbsdf_multiscatter_data_resolution(
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
-        size_t &out_theta,
-        size_t &out_roughness,
-        size_t &out_ior) const MDL_FINAL;
+        size_t                         &out_theta,
+        size_t                         &out_roughness,
+        size_t                         &out_ior) const MDL_FINAL;
 
     /// Get access to the libbsdf multi-scattering lookup table data.
     ///

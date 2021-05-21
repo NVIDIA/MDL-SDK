@@ -594,7 +594,7 @@ char const *get_error_template(
             return "Annotations on annotation declarations are forbidden in MDL $0.$1 "
                 "and will be ignored";
         case CONST_EXPR_ARGUMENT_REQUIRED:
-            return "'$0' requires a const expression as first argument";
+            return "'$0' requires a const expression as $1 argument";
         case USING_ALIAS_REDECLARATION:
             return "redeclaration of using alias '$0'";
         case USING_ALIAS_DECL_FORBIDDEN:
@@ -602,10 +602,22 @@ char const *get_error_template(
         case PACKAGE_NAME_CONTAINS_FORBIDDEN_CHAR:
             return "package name contains forbidden character '$0'";
         case ABSOLUTE_ALIAS_NOT_AT_BEGINNING:
-            return "Alias name '$0' defines an absolute path, but is not at the beginning of a "
+            return "alias name '$0' defines an absolute path, but is not at the beginning of a "
                 "qualified name";
         case INVALID_CHARACTER_IN_RESOURCE:
-            return "Resource file path contains forbidden character '$0'";
+            return "resource file path contains forbidden character '$0'";
+        case IMPLICIT_LITERAL_CONVERSION_LOST_PRECISION:
+            return "implicit conversion from '$0' to '$1' changes value from '$2' to '$3'";
+        case IGNORED_ON_THIS_ENTITY:
+            return "annotation '$0' will be ignored because it is not allowed on this entity";
+        case AUTO_DECL_WITHOUT_INIT:
+            return "declaration of auto '$0' must have an initializer";
+        case USED_BEFORE_AUTO_DEDUCTION:
+            return "use of '$0' before deduction of 'auto'";
+        case INCONSISTANT_AUTO_DEDUCTION:
+            return "inconsistent deduction for 'auto': '$0' and then '$1'";
+        case INCONSISTANT_AUTO_RETURN_DEDUCTION:
+            return "inconsistent deduction for auto return type: '$0' and then '$1'";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:
@@ -680,7 +692,13 @@ char const *get_error_template(
         case MDR_PRE_RELEASE_VERSION:
             return "Header of MDL archive '$0' contains a pre-release version";
         case MDR_INVALID_HEADER_VERSION:
-            return "Header version of MDL archive'$0' is invalid";
+            return "Header version of MDL archive '$0' is invalid";
+        case ARCHIVE_HAS_BROKEN_MANIFEST:
+            return "MDL archive '$0' has broken/missing MANIFEST";
+        case ARCHIVE_MANIFEST_PARSE_ERROR:
+            return "MDL archive '$0' has invalid key, value pair in MANIFEST";
+        case INVALID_KEY_IDENT:
+            return "Key '$0' is not a valid identifier";
 
         // ------------------------------------------------------------- //
         case INTERNAL_ARCHIVER_ERROR:
@@ -727,6 +745,10 @@ char const *get_error_template(
             return "Header of MDLE file '$0' contains a pre-release version";
         case MDLE_FAILED_TO_ADD_ZIP_COMMENT:
             return "Filed to add zip comment to MDLE file '$0'";
+        case MDLE_MANIFEST_ERROR:
+            return "Missing or broken manifest of MDLE file '$0'";
+        case MDLE_MANIFEST_PARSE_ERROR:
+            return "MDLE '$0' has invalid key, value pair in MANIFEST";
 
         // ------------------------------------------------------------- //
         case MDLE_INTERNAL_ERROR:
@@ -1681,17 +1703,32 @@ static void print_error_param(
                 break;
             }
 
-            IType_function const *func_type = cast<IType_function>(def->get_type());
+            // use the declaration type here for the signature
+            IType_function const *func_type = cast<IType_function>(def->get_decl_type());
 
             bool is_material = false;
             if (kind == Definition::DK_FUNCTION) {
                 IType const *ret_type = func_type->get_return_type();
-                if (IType_struct const *s_type = as<IType_struct>(ret_type))
-                    if (s_type->get_predefined_id() == IType_struct::SID_MATERIAL)
+                if (IType_struct const *s_type = as<IType_struct>(ret_type)) {
+                    if (s_type->get_predefined_id() == IType_struct::SID_MATERIAL) {
                         is_material = true;
+                    }
+                }
 
                 if (is_material || err_kind == Error_params::EK_SIGNATURE) {
-                    printer->print(ret_type);
+                    if (as<IType_auto>(ret_type) != NULL) {
+                        // map incomplete to auto
+                        IType::Modifiers mod = ret_type->get_type_modifiers();
+
+                        if (mod & IType::MK_VARYING) {
+                            printer->print("varying ");
+                        } else if (mod & IType::MK_UNIFORM) {
+                            printer->print("uniform ");
+                        }
+                        printer->print("auto");
+                    } else {
+                        printer->print(ret_type);
+                    }
                     printer->print(" ");
                 }
             } else if (kind == Definition::DK_ANNOTATION)
@@ -1792,6 +1829,7 @@ static void print_error_param(
             case IMDL::MDL_VERSION_1_5: s = "1.5"; break;
             case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
             case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
+            case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
             }
             printer->print(s);
         }

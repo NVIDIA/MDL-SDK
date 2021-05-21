@@ -430,7 +430,9 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // do not next event estimation (but delay the adding of contribution)
     float3 contribution = float3(0.0f, 0.0f, 0.0f);
-    const bool next_event_valid = ((dot(to_light, mdl_state.geom_normal) > 0.0f) != inside) && light_pdf != 0.0f;
+    const bool next_event_valid = ((dot(to_light, mdl_state.geom_normal) > 0.0f) != inside) && light_pdf != 0.0f &&
+        !has_flag(payload.flags, FLAG_LAST_PATH_SEGMENT);
+
     if (next_event_valid)
     {
         // call generated mdl function to evaluate the scattering BSDF

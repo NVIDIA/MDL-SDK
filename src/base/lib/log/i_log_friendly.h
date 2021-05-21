@@ -35,31 +35,178 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <cmath>
+
+#include <base/lib/mem/i_mem_size.h>
+
 
 namespace MI {
 namespace LOG {
 
-/** iostream helper to print human readable byte counts. */
-struct Bytes
-{
-    size_t bytes;
+/** iostream helper to print large numbers with a prefix.
 
-    explicit Bytes(size_t bytes=~size_t(0))
-    : bytes(bytes) {}
+ Numbers of this type will be printed with the appropriate SI prefix.
+
+ \sa #MI::LOG::Prefixed
+ \sa #MI::LOG::round
+ \sa #MI::LOG::prefix_threshold
+ */
+template <typename T>
+struct Prefixed
+{
+    using base_type = T;
+
+    base_type value;
+
+    explicit Prefixed(const T val={})
+    : value(val) {}
+};
+
+template <typename T>
+inline bool operator==(const Prefixed<T>& l, const Prefixed<T>& r)
+{ return l.value == r.value; }
+
+
+/** iostream helper to print a number with a unit.
+
+ If the underlying type is \c Prefixed<T>, the unit will receive SI unit
+ prefixes as appropriate.
+ */
+template <typename Tag, typename T=Prefixed<size_t>>
+struct Quantity
+{
+    using base_type = T;
+    base_type value;
+
+    Quantity()
+    : value{} {}
+
+    explicit Quantity(const T val)
+    : value{val} {}
+};
+template <typename Tag, typename T>
+struct Quantity<Tag,Prefixed<T>>
+{
+    Prefixed<T> value;
+
+    Quantity()
+    : value{} {}
+
+    explicit Quantity(const T val)
+    : value{Prefixed<T>{val}} {}
+
+    explicit Quantity(const Prefixed<T> val)
+    : value{val} {}
 };
 
 
-/** iostream helper to print human readable numbers. */
-struct Large_number
-{
-    size_t count;
+// implementation details
+namespace DETAIL {
 
-    explicit Large_number(size_t val=0)
-    : count(val) {}
+
+inline long& get_prefix_threshold(std::ostream& str)
+{
+    static const int idx = std::ios_base::xalloc();
+    return str.iword(idx);
+}
+
+
+inline long& get_rounding(std::ostream& str)
+{
+    static const int idx = std::ios_base::xalloc();
+    return str.iword(idx);
+}
+
+
+struct Threshold
+{
+    size_t value = 0;
 };
 
-inline bool operator==(const Large_number& l, const Large_number& r)
-{ return l.count == r.count; }
+
+inline std::ostream& operator<<(std::ostream& str, const Threshold t)
+{
+    get_prefix_threshold(str) = t.value;
+    return str;
+}
+
+
+struct Config
+{
+    long& threshold;
+    long& round;
+
+    Config(std::ostream& str)
+    : threshold{get_prefix_threshold(str)}
+    , round{get_rounding(str)}
+    {}
+
+    ~Config()
+    {
+        threshold = 0;
+        round = false;
+    }
+
+    Config(const Config&) = delete;
+    Config& operator=(const Config&) = delete;
+};
+
+
+template <typename T>
+inline std::ostream& print(std::ostream& str, const Prefixed<T> num)
+{
+    Config cfg{str};
+    if (num.value < size_t(cfg.threshold)) {
+        return str << num.value;
+    }
+
+    unsigned i = 0;
+    const char* prefix[] = {" ", " k", " M", " G", " T", " P", " E"};
+    double val = (double)num.value;
+    for (; val >= 1000.; ++i) {
+        val /= 1000.;
+    }
+
+    str << std::fixed << std::setprecision(3);
+    return (cfg.round ? (str << (T)std::round(val)) : (str << val)) << prefix[i];
+}
+
+}
+
+
+/** Utility macro to generate a new unit type.
+
+ This macro generates a unit type called \p N of underlying type \p T.
+ Printing instances of \p N will yield the value and the unit symbol \p S.
+
+ \see #MAKE_PREFIXED_UNIT
+ */
+#define MAKE_UNIT(N,S,T) \
+using N = MI::LOG::Quantity<struct N##_tag,T>; \
+inline const char* get_unit_symbol(const N&) { return S; }
+
+
+/** Utility macro to generate a new unit type.
+
+ This macro generates a new unit type like #MAKE_UNIT does. In contrast
+ to that macro, however, this macro generates a unit that is printed with
+ SI prefixes.
+ */
+#define MAKE_PREFIXED_UNIT(N,S,T) MAKE_UNIT(N,S,MI::LOG::Prefixed<T>)
+
+
+/** iostream helper to print human-readable byte counts. */
+using MEM::Bytes;
+
+
+/** iostream helper to print human-readable large numbers.
+
+ Large numbers greater than 100000 will receive an SI prefix and will be rounded.
+ */
+struct Large_number : public Prefixed<size_t>
+{
+    using Prefixed<size_t>::Prefixed;
+};
 
 
 /** iostream helper to print item counts.
@@ -73,84 +220,120 @@ struct Item_count
     const char* const name;
     const char* const plural;
 
-    Item_count(size_t c, const char* const n, const char* const p=nullptr)
+    Item_count(T c, const char* const n, const char* const p=nullptr)
     : count(c), name(n), plural(p) {}
+
+    template <typename T_=T, typename U=typename T_::base_type>
+    Item_count(U c, const char* const n, const char* const p=nullptr)
+    : Item_count{T{c},n,p} {}
 };
 
 
-/** iostream helper to print large item counts. */
+/** iostream helper to print large item counts.
+
+ Like \c Item_count, large item counts will be printed with the appropriate singular
+ or plural form. However, the number will be printed with the appropriate SI prefix and
+ rounded, e.g. `Large_item_count{123456,"foo"}` will print as "123 k foos".
+ */
 struct Large_item_count : public Item_count<Large_number>
 {
     Large_item_count(size_t c, const char* const n, const char* const p=nullptr)
-    : Item_count<Large_number>(c,n,p) {}
+    : Item_count<Large_number>(Large_number{c},n,p) {}
 };
 
 
-/** iostream helper to print numbers of seconds.
+/** iostream helper to print numbers of seconds. */
+MAKE_UNIT(Seconds,"s",double)
 
- This is mainly used to make printing of timings consistent and may be replaced
- by std::chrono.
+/** iostream helper to print prefixed Hertz (e.g. kHz) */
+MAKE_PREFIXED_UNIT(Hertz,"Hz",size_t)
+
+
+/** iostream manipulator that controls rounding of prefixed numbers.
+
+ Note that this manipulator controls the output of the next \c Prefixed number
+ and is then reset.
+
+ \sa #MI::LOG::Prefixed
  */
-struct Seconds
+inline std::ostream& round(std::ostream& str)
 {
-    double seconds;
-
-    Seconds(double s)
-    : seconds(s) {}
-};
+    DETAIL::get_rounding(str) = true;
+    return str;
+}
 
 
+/** iostream manipulator that controls when numbers are prefixed.
 
-/** \brief Prints a 'readable' presentation of the provided number of bytes to the given stream.
+ This manipulator sets a threshold for number prefixes. Values lower than the
+ provided threshold will not receive a prefix.
+
+ Note that this manipulator controls the output of the next \c Prefixed number
+ and is then reset.
+
+ \sa #MI::LOG::Prefixed
+ */
+inline DETAIL::Threshold prefix_threshold(const size_t t)
+{
+    return DETAIL::Threshold{t};
+}
+
+}
+namespace MEM {
+
+/** \brief Prints a human-readable presentation of the provided number of bytes to the given stream.
 
  This function converts \p bytes to kibi-, mebi-, ..., exbibytes as appropriate and prints the
  result.
  */
 inline std::ostream& operator<<(std::ostream& str, const Bytes bytes)
 {
-    if (bytes.bytes == ~size_t(0)) {
+    if (bytes.is_unknown()) {
         return str << "unknown";
     }
 
     int i = 0;
-    const char* units[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"};
-    double size = (double)bytes.bytes;
+    const char* units[] = {" B", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
+    double size = (double)bytes.get_count();
     while (size > 1024.) {
         size /= 1024.;
         ++i;
     }
-    return str << std::fixed << std::setprecision(3) << size << ' ' << units[i];
+    return str << std::fixed << std::setprecision(3) << size << units[i];
 }
 
+}
+namespace LOG {
+using MEM::operator<<;
 
-/// Converts an integer memory size into a human-readable form, e.g., 16777216 -> "16 MiB".
-inline std::string get_readable_memory_size(size_t mem_size)
+
+template <typename T>
+inline std::ostream& operator<<(std::ostream& str, const Prefixed<T> num)
 {
-    std::ostringstream str;
-    str << Bytes(mem_size);
-    return str.str();
+    return DETAIL::print(str,num);
 }
 
 
 inline std::ostream& operator<<(std::ostream& str, const Large_number num)
 {
-    if (num.count < 100000)
-        str << num.count;
-    else if (num.count < 100000000)
-        str << (num.count + 999) / 1000 << "k";
-    else
-        str << (num.count + 999999) / 1000000 << "M";
-
-    return str;
+    // Note: large numbers are automatically thresholded and rounded. Could make this configurable.
+    str << round << prefix_threshold(100000);
+    return DETAIL::print(str,num);
 }
 
 
-/// Converts number into a human-readable form, e.g., 16777216 -> "16 M".
-inline std::string get_readable_amount(const size_t num)
+template <typename Tag, typename T>
+inline std::ostream& operator<<(std::ostream& str, const Quantity<Tag,T>& value)
 {
-    std::ostringstream str;
-    str << Large_number(num);
-    return str.str();
+    return str << std::fixed << std::setprecision(3)
+               << value.value << ' ' << get_unit_symbol(value);
+}
+
+
+template <typename Tag, typename T>
+inline std::ostream& operator<<(std::ostream& str, const Quantity<Tag,Prefixed<T>>& value)
+{
+    return str << value.value << get_unit_symbol(value);
 }
 
 
@@ -166,9 +349,21 @@ inline std::ostream& operator<<(std::ostream& str, const Item_count<T>& value)
 }
 
 
-inline std::ostream& operator<<(std::ostream& str, const Seconds value)
+/// Converts an integer memory size into a human-readable form, e.g., 16777216 -> "16 MiB".
+inline std::string get_readable_memory_size(const size_t mem_size)
 {
-    return str << std::fixed << std::setprecision(3) << value.seconds << 's';
+    std::ostringstream str;
+    str << Bytes(mem_size);
+    return str.str();
+}
+
+
+/// Converts number into a human-readable form, e.g., 16777216 -> "16 M".
+inline std::string get_readable_amount(const size_t num)
+{
+    std::ostringstream str;
+    str << Large_number(num);
+    return str.str();
 }
 
 

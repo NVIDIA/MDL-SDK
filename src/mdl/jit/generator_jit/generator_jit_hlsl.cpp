@@ -29,7 +29,16 @@
 #include "pch.h"
 
 #include <llvm/ADT/EquivalenceClasses.h>
+
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 #include <llvm/ADT/SetVector.h>
+#if defined(__GNUC__) && (__GNUC__ >= 7)
+#pragma GCC diagnostic pop
+#endif 
+
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Pass.h>
 #include <llvm/Transforms/Scalar.h>
@@ -689,10 +698,136 @@ char const *LLVM_code_generator::get_hlsl_tex_type_func_suffix(IDefinition const
     return "";
 }
 
+/// If the given definition has the since flags set, find the latest MDL version.
+IDefinition const *LLVM_code_generator::promote_to_highest_version(
+    IDefinition const *idef,
+    unsigned          &promote)
+{
+    promote = LLVM_code_generator::PR_NONE;
+
+    Definition const *def = impl_cast<Definition>(idef);
+
+    unsigned ver_flags = def->get_version_flags();
+
+    if (((ver_flags >> 8) & 0xFF) == 0) {
+        // this definition was never removed
+        return def;
+    }
+
+    // try to find the latest
+    Definition const *ndef = def->get_next_def();
+    for (; ndef != NULL;) {
+        unsigned ver_flags = ndef->get_version_flags();
+
+        if (((ver_flags >> 8) & 0xFF) == 0) {
+            // found
+            break;
+        }
+    }
+
+    if (ndef != NULL) {
+        switch (ndef->get_semantics()) {
+        case IDefinition::DS_INTRINSIC_TEX_WIDTH:
+        case IDefinition::DS_INTRINSIC_TEX_HEIGHT:
+        case IDefinition::DS_INTRINSIC_TEX_DEPTH:
+            {
+                IType_function const *f_tp = cast<IType_function>(def->get_type());
+
+                ISymbol const *dummy;
+                IType const   *p_tp;
+                f_tp->get_parameter(0, p_tp, dummy);
+
+                if (is_tex_2d(p_tp)) {
+                    // we have 2 promotions here
+                    if (f_tp->get_parameter_count() < 2) {
+                        // add uv_tile
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_INT2;
+                    }
+                    if (f_tp->get_parameter_count() < 3) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                } else if (is_tex_3d(p_tp)) {
+                    if (f_tp->get_parameter_count() < 2) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+            {
+                IType_function const *f_tp = cast<IType_function>(def->get_type());
+
+                ISymbol const *dummy;
+                IType const *p_tp;
+                f_tp->get_parameter(0, p_tp, dummy);
+
+                if (is_tex_2d(p_tp)) {
+                    // we have 2 promotions here
+                    if (f_tp->get_parameter_count() == 6) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                } else if (is_tex_3d(p_tp)) {
+                    if (f_tp->get_parameter_count() == 8) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
+            {
+                IType_function const *f_tp = cast<IType_function>(def->get_type());
+
+                ISymbol const *dummy;
+                IType const *p_tp;
+                f_tp->get_parameter(0, p_tp, dummy);
+
+                if (is_tex_2d(p_tp)) {
+                    // we have 2 promotions here
+                    if (f_tp->get_parameter_count() < 3) {
+                        // add uv_tile
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_INT2;
+                    }
+                    if (f_tp->get_parameter_count() < 4) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                } else if (is_tex_3d(p_tp)) {
+                    if (f_tp->get_parameter_count() < 3) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                }
+            }
+            break;
+
+        default:
+            break;
+        }
+        MDL_ASSERT(promote != LLVM_code_generator::PR_NONE && "unexpected promotion");
+        if (promote != LLVM_code_generator::PR_NONE) {
+            return ndef;
+        }
+    }
+
+    return def;
+}
+
 // Get the intrinsic LLVM function for a MDL function for HLSL code.
 llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
     IDefinition const *def,
-    bool               return_derivs)
+    bool              return_derivs)
 {
     char const *module_name = NULL;
     enum Module_enum {
@@ -751,13 +886,15 @@ llvm::Function *LLVM_code_generator::get_hlsl_intrinsic_function(
     }
 
     // no special handling required?
-    if (module_name == NULL)
+    if (module_name == NULL) {
         return NULL;
+    }
 
     Function_instance inst(get_allocator(), def, return_derivs);
     llvm::Function *func = get_function(inst);
-    if (func != NULL)
+    if (func != NULL) {
         return func;
+    }
 
     IModule const *owner = m_compiler->find_builtin_module(string(module_name, get_allocator()));
 

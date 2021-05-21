@@ -43,15 +43,10 @@ class Mem_module : public SYSTEM::IModule
 {
 public:
     /// Constructor.
-    Mem_module() : m_exit_memory_callback(0) { }
+    Mem_module() { }
 
     /// Destructor.
     ~Mem_module() { }
-
-    /// Register a callback to be called from exit() of this module.
-    /// \note This currently accepts only one callback function.
-    /// \param cb the callback function, 0 can be used to uninstall the previous callback
-    void set_exit_cb(void (*cb)());
 
     // methods of IModule
     
@@ -62,9 +57,6 @@ public:
     bool init();
 
     void exit();
-
-private:
-    void (*m_exit_memory_callback)();
 };
 
 } // namespace MEM

@@ -104,6 +104,9 @@ private:
     /// Run local optimizations.
     void local_opt();
 
+    /// If expr is a sequence, remove useless subexpressions.
+    IExpression const *remove_useless_sequence(IExpression const *expr);
+
     /// Run local optimizations.
     IDeclaration const *local_opt(IDeclaration const *decl);
 

@@ -104,6 +104,7 @@ Thread_context::Thread_context(
 , m_options(alloc)
 , m_rrh(NULL)
 , m_front_path(alloc)
+, m_virtual_root(alloc)
 , m_repl_module_name(alloc)
 , m_repl_file_name(alloc)
 , m_all_warnings_are_off(false)

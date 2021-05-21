@@ -48,59 +48,56 @@ class Serializer_impl : public Serializer, public MI::MEM::Allocatable
 public:
     Serializer_impl() : m_id_counter(1), m_helper() { }
 
-    virtual ~Serializer_impl() { };
+    virtual ~Serializer_impl() = default;
 
-    bool is_remote() { return false; }
+    bool is_remote() const override { return false; }
 
-    virtual void serialize(const Serializable* serializable, bool shared = false);
+    void serialize(const Serializable* serializable, bool shared = false) override;
 
     using Serializer::write;
 
     // Default implementation for basic types.
-    virtual void write(bool value) { do_write(&value, 1); }
-    virtual void write(Uint8 value) { do_write(&value, 1); }
-    virtual void write(Uint16 value) { do_write(&value, 1); }
-    virtual void write(Uint32 value) { do_write(&value, 1); }
-    virtual void write(Uint64 value) { do_write(&value, 1); }
-    virtual void write(Sint8 value) { do_write(&value, 1); }
-    virtual void write(Sint16 value) { do_write(&value, 1); }
-    virtual void write(Sint32 value) { do_write(&value, 1); }
-    virtual void write(Sint64 value) { do_write(&value, 1); }
-    virtual void write(float value) { do_write(&value, 1); }
-    virtual void write(double value) { do_write(&value, 1); }
+    void write(bool value) override { do_write(&value, 1); }
+    void write(Uint8 value) override { do_write(&value, 1); }
+    void write(Uint16 value) override { do_write(&value, 1); }
+    void write(Uint32 value) override { do_write(&value, 1); }
+    void write(Uint64 value) override { do_write(&value, 1); }
+    void write(Sint8 value) override { do_write(&value, 1); }
+    void write(Sint16 value) override { do_write(&value, 1); }
+    void write(Sint32 value) override { do_write(&value, 1); }
+    void write(Sint64 value) override { do_write(&value, 1); }
+    void write(float value) override { do_write(&value, 1); }
+    void write(double value) override { do_write(&value, 1); }
 
 
     /// Default implementations for serializing an array of value types. These
     /// default implementations can/should be overridden by the derived classes.
-    virtual void write(const char* values, size_t count) { do_write(values, count); }
-    virtual void write(const bool* values, Size count) { do_write(values, count); }
-    virtual void write(const Uint8* values, Size count) { do_write(values, count); }
-    virtual void write(const Uint16* values, Size count) { do_write(values, count); }
-    virtual void write(const Uint32* values, Size count) { do_write(values, count); }
-    virtual void write(const Uint64* values, Size count) { do_write(values, count); }
-    virtual void write(const Sint8* values, Size count) { do_write(values, count); }
-    virtual void write(const Sint16* values, Size count) { do_write(values, count); }
-    virtual void write(const Sint32* values, Size count) { do_write(values, count); }
-    virtual void write(const Sint64* values, Size count) { do_write(values, count); }
-    virtual void write(const float* values, Size count) { do_write(values, count); }
-    virtual void write(const double* values, Size count) { do_write(values, count); }
-    void write(const DB::Tag& value);
-    void write(const char* value);
-    void write(const std::string& value);
-    void write(const mi::base::Uuid& value);
-    void write(const mi::math::Color& value);
-    void write(const CONT::Bitvector& value);
-    void write(const CONT::Dictionary& value);
+    void write(const char* values, size_t count) override { do_write(values, count); }
+    void write(const bool* values, Size count) override { do_write(values, count); }
+    void write(const Uint8* values, Size count) override { do_write(values, count); }
+    void write(const Uint16* values, Size count) override { do_write(values, count); }
+    void write(const Uint32* values, Size count) override { do_write(values, count); }
+    void write(const Uint64* values, Size count) override { do_write(values, count); }
+    void write(const Sint8* values, Size count) override { do_write(values, count); }
+    void write(const Sint16* values, Size count) override { do_write(values, count); }
+    void write(const Sint32* values, Size count) override { do_write(values, count); }
+    void write(const Sint64* values, Size count) override { do_write(values, count); }
+    void write(const float* values, Size count) override { do_write(values, count); }
+    void write(const double* values, Size count) override { do_write(values, count); }
+    void write(const DB::Tag& value) override;
+    void write(const char* value) override;
+    void write(const CONT::Bitvector& value) override;
+    void write(const CONT::Dictionary& value) override;
 
-    void write_size_t(size_t value);
+    void write_size_t(size_t value) override;
 
-    void write(const Serializable& object) { object.serialize(this); }
+    void write(const Serializable& object) override { object.serialize(this); }
 
-    void reserve(size_t size) { };
+    void reserve(size_t size) override { }
 
-    void flush() { }
+    void flush() override { }
 
-    void start_extension();
+    void start_extension() override;
 
     static void write_direct(Serializer* serializer, const char* buffer, size_t size);
 
@@ -142,60 +139,57 @@ class Deserializer_impl : public Deserializer, public MI::MEM::Allocatable
 public:
     Deserializer_impl(Deserialization_manager* deserialization_manager);
 
-    virtual ~Deserializer_impl() { };
+    virtual ~Deserializer_impl() = default;
 
-    virtual bool is_remote() { return false; }
+    bool is_remote() const override { return false; }
 
-    virtual Serializable* deserialize(bool shared = false);
+    Serializable* deserialize(bool shared = false) override;
 
     using Deserializer::read;
 
     /// Default implementations for deserializing an array of value types. These
     /// default implementations can/should be overridden by the derived classes.
-    virtual void read(bool* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Uint8* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Uint16* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Uint32* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Uint64* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Sint8* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Sint16* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Sint32* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(Sint64* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(float* value_pointer) { do_read(value_pointer, 1); }
-    virtual void read(double* value_pointer) { do_read(value_pointer, 1); }
+    void read(bool* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Uint8* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Uint16* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Uint32* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Uint64* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Sint8* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Sint16* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Sint32* value_pointer) override { do_read(value_pointer, 1); }
+    void read(Sint64* value_pointer) override { do_read(value_pointer, 1); }
+    void read(float* value_pointer) override { do_read(value_pointer, 1); }
+    void read(double* value_pointer) override { do_read(value_pointer, 1); }
 
     /// Default implementations for deserializing an array of value types. These
     /// default implementations can/should be overridden by the derived classes.
-    virtual void read(char* value_pointer, size_t count) { do_read(value_pointer, count); }
-    virtual void read(bool* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Uint8* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Uint16* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Uint32* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Uint64* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Sint8* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Sint16* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Sint32* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(Sint64* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(float* value_pointer, Size count) { do_read(value_pointer, count); }
-    virtual void read(double* value_pointer, Size count) { do_read(value_pointer, count); }
+    void read(char* value_pointer, size_t count) override { do_read(value_pointer, count); }
+    void read(bool* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Uint8* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Uint16* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Uint32* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Uint64* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Sint8* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Sint16* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Sint32* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(Sint64* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(float* value_pointer, Size count) override { do_read(value_pointer, count); }
+    void read(double* value_pointer, Size count) override { do_read(value_pointer, count); }
 
-    void read(DB::Tag* value_pointer);
-    void read(char** value_pointer);
-    void read(std::string* value_pointer);
-    void read(mi::base::Uuid* value_pointer);
-    void read(mi::math::Color* value_pointer);
-    void read(CONT::Bitvector* value_type);
-    void read(CONT::Dictionary* value_pointer);
+    void read(DB::Tag* value_pointer) override;
+    void read(char** value_pointer) override;
+    void read(CONT::Bitvector* value_type) override;
+    void read(CONT::Dictionary* value_pointer) override;
 
-    void read_size_t(size_t* value);
+    void read_size_t(size_t* value) override;
 
-    void release(const char *str);
+    void release(const char *str) override;
 
-    void read(Serializable* object) { object->deserialize(this); }
+    void read(Serializable* object) override { object->deserialize(this); }
 
-    bool check_extension();
+    bool check_extension() override;
 
-    void set_error_handler(IDeserializer_error_handler<>* handler);
+    void set_error_handler(IDeserializer_error_handler<>* handler) override;
 
 protected:
     // This is meant to be called from the database or similar modules only! It will clear the map

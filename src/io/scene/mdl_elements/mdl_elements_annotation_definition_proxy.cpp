@@ -45,26 +45,27 @@ Mdl_annotation_definition_proxy::Mdl_annotation_definition_proxy()
 {
 }
 
-Mdl_annotation_definition_proxy::Mdl_annotation_definition_proxy(
-    const char* module_name)
+Mdl_annotation_definition_proxy::Mdl_annotation_definition_proxy( const char* module_name)
   : m_module_db_name( get_db_name( module_name))
 {
 }
 
-const SERIAL::Serializable* Mdl_annotation_definition_proxy::serialize( SERIAL::Serializer* serializer) const
+const SERIAL::Serializable* Mdl_annotation_definition_proxy::serialize(
+    SERIAL::Serializer* serializer) const
 {
     Scene_element_base::serialize( serializer);
 
-    serializer->write( m_module_db_name);
+    SERIAL::write( serializer, m_module_db_name);
 
     return this + 1;
 }
 
-SERIAL::Serializable* Mdl_annotation_definition_proxy::deserialize( SERIAL::Deserializer* deserializer)
+SERIAL::Serializable* Mdl_annotation_definition_proxy::deserialize(
+    SERIAL::Deserializer* deserializer)
 {
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_module_db_name);
+    SERIAL::read( deserializer, &m_module_db_name);
 
     return this + 1;
 }
@@ -79,7 +80,7 @@ void Mdl_annotation_definition_proxy::dump() const
 size_t Mdl_annotation_definition_proxy::get_size() const
 {
     return sizeof( *this)
-        + SCENE::Scene_element<Mdl_annotation_definition_proxy, 
+        + SCENE::Scene_element<Mdl_annotation_definition_proxy,
                                Mdl_annotation_definition_proxy::id>::get_size()
             - sizeof( SCENE::Scene_element<Mdl_annotation_definition_proxy,
                                            Mdl_annotation_definition_proxy::id>)

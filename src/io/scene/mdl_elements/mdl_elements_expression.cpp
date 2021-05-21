@@ -30,11 +30,9 @@
 
 #include "pch.h"
 
-#include "i_mdl_elements_material_instance.h"
 #include "i_mdl_elements_module.h"
 #include "i_mdl_elements_function_call.h"
 #include "i_mdl_elements_function_definition.h"
-#include "i_mdl_elements_material_definition.h"
 #include "i_mdl_elements_utilities.h"
 
 #include "mdl_elements_annotation_definition_proxy.h"
@@ -93,21 +91,24 @@ mi::Size Expression_parameter::get_memory_consumption() const
         + dynamic_memory_consumption( m_type);
 }
 
-DB::Tag Expression_direct_call::get_definition(DB::Transaction *transaction) const
+DB::Tag Expression_direct_call::get_definition( DB::Transaction* transaction) const
 {
-    if (transaction == nullptr)
+    if( !transaction)
         return m_definition_ident.first;
 
-    DB::Access<Mdl_module> module(m_module_tag, transaction);
-    SERIAL::Class_id class_id = transaction->get_class_id(m_definition_ident.first);
-    if (class_id == ID_MDL_MATERIAL_DEFINITION) {
-        if (module->has_material_definition(m_definition_db_name, m_definition_ident.second) == 0)
-            return m_definition_ident.first;
-    }
-    else if (class_id == ID_MDL_FUNCTION_DEFINITION) {
-        if (module->has_function_definition(m_definition_db_name, m_definition_ident.second) == 0)
-            return m_definition_ident.first;
-    }
+    DB::Access<Mdl_module> module( m_module_tag, transaction);
+    SERIAL::Class_id class_id = transaction->get_class_id( m_definition_ident.first);
+    if( class_id != ID_MDL_FUNCTION_DEFINITION)
+        return DB::Tag();
+
+    if( module->has_definition(
+        /*is_material*/ true, m_definition_db_name, m_definition_ident.second) == 0)
+        return m_definition_ident.first;
+
+    if( module->has_definition(
+        /*is_material*/ false, m_definition_db_name, m_definition_ident.second) == 0)
+        return m_definition_ident.first;
+
     return DB::Tag();
 }
 
@@ -222,19 +223,31 @@ mi::neuraylib::IAnnotation_definition::Semantics Annotation_definition::get_sema
     return m_semantic;
 }
 
+bool Annotation_definition::is_exported() const
+{
+    return m_is_exported;
+}
+
+void Annotation_definition::get_mdl_version(
+    mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const
+{
+    since   = MDL::convert_mdl_version( m_since_version);
+    removed = MDL::convert_mdl_version( m_removed_version);
+}
+
 mi::Size Annotation_definition::get_parameter_count() const
 {
     return m_parameter_types->get_size();
 }
 
-const char* Annotation_definition::get_parameter_name(mi::Size index) const
+const char* Annotation_definition::get_parameter_name( mi::Size index) const
 {
-    return m_parameter_types->get_name(index);
+    return m_parameter_types->get_name( index);
 }
 
-mi::Size Annotation_definition::get_parameter_index(const char* name) const
+mi::Size Annotation_definition::get_parameter_index( const char* name) const
 {
-    return m_parameter_types->get_index(name);
+    return m_parameter_types->get_index( name);
 }
 
 const IType_list* Annotation_definition::get_parameter_types() const
@@ -258,20 +271,12 @@ const IAnnotation_block* Annotation_definition::get_annotations() const
     return m_annotations.get();
 }
 
-bool Annotation_definition::is_exported() const
-{
-    return m_is_exported;
-}
-
 const IAnnotation* Annotation_definition::create_annotation(const IExpression_list* arguments) const
 {
-    if (!arguments && m_parameter_defaults->get_size() == 0)
-        return nullptr;
-
     // check that all provided arguments exist in the definition
     if (arguments) {
         for (mi::Size i = 0, n = arguments->get_size(); i < n; ++i) {
-            const char *name = arguments->get_name(i);
+            const char* name = arguments->get_name(i);
             if (m_parameter_types->get_index(name) == mi::Size(-1))
                 return nullptr;
         }
@@ -283,8 +288,9 @@ const IAnnotation* Annotation_definition::create_annotation(const IExpression_li
     mi::base::Handle<IExpression_list> complete_arguments(ef->create_expression_list());
     for (mi::Size i = 0, n = m_parameter_types->get_size(); i < n; ++i) {
 
-        const char *name = m_parameter_types->get_name(i);
-        mi::base::Handle<const IExpression> arg(arguments->get_expression(name)); //-V522 PVS
+        const char* name = m_parameter_types->get_name(i);
+        mi::base::Handle<const IExpression> arg(
+            arguments ? arguments->get_expression(name) : nullptr);
         if (arg) {
             if (arg->get_kind() != IExpression::EK_CONSTANT)
                 return nullptr;
@@ -314,11 +320,18 @@ const IAnnotation* Annotation_definition::create_annotation(const IExpression_li
     return new Annotation(m_name.c_str(), complete_arguments.get());
 }
 
+void Annotation_definition::get_mdl_version(
+    mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const
+{
+    since   = m_since_version;
+    removed = m_removed_version;
+}
+
 mi::Size Annotation_definition::get_memory_consumption() const
 {
     return sizeof(*this)
         + dynamic_memory_consumption(m_name)
-        + dynamic_memory_consumption(m_module_name)
+        + dynamic_memory_consumption(m_module_mdl_name)
         + dynamic_memory_consumption(m_module_db_name)
         + dynamic_memory_consumption(m_simple_name)
         + dynamic_memory_consumption(m_parameter_type_names)
@@ -329,7 +342,7 @@ mi::Size Annotation_definition::get_memory_consumption() const
 
 std::string Annotation_definition::get_mdl_name_without_parameter_types() const
 {
-    return m_module_name + "::" + m_simple_name;
+    return m_module_mdl_name + "::" + m_simple_name;
 }
 
 const IExpression_list* Annotation::get_arguments() const
@@ -527,8 +540,11 @@ IExpression_direct_call* Expression_factory::create_direct_call(
     const std::string& definition_db_name,
     IExpression_list* arguments) const
 {
-    return type && definition_ident.first && !definition_db_name.empty() && arguments
-        ? new Expression_direct_call(type, module_tag, definition_ident, definition_db_name, arguments) : nullptr;
+    if( !type || !definition_ident.first || definition_db_name.empty() || !arguments)
+        return nullptr;
+
+    return new Expression_direct_call(
+        type, module_tag, definition_ident, definition_db_name, arguments);
 }
 
 IExpression_temporary* Expression_factory::create_temporary(
@@ -560,6 +576,8 @@ IAnnotation_definition* Expression_factory::create_annotation_definition(
     const std::vector<std::string>& parameter_type_names,
     mi::neuraylib::IAnnotation_definition::Semantics sema,
     bool is_exported,
+    mi::mdl::IMDL::MDL_version since_version,
+    mi::mdl::IMDL::MDL_version removed_version,
     const IType_list* parameter_types,
     const IExpression_list* parameter_defaults,
     const IAnnotation_block* annotations) const
@@ -569,7 +587,7 @@ IAnnotation_definition* Expression_factory::create_annotation_definition(
 
     return new Annotation_definition(
         name, module_name, simple_name, parameter_type_names, sema, is_exported,
-        parameter_types, parameter_defaults, annotations);
+        since_version, removed_version, parameter_types, parameter_defaults, annotations);
 }
 
 IExpression_list* Expression_factory::create_expression_list() const
@@ -615,21 +633,17 @@ IExpression* Expression_factory::clone(
             mi::base::Handle<const IType> type( expr->get_type());
             mi::base::Handle<const IExpression_call> expr_call(
                 expr->get_interface<IExpression_call>());
-            if (copy_immutable_calls)
-            {
-                ASSERT(M_SCENE, transaction);
+            if( copy_immutable_calls) {
+                ASSERT( M_SCENE, transaction);
                 DB::Tag call_tag = expr_call->get_call();
-                SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
+                SERIAL::Class_id class_id = transaction->get_class_id( call_tag);
                 std::vector<mi::base::Handle<const IExpression> > dummy_context;
-                if (class_id == Mdl_function_call::id) {
-                    DB::Access<Mdl_function_call> f_call(call_tag, transaction);
-                    if (f_call->is_immutable())
-                        return deep_copy(this, transaction, expr_call.get(), dummy_context);
-                } else if (class_id == Mdl_material_instance::id) {
-                    DB::Access<Mdl_material_instance> mat_inst(call_tag, transaction);
-                    if (mat_inst->is_immutable())
-                        return deep_copy(this, transaction, expr_call.get(), dummy_context);
-                }
+                if( class_id == Mdl_function_call::id) {
+                    DB::Access<Mdl_function_call> fc( call_tag, transaction);
+                    if( fc->is_immutable())
+                        return deep_copy( this, transaction, expr_call.get(), dummy_context);
+                } else
+                    return nullptr;
             }
             return create_call( type.get(), expr_call->get_call());
         }
@@ -647,9 +661,8 @@ IExpression* Expression_factory::clone(
             mi::base::Handle<IExpression_list> clone_arguments(
                 clone( arguments.get(), transaction, copy_immutable_calls));
             Mdl_tag_ident def_ident(
-                expr_direct_call->get_definition(/*transaction=*/nullptr),
+                expr_direct_call->get_definition( transaction),
                 expr_direct_call->get_definition_ident());
-
             return create_direct_call(
                 type.get(), expr_direct_call->get_module(), def_ident,
                 expr_direct_call->get_definition_db_name(), clone_arguments.get());
@@ -850,7 +863,7 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
 {
     IExpression::Kind kind = expr->get_kind();
     mi::Uint32 kind_as_uint32 = kind;
-    serializer->write( kind_as_uint32);
+    SERIAL::write(serializer,  kind_as_uint32);
 
     switch( kind) {
 
@@ -868,7 +881,7 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
             mi::base::Handle<const IExpression_call> expr_call(
                 expr->get_interface<IExpression_call>());
             DB::Tag tag = expr_call->get_call();
-            serializer->write( tag);
+            SERIAL::write(serializer,  tag);
             return;
         }
         case IExpression::EK_PARAMETER: {
@@ -878,7 +891,7 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
             mi::base::Handle<const IExpression_parameter> expr_parameter(
                 expr->get_interface<IExpression_parameter>());
             mi::Size index = expr_parameter->get_index();
-            serializer->write( index);
+            SERIAL::write(serializer,  index);
             return;
         }
         case IExpression::EK_DIRECT_CALL: {
@@ -888,13 +901,13 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
             mi::base::Handle<const IExpression_direct_call> expr_direct_call(
                 expr->get_interface<IExpression_direct_call>());
             DB::Tag module_tag = expr_direct_call->get_module();
-            serializer->write(module_tag);
+            SERIAL::write(serializer, module_tag);
             DB::Tag tag = expr_direct_call->get_definition(/*transaction=*/nullptr);
-            serializer->write( tag);
+            SERIAL::write(serializer,  tag);
             Mdl_ident ident = expr_direct_call->get_definition_ident();
-            serializer->write(ident);
+            SERIAL::write(serializer, ident);
             const char* definition_db_name = expr_direct_call->get_definition_db_name();
-            serializer->write(definition_db_name);
+            SERIAL::write(serializer, definition_db_name);
             mi::base::Handle<const IExpression_list> arguments( expr_direct_call->get_arguments());
             serialize_list( serializer, arguments.get());
             return;
@@ -906,7 +919,7 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
             mi::base::Handle<const IExpression_temporary> expr_temporary(
                 expr->get_interface<IExpression_temporary>());
             mi::Size index = expr_temporary->get_index();
-            serializer->write( index);
+            SERIAL::write(serializer,  index);
             return;
         }
         case IExpression::EK_FORCE_32_BIT:
@@ -919,7 +932,7 @@ void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpre
 IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer) const
 {
     mi::Uint32 kind_as_uint32;
-    deserializer->read( &kind_as_uint32);
+    SERIAL::read(deserializer,  &kind_as_uint32);
     IExpression::Kind kind = static_cast<IExpression::Kind>( kind_as_uint32);
 
     switch( kind) {
@@ -932,27 +945,27 @@ IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer
             mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
             mi::base::Handle<const IType> type( tf->deserialize( deserializer));
             DB::Tag tag;
-            deserializer->read( &tag);
+            SERIAL::read(deserializer,  &tag);
             return create_call( type.get(), tag);
         }
         case IExpression::EK_PARAMETER: {
             mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
             mi::base::Handle<const IType> type( tf->deserialize( deserializer));
             mi::Size index;
-            deserializer->read( &index);
+            SERIAL::read(deserializer,  &index);
             return create_parameter( type.get(), index);
         }
         case IExpression::EK_DIRECT_CALL: {
             mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
             mi::base::Handle<const IType> type( tf->deserialize( deserializer));
             DB::Tag module_tag;
-            deserializer->read(&module_tag);
+            SERIAL::read(deserializer, &module_tag);
             DB::Tag tag;
-            deserializer->read( &tag);
+            SERIAL::read(deserializer,  &tag);
             Mdl_ident ident;
-            deserializer->read(&ident);
+            SERIAL::read(deserializer, &ident);
             std::string definition_db_name;
-            deserializer->read(&definition_db_name);
+            SERIAL::read(deserializer, &definition_db_name);
             mi::base::Handle<IExpression_list> arguments( deserialize_list( deserializer));
             return create_direct_call(
                 type.get(),
@@ -962,7 +975,7 @@ IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer
             mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
             mi::base::Handle<const IType> type( tf->deserialize( deserializer));
             mi::Size index;
-            deserializer->read( &index);
+            SERIAL::read(deserializer,  &index);
             return create_temporary( type.get(), index);
         }
         case IExpression::EK_FORCE_32_BIT:
@@ -983,7 +996,7 @@ void Expression_factory::serialize_list(
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_expressions.size();
-    serializer->write( size);
+    SERIAL::write(serializer,  size);
     for( mi::Size i = 0; i < size; ++i)
         serialize( serializer, list_impl->m_expressions[i].get());
 }
@@ -996,7 +1009,7 @@ IExpression_list* Expression_factory::deserialize_list( SERIAL::Deserializer* de
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;
-    deserializer->read( &size);
+    SERIAL::read(deserializer,  &size);
     list_impl->m_expressions.resize( size);
     for( mi::Size i = 0; i < size; ++i)
         list_impl->m_expressions[i] = deserialize( deserializer);
@@ -1008,7 +1021,7 @@ void Expression_factory::serialize_annotation(
     SERIAL::Serializer* serializer, const IAnnotation* annotation) const
 {
     std::string name = annotation->get_name();
-    serializer->write( name);
+    SERIAL::write(serializer,  name);
     mi::base::Handle<const IExpression_list> arguments( annotation->get_arguments());
     serialize_list( serializer, arguments.get());
 }
@@ -1017,7 +1030,7 @@ IAnnotation* Expression_factory::deserialize_annotation(
     SERIAL::Deserializer* deserializer) const
 {
     std::string name;
-    deserializer->read( &name);
+    SERIAL::read(deserializer,  &name);
     mi::base::Handle<IExpression_list> arguments( deserialize_list( deserializer));
     return create_annotation( name.c_str(), arguments.get());
 }
@@ -1025,20 +1038,23 @@ IAnnotation* Expression_factory::deserialize_annotation(
 void Expression_factory::serialize_annotation_definition(
     SERIAL::Serializer* serializer, const IAnnotation_definition* anno_def) const
 {
-    serializer->write(anno_def->get_name());
-    serializer->write(anno_def->get_mdl_module_name());
-    serializer->write(anno_def->get_mdl_simple_name());
+    SERIAL::write(serializer, anno_def->get_name());
+    SERIAL::write(serializer, anno_def->get_mdl_module_name());
+    SERIAL::write(serializer, anno_def->get_mdl_simple_name());
 
     mi::base::Handle<const IType_list> type_list(anno_def->get_parameter_types());
     size_t n = type_list->get_size();
     serializer->write_size_t(n);
     for(size_t i = 0; i < n; ++i)
-        serializer->write(anno_def->get_mdl_parameter_type_name(i));
+        SERIAL::write(serializer, anno_def->get_mdl_parameter_type_name(i));
 
-    mi::neuraylib::IAnnotation_definition::Semantics sema = anno_def->get_semantic();
-    serializer->write(static_cast<mi::Uint32>(sema));
+    SERIAL::write_enum(serializer, anno_def->get_semantic());
+    SERIAL::write(serializer, anno_def->is_exported());
 
-    serializer->write(anno_def->is_exported());
+    mi::mdl::IMDL::MDL_version since_version, removed_version;
+    anno_def->get_mdl_version( since_version, removed_version);
+    write_enum( serializer, since_version);
+    write_enum( serializer, removed_version);
 
     mi::base::Handle<IType_factory> tf(m_value_factory->get_type_factory());
     tf->serialize_list(serializer, type_list.get());
@@ -1054,28 +1070,32 @@ IAnnotation_definition* Expression_factory::deserialize_annotation_definition(
     SERIAL::Deserializer* deserializer) const
 {
     std::string name;
-    deserializer->read(&name);
+    SERIAL::read(deserializer, &name);
 
     std::string mdl_module_name;
-    deserializer->read(&mdl_module_name);
+    SERIAL::read(deserializer, &mdl_module_name);
 
     std::string mdl_simple_name;
-    deserializer->read(&mdl_simple_name);
+    SERIAL::read(deserializer, &mdl_simple_name);
 
     size_t n;
     deserializer->read_size_t(&n);
     std::vector<std::string> mdl_parameter_type_names;
     for(size_t i = 0; i < n; ++i) {
         std::string s;
-        deserializer->read(&s);
+        SERIAL::read(deserializer, &s);
         mdl_parameter_type_names.push_back(s);
     }
 
-    mi::Uint32 semantic;
-    deserializer->read(&semantic);
+    mi::neuraylib::IAnnotation_definition::Semantics semantic;
+    SERIAL::read_enum(deserializer, &semantic);
 
     bool is_exported = false;
-    deserializer->read(&is_exported);
+    SERIAL::read(deserializer, &is_exported);
+
+    mi::mdl::IMDL::MDL_version since_version, removed_version;
+    read_enum( deserializer, &since_version);
+    read_enum( deserializer, &removed_version);
 
     mi::base::Handle<IType_factory> tf(m_value_factory->get_type_factory());
     mi::base::Handle<IType_list> parameter_types(tf->deserialize_list(deserializer));
@@ -1089,16 +1109,20 @@ IAnnotation_definition* Expression_factory::deserialize_annotation_definition(
         mdl_module_name.c_str(),
         mdl_simple_name.c_str(),
         mdl_parameter_type_names,
-        static_cast<mi::neuraylib::IAnnotation_definition::Semantics>(semantic),
+        semantic,
         is_exported,
-        parameter_types.get(), defaults.get(), annotations.get());
+        since_version,
+        removed_version,
+        parameter_types.get(),
+        defaults.get(),
+        annotations.get());
 }
 
 void Expression_factory::serialize_annotation_block(
     SERIAL::Serializer* serializer, const IAnnotation_block* block) const
 {
     mi::Size size = block ? block->get_size() : 0;
-    serializer->write( size);
+    SERIAL::write( serializer, size);
     for( mi::Size i = 0; i < size; ++i) {
         mi::base::Handle<const IAnnotation> anno( block->get_annotation( i));
         serialize_annotation( serializer, anno.get());
@@ -1109,7 +1133,7 @@ IAnnotation_block* Expression_factory::deserialize_annotation_block(
     SERIAL::Deserializer* deserializer) const
 {
     mi::Size size;
-    deserializer->read( &size);
+    SERIAL::read( deserializer, &size);
     if( size == 0)
         return nullptr;
 
@@ -1130,7 +1154,7 @@ void Expression_factory::serialize_annotation_list(
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_annotation_blocks.size();
-    serializer->write( size);
+    SERIAL::write( serializer, size);
     for( mi::Size i = 0; i < size; ++i)
         serialize_annotation_block( serializer, list_impl->m_annotation_blocks[i].get());
 }
@@ -1144,7 +1168,7 @@ IAnnotation_list* Expression_factory::deserialize_annotation_list(
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;
-    deserializer->read( &size);
+    SERIAL::read( deserializer, &size);
     list_impl->m_annotation_blocks.resize( size);
     for( mi::Size i = 0; i < size; ++i)
         list_impl->m_annotation_blocks[i] = deserialize_annotation_block( deserializer);
@@ -1161,7 +1185,7 @@ void Expression_factory::serialize_annotation_definition_list(
 
     write(serializer, anno_def_list_impl->m_name_to_index);
     mi::Size size = anno_def_list_impl->m_anno_definitions.size();
-    serializer->write(size);
+    SERIAL::write(serializer, size);
     for (mi::Size i = 0; i < size; ++i)
         serialize_annotation_definition(serializer, anno_def_list_impl->m_anno_definitions[i].get());
 }
@@ -1174,7 +1198,7 @@ IAnnotation_definition_list* Expression_factory::deserialize_annotation_definiti
     read(deserializer, &list_impl->m_name_to_index);
 
     mi::Size size;
-    deserializer->read(&size);
+    SERIAL::read(deserializer, &size);
     list_impl->m_anno_definitions.resize(size);
     for (mi::Size i = 0; i < size; ++i)
         list_impl->m_anno_definitions[i] = deserialize_annotation_definition(deserializer);

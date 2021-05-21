@@ -67,6 +67,10 @@ public:
 
     const char* get_image() const;
 
+    mi::Sint32 set_volume( const char* name);
+
+    const char* get_volume() const;
+
     void set_gamma( Float32 gamma);
 
     Float32 get_gamma() const;

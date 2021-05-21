@@ -64,7 +64,7 @@ public:
 
     // public API methods
 
-    mi::neuraylib::ICanvas* create_canvas(
+    mi::neuraylib::ICanvas* deprecated_create_tiled_canvas(
         const char* pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
@@ -72,6 +72,14 @@ public:
         mi::Uint32 tile_height,
         mi::Uint32 layers,
         bool is_cubemap,
+        mi::Float32 gamma) const;
+
+    mi::neuraylib::ICanvas* create_canvas(
+        const char* pixel_type,
+        mi::Uint32 width,
+        mi::Uint32 height,
+        mi::Uint32 layers,
+        mi::neuraylib::Boolean is_cubemap,
         mi::Float32 gamma) const;
 
     mi::neuraylib::ICanvas_cuda* create_canvas_cuda(
@@ -115,7 +123,8 @@ public:
         const mi::neuraylib::ICanvas* canvas,
         const char* image_format,
         const char* pixel_type,
-        const char* quality) const;
+        const char* quality,
+        bool force_default_gamma) const;
 
     mi::neuraylib::ICanvas* create_canvas_from_buffer(
         const mi::neuraylib::IBuffer* buffer,

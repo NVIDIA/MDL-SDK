@@ -83,7 +83,7 @@ const mi::Float32_3_4 identity(
 
 // Creates an instance of the given material.
 void create_material_instance(
-    mi::neuraylib::IMdl_factory* factory,
+    mi::neuraylib::IMdl_factory* mdl_factory,
     mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_impexp_api* mdl_impexp_api,
     mi::neuraylib::IMdl_execution_context* context,
@@ -103,11 +103,20 @@ void create_material_instance(
 
     // Get the database name for the module we loaded
     mi::base::Handle<const mi::IString> module_db_name(
-        factory->get_db_module_name(module_name.c_str()));
+        mdl_factory->get_db_module_name(module_name.c_str()));
+    mi::base::Handle<const mi::neuraylib::IModule> module(
+        transaction->access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
+    if (!module)
+        exit_failure("Failed to access the loaded module.");
 
-    // attach the material name
-    std::string material_db_name =
-        std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
+    // Attach the material name
+    std::string material_db_name
+        = std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
+    material_db_name = mi::examples::mdl::add_missing_material_signature(
+        module.get(), material_db_name);
+    if (material_db_name.empty())
+        exit_failure("Failed to find the material %s in the module %s.",
+            material_simple_name.c_str(), module_name.c_str());
 
     // Get the material definition from the database
     mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
@@ -231,7 +240,7 @@ mi::neuraylib::ICanvas *bake_expression_native(
 
     // Calculate all expression values for a 2x2 quad around the center of the world
     // and write them to the canvas.
-    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
     mi::Float32_3_struct *data = static_cast<mi::Float32_3_struct *>(tile->get_data());
     for (mi::Uint32 y = 0; y < height; ++y) {
         for (mi::Uint32 x = 0; x < width; ++x) {
@@ -325,7 +334,7 @@ mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
 
     // Calculate all expression values for a 2x2 quad around the center of the world
     // and write them to the canvas.
-    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(0, 0));
+    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
     mi::Float32_3_struct *data = static_cast<mi::Float32_3_struct *>(tile->get_data());
     for (mi::Uint32 y = 0; y < height; ++y) {
         for (mi::Uint32 x = 0; x < width; ++x) {

@@ -50,7 +50,7 @@ template <class E>
 class Expression_base : public mi::base::Interface_implement<E>
 {
 public:
-    typedef Expression_base<E> Base;
+    using Base = Expression_base<E>;
 
     Expression_base( const IType* type) : m_type( type, mi::base::DUP_INTERFACE)
     { ASSERT( M_SCENE, type); }
@@ -139,7 +139,7 @@ public:
         ASSERT(M_SCENE, definition_ident.first); ASSERT(M_SCENE, module_tag); ASSERT(M_SCENE, arguments);
     }
 
-    DB::Tag get_definition(DB::Transaction *transaction) const;
+    DB::Tag get_definition( DB::Transaction *transaction) const;
 
     DB::Tag get_module() const { return m_module_tag; }
 
@@ -214,10 +214,10 @@ private:
     typedef std::map<std::string, mi::Size> Name_index_map;
     Name_index_map m_name_index;
 
-    typedef std::vector<std::string> Index_name_vector;
+    using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
 
-    typedef std::vector<mi::base::Handle<const IExpression> > Expressions_vector;
+    using Expressions_vector = std::vector<mi::base::Handle<const IExpression> >;
     Expressions_vector m_expressions;
 };
 
@@ -227,30 +227,34 @@ class Annotation_definition : public mi::base::Interface_implement<IAnnotation_d
 public:
     Annotation_definition(
         const char* name,
-        const char* module_name,
+        const char* module_mdl_name,
         const char* simple_name,
         const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics semantic,
         bool is_exported,
+        mi::mdl::IMDL::MDL_version since_version,
+        mi::mdl::IMDL::MDL_version removed_version,
         const IType_list* parameter_types,
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations)
-        : m_name(name)
-        , m_module_name(module_name)
-        , m_module_db_name(get_db_name(module_name))
-        , m_simple_name(simple_name)
-        , m_parameter_type_names(parameter_type_names)
-        , m_semantic(semantic)
-        , m_is_exported(is_exported)
-        , m_parameter_types(parameter_types, mi::base::DUP_INTERFACE)
-        , m_parameter_defaults(parameter_defaults, mi::base::DUP_INTERFACE)
-        , m_annotations(annotations, mi::base::DUP_INTERFACE) { }
+      : m_name( name),
+        m_module_mdl_name( module_mdl_name),
+        m_module_db_name( get_db_name( module_mdl_name)),
+        m_simple_name( simple_name),
+        m_parameter_type_names( parameter_type_names),
+        m_semantic( semantic),
+        m_is_exported( is_exported),
+        m_since_version( since_version),
+        m_removed_version( removed_version),
+        m_parameter_types( parameter_types, mi::base::DUP_INTERFACE),
+        m_parameter_defaults( parameter_defaults, mi::base::DUP_INTERFACE),
+        m_annotations( annotations, mi::base::DUP_INTERFACE) { }
 
     const char* get_module() const { return m_module_db_name.c_str(); }
 
     const char* get_name() const { return m_name.c_str(); }
 
-    const char* get_mdl_module_name() const { return m_module_name.c_str(); }
+    const char* get_mdl_module_name() const { return m_module_mdl_name.c_str(); }
 
     const char* get_mdl_simple_name() const { return m_simple_name.c_str(); }
 
@@ -258,21 +262,29 @@ public:
 
     mi::neuraylib::IAnnotation_definition::Semantics get_semantic() const;
 
+    bool is_exported() const;
+
+    void get_mdl_version(
+        mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const;
+
     mi::Size get_parameter_count() const;
 
-    const char* get_parameter_name(mi::Size index) const;
+    const char* get_parameter_name( mi::Size index) const;
 
-    mi::Size get_parameter_index(const char* name) const;
+    mi::Size get_parameter_index( const char* name) const;
 
     const IType_list* get_parameter_types() const;
 
     const IExpression_list* get_defaults() const;
 
-    bool is_exported() const;
-
     const IAnnotation_block* get_annotations() const;
 
     const IAnnotation* create_annotation(const IExpression_list* arguments) const;
+
+    // internal
+
+    void get_mdl_version(
+        mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const;
 
     mi::Size get_memory_consumption() const;
 
@@ -280,12 +292,14 @@ public:
 
 private:
     std::string m_name;
-    std::string m_module_name;
+    std::string m_module_mdl_name;
     std::string m_module_db_name;
     std::string m_simple_name;
     std::vector<std::string> m_parameter_type_names;
     mi::neuraylib::IAnnotation_definition::Semantics m_semantic;
     bool m_is_exported;
+    mi::mdl::IMDL::MDL_version m_since_version;
+    mi::mdl::IMDL::MDL_version m_removed_version;
     mi::base::Handle<const IType_list> m_parameter_types;
     mi::base::Handle<const IExpression_list> m_parameter_defaults;
     mi::base::Handle<const IAnnotation_block> m_annotations;
@@ -304,7 +318,7 @@ public:
 
     const IExpression_list* get_arguments() const;
 
-    const IAnnotation_definition* get_definition(DB::Transaction* transaction) const;
+    const IAnnotation_definition* get_definition( DB::Transaction* transaction) const;
 
     mi::Size get_memory_consumption() const;
 
@@ -364,10 +378,10 @@ private:
     typedef std::map<std::string, mi::Size> Name_index_map;
     Name_index_map m_name_index;
 
-    typedef std::vector<std::string> Index_name_vector;
+    using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
 
-    typedef std::vector<mi::base::Handle<const IAnnotation_block> > Annotation_blocks_vector;
+    using Annotation_blocks_vector = std::vector<mi::base::Handle<const IAnnotation_block> >;
     Annotation_blocks_vector m_annotation_blocks;
 };
 
@@ -412,6 +426,8 @@ public:
         const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics sema,
         bool is_exported,
+        mi::mdl::IMDL::MDL_version since,
+        mi::mdl::IMDL::MDL_version removed,
         const IType_list* parameter_types,
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations) const;
@@ -568,11 +584,11 @@ private:
 class Annotation_definition_list : public mi::base::Interface_implement<IAnnotation_definition_list>
 {
 public:
-    mi::Sint32 add_definition(const IAnnotation_definition* anno_def);
+    mi::Sint32 add_definition( const IAnnotation_definition* anno_def);
 
-    const IAnnotation_definition* get_definition(mi::Size index) const;
+    const IAnnotation_definition* get_definition( mi::Size index) const;
 
-    const IAnnotation_definition* get_definition(const char* name) const;
+    const IAnnotation_definition* get_definition( const char* name) const;
 
     mi::Size get_size() const { return m_anno_definitions.size(); }
 

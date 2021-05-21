@@ -108,8 +108,7 @@ public:
     /// \note After adding a builtin module it is still necessary to load it using
     ///       #mi::neuraylib::IMdl_impexp_api::load_module() before it can actually be used.
     ///
-    /// \param module_name     The fully-qualified MDL name of the MDL module (including package
-    ///                        names, starting with "::").
+    /// \param module_name     The MDL name of the module.
     /// \param module_source   The MDL source code of the module.
     /// \return
     ///                        -  0: Success.

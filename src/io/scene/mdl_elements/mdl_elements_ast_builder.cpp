@@ -33,27 +33,26 @@
 #include <mi/mdl/mdl_declarations.h>
 #include <mi/mdl/mdl_modules.h>
 
-#include "base/lib/log/i_log_assert.h"
-#include "base/lib/log/i_log_logger.h"
+#include <base/lib/log/i_log_assert.h>
+#include <base/lib/log/i_log_logger.h>
 
-#include "base/data/db/i_db_transaction.h"
-#include "base/data/db/i_db_access.h"
-#include "base/data/db/i_db_tag.h"
+#include <base/data/db/i_db_transaction.h>
+#include <base/data/db/i_db_access.h>
 
-#include "mdl/compiler/compilercore/compilercore_allocator.h"
-#include "mdl/compiler/compilercore/compilercore_modules.h"
-#include "mdl/compiler/compilercore/compilercore_symbols.h"
-#include "mdl/compiler/compilercore/compilercore_tools.h"
+#include <mdl/compiler/compilercore/compilercore_allocator.h>
+#include <mdl/compiler/compilercore/compilercore_modules.h>
+#include <mdl/compiler/compilercore/compilercore_symbols.h>
+#include <mdl/compiler/compilercore/compilercore_tools.h>
 
-#include "io/scene/texture/i_texture.h"
-#include "io/scene/dbimage/i_dbimage.h"
-#include "io/scene/lightprofile/i_lightprofile.h"
-#include "io/scene/bsdf_measurement/i_bsdf_measurement.h"
+#include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
+#include <io/scene/dbimage/i_dbimage.h>
+#include <io/scene/lightprofile/i_lightprofile.h>
+#include <io/scene/texture/i_texture.h>
+
 
 #include "i_mdl_elements_function_call.h"
 #include "i_mdl_elements_function_definition.h"
-#include "i_mdl_elements_material_definition.h"
-#include "i_mdl_elements_material_instance.h"
+#include "i_mdl_elements_utilities.h"
 #include "mdl_elements_ast_builder.h"
 
 // Disable false positives (claiming expressions involving "class_id" always being true or false)
@@ -68,7 +67,7 @@ using mi::mdl::cast;
 
 using mi::base::Handle;
 
-/// Get the name of an neuray type.
+/// Get the core name of an neuray type.
 ///
 /// \param type  the type
 static std::string get_type_name(
@@ -88,7 +87,7 @@ static std::string get_type_name(
     case IType::TK_ENUM:
         {
             Handle<const IType_enum> e_tp(type->get_interface<IType_enum>());
-            return e_tp->get_symbol();
+            return decode_name_without_signature(e_tp->get_symbol());
         }
         break;
     case IType::TK_FLOAT:
@@ -144,7 +143,7 @@ static std::string get_type_name(
             switch (s_tp->get_predefined_id()) {
             default:
             case IType_struct::SID_USER:
-                return s_tp->get_symbol();
+                return decode_name_without_signature(s_tp->get_symbol());
             case IType_struct::SID_MATERIAL_EMISSION:
                 return "material_emission";
             case IType_struct::SID_MATERIAL_SURFACE:
@@ -208,10 +207,13 @@ static std::string get_type_name(
 Mdl_ast_builder::Mdl_ast_builder(
     mi::mdl::IModule *owner,
     DB::Transaction *transaction,
-    const mi::base::Handle<IExpression_list const>& args,
-    Name_mangler& name_mangler)
+    bool traverse_ek_parameter,
+    const IExpression_list* args,
+    Name_mangler& name_mangler,
+    bool avoid_resource_urls)
 : m_owner(impl_cast<mi::mdl::Module>(owner))
 , m_trans(transaction)
+, m_traverse_ek_parameter(traverse_ek_parameter)
 , m_nf(*m_owner->get_name_factory())
 , m_vf(*m_owner->get_value_factory())
 , m_ef(*m_owner->get_expression_factory())
@@ -219,10 +221,12 @@ Mdl_ast_builder::Mdl_ast_builder(
 , m_st(m_owner->get_symbol_table())
 , m_tmp_idx(0u)
 , m_param_map()
-, m_args(args)
+, m_param_vector()
+, m_args(args, mi::base::DUP_INTERFACE)
 , m_used_user_types()
 , m_owner_version(m_owner->get_mdl_version())
 , m_name_mangler(name_mangler)
+, m_avoid_resource_urls(avoid_resource_urls)
 {
 }
 
@@ -235,7 +239,7 @@ const mi::mdl::ISimple_name* Mdl_ast_builder::create_simple_name( const std::str
 mi::mdl::IQualified_name* Mdl_ast_builder::create_qualified_name( const std::string& name)
 {
     mi::mdl::IQualified_name* qualified_name = m_nf.create_qualified_name();
-    if( is_absolute( name) && !is_in_module( name, "::<builtins>"))
+    if( is_absolute( name) && !is_in_module( name, get_builtins_module_mdl_name()))
         qualified_name->set_absolute();
 
     std::string module_name     = get_mdl_module_name( name);
@@ -251,7 +255,7 @@ mi::mdl::IQualified_name* Mdl_ast_builder::create_qualified_name( const std::str
         qualified_name->add_component( simple_name);
     }
 
-    if( simple_module_name != "<builtins>") {
+    if( simple_module_name != get_builtins_module_simple_name()) {
         simple_name = create_simple_name( m_name_mangler.mangle( simple_module_name.c_str()));
         qualified_name->add_component( simple_name);
     }
@@ -266,7 +270,7 @@ mi::mdl::IQualified_name* Mdl_ast_builder::create_scope_name( const std::string&
 {
     mi::mdl::IQualified_name* qualified_name = m_nf.create_qualified_name();
 
-    if( is_absolute( name) && !is_in_module( name, "::<builtins>"))
+    if( is_absolute( name) && !is_in_module( name, get_builtins_module_mdl_name()))
         qualified_name->set_absolute();
 
     std::string module_name     = get_mdl_module_name( name);
@@ -281,7 +285,7 @@ mi::mdl::IQualified_name* Mdl_ast_builder::create_scope_name( const std::string&
         qualified_name->add_component( simple_name);
     }
 
-    if( simple_module_name != "<builtins>") {
+    if( simple_module_name != get_builtins_module_simple_name()) {
         const mi::mdl::ISimple_name* simple_name
             = create_simple_name( m_name_mangler.mangle( simple_module_name.c_str()));
         qualified_name->add_component( simple_name);
@@ -323,6 +327,7 @@ mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
     case IType::TK_BSDF_MEASUREMENT:
         {
             std::string name(get_type_name(type));
+            name = remove_qualifiers_if_from_module( name, m_owner->get_name());
 
             mi::mdl::IQualified_name *qname = create_qualified_name(name);
             mi::mdl::IType_name      *tn    = m_nf.create_type_name(qname);
@@ -405,7 +410,7 @@ mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
 // parameter types.
 const mi::mdl::ISymbol* Mdl_ast_builder::get_field_sym( const std::string& def)
 {
-    ASSERT(M_SCENE, def.size() > 0 && def[def.size()-1] != ')');
+    ASSERT(M_SCENE, !def.empty() && def.back() != ')');
     std::string field = get_mdl_field_name(def);
     return m_st.get_symbol(field.c_str());
 }
@@ -414,11 +419,11 @@ static size_t const zero_size = 0u;
 
 // Transform a call.
 mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
-    Handle<IType const> const            &ret_type,
+    const IType                          *ret_type,
     mi::mdl::IDefinition::Semantics      sema,
     std::string const                    &callee_name,
     mi::Size                             n_params,
-    Handle<IExpression_list const> const &args,
+    const IExpression_list               *args,
     bool                                 named_args)
 {
     bool is_material_type = false;
@@ -428,7 +433,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
         IType_struct::Predefined_id id = s_tp->get_predefined_id();
         if (id == IType_struct::SID_USER) {
-            m_used_user_types.push_back(s_tp->get_symbol());
+            m_used_user_types.insert(decode_name_without_signature(s_tp->get_symbol()));
         } else if (id == IType_struct::SID_MATERIAL) {
             is_material_type = true;
         }
@@ -437,7 +442,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
         if (e_tp->get_predefined_id() != IType_enum::EID_INTENSITY_MODE) {
             // only intensity_mode is predefined
-            m_used_user_types.push_back(e_tp->get_symbol());
+            m_used_user_types.insert(decode_name_without_signature(e_tp->get_symbol()));
         }
     }
 
@@ -447,17 +452,17 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         if (mi::mdl::is_unary_operator(op)) {
 
             Handle<IExpression const> un_arg(args->get_expression(mi::Size(0)));
-            mi::mdl::IExpression const *arg = transform_expr(un_arg);
+            mi::mdl::IExpression const *arg = transform_expr(un_arg.get());
 
             mi::mdl::IExpression_unary* res = m_ef.create_unary(
                 mi::mdl::IExpression_unary::Operator(op), arg);
 
             if (op == mi::mdl::IExpression::OK_CAST) {
                 const mi::mdl::IType* type = int_type_to_mdl_type(
-                    ret_type.get(),
+                    ret_type,
                     m_tf);
 
-                const mi::mdl::IType_name* tn = type_to_type_name(m_owner, type);
+                const mi::mdl::IType_name* tn = type_to_type_name(m_owner, type, &m_name_mangler);
                 res->set_type_name(tn);
             }
             return res;
@@ -467,8 +472,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             Handle<IExpression const> l_arg(args->get_expression(mi::Size(0)));
             Handle<IExpression const> r_arg(args->get_expression(mi::Size(1)));
 
-            mi::mdl::IExpression const *l = transform_expr(l_arg);
-            mi::mdl::IExpression const *r = transform_expr(r_arg);
+            mi::mdl::IExpression const *l = transform_expr(l_arg.get());
+            mi::mdl::IExpression const *r = transform_expr(r_arg.get());
 
             return m_ef.create_binary(bop, l, r);
         } else if (op == mi::mdl::IExpression::OK_TERNARY) {
@@ -477,9 +482,9 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             Handle<IExpression const> true_arg(args->get_expression(mi::Size(1)));
             Handle<IExpression const> false_arg(args->get_expression(mi::Size(2)));
 
-            mi::mdl::IExpression const *cond      = transform_expr(cond_arg);
-            mi::mdl::IExpression const *true_res  = transform_expr(true_arg);
-            mi::mdl::IExpression const *false_res = transform_expr(false_arg);
+            mi::mdl::IExpression const *cond      = transform_expr(cond_arg.get());
+            mi::mdl::IExpression const *true_res  = transform_expr(true_arg.get());
+            mi::mdl::IExpression const *false_res = transform_expr(false_arg.get());
 
             return m_ef.create_conditional(cond, true_res, false_res);
         }
@@ -502,7 +507,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 mi::mdl::IArgument const *arg = nullptr;
 
                 Handle<IExpression const> nr_arg(args->get_expression(i));
-                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
                 if (named_args) {
                     arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
@@ -524,6 +529,53 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             return call;
         }
         break;
+
+    case mi::mdl::IDefinition::DS_TEXTURE_CONSTRUCTOR:
+        {
+            mi::mdl::IQualified_name *qname = create_qualified_name(callee_name);
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            mi::mdl::IExpression const *tex_expr = nullptr;
+
+            for (mi::Size i = 0, n = n_params; i < n; ++i) {
+                Handle<IExpression const> arg(args->get_expression(i));
+
+                mi::mdl::IExpression const *expr = transform_expr(arg.get());
+                if (i == 0) {
+                    tex_expr = expr;
+                }
+
+                if (named_args) {
+                    mi::mdl::ISimple_name const *sname = to_simple_name(args->get_name(i));
+                    call->add_argument(
+                        m_ef.create_named_argument(sname, expr));
+                } else {
+                    call->add_argument(
+                        m_ef.create_positional_argument(expr));
+                }
+            }
+
+            if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_6) {
+                mi::mdl::IType const *tex = tex_expr->get_type();
+                if (n_params == 2 && (mi::mdl::is_tex_2d(tex) || mi::mdl::is_tex_3d(tex))) {
+                    // MDL 1.6 -> 1.7: insert the selector parameter
+                    mi::mdl::IExpression const *expr =
+                        m_ef.create_literal(m_vf.create_string(""));
+
+                    mi::mdl::IArgument const *arg = nullptr;
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("selector"), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
+                }
+            }
+            return call;
+        }
+        break;
+
     case mi::mdl::IDefinition::DS_INTRINSIC_DF_MEASURED_EDF:
         if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_1 && n_params == 4) {
             // MDL 1.0 -> 1.2: insert the multiplier and tangent_u parameters
@@ -567,7 +619,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 }
 
                 Handle<IExpression const> nr_arg(args->get_expression(i));
-                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
                 if (named_args) {
                     arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
@@ -607,7 +659,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 }
 
                 Handle<IExpression const> nr_arg(args->get_expression(i));
-                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
                 if (named_args) {
                     arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
@@ -634,7 +686,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                         mi::mdl::IArgument const *arg = nullptr;
 
                         Handle<IExpression const> nr_arg(args->get_expression(i));
-                        mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                        mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
                         if (i == 1) {
                             // wrap by color constructor
@@ -681,7 +733,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 }
 
                 Handle<IExpression const> nr_arg(args->get_expression(i));
-                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
                 if (named_args) {
                     arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
@@ -717,7 +769,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             for (mi::Size i = 0; i < n_params; ++i) {
                 Handle<IExpression const> nr_arg(args->get_expression(i));
-                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
                 mi::mdl::IArgument const *arg = nullptr;
                 if (named_args) {
@@ -741,42 +793,126 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         break;
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_WIDTH:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_HEIGHT:
-        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3 && n_params == 1) {
-            mi::mdl::IQualified_name *qname = create_qualified_name(strip_deprecated_suffix(callee_name));
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_DEPTH:
+        {
+            mi::mdl::IQualified_name       *qname =
+                create_qualified_name(strip_deprecated_suffix(callee_name));
             mi::mdl::IExpression_reference *ref = to_reference(qname);
-            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+            mi::mdl::IExpression_call      *call = m_ef.create_call(ref);
 
             Handle<IExpression const> nr_arg(args->get_expression(zero_size));
-            mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+            mi::mdl::IExpression const *tex = transform_expr(nr_arg.get());
 
             mi::mdl::IArgument const *arg = nullptr;
             if (named_args) {
-                arg = m_ef.create_named_argument(to_simple_name(args->get_name(0)), expr);
+                arg = m_ef.create_named_argument(to_simple_name(args->get_name(0)), tex);
             } else {
-                arg = m_ef.create_positional_argument(expr);
+                arg = m_ef.create_positional_argument(tex);
             }
             call->add_argument(arg);
 
-            if (mi::mdl::is_tex_2d(expr->get_type())) {
-                // MDL 1.3 -> 1.4: insert the uv_tile parameter
-                mi::mdl::IExpression const *expr =
-                    m_ef.create_literal(mi::mdl::create_int2_zero(m_vf));
-                if (named_args) {
-                    arg = m_ef.create_named_argument(to_simple_name("uv_tile"), expr);
-                } else {
-                    arg = m_ef.create_positional_argument(expr);
+            if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3 && n_params == 1) {
+                if (mi::mdl::is_tex_2d(tex->get_type())) {
+                    // MDL 1.3 -> 1.4: insert the uv_tile parameter for width/heigth(tex_2d)
+                    mi::mdl::IExpression const *expr =
+                        m_ef.create_literal(mi::mdl::create_int2_zero(m_vf));
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("uv_tile"), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
+                    ++n_params;
                 }
-                call->add_argument(arg);
+            }
+            if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_6) {
+                if ((
+                        /* width/height(tex_2d tex, uv_tile) */
+                        n_params == 2 && mi::mdl::is_tex_2d(tex->get_type())
+                    )
+                    ||
+                    (
+                        /* width/height/depth(tex_3d tex) */
+                        n_params == 1 && mi::mdl::is_tex_3d(tex->get_type())
+                    )) {
+                    // MDL 1.6 -> 1.7: insert the frame parameter for width/heigth/depth()
+                    mi::mdl::IExpression const *expr =
+                        m_ef.create_literal(m_vf.create_float(0.0f));
+                    mi::mdl::IArgument const *arg = nullptr;
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("frame"), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
+                }
             }
             return call;
         }
         break;
+
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+        {
+            mi::mdl::IQualified_name *qname = create_qualified_name(callee_name);
+            mi::mdl::IExpression_reference *ref = to_reference(qname);
+            mi::mdl::IExpression_call *call = m_ef.create_call(ref);
+
+            mi::mdl::IExpression const *tex_expr = nullptr;
+
+            for (mi::Size i = 0, n = n_params; i < n; ++i) {
+                Handle<IExpression const> arg(args->get_expression(i));
+
+                mi::mdl::IExpression const *expr = transform_expr(arg.get());
+                if (i == 0) {
+                    tex_expr = expr;
+                }
+
+                if (named_args) {
+                    mi::mdl::ISimple_name const *sname = to_simple_name(args->get_name(i));
+                    call->add_argument(
+                        m_ef.create_named_argument(sname, expr));
+                } else {
+                    call->add_argument(
+                        m_ef.create_positional_argument(expr));
+                }
+            }
+
+            if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_6) {
+                if ((
+                    mi::mdl::is_tex_2d(tex_expr->get_type()) && n_params == 6
+                    )
+                    ||
+                    (
+                        mi::mdl::is_tex_3d(tex_expr->get_type()) && n_params == 8
+                        ))
+                {
+                    // MDL 1.6 -> 1.7: insert the frame parameter
+                    mi::mdl::IExpression const *expr =
+                        m_ef.create_literal(m_vf.create_float(0.0));
+
+                    mi::mdl::IArgument const *arg = nullptr;
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("frame"), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
+                }
+            }
+            return call;
+        }
+        break;
+
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
-        if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3 && n_params == 2) {
+        {
             mi::mdl::IQualified_name *qname = create_qualified_name(strip_deprecated_suffix(callee_name));
             mi::mdl::IExpression_reference *ref = to_reference(qname);
             mi::mdl::IExpression_call *call = m_ef.create_call(ref);
@@ -784,7 +920,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             mi::mdl::IExpression const *tex_expr;
             {
                 Handle<IExpression const> nr_arg(args->get_expression(zero_size));
-                tex_expr = transform_expr(nr_arg);
+                tex_expr = transform_expr(nr_arg.get());
 
                 mi::mdl::IArgument const *arg = nullptr;
                 if (named_args) {
@@ -797,7 +933,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             {
                 Handle<IExpression const> nr_arg(args->get_expression(1));
-                mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+                mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
                 mi::mdl::IArgument const *arg = nullptr;
                 if (named_args) {
@@ -808,18 +944,43 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 call->add_argument(arg);
             }
 
-            if (mi::mdl::is_tex_2d(tex_expr->get_type())) {
-                // MDL 1.3 -> 1.4: insert the uv_tile parameter
-                mi::mdl::IExpression const *expr =
-                    m_ef.create_literal(mi::mdl::create_int2_zero(m_vf));
+            if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3 && n_params == 2) {
+                if (mi::mdl::is_tex_2d(tex_expr->get_type())) {
+                    // MDL 1.3 -> 1.4: insert the uv_tile parameter
+                    mi::mdl::IExpression const *expr =
+                        m_ef.create_literal(mi::mdl::create_int2_zero(m_vf));
 
-                mi::mdl::IArgument const *arg = nullptr;
-                if (named_args) {
-                    arg = m_ef.create_named_argument(to_simple_name("uv_tile"), expr);
-                } else {
-                    arg = m_ef.create_positional_argument(expr);
+                    mi::mdl::IArgument const *arg = nullptr;
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("uv_tile"), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
                 }
-                call->add_argument(arg);
+            }
+
+            if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_6) {
+                if ((
+                    mi::mdl::is_tex_2d(tex_expr->get_type()) && n_params == 3
+                    )
+                    ||
+                    (
+                        mi::mdl::is_tex_3d(tex_expr->get_type()) && n_params == 2
+                    ))
+                {
+                    // MDL 1.6 -> 1.7: insert the frame parameter
+                    mi::mdl::IExpression const *expr =
+                        m_ef.create_literal(m_vf.create_float(0.0));
+
+                    mi::mdl::IArgument const *arg = nullptr;
+                    if (named_args) {
+                        arg = m_ef.create_named_argument(to_simple_name("frame"), expr);
+                    } else {
+                        arg = m_ef.create_positional_argument(expr);
+                    }
+                    call->add_argument(arg);
+                }
             }
             return call;
         }
@@ -841,7 +1002,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
         mi::mdl::IExpression_call *tn_call = m_ef.create_call(tn_ref);
 
         Handle<IExpression const> arg(args->get_expression(mi::Size(0)));
-        mi::mdl::IExpression const *arg_mdl = transform_expr(arg);
+        mi::mdl::IExpression const *arg_mdl = transform_expr(arg.get());
 
         tn_call->add_argument(m_ef.create_positional_argument(arg_mdl));
 
@@ -850,7 +1011,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
         {
             Handle<IExpression const> comp_arg(args->get_expression(mi::Size(0)));
-            mi::mdl::IExpression const *compound = transform_expr(comp_arg);
+            mi::mdl::IExpression const *compound = transform_expr(comp_arg.get());
 
             mi::mdl::ISymbol const *f_sym = get_field_sym(callee_name);
 
@@ -869,7 +1030,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             Handle<IType_array const> a_tp(ret_type->get_interface<IType_array>());
             Handle<IType const>       e_tp(a_tp->get_element_type());
 
-            mi::mdl::IType_name *tn = create_type_name(e_tp);
+            mi::mdl::IType_name *tn = create_type_name(a_tp);
             mi::mdl::IExpression_reference *ref = m_ef.create_reference(tn);
             ref->set_array_constructor();
 
@@ -878,7 +1039,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             for (mi::Size i = 0, n = n_params; i < n; ++i) {
                 Handle<IExpression const> arg(args->get_expression(i));
 
-                mi::mdl::IExpression const *expr = transform_expr(arg);
+                mi::mdl::IExpression const *expr = transform_expr(arg.get());
 
                 call->add_argument(m_ef.create_positional_argument(expr));
             }
@@ -926,7 +1087,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             for (mi::Size i = 0, n = n_params; i < n; ++i) {
                 Handle<IExpression const> arg(args->get_expression(i));
 
-                mi::mdl::IExpression const *expr = transform_expr(arg);
+                mi::mdl::IExpression const *expr = transform_expr(arg.get());
 
                 if (named_args) {
                     mi::mdl::ISimple_name const *sname = to_simple_name(args->get_name(i));
@@ -945,9 +1106,9 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 }
 
 // Transform a MDL expression from neuray representation to MDL representation.
-const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const IExpression>& expr)
+const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* expr)
 {
-    Param_map::const_iterator it( m_param_map.find( expr));
+    Param_map::const_iterator it( m_param_map.find( make_handle_dup( expr)));
     if( it != m_param_map.end()) {
         // must be mapped
         return to_reference( it->second);
@@ -959,7 +1120,7 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
 
             Handle<const IExpression_constant> constant(expr->get_interface<IExpression_constant>());
             Handle<const IValue> v(constant->get_value());
-            return transform_value(v);
+            return transform_value(v.get());
         }
 
         case IExpression::EK_CALL: {
@@ -968,6 +1129,10 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
 
             DB::Tag tag = call->get_call();
             if( !tag)
+                return m_ef.create_invalid();
+
+            Call_stack_guard guard( m_set_indirect_calls, tag);
+            if( guard.last_frame_creates_cycle())
                 return m_ef.create_invalid();
 
             Handle<const IType> type( call->get_type());
@@ -981,7 +1146,6 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
 
             if( class_id == Mdl_function_call::id) {
 
-                // handle function calls
                 DB::Access<Mdl_function_call> fcall( tag, m_trans);
                 DB::Tag def_tag = fcall->get_function_definition( m_trans);
                 if( !def_tag)
@@ -989,7 +1153,7 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
                 DB::Access<Mdl_function_definition> fdef( def_tag, m_trans);
                 def = fdef->get_mdl_name_without_parameter_types();
 
-                // if reexported, use the original
+                // if reexported, use the original name
                 const char* original_mdl_name = fdef->get_mdl_original_name();
                 if( original_mdl_name) {
                     DB::Tag orig_tag = m_trans->name_to_tag( get_db_name( original_mdl_name).c_str());
@@ -997,33 +1161,11 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
                     def = orig_fdef->get_mdl_name_without_parameter_types();
                 }
 
-                named_args = false;
+                def        = decode_name_without_signature( def);
+                named_args = fdef->is_material();
                 sema       = fdef->get_mdl_semantic();
                 args       = fcall->get_arguments();
                 n_params   = fcall->get_parameter_count();
-
-            } else if( class_id == Mdl_material_instance::id) {
-
-                // handle material instances
-                DB::Access<Mdl_material_instance> mat_inst( tag, m_trans);
-                DB::Tag def_tag = mat_inst->get_material_definition( m_trans);
-                if( !def_tag)
-                    return m_ef.create_invalid();
-                DB::Access<Mdl_material_definition> mat_def( def_tag, m_trans);
-                def = mat_def->get_mdl_name_without_parameter_types();
-
-                // if reexported, use the original
-                const char* original_mdl_name = mat_def->get_mdl_original_name();
-                if( original_mdl_name) {
-                    DB::Tag orig_tag = m_trans->name_to_tag( get_db_name( original_mdl_name).c_str());
-                    DB::Access<Mdl_material_definition> orig_mat_def( orig_tag, m_trans);
-                    def = orig_mat_def->get_mdl_name_without_parameter_types();
-                }
-
-                named_args = true;
-                sema       = mi::mdl::IDefinition::DS_UNKNOWN;
-                args       = mat_inst->get_arguments();
-                n_params   = mat_def->get_parameter_count();
 
             } else {
 
@@ -1033,7 +1175,8 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
 
             }
 
-            return transform_call(type, sema, def, n_params, args, named_args);
+            def = remove_qualifiers_if_from_module( def, m_owner->get_name());
+            return transform_call(type.get(), sema, def, n_params, args.get(), named_args);
         }
 
         case IExpression::EK_DIRECT_CALL: {
@@ -1056,7 +1199,6 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
 
             if( class_id == Mdl_function_definition::id) {
 
-                // handle function calls
                 DB::Access<Mdl_function_definition> fdef( tag, m_trans);
                 def = fdef->get_mdl_name_without_parameter_types();
 
@@ -1066,29 +1208,13 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
                     DB::Tag orig_tag = m_trans->name_to_tag( get_db_name( original_mdl_name).c_str());
                     DB::Access<Mdl_function_definition> orig_fdef( orig_tag, m_trans);
                     def = orig_fdef->get_mdl_name_without_parameter_types();
+
                 }
 
-                named_args = false;
+                def        = decode_name_without_signature( def);
+                named_args = fdef->is_material();
                 sema       = fdef->get_mdl_semantic();
                 n_params   = fdef->get_parameter_count();
-
-            } else if( class_id == Mdl_material_definition::id) {
-
-                // handle material instances
-                DB::Access<Mdl_material_definition> mat_def( tag, m_trans);
-                def = mat_def->get_mdl_name_without_parameter_types();
-
-                // if reexported, use the original
-                const char* original_mdl_name = mat_def->get_mdl_original_name();
-                if( original_mdl_name) {
-                    DB::Tag orig_tag = m_trans->name_to_tag( get_db_name( original_mdl_name).c_str());
-                    DB::Access<Mdl_function_definition> c( orig_tag, m_trans);
-                    def = mat_def->get_mdl_name_without_parameter_types();
-                }
-
-                named_args = true;
-                sema       = mi::mdl::IDefinition::DS_UNKNOWN;
-                n_params   = mat_def->get_parameter_count();
 
             } else {
 
@@ -1098,7 +1224,8 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
 
             }
 
-            return transform_call(type, sema, def, n_params, args, named_args);
+            def = remove_qualifiers_if_from_module( def, m_owner->get_name());
+            return transform_call(type.get(), sema, def, n_params, args.get(), named_args);
         }
 
         case IExpression::EK_PARAMETER: {
@@ -1106,13 +1233,20 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const Handle<const 
             Handle<const IExpression_parameter> parameter( expr->get_interface<IExpression_parameter>());
             mi::Size index = parameter->get_index();
 
-            Handle<const IExpression> arg( m_args->get_expression(index));
-            if( !arg) {
-                ASSERT( M_SCENE, !"parameter has no argument");
-                break;
+            if( m_traverse_ek_parameter) {
+                Handle<const IExpression> arg( m_args->get_expression(index));
+                if( !arg) {
+                    ASSERT( M_SCENE, !"parameter has no argument");
+                    break;
+                }
+                return transform_expr(arg.get());
+            } else {
+                if( index >= m_param_vector.size()) {
+                    ASSERT( M_SCENE, !"parameter has no argument");
+                    break;
+                }
+                return to_reference( m_param_vector[index]);
             }
-
-            return transform_expr(arg);
         }
 
     case IExpression::EK_TEMPORARY:
@@ -1147,28 +1281,36 @@ static std::string get_texture_resource_name_and_gamma(
 
     DB::Access<TEXTURE::Texture> texture( tag, trans);
     DB::Tag image_tag( texture->get_image());
-    if( !image_tag)
-        return std::string();
 
-    class_id = trans->get_class_id( image_tag);
-    if( class_id != DBIMAGE::Image::id) {
-        const char* name = trans->tag_to_name( image_tag);
-        LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-            "Incorrect type for image resource \"%s\".", name ? name : "");
+    if( image_tag.is_valid()) {
+        class_id = trans->get_class_id( image_tag);
+        if( class_id != DBIMAGE::Image::id) {
+            const char* name = trans->tag_to_name( image_tag);
+            LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
+                "Incorrect type for image resource \"%s\".", name ? name : "");
+            return std::string();
+        }
+
+        // try to convert gamma value into the MDL constant
+        mi::Float32 gamma_override = texture->get_gamma();
+        if( gamma_override == 1.0f)
+            gamma_mode = mi::mdl::IValue_texture::gamma_linear;
+        else if( gamma_override == 2.2f)
+            gamma_mode = mi::mdl::IValue_texture::gamma_srgb;
+        else
+            gamma_mode = mi::mdl::IValue_texture::gamma_default;
+
+        DB::Access<DBIMAGE::Image> image( image_tag, trans);
+        const std::string& s1 = image->get_mdl_file_path();
+        if( !s1.empty())
+            return s1;
+        const std::string& s2 = image->get_filename();
+        // Do not use the filename for uvtiles since it only identifies the first one.
+        if( !s2.empty() && !image->is_uvtile())
+            return get_file_path( s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
         return std::string();
     }
-
-    // try to convert gamma value into the MDL constant
-    mi::Float32 gamma_override = texture->get_gamma();
-    if( gamma_override == 1.0f)
-        gamma_mode = mi::mdl::IValue_texture::gamma_linear;
-    else if( gamma_override == 2.2f)
-        gamma_mode = mi::mdl::IValue_texture::gamma_srgb;
-    else
-        gamma_mode = mi::mdl::IValue_texture::gamma_default;
-
-    DB::Access<DBIMAGE::Image> image( image_tag, trans);
-    return image->get_original_filename();
+    return std::string();
 }
 
 /// Get the light_profile resource name of a tag.
@@ -1184,7 +1326,13 @@ static std::string get_light_profile_resource_name(
         return std::string();
     }
     DB::Access<LIGHTPROFILE::Lightprofile> lightprofile( tag, trans);
-    return lightprofile->get_original_filename();
+    const std::string& s1 = lightprofile->get_mdl_file_path();
+    if( !s1.empty())
+        return s1;
+    const std::string& s2 = lightprofile->get_filename();
+    if( !s2.empty())
+        return get_file_path( s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
+    return std::string();
 }
 
 /// Get the bsdf_measurement resource name of a tag.
@@ -1200,12 +1348,17 @@ static std::string get_bsdf_measurement_resource_name(
         return std::string();
     }
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( tag, trans);
-    return bsdf_measurement->get_original_filename();
+    const std::string& s1 = bsdf_measurement->get_mdl_file_path();
+    if( !s1.empty())
+        return s1;
+    const std::string& s2 = bsdf_measurement->get_filename();
+    if( !s2.empty())
+        return get_file_path( s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
+    return std::string();
 }
 
 // Transform a MDL expression from neuray representation to MDL representation.
-mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
-    const Handle<IValue const>& value)
+mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* value)
 {
     IValue::Kind kind = value->get_kind();
     switch (kind) {
@@ -1232,7 +1385,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
             char const *v_name = e_tp->get_value_name(index);
             mi::mdl::ISimple_name const *sname = create_simple_name(v_name);
 
-            mi::mdl::IQualified_name *qname = create_scope_name(e_tp->get_symbol());
+            std::string symbol = decode_name_without_signature(e_tp->get_symbol());
+            mi::mdl::IQualified_name *qname = create_scope_name(symbol);
             qname->add_component(sname);
 
             mi::mdl::IType_enum const *mdl_tp = convert_enum_type(e_tp.get());
@@ -1280,10 +1434,31 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
 
             mi::mdl::IExpression_call *call = m_ef.create_call(ref);
 
-            for (mi::Size i = 0, n = v->get_size(); i < n; ++i) {
+            mi::Size n = v->get_size();
+            if (kind == IValue::VK_STRUCT) {
+                mi::mdl::IMDL::MDL_version version = m_owner->get_mdl_version();
+
+                if (version < mi::mdl::IMDL::MDL_VERSION_1_7) {
+                    Handle<IValue_struct const> v(value->get_interface<IValue_struct>());
+                    Handle<IType_struct const> s_tp(v->get_type());
+
+                    if (s_tp->get_predefined_id() == IType_struct::SID_MATERIAL_VOLUME) {
+                        // material_volume has no emission_intensity field
+                        --n;
+                    }
+                    if (version < mi::mdl::IMDL::MDL_VERSION_1_1 &&
+                        s_tp->get_predefined_id() == IType_struct::SID_MATERIAL_EMISSION)
+                    {
+                        // material_emission has no intensity_mode field
+                        --n;
+                    }
+                }
+            }
+
+            for (mi::Size i = 0; i < n; ++i) {
                 Handle<IValue const> e_v(v->get_value(i));
 
-                call->add_argument(m_ef.create_positional_argument(transform_value(e_v)));
+                call->add_argument(m_ef.create_positional_argument(transform_value(e_v.get())));
             }
             return call;
         }
@@ -1303,7 +1478,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
             for (mi::Size i = 0, n = v->get_size(); i < n; ++i) {
                 Handle<IValue const> e_v(v->get_value(i));
 
-                call->add_argument(m_ef.create_positional_argument(transform_value(e_v)));
+                call->add_argument(m_ef.create_positional_argument(transform_value(e_v.get())));
             }
             return call;
         }
@@ -1314,7 +1489,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
             Handle<IType_reference const> type(v->get_type());
 
             mi::mdl::IType_reference const *r_tp =
-                cast<mi::mdl::IType_reference>(transform_type(type));
+                cast<mi::mdl::IType_reference>(transform_type(type.get()));
             mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
             return m_ef.create_literal(vv);
         }
@@ -1333,24 +1508,24 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
             // neuray sometimes creates wrong textures with TAG 0, handle them
             if (tag.is_invalid() || class_id != TEXTURE::Texture::id) {
                 mi::mdl::IType_reference const *r_tp =
-                    cast<mi::mdl::IType_reference>(transform_type(type));
+                    cast<mi::mdl::IType_reference>(transform_type(type.get()));
                 mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
                 return m_ef.create_literal(vv);
             }
 
             mi::mdl::IValue_texture::gamma_mode gamma = mi::mdl::IValue_texture::gamma_default;
             std::string url( get_texture_resource_name_and_gamma(m_trans, tag, gamma));
-            if (url.empty()) {
-                // no file, map to IValue with tag
+            if (m_avoid_resource_urls || url.empty()) {
+                // map to IValue with tag
                 DB::Access<TEXTURE::Texture> texture(tag, m_trans);
-                DB::Tag image_tag(texture->get_image());
-                DB::Tag_version image_tag_version = m_trans->get_tag_version(image_tag);
+                DB::Tag tex_data_tag(texture->get_image() ? texture->get_image() : texture->get_volume_data());
+                DB::Tag_version tex_data_tag_version = m_trans->get_tag_version(tex_data_tag);
                 mi::mdl::IType_texture const *t_tp =
-                    cast<mi::mdl::IType_texture>(transform_type(type));
+                    cast<mi::mdl::IType_texture>(transform_type(type.get()));
                 DB::Tag_version tag_version = m_trans->get_tag_version(tag);
                 mi::mdl::IValue_texture const *vv = m_vf.create_texture(
-                    t_tp, "", gamma, tag.get_uint(),
-                    get_hash(/*mdl_file_path*/ nullptr, 0.0f, tag_version, image_tag_version));
+                    t_tp, "", gamma, "", tag.get_uint(),
+                    get_hash(/*mdl_file_path*/ nullptr, 0.0f, tag_version, tex_data_tag_version));
                 return m_ef.create_literal(vv);
             }
 
@@ -1416,7 +1591,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
             DB::Tag tag = v->get_value();
             if (tag.is_invalid()) {
                 mi::mdl::IType_reference const *r_tp =
-                    cast<mi::mdl::IType_reference>(transform_type(type));
+                    cast<mi::mdl::IType_reference>(transform_type(type.get()));
                 mi::mdl::IValue_invalid_ref const *vv = m_vf.create_invalid_ref(r_tp);
                 return m_ef.create_literal(vv);
             }
@@ -1424,18 +1599,18 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
             std::string url(kind == IValue::VK_LIGHT_PROFILE ?
                 get_light_profile_resource_name(m_trans, tag) :
                 get_bsdf_measurement_resource_name(m_trans, tag));
-            if (url.empty()) {
-                // no file, map to IValue with tag
+            if (m_avoid_resource_urls || url.empty()) {
+                // map to IValue with tag
                 DB::Tag_version tag_version = m_trans->get_tag_version(tag);
                 if (kind == IValue::VK_LIGHT_PROFILE) {
                     mi::mdl::IType_light_profile const *lp_tp =
-                        cast<mi::mdl::IType_light_profile>(transform_type(type));
+                        cast<mi::mdl::IType_light_profile>(transform_type(type.get()));
                     mi::mdl::IValue_light_profile const *vv = m_vf.create_light_profile(
                         lp_tp, "", tag.get_uint(), get_hash(/*mdl_file_path*/ nullptr, tag_version));
                     return m_ef.create_literal(vv);
                 } else {
                     mi::mdl::IType_bsdf_measurement const *bm_tp =
-                        cast<mi::mdl::IType_bsdf_measurement>(transform_type(type));
+                        cast<mi::mdl::IType_bsdf_measurement>(transform_type(type.get()));
                     mi::mdl::IValue_bsdf_measurement const *vv = m_vf.create_bsdf_measurement(
                         bm_tp, "", tag.get_uint(), get_hash(/*mdl_file_path*/ nullptr, tag_version));
                     return m_ef.create_literal(vv);
@@ -1460,8 +1635,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value(
 }
 
 // Transform a (non-user defined) MDL type from neuray representation to MDL representation.
-mi::mdl::IType const *Mdl_ast_builder::transform_type(
-    mi::base::Handle<IType const> const &type)
+mi::mdl::IType const *Mdl_ast_builder::transform_type( const IType* type)
 {
     switch (type->get_kind()) {
     case IType::TK_ALIAS:
@@ -1486,7 +1660,7 @@ mi::mdl::IType const *Mdl_ast_builder::transform_type(
             Handle<IType_vector const> v_tp(type->get_interface<IType_vector>());
             Handle<IType const>        e_tp(v_tp->get_element_type());
 
-            mi::mdl::IType_atomic const *a_tp = cast<mi::mdl::IType_atomic>(transform_type(e_tp));
+            mi::mdl::IType_atomic const *a_tp = cast<mi::mdl::IType_atomic>(transform_type(e_tp.get()));
             return m_tf.create_vector(a_tp, int(v_tp->get_size()));
         }
     case IType::TK_MATRIX:
@@ -1494,7 +1668,7 @@ mi::mdl::IType const *Mdl_ast_builder::transform_type(
             Handle<IType_matrix const> m_tp(type->get_interface<IType_matrix>());
             Handle<IType const>        e_tp(m_tp->get_element_type());
 
-            mi::mdl::IType_vector const *v_tp = cast<mi::mdl::IType_vector>(transform_type(e_tp));
+            mi::mdl::IType_vector const *v_tp = cast<mi::mdl::IType_vector>(transform_type(e_tp.get()));
             return m_tf.create_matrix(v_tp, int(m_tp->get_size()));
         }
     case IType::TK_COLOR:
@@ -1548,7 +1722,7 @@ mi::mdl::ISymbol const *Mdl_ast_builder::get_temporary_symbol()
     snprintf(buffer, dimension_of(buffer), "tmp%u", m_tmp_idx++);
     buffer[dimension_of(buffer) - 1] = '\0';
 
-    // FIXME: check for name clashes here
+    // TODO check for name clashes here
     return m_st.get_symbol(buffer);
 }
 
@@ -1592,15 +1766,17 @@ mi::mdl::IExpression_reference *Mdl_ast_builder::to_reference(mi::mdl::ISymbol c
 // Declare a parameter.
 void Mdl_ast_builder::declare_parameter(
     mi::mdl::ISymbol const *sym,
-    mi::base::Handle<const IExpression> const &init)
+    const IExpression *init)
 {
-    m_param_map[init] = sym;
+    m_param_map[make_handle_dup(init)] = sym;
+    m_param_vector.push_back(sym);
 }
 
 // Remove all declared parameter mappings.
 void Mdl_ast_builder::remove_parameters()
 {
     m_param_map.clear();
+    m_param_vector.clear();
 }
 
 // Convert an neuray enum type into a MDL enum type.
@@ -1610,7 +1786,14 @@ mi::mdl::IType_enum const *Mdl_ast_builder::convert_enum_type(
     switch (e_tp->get_predefined_id()) {
     case IType_enum::EID_USER:
         {
-            mi::mdl::ISymbol const *sym = m_st.get_user_type_symbol(e_tp->get_symbol());
+            std::string symbol = decode_name_without_signature(e_tp->get_symbol());
+            symbol = m_name_mangler.mangle_scoped_name(symbol);
+            if (mi::mdl::IType_enum const *et = m_tf.lookup_enum(symbol.c_str())) {
+                // an enum with this name already exists, assume it's the right one
+                return et;
+            }
+
+            mi::mdl::ISymbol const *sym = m_st.get_user_type_symbol(symbol.c_str());
             mi::mdl::IType_enum *res = m_tf.create_enum(sym);
 
             for (mi::Size i = 0, n = e_tp->get_size(); i < n; ++i) {
@@ -1633,10 +1816,10 @@ mi::mdl::IType_enum const *Mdl_ast_builder::convert_enum_type(
 }
 
 mi::mdl::IExpression const *Mdl_ast_builder::add_multiscatter_param(
-     std::string const                              &callee_name,
-     mi::Size                                       n_params,
-     bool                                           named_args,
-     mi::base::Handle<IExpression_list const> const &args)
+     std::string const     &callee_name,
+     mi::Size              n_params,
+     bool                  named_args,
+     const IExpression_list *args)
  {
      // MDL 1.5 -> 1.6: insert multiscatter_tint parameter to all glossy BSDFs
      mi::mdl::IQualified_name *qname = create_qualified_name(strip_deprecated_suffix(callee_name));
@@ -1660,7 +1843,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::add_multiscatter_param(
          }
 
          Handle<IExpression const> nr_arg(args->get_expression(i));
-         mi::mdl::IExpression const *expr = transform_expr(nr_arg);
+         mi::mdl::IExpression const *expr = transform_expr(nr_arg.get());
 
          if (named_args) {
              arg = m_ef.create_named_argument(to_simple_name(args->get_name(i)), expr);
@@ -1674,3 +1857,4 @@ mi::mdl::IExpression const *Mdl_ast_builder::add_multiscatter_param(
 
 } // namespace MDL
 } // namespace MI
+

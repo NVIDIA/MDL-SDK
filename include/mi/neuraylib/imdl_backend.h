@@ -166,6 +166,12 @@ public:
     ///   be provided in both dimensions and only the \c x component of the result will be used.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
+    /// - \c "use_renderer_adapt_normal": If enabled, the generated code expects
+    ///   the renderer to provide a function with the prototype
+    ///   \c "float3 mdl_adapt_normal(Shading_state_material state, float3 normal)"
+    ///   which can adapt the normal of BSDFs.
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     ///
     /// \param name       The name of the option.
     /// \param value      The value of the option.
@@ -218,8 +224,7 @@ public:
     /// \param call                        The MDL function call for the environment.
     /// \param fname                       The name of the generated function. If \c NULL is passed,
     ///                                    \c "lambda" will be used.
-    /// \param[inout] context              A pointer to an
-    ///                                    #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context              An execution context which can be used
     ///                                    to pass compilation options to the MDL compiler. The
     ///                                    following options are supported by this operation:
     ///                                    - Float32 "meters_per_scene_unit": The conversion
@@ -266,8 +271,7 @@ public:
     ///                        translated, e.g., \c "geometry.displacement".
     /// \param fname           The name of the generated function. If \c NULL is passed, \c "lambda"
     ///                        will be used.
-    /// \param[inout] context  A pointer to an
-    ///                        #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context  An execution context which can be used
     ///                        to pass compilation options to the MDL compiler. Currently, no
     ///                        options are supported by this operation.
     ///                        During material translation, messages like errors and
@@ -301,8 +305,7 @@ public:
     ///                       should be translated, e.g., \c "surface.scattering".
     /// \param base_fname     The base name of the generated functions.
     ///                       If \c NULL is passed, \c "lambda" will be used.
-    /// \param[inout] context A pointer to an
-    ///                       #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context An execution context which can be used
     ///                       to pass compilation options to the MDL compiler. The
     ///                       following options are supported by this operation:
     ///                       - bool "include_geometry_normal". If true, the \c
@@ -344,8 +347,7 @@ public:
     /// \param material                 The compiled MDL material.
     /// \param function_descriptions    The list of descriptions of function to translate.
     /// \param description_count        The size of the list of descriptions.
-    /// \param[inout] context           A pointer to an
-    ///                                 #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context           An execution context which can be used
     ///                                 to pass compilation options to the MDL compiler. The
     ///                                 following options are supported for this operation:
     ///                                 - bool "include_geometry_normal". If true, the \c
@@ -368,8 +370,7 @@ public:
     /// Creates a new link unit.
     ///
     /// \param transaction     The transaction to be used.
-    /// \param[inout] context  A pointer to an
-    ///                        #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context  An execution context which can be used
     ///                        to pass compilation options to the MDL compiler.
     ///                        The following options are supported for this operation:
     ///                         - "internal_space"
@@ -391,8 +392,7 @@ public:
     /// Transforms a link unit to target code.
     ///
     /// \param lu             The link unit to translate.
-    /// \param[inout] context A pointer to an
-    ///                       #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context An execution context which can be used
     ///                       to pass compilation options to the MDL compiler.
     ///                       During material translation, messages like errors and
     ///                       warnings will be passed to the context for
@@ -411,7 +411,7 @@ public:
     /// messages for details.
     ///
     /// \param buffer         The buffer containing the serialized target code to restore.
-    /// \param[inout] context A pointer to an #mi::neuraylib::IMdl_execution_context which can be
+    /// \param[inout] context An execution context which can be
     ///                       used to pass serialization options. Currently there are no options
     ///                       supported for this operation.
     ///                       During the serialization messages like errors and warnings will be
@@ -434,7 +434,7 @@ public:
     ///
     /// \param buffer_data    The buffer containing the serialized target code to restore.
     /// \param buffer_size    The size of \c buffer_data.
-    /// \param[inout] context A pointer to an #mi::neuraylib::IMdl_execution_context which can be
+    /// \param[inout] context An execution context which can be
     ///                       used to pass serialization options. Currently there are no options
     ///                       supported for this operation.
     ///                       During the serialization messages like errors and warnings will be
@@ -707,7 +707,7 @@ public:
     ///                   is out of bounds.
     virtual const char* get_callable_function( Size index) const = 0;
 
-    /// \name Texures
+    /// \name Textures
     //@{
     
     /// Returns the number of texture resources used by the target code.
@@ -1330,7 +1330,7 @@ public:
     /// Stores the data of this object in a buffer that can written to an external cache.
     /// The object can be restored by a corresponding back-end.
     ///
-    /// \param[inout] context A pointer to an #mi::neuraylib::IMdl_execution_context which can be
+    /// \param[inout] context An execution context which can be
     ///                       used to pass serialization options. The following options are
     ///                       supported for this operation:
     ///                        - \c bool "serialize_class_instance_data": If true, the argument
@@ -1365,8 +1365,7 @@ public:
     ///
     /// \param call                       The MDL function call for the environment.
     /// \param fname                      The name of the function that is created.
-    /// \param[inout] context             A pointer to an
-    ///                                   #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context             An execution context which can be used
     ///                                   to pass compilation options to the MDL compiler.
     ///                                   Currently, no options are supported by this operation.
     ///                                   During material compilation messages like errors and
@@ -1378,8 +1377,7 @@ public:
     ///                                    - The backend failed to compile the function.
     /// \return           A return code. The return codes have the following meaning:
     ///                   -  0: Success.
-    ///                   - -1: An error occurred. Please check the
-    ///                         #mi::neuraylib::IMdl_execution_context for details
+    ///                   - -1: An error occurred. Please check the execution context for details
     ///                         if it has been provided.
     virtual Sint32 add_environment(
         const IFunction_call    *call,
@@ -1393,8 +1391,7 @@ public:
     /// \param path       The path from the material root to the expression that should be
     ///                   translated, e.g., \c "geometry.displacement".
     /// \param fname      The name of the function that is created.
-    /// \param[inout] context  A pointer to an
-    ///                        #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context  An execution context which can be used
     ///                        to pass compilation options to the MDL compiler.
     ///                        Currently, no options are supported by this operation.
     ///                        During material compilation messages like errors and
@@ -1410,8 +1407,7 @@ public:
     ///                         compiled.
     /// \return           A return code. The return codes have the following meaning:
     ///                   -  0: Success.
-    ///                   - -1: An error occurred. Please check the
-    ///                         #mi::neuraylib::IMdl_execution_context for details
+    ///                   - -1: An error occurred. Please check the execution context for details
     ///                         if it has been provided.
     virtual Sint32 add_material_expression(
         const ICompiled_material* inst,
@@ -1420,6 +1416,7 @@ public:
         IMdl_execution_context* context) = 0;
 
     /// Add an MDL distribution function to this link unit.
+    ///
     /// Note that currently this is only supported for BSDFs.
     /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
     /// \c "_evaluate" and \c "_pdf".
@@ -1429,8 +1426,7 @@ public:
     ///                         should be translated, e.g., \c "surface.scattering".
     /// \param base_fname       The base name of the generated functions.
     ///                         If \c NULL is passed, \c "lambda" will be used.
-    /// \param[inout] context   A pointer to an
-    ///                         #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context   An execution context which can be used
     ///                         to pass compilation options to the MDL compiler. The
     ///                         following options are supported for this operation:
     ///                         - bool "include_geometry_normal". If true, the \c
@@ -1453,8 +1449,7 @@ public:
     ///                         - The requested DF is not supported, yet.
     /// \return           A return code. The return codes have the following meaning:
     ///                   -  0: Success.
-    ///                   - -1: An error occurred. Please check the
-    ///                         #mi::neuraylib::IMdl_execution_context for details
+    ///                   - -1: An error occurred. Please check the execution context for details
     ///                         if it has been provided.
     virtual Sint32 add_material_df(
         const ICompiled_material* material,
@@ -1477,8 +1472,7 @@ public:
     /// \param material                 The compiled MDL material.
     /// \param[inout] function_descriptions The list of descriptions of function to translate.
     /// \param description_count        The size of the list of descriptions.
-    /// \param[inout] context           A pointer to an
-    ///                                 #mi::neuraylib::IMdl_execution_context which can be used
+    /// \param[inout] context           An execution context which can be used
     ///                                 to pass compilation options to the MDL compiler. The
     ///                                 following options are supported for this operation:
     ///                                 - bool "include_geometry_normal". If true, the \c
@@ -1491,8 +1485,7 @@ public:
     /// \return              A return code. The error codes have the following meaning:
     ///                      -  0: Success.
     ///                      - -1: An error occurred while processing the entries in the list.
-    ///                            Please check the
-    ///                            #mi::neuraylib::IMdl_execution_context for details
+    ///                            Please check the execution context for details
     ///                            if it has been provided.
     ///
     /// \note Upon unsuccessful return, function_descriptions.return_code might contain further

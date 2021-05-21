@@ -663,9 +663,9 @@ bool Raytracing_acceleration_structure::build_bottom_level_structure(
     build_desc.DestAccelerationStructureData =
         blas.m_blas_resource->GetGPUVirtualAddress();
 
+    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::UAV(blas.m_blas_resource.Get());
     command_list->BuildRaytracingAccelerationStructure(&build_desc, 0, 0);
-    command_list->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(
-        blas.m_blas_resource.Get()));
+    command_list->ResourceBarrier(1, &resource_barrier);
 
     return true;
 }
@@ -827,9 +827,9 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
     build_desc.ScratchAccelerationStructureData = m_scratch_resource->GetGPUVirtualAddress();
     build_desc.DestAccelerationStructureData = m_top_level_structure->GetGPUVirtualAddress();
 
+    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::UAV(m_top_level_structure.Get());
     command_list->BuildRaytracingAccelerationStructure(&build_desc, 0, 0);
-    command_list->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(
-        m_top_level_structure.Get()));
+    command_list->ResourceBarrier(1, &resource_barrier);
 
     return true;
 }

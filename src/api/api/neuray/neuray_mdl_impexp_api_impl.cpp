@@ -41,11 +41,15 @@
 #include "neuray_module_impl.h"
 #include "neuray_string_impl.h"
 #include "neuray_transaction_impl.h"
+#include "neuray_type_impl.h"
+
+#include <boost/algorithm/string/replace.hpp>
 
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
 #include <base/hal/disk/disk_memory_reader_writer_impl.h>
 #include <base/hal/hal/i_hal_ospath.h>
 #include <base/lib/path/i_path.h>
+#include <base/system/main/access_module.h>
 #include <io/image/image/i_image.h>
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
@@ -74,19 +78,19 @@ Mdl_impexp_api_impl::~Mdl_impexp_api_impl()
 
 mi::Sint32 Mdl_impexp_api_impl::load_module(
     mi::neuraylib::ITransaction* transaction,
-    const char* module_name,
+    const char* argument,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    if (!transaction || !module_name)
+    if( !transaction || !argument)
         return -1;
 
     Transaction_impl* transaction_impl
-        = static_cast<Transaction_impl*>(transaction);
+        = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     MDL::Execution_context default_context;
-    return MDL::Mdl_module::create_module(
-        db_transaction, module_name, unwrap_and_clear_context(context, default_context));
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+    return MDL::Mdl_module::create_module( db_transaction, argument, context_impl);
 }
 
 mi::Sint32 Mdl_impexp_api_impl::load_module_from_string(
@@ -95,19 +99,20 @@ mi::Sint32 Mdl_impexp_api_impl::load_module_from_string(
     const char* module_source,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    if (!transaction || !module_name || !module_source)
+    if( !transaction || !module_name || !module_source)
         return -1;
 
     Transaction_impl* transaction_impl
-        = static_cast<Transaction_impl*>(transaction);
+        = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     mi::base::Handle<mi::neuraylib::IReader> reader(
-        Impexp_utilities::create_reader(module_source, strlen(module_source)));
+        Impexp_utilities::create_reader( module_source, strlen( module_source)));
 
     MDL::Execution_context default_context;
-    return MDL::Mdl_module::create_module(db_transaction, module_name, reader.get(),
-        unwrap_and_clear_context(context, default_context));
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+    return MDL::Mdl_module::create_module(
+        db_transaction, module_name, reader.get(), context_impl);
 }
 
 mi::Sint32 Mdl_impexp_api_impl::export_module(
@@ -176,7 +181,10 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_to_string(
 }
 
 mi::Sint32 Mdl_impexp_api_impl::export_canvas(
-    const char* filename, const mi::neuraylib::ICanvas* canvas, mi::Uint32 quality) const
+    const char* filename,
+    const mi::neuraylib::ICanvas* canvas,
+    mi::Uint32 quality,
+    bool force_default_gamma) const
 {
     if( !filename)
         return -1;
@@ -188,7 +196,7 @@ mi::Sint32 Mdl_impexp_api_impl::export_canvas(
        return -3;
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
-    bool result = image_module->export_canvas( canvas, filename, quality);
+    bool result = image_module->export_canvas( canvas, filename, quality, force_default_gamma);
     return result ? 0 : -4;
 }
 
@@ -226,7 +234,7 @@ const mi::IString* Mdl_impexp_api_impl::uvtile_marker_to_string(
 {
     if( !marker)
         return nullptr;
-    
+
     const std::string& result = MDL::uvtile_marker_to_string( marker, u, v);
     return result.empty() ? nullptr : new String_impl( result.c_str());
 }
@@ -234,11 +242,161 @@ const mi::IString* Mdl_impexp_api_impl::uvtile_marker_to_string(
 const mi::IString* Mdl_impexp_api_impl::uvtile_string_to_marker(
     const char* str, const char* marker) const
 {
-    if( !str && !marker)
+    if( !str || !marker)
         return nullptr;
 
     const std::string& result = MDL::uvtile_string_to_marker( str, marker);
     return result.empty() ? nullptr : new String_impl( result.c_str());
+}
+
+const mi::IString* Mdl_impexp_api_impl::get_mdl_module_name(
+    const char* filename, mi::neuraylib::IMdl_impexp_api::Search_option option) const
+{
+    if( !filename || strlen( filename) == 0)
+        return nullptr;
+
+    std::string basename, extension;
+
+    HAL::Ospath::splitext( filename, basename, extension);
+    if( extension != ".mdl" && extension != ".mdr")
+        return nullptr;
+    if( basename.empty())
+        return nullptr;
+
+    std::string result = MDL::get_file_path( basename, option);
+    boost::replace_all( result, "/", "::");
+    result = MDL::encode_module_name( result);
+
+    return new String_impl( result.c_str());
+}
+
+const mi::neuraylib::ISerialized_function_name* Mdl_impexp_api_impl::serialize_function_name(
+    const char* definition_name,
+    const mi::neuraylib::IType_list* argument_types,
+    const mi::neuraylib::IType* return_type,
+    mi::neuraylib::IMdle_serialization_callback* mdle_callback,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+
+    if( !MDL::get_encoded_names_enabled())
+        return nullptr;
+    if( !definition_name)
+        return nullptr;
+
+    mi::base::Handle<const MDL::IType_list> argument_types_int(
+        get_internal_type_list( argument_types));
+    mi::base::Handle<const MDL::IType> return_type_int(
+        get_internal_type( return_type));
+    return MDL::serialize_function_name(
+        definition_name,
+        argument_types_int.get(),
+        return_type_int.get(),
+        mdle_callback,
+        context_impl);
+}
+
+namespace {
+
+/// Implementation of mi::neuraylib::IDeserialized_function_name which simply wraps
+/// MDL::IDeserialized_function_name.
+class Deserialized_function_name_impl : public
+    mi::base::Interface_implement<mi::neuraylib::IDeserialized_function_name>
+{
+public:
+    Deserialized_function_name_impl(
+        Type_factory* tf, const MDL::IDeserialized_function_name* impl)
+      : m_tf( tf, mi::base::DUP_INTERFACE)
+      , m_impl( impl, mi::base::DUP_INTERFACE)
+    { }
+
+    const char* get_db_name() const { return m_impl->get_db_name(); }
+
+    const mi::neuraylib::IType_list* get_argument_types() const
+    {
+        mi::base::Handle<const MDL::IType_list> result_int( m_impl->get_argument_types());
+        return m_tf->create_type_list( result_int.get(), /*owner*/ nullptr);
+    }
+
+private:
+    mi::base::Handle<Type_factory> m_tf;
+    mi::base::Handle<const MDL::IDeserialized_function_name> m_impl;
+};
+
+} // namespace
+
+const mi::neuraylib::IDeserialized_function_name* Mdl_impexp_api_impl::deserialize_function_name(
+    mi::neuraylib::ITransaction* transaction,
+    const char* function_name,
+    mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+
+    if( !MDL::get_encoded_names_enabled())
+        return nullptr;
+    if( !transaction || !function_name)
+        return nullptr;
+
+    Transaction_impl* transaction_impl
+        = static_cast<Transaction_impl*>( transaction);
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+
+    mi::base::Handle<const MDL::IDeserialized_function_name> result_int(
+         MDL::deserialize_function_name(
+             db_transaction, function_name, mdle_callback, context_impl));
+    if( !result_int)
+        return nullptr;
+
+    mi::base::Handle<Type_factory> tf( transaction_impl->get_type_factory());
+    return new Deserialized_function_name_impl( tf.get(), result_int.get());
+}
+
+const mi::neuraylib::IDeserialized_function_name* Mdl_impexp_api_impl::deserialize_function_name(
+    mi::neuraylib::ITransaction* transaction,
+    const char* module_name,
+    const char* function_name_without_module_name,
+    mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+
+    if( !MDL::get_encoded_names_enabled())
+        return nullptr;
+    if( !transaction || !module_name || !function_name_without_module_name)
+        return nullptr;
+
+    Transaction_impl* transaction_impl
+        = static_cast<Transaction_impl*>( transaction);
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+
+    mi::base::Handle<const MDL::IDeserialized_function_name> result_int(
+         MDL::deserialize_function_name( db_transaction,
+             module_name, function_name_without_module_name, mdle_callback, context_impl));
+    if( !result_int)
+        return nullptr;
+
+    mi::base::Handle<Type_factory> tf( transaction_impl->get_type_factory());
+    return new Deserialized_function_name_impl( tf.get(), result_int.get());
+}
+
+const mi::neuraylib::IDeserialized_module_name* Mdl_impexp_api_impl::deserialize_module_name(
+    const char* module_name,
+    mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
+    mi::neuraylib::IMdl_execution_context* context) const
+{
+    MDL::Execution_context default_context;
+    MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
+
+    if( !MDL::get_encoded_names_enabled())
+        return nullptr;
+    if( !module_name)
+        return nullptr;
+
+    return MDL::deserialize_module_name( module_name, mdle_callback, context_impl);
 }
 
 namespace {
@@ -307,8 +465,6 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_common(
     ASSERT(M_NEURAY_API, module);
     ASSERT(M_NEURAY_API, writer);
     ASSERT(M_NEURAY_API, context);
-
-    context->clear_messages();
 
     // check that the bundle_resources option is not used with string-based exports
     if (!filename && context->get_option<bool>(MDL_CTX_OPTION_BUNDLE_RESOURCES))

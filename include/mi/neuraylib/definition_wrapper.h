@@ -113,6 +113,9 @@ public:
     /// Indicates whether the material or function definition is exported by its module.
     bool is_exported() const;
 
+    /// Indicates whether the definition represents a material.
+    bool is_material() const;
+
     /// Returns the number of parameters.
     Size get_parameter_count() const;
 
@@ -249,7 +252,7 @@ public:
     ///                    or function call (all parameters without default need to be present). If
     ///                    \c NULL, then the default for a parameter is used, or the argument is
     ///                    default-constructed for parameters without default. Must not be \c NULL
-    ///                    in case of \ref mi_neuray_mdl_template_like_functions_definitions.
+    ///                    in case of \ref mi_neuray_mdl_template_like_function_definitions.
     /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
     ///                    -  0: Success. If \p arguments is \c NULL, then the method always
@@ -261,8 +264,8 @@ public:
     ///                    - -3: A parameter that has no default was not provided with an argument
     ///                          value.
     ///                    - -4: The function definition is one of
-    ///                          \ref mi_neuray_mdl_template_like_functions_definitions and
-    ///                          \p argments is \c NULL.
+    ///                          \ref mi_neuray_mdl_template_like_function_definitions and
+    ///                          \p arguments is \c NULL.
     /// \return            The constructed material instance or function call, or \c NULL in case
     ///                    of errors.
     IScene_element* create_instance(
@@ -274,7 +277,7 @@ public:
     ///                    or function call (all parameters without default need to be present). If
     ///                    \c NULL, then the default for a parameter is used, or the argument is
     ///                    default-constructed for parameters without default. Must not be \c NULL
-    ///                    in case of \ref mi_neuray_mdl_template_like_functions_definitions.
+    ///                    in case of \ref mi_neuray_mdl_template_like_function_definitions.
     /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
     ///                    -  0: Success. If \p arguments is \c NULL, then the method always
@@ -286,8 +289,8 @@ public:
     ///                    - -3: A parameter that has no default was not provided with an argument
     ///                          value.
     ///                    - -4: The function definition is one of
-    ///                          \ref mi_neuray_mdl_template_like_functions_definitions and
-    ///                          \p argments is \c NULL.
+    ///                          \ref mi_neuray_mdl_template_like_function_definitions and
+    ///                          \p arguments is \c NULL.
     /// \return            The constructed material instance or function call, or \c NULL in case
     ///                    of errors.
     ///
@@ -430,6 +433,16 @@ inline bool Definition_wrapper::is_exported() const
 
     } else
         return false;
+}
+
+inline bool Definition_wrapper::is_material() const
+{
+    if( !m_access)
+        return false;
+
+    base::Handle<const IMaterial_definition> md(
+        m_access->get_interface<IMaterial_definition>());
+    return md.is_valid_interface();
 }
 
 inline Size Definition_wrapper::get_parameter_count() const
@@ -676,7 +689,9 @@ inline const IAnnotation_block* Definition_wrapper::get_return_annotations() con
 {
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
-        return 0;
+        base::Handle<const IMaterial_definition> md(
+            m_access->get_interface<IMaterial_definition>());
+        return md->get_return_annotations();
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 

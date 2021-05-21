@@ -92,8 +92,9 @@ Dependency_entry const *Manifest::get_first_dependency() const
 Value_entry const *Manifest::get_opt_author() const
 {
     Key_map::const_iterator it(m_key_map.find(get_key(PK_AUTHOR)));
-    if (it != m_key_map.end())
+    if (it != m_key_map.end()) {
         return it->second;
+    }
     return NULL;
 }
 
@@ -101,40 +102,45 @@ Value_entry const *Manifest::get_opt_author() const
 Value_entry const *Manifest::get_opt_contributor() const
 {
     Key_map::const_iterator it(m_key_map.find(get_key(PK_CONTRIBUTOR)));
-    if (it != m_key_map.end())
+    if (it != m_key_map.end()) {
         return it->second;
+    }
     return NULL;
 }
 
 // Get the copyright notice of the archive if any.
 char const *Manifest::get_opt_copyrigth_notice() const
 {
-    if (m_copyright_notice.empty())
+    if (m_copyright_notice.empty()) {
         return NULL;
+    }
     return m_copyright_notice.c_str();
 }
 
 // Get the description of the archive if any.
 char const *Manifest::get_opt_description() const
 {
-    if (m_description.empty())
+    if (m_description.empty()) {
         return NULL;
+    }
     return m_description.c_str();
 }
 
 // Get the created date of the archive if any.
 char const *Manifest::get_opt_created() const
 {
-    if (m_created.empty())
+    if (m_created.empty()) {
         return NULL;
+    }
     return m_created.c_str();
 }
 
 // Get the modified date of the archive if any.
 char const *Manifest::get_opt_modified() const
 {
-    if (m_modified.empty())
+    if (m_modified.empty()) {
         return NULL;
+    }
     return m_modified.c_str();
 }
 
@@ -193,8 +199,9 @@ char const *Manifest::get_key(size_t i) const
         }
     }
     i -= PK_FIRST_USER_ID;
-    if (i < m_user_keys.size())
+    if (i < m_user_keys.size()) {
         return m_user_keys[i];
+    }
     return NULL;
 }
 
@@ -208,10 +215,39 @@ Value_entry const *Manifest::get_first_value(size_t i) const
     if (i - PK_FIRST_USER_ID < m_user_keys.size()) {
         Key_map::const_iterator it(m_key_map.find(get_key(i)));
 
-        if (it != m_key_map.end())
+        if (it != m_key_map.end()) {
             return it->second;
+        }
     }
     return NULL;
+}
+
+/// Check for valid key identifiers.
+static bool is_valid_identifier(char const *ident)
+{
+    char c = ident[0];
+
+    if (!isalpha(c)) {
+        return false;
+    }
+
+    bool dot_seen = false;
+    for (size_t i = 1; ident[i] != '\0'; ++i) {
+        c = ident[i];
+
+        if (isalpha(c) || isdigit(c) || c == '_') {
+            dot_seen = false;
+            continue;
+        }
+
+        if (c == '.' && !dot_seen) {
+            dot_seen = true;
+            continue;
+        }
+
+        return false;
+    }
+    return true;
 }
 
 // Add a key, value pair.
@@ -219,8 +255,13 @@ Manifest::Error_code Manifest::add_key_value(
     char const *key,
     char const *value)
 {
-    if (key == NULL || value == NULL)
+    if (key == NULL || value == NULL) {
         return ERR_NULL_ARG;
+    }
+
+    if (!is_valid_identifier(key)) {
+        return ERR_KEY_FORMAT;
+    }
 
     switch (key[0]) {
     case 'a':
@@ -257,35 +298,45 @@ Manifest::Error_code Manifest::add_key_value(
         }
         break;
     case 'e':
-        if (strcmp("exports.function", key) == 0)
+        if (strcmp("exports.function", key) == 0) {
             return ERR_FORBIDDEN;
-        if (strcmp("exports.material", key) == 0)
+        }
+        if (strcmp("exports.material", key) == 0) {
             return ERR_FORBIDDEN;
-        if (strcmp("exports.struct", key) == 0)
+        }
+        if (strcmp("exports.struct", key) == 0) {
             return ERR_FORBIDDEN;
-        if (strcmp("exports.enum", key) == 0)
+        }
+        if (strcmp("exports.enum", key) == 0) {
             return ERR_FORBIDDEN;
-        if (strcmp("exports.const", key) == 0)
+        }
+        if (strcmp("exports.const", key) == 0) {
             return ERR_FORBIDDEN;
-        if (strcmp("exports.annotation", key) == 0)
+        }
+        if (strcmp("exports.annotation", key) == 0) {
             return ERR_FORBIDDEN;
+        }
         break;
     case 'm':
-        if (strcmp("mdl", key) == 0)
+        if (strcmp("mdl", key) == 0) {
             return ERR_FORBIDDEN;
-        if (strcmp("module", key) == 0)
+        }
+        if (strcmp("module", key) == 0) {
             return ERR_FORBIDDEN;
+        }
         if (strcmp("modified", key) == 0) {
-            if (!check_time_format(value))
+            if (!check_time_format(value)) {
                 return ERR_TIME_FORMAT;
+            }
             set_opt_modified(value);
             return ERR_OK;
         }
         break;
     case 'v':
         if (strcmp("version", key) == 0) {
-            if (!check_version_format(value))
+            if (!check_version_format(value)) {
                 return ERR_VERSION_FORMAT;
+            }
             set_sema_version(value);
             return ERR_OK;
         }
@@ -297,11 +348,12 @@ Manifest::Error_code Manifest::add_key_value(
     return ERR_OK;
 }
 
-// Add a MDL version
+// Add a MDL version.
 void Manifest::add_mdl_version(IMDL::MDL_version version)
 {
-    if (version > m_mdl_version)
+    if (version > m_mdl_version) {
         m_mdl_version = version;
+    }
 }
 
 // Set a MDL version.
@@ -323,14 +375,18 @@ void Manifest::set_sema_version(char const *version)
         ++s;
     }
 
-    if (*s == '.') ++s;
+    if (*s == '.') {
+        ++s;
+    }
 
     while (DIGIT(*s)) {
         minor = minor * 10 + *s - '0';
         ++s;
     }
 
-    if (*s == '.') ++s;
+    if (*s == '.') {
+        ++s;
+    }
 
     while (DIGIT(*s)) {
         patch = patch * 10 + *s - '0';
@@ -407,8 +463,9 @@ void Manifest::set_opt_modified(char const *modified)
 // Add a module.
 size_t Manifest::add_module(char const *abs_name)
 {
-    if (abs_name[0] == ':' && abs_name[1] == ':')
+    if (abs_name[0] == ':' && abs_name[1] == ':') {
         abs_name += 2;
+    }
 
     abs_name = Arena_strdup(m_arena, abs_name);
 
@@ -423,8 +480,9 @@ size_t Manifest::add_module(char const *abs_name)
 // Get the i'th module.
 Module_entry const *Manifest::get_module(size_t i) const
 {
-    if (i < m_modules.size())
+    if (i < m_modules.size()) {
         return m_modules[i];
+    }
     return NULL;
 }
 
@@ -462,8 +520,9 @@ void Manifest::add_pair(char const *key, bool user_key, char const *value)
         for (;;) {
             Value_entry *q = p->get_next();
 
-            if (q == NULL)
+            if (q == NULL) {
                 break;
+            }
             p = q;
         }
     }
@@ -473,9 +532,9 @@ void Manifest::add_pair(char const *key, bool user_key, char const *value)
     value = Arena_strdup(m_arena, value);
     Value_entry *e = builder.create<Value_entry>(value);
 
-    if (p != NULL)
+    if (p != NULL) {
         p->set_next(e);
-    else {
+    } else {
         if (user_key) {
             key = Arena_strdup(m_arena, key);
             m_user_keys.push_back(key);
@@ -489,28 +548,39 @@ bool Manifest::check_time_format(char const *s)
 {
 #define DIGIT(c)  ('0' <= (c) && (c) <= '9')
 
-    if (!DIGIT(s[0]))
+    if (!DIGIT(s[0])) {
         return false;
-    if (!DIGIT(s[1]))
+    }
+    if (!DIGIT(s[1])) {
         return false;
-    if (!DIGIT(s[2]))
+    }
+    if (!DIGIT(s[2])) {
         return false;
-    if (!DIGIT(s[3]))
+    }
+    if (!DIGIT(s[3])) {
         return false;
-    if (s[4] != '-')
+    }
+    if (s[4] != '-') {
         return false;
-    if (!DIGIT(s[5]))
+    }
+    if (!DIGIT(s[5])) {
         return false;
-    if (!DIGIT(s[6]))
+    }
+    if (!DIGIT(s[6])) {
         return false;
-    if (s[7] != '-')
+    }
+    if (s[7] != '-') {
         return false;
-    if (!DIGIT(s[8]))
+    }
+    if (!DIGIT(s[8])) {
         return false;
-    if (!DIGIT(s[9]))
+    }
+    if (!DIGIT(s[9])) {
         return false;
-    if (s[10] != '\0' && s[10] != ',')
+    }
+    if (s[10] != '\0' && s[10] != ',') {
         return false;
+    }
     return true;
 #undef DIGIT
 }
@@ -521,37 +591,43 @@ bool Manifest::check_version_format(char const *s)
 #define DIGIT(c)  ('0' <= (c) && (c) <= '9')
 
     // major
-    if (!DIGIT(*s))
+    if (!DIGIT(*s)) {
         return false;
+    }
     do {
         ++s;
     } while(DIGIT(*s));
 
-    if (*s != '.')
+    if (*s != '.') {
         return false;
+    }
     ++s;
 
     // minor
-    if (!DIGIT(*s))
+    if (!DIGIT(*s)) {
         return false;
+    }
     do {
         ++s;
     } while(DIGIT(*s));
 
-    if (*s != '.')
+    if (*s != '.') {
         return false;
+    }
     ++s;
 
     // patch
-    if (!DIGIT(*s))
+    if (!DIGIT(*s)) {
         return false;
+    }
     do {
         ++s;
     } while(DIGIT(*s));
 
     // prerelease
-    if (*s != '-' && *s != '\0')
+    if (*s != '-' && *s != '\0') {
         return false;
+    }
 
     return true;
 #undef DIGIT
@@ -581,8 +657,9 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
     mi::base::Handle<IArchive_manifest const> manifest(
         iface->get_interface<IArchive_manifest>());
 
-    if (!manifest.is_valid_interface())
+    if (!manifest.is_valid_interface()) {
         return;
+    }
 
     // mandatory fields
 
@@ -596,6 +673,7 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
     case IMDL::MDL_VERSION_1_5: s = "1.5"; break;
     case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
     case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
+    case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
     }
     printer->printf("%s = \"%s\"\n", manifest->get_key(IArchive_manifest::PK_MDL), s);
 
@@ -669,8 +747,9 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
             string prefix("::", get_allocator());
 
             prefix.append(manifest->get_module_name(index));
-            if (prefix.length() > 2)
+            if (prefix.length() > 2) {
                 prefix.append("::");
+            }
 
             for (IArchive_manifest_export const *e =
                     manifest->get_first_export(index, export_index);
@@ -686,18 +765,24 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
     }
 
     // optionally fields
-    if (IArchive_manifest_value const *authors = manifest->get_opt_author())
+    if (IArchive_manifest_value const *authors = manifest->get_opt_author()) {
         print_list(printer, manifest->get_key(IArchive_manifest::PK_AUTHOR), authors);
-    if (IArchive_manifest_value const *contributors = manifest->get_opt_contributor())
+    }
+    if (IArchive_manifest_value const *contributors = manifest->get_opt_contributor()) {
         print_list(printer, manifest->get_key(IArchive_manifest::PK_CONTRIBUTOR), contributors);
-    if (char const *copyright_notice = manifest->get_opt_copyrigth_notice())
+    }
+    if (char const *copyright_notice = manifest->get_opt_copyrigth_notice()) {
         printer->printf("copyright_notice = \"%s\"\n", copyright_notice);
-    if (char const *description = manifest->get_opt_description())
+    }
+    if (char const *description = manifest->get_opt_description()) {
         printer->printf("description = \"%s\"\n", description);
-    if (char const *created = manifest->get_opt_created())
+    }
+    if (char const *created = manifest->get_opt_created()) {
         printer->printf("created = \"%s\"\n", created);
-    if (char const *modified = manifest->get_opt_modified())
+    }
+    if (char const *modified = manifest->get_opt_modified()) {
         printer->printf("modified = \"%s\"\n", modified);
+    }
 
     // user defined
     for (size_t i = IArchive_manifest::PK_FIRST_USER_ID, n = manifest->get_key_count();
@@ -705,8 +790,9 @@ void Manifest_printer::print(Printer *printer, mi::base::IInterface const *iface
          ++i)
     {
         char const *key = manifest->get_key(i);
-        if (IArchive_manifest_value const *value = manifest->get_first_value(i))
+        if (IArchive_manifest_value const *value = manifest->get_first_value(i)) {
             print_list(printer, key, value);
+        }
     }
 }
 

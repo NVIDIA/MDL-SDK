@@ -105,6 +105,8 @@ enum Attr_resv_id {
     APPROX,			///< Approx     tessellation accuracies
     APPROX_CURVE,		///< Approx     curve approximation accuracies
     MATTE_SHADOW_INTENSITY,     ///< Scalar     matte_shadow_intensity for fake shadows
+    VOLUME_PRIORITY,            ///< Sint8      volume stack priority    
+    BACKPLATE_MESH_FUNCTION,    ///< Tag        backplate mesh function
                                 //------------------ object, no inheritance ---
     OBJ_NORMAL,			///< Vector3    vertex normal
     OBJ_MOTION,			///< Vector3[]  vertex motion path
@@ -247,6 +249,7 @@ enum Attr_resv_id {
     OPT_MDL_METERS_PER_SCENE_UNIT, ///< scalar   conversion config
     OPT_MDL_DISTILLING_TARGET,  /// < uint
     OPT_FORCE_BUILTIN_BUMP_LINEAR_GAMMA, /// < bool force linear gamma for builtin bumps
+    OPT_IRAY_ALLOW_SURFACE_VOLUME_COEFFICIENTS, /// < bool allow surface-varying volume coeffs in iray
                                 //------------------ obsolete options ---------
     OPT_SAMPLES_MIN,		///< scalar      raytracer: min # samples/pixel
     OPT_AO_SAMPLES_MIN,		///< scalar      unused

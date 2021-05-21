@@ -1,0 +1,249 @@
+/******************************************************************************
+ * Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_df_native Example for Integrating MDL into a Renderer by Using the Native Backend (CPU)
+
+<div align="right">
+    [\link mi_neuray_example_df_cuda Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_derivatives Next\endlink]
+</div>
+
+This example demonstrates how to generate target code for the native backend (CPU) from an MDL material and use the generated BSDF functions in a CPU based renderer to account for the \c surface.scattering, \c emission, \c thin_walled and \c geometry.cutout_opacity expressions of the material.
+The example implements a physically based path-tracer technique for rendering a single sphere with MDL materials. The sphere is illuminated by a point light and/or an HDR environment map as seen from a perspective camera. The MDL material is loaded from a module and compiled for native backend (CPU) in order to execute different BSDF target functions during renderings. The renderer takes advantage of multi-threading by assigning different spans of the framebuffer to the available logical cores.
+
+\section example_df_native_new New Topics
+  - Generating target code for BSDF functions (CPU).
+  - Using generated BSDF functions (CPU).
+\section example_df_native_descr Detailed Description
+
+<dl>
+<dt><b>Generating target code for BSDF functions (CPU)</b></dt>
+<dd><br>
+The whole target code generation process for this example can be divided in 3 steps:
+    
+- Create the material instance: 
+Here an MDL material is loaded from a module and instantiated. For further information about material instantiation, please check \ref mi_neuray_example_instantiation. In the example, this is performed by the method:
+    
+\code
+void create_material_instance(
+    mi::neuraylib::IMdl_factory*            mdl_factory,
+    mi::neuraylib::ITransaction*            transaction,
+    mi::neuraylib::IMdl_impexp_api*         mdl_impexp_api,
+    mi::neuraylib::IMdl_execution_context*  context,
+    const char*                             material_name,
+    const char*                             instance_name,
+    bool                                    encoded_names_enabled);
+\endcode
+    
+- Compile the material instance:
+The material instance is not only required to generate target code for a given backend but also to inspect the material properties and collect the required material sub-expressions to be translated by the link unit. For example, if a material is thin walled, it may be required to translate also sub-expressions of \c backface. Please check \ref mi_neuray_compilation_modes for further information about the material compilation. In the example, this is performed by the method:
+
+\code
+void compile_material_instance(
+    mi::neuraylib::ITransaction*            transaction,
+    mi::neuraylib::IMdl_execution_context*  context,
+    const char*                             instance_name,
+    const char*                             compiled_material_name,
+    bool                                    class_compilation);
+\endcode
+
+- Generate the target code:
+Here, depending on the compiled material, different sub-expressions are selected and translated by the link unit for the native backend (CPU). In the example, this is performed by the method:
+
+\code
+void generate_native(
+    Render_context&                         render_context,
+    mi::neuraylib::ITransaction*            transaction,
+    mi::neuraylib::IMdl_backend_api*        mdl_backend_api,
+    mi::neuraylib::IMdl_execution_context*  context,
+    const char*                             compiled_material_name,
+    bool                                    use_custom_tex_runtime,
+    bool                                    enable_derivatives);
+\endcode
+
+Let's have a more detailed look at the last step. First, the native backend is obtained through the MDL backend API \c mdl_backend_api and the link unit is created:
+
+\code
+    mi::base::Handle<mi::neuraylib::IMdl_backend> be_native(
+        mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_NATIVE));
+    ...
+     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
+        be_native->create_link_unit(transaction, context));
+\endcode
+
+Next, the material sub-expressions are collected and passed to the link unit along the compiled material:
+
+\code
+    std::vector<mi::neuraylib::Target_function_description> descs;
+    descs.push_back(mi::neuraylib::Target_function_description("surface.scattering"));
+    descs.push_back(mi::neuraylib::Target_function_description("surface.emission.emission"));
+    descs.push_back(mi::neuraylib::Target_function_description("surface.emission.intensity"));
+    
+    ...
+    
+    bool need_backface_bsdf = is_thing_walled && 
+        compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_SCATTERING) !=
+        compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_SCATTERING);
+    
+    if (need_backface_bsdf)
+    {
+        backface_scattering_index = descs.size();
+        descs.push_back(mi::neuraylib::Target_function_description("backface.scattering"));
+    }
+    
+    ...
+    
+    link_unit->add_material(
+        compiled_material.get(),
+        descs.data(),
+        descs.size(),
+        context);
+
+\endcode
+
+where \c descs, of type #mi::neuraylib::Target_function_description, serves to collect the sub-expressions required later during rendering. Some sub-expressions are known to be required while others are added dynamically by inspecting different elements of the compiled material:
+
+Note that the renderer has to keep track of the indices of the sub-expressions in the array \c descs in order to lookup the functions later during rendering when executing any function of #mi::neuraylib::ITarget_code. In the example, the struct \c render_context is used for that:
+
+\code
+    render_context.surface_bsdf_function_index =                descs[0].function_index;
+    render_context.surface_edf_function_index =                 descs[1].function_index;
+    render_context.surface_emission_intensity_function_index =  descs[2].function_index;
+    ...
+\endcode
+
+Finally, the target code for the native backend (CPU) is generated:
+
+\code
+    mi::base::Handle<const mi::neuraylib::ITarget_code> code_native(
+        be_native->translate_link_unit(link_unit.get(), context));
+\endcode
+
+In the example the struct \c render_context is used to take ownership of \c code_native in order to extend its scope to the renderer application scope, otherwise it would be freed by the end of \c generate_native() :
+
+\code
+    render_context.target_code = code_native;
+\endcode
+
+</dd>
+</dl>
+
+<dl>
+<dt><b>Using generated BSDF functions (CPU)</b></dt>
+<dd><br>
+At this point the target code for the native backend is available for the renderer and it can be used to query material properties and evaluate material distribution functions. Here for example, the renderer uses \c target_code to obtain the \c cutout_opacity and \c thin_walled material properties for the current \c shading_state:
+
+\code
+    // evaluate material cutout opacity state
+    float cutout_opacity = rc.cutout.constant_opacity;
+    if (!rc.cutout.is_constant)
+    {
+        rc.target_code->execute(
+            rc.cutout_opacity_function_index,
+            reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
+            /*texture_handler=*/ nullptr,
+            /*arg_block_data=*/ nullptr,
+            &cutout_opacity);
+    }
+    
+    ...
+    
+    // evaluate thin_walled state
+    bool is_thin_walled = rc.thin_walled.is_thin_walled;
+    if (!rc.thin_walled.is_constant)
+    {
+        rc.target_code->execute(
+            rc.thin_walled_function_index,
+            reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
+            /*texture_handler=*/ nullptr,
+            /*arg_block_data=*/ nullptr,
+            &is_thin_walled);
+    }    
+\endcode
+
+and here, the renderer uses three \c target_code functions to evaluate the material emission contribution for the current \c shading_state.
+- \c target_code->execute_bsdf_init() to initialize the emission distribution function for the current \c shading_state and function index \c edf_function_index.
+- \c target_code->execute_edf_evaluate() to evaluate material emission distribution function for the current view direction \c eval_data.k1 and function index \c edf_function_index.
+- \c target_code->execute() to obtain the emission \c intensity for the function index \c surface_emission_intensity_function_index.
+
+\code
+    uint64_t edf_function_index = ray.is_inside ? rc.backface_edf_function_index : rc.surface_edf_function_index;
+    // shader initialization for the current hit point
+    rc.target_code->execute_bsdf_init(
+        edf_function_index,
+        rc.shading_state,
+        nullptr,
+        nullptr);
+
+    mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
+    eval_data.k1 = -ray.dir;
+
+    // evaluate material surface edf
+    rc.target_code->execute_edf_evaluate(
+        edf_function_index + 2,     // edf_function_index corresponds to 'init'
+                                    // edf_function_index + 2 to 'evaluate'
+        &eval_data,
+        rc.shading_state,
+        /*texture_handler=*/ nullptr,
+        /*arg_block_data=*/ nullptr);
+
+    if (eval_data.pdf > 1.e-6f)
+    {
+        mi::Float32_3 intensity(1.f);
+        rc.target_code->execute(
+            rc.surface_emission_intensity_function_index,
+            reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
+            /*texture_handler=*/ nullptr,
+            /*arg_block_data=*/ nullptr,
+            &intensity);
+
+        vp_sample[VPCH_ILLUM] += static_cast<mi::Float32_3>(eval_data.edf)*intensity*ray.weight;
+    }
+\endcode
+
+</dd>
+</dl>
+
+\section example_df_native Example Source
+
+To compile the source code, GLFW and GLEW are required.
+For detailed instructions, please refer to the \link mi_neuray_getting_started Getting Started \endlink section.
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/df_native/example_df_native.cpp</tt>
+
+\include df_native/example_df_native.cpp
+
+<div align="right">
+    [\link mi_neuray_example_df_cuda Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_derivatives Next\endlink]
+</div>
+
+*/

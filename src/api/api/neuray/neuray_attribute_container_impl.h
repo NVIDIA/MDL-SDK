@@ -51,10 +51,6 @@ class Attribute_container_impl
                                               Attribute_container> >
 {
 public:
-
-    typedef Attribute_set_impl<Db_element_impl<mi::neuraylib::IAttribute_container,
-                                               Attribute_container> > Parent_type;
-
     static DB::Element_base* create_db_element(
         mi::neuraylib::ITransaction* transaction,
         mi::Uint32 argc,

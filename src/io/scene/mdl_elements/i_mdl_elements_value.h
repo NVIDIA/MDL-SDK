@@ -363,11 +363,13 @@ public:
 
     virtual const char* get_unresolved_mdl_url() const = 0;
 
-    virtual void set_unresolved_mdl_url(const char *url) = 0;
+    virtual void set_unresolved_mdl_url( const char* url) = 0;
 
-    virtual const char *get_owner_module() const = 0;
+    /// Returns the MDL name of the owner module.
+    virtual const char* get_owner_module() const = 0;
 
-    virtual void set_owner_module(const char *module) = 0;
+    /// Set the owner module by its MDL name.
+    virtual void set_owner_module( const char* module) = 0;
 
     virtual const char* get_file_path( DB::Transaction* transaction) const = 0;
 };
@@ -383,8 +385,7 @@ public:
 
     virtual Float32 get_gamma() const = 0;
 
-    virtual void set_gamma(mi::Float32 gamma) = 0;
-
+    virtual void set_gamma( mi::Float32 gamma) = 0;
 };
 
 class IValue_light_profile : public
@@ -467,7 +468,8 @@ public:
 
     virtual IValue_string* create_string( const char* value = "") const = 0;
 
-    virtual IValue_string_localized* create_string_localized( const char* value = "", const char* original_value = "") const = 0;
+    virtual IValue_string_localized* create_string_localized(
+        const char* value = "", const char* original_value = "") const = 0;
 
     virtual IValue_vector* create_vector( const IType_vector* type) const = 0;
 
@@ -486,26 +488,35 @@ public:
         const IType_texture* type,
         DB::Tag value) const = 0;
 
+    /// Creates a texture.
+    ///
+    /// \param owner_module   MDL name of owner module (or \c NULL).
     virtual IValue_texture* create_texture(
         const IType_texture* type,
         DB::Tag value,
-        const char *unresolved_mdl_url,
-        const char *owner_module,
+        const char* unresolved_mdl_url,
+        const char* owner_module,
         mi::Float32 gamma) const = 0;
 
     virtual IValue_light_profile* create_light_profile( DB::Tag value) const = 0;
 
+    /// Creates a light profile.
+    ///
+    /// \param owner_module   MDL name of owner module (or \c NULL).
     virtual IValue_light_profile* create_light_profile(
         DB::Tag value,
-        const char *unresolved_mdl_url,
-        const char *owner_module) const = 0;
+        const char* unresolved_mdl_url,
+        const char* owner_module) const = 0;
 
     virtual IValue_bsdf_measurement* create_bsdf_measurement( DB::Tag value) const = 0;
 
+    /// Creates a BSDF measurement.
+    ///
+    /// \param owner_module   MDL name of owner module (or \c NULL).
     virtual IValue_bsdf_measurement* create_bsdf_measurement(
         DB::Tag value,
-        const char *unresolved_mdl_url,
-        const char *owner_module) const = 0;
+        const char* unresolved_mdl_url,
+        const char* owner_module) const = 0;
 
     virtual IValue_invalid_df* create_invalid_df( const IType_reference* type) const = 0;
 

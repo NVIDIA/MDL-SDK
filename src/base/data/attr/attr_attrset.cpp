@@ -39,7 +39,6 @@
 #include <base/data/serial/i_serializer.h>
 #include <base/lib/cont/i_cont_rle_array.h>
 #include <base/lib/log/i_log_logger.h>
-#include <boost/shared_ptr.hpp>
 
 #include <limits>
 #include <utility>
@@ -157,7 +156,7 @@ void set_bool_attrib(
         Uint array_size = 1;
         // m_flag_value
         Type type(TYPE_BOOLEAN, name, array_size);
-        boost::shared_ptr<Attribute> attr_ptr(new Attribute(id, type));
+        auto attr_ptr = std::make_shared<Attribute>(id, type);
         attr_ptr->set_global(true);
         attr_set.attach(attr_ptr);
         flag = attr_set.lookup(id);
@@ -206,12 +205,12 @@ Attribute *Attribute_set::lookup(
 }
 
 
-boost::shared_ptr<Attribute> Attribute_set::lookup_shared_ptr(
+std::shared_ptr<Attribute> Attribute_set::lookup_shared_ptr(
     Attribute_id	id) const	// ID of attribute to look up
 {
     Const_iter it = m_attrs.find(id);
     if (it == m_attrs.end())
-        return boost::shared_ptr<Attribute>();
+        return std::shared_ptr<Attribute>();
     else
         return (*it).second;
 }
@@ -226,7 +225,7 @@ boost::shared_ptr<Attribute> Attribute_set::lookup_shared_ptr(
 //
 
 bool Attribute_set::attach(
-    const boost::shared_ptr<Attribute> &attr)// attribute to attach
+    const std::shared_ptr<Attribute> &attr)// attribute to attach
 {
     // error checking
     const Attribute *other = lookup(attr->get_id());
@@ -256,14 +255,14 @@ bool Attribute_set::attach(
 
 
 //
-// detach an attribute, but don't destroy it. The boost::shared_ptr return value
+// detach an attribute, but don't destroy it. The std::shared_ptr return value
 // takes care of destroying the attribute in the end.
 //
 
-boost::shared_ptr<Attribute> Attribute_set::detach(
+std::shared_ptr<Attribute> Attribute_set::detach(
     Attribute_id	id)		// ID of attribute to detach
 {
-    boost::shared_ptr<Attribute> attr;
+    std::shared_ptr<Attribute> attr;
     Iter it = m_attrs.find(id);
     if (it != m_attrs.end()) {
         attr = (*it).second;
@@ -273,7 +272,7 @@ boost::shared_ptr<Attribute> Attribute_set::detach(
     return attr;
 }
 
-boost::shared_ptr<Attribute> Attribute_set::detach(
+std::shared_ptr<Attribute> Attribute_set::detach(
     const char          *name)          // name of attribute to detach
 {
     return detach(Attribute::id_lookup(name));
@@ -293,7 +292,7 @@ void Attribute_set::deep_copy(
     for (it=other.m_attrs.begin(); it != end; ++it) {
         const Attribute *attr = (*it).second.get();
         if (attr) {
-            boost::shared_ptr<Attribute> new_attr(attr->copy());
+            std::shared_ptr<Attribute> new_attr(attr->copy());
 
             // I do not use attach() here to avoid the useless error checking.
             // It is useless here since we start with an empty m_attrs.
@@ -428,7 +427,7 @@ void Attribute_set::get_references(
 
     // iterating the Attribute_set's attributes
     for (it=m_attrs.begin(); it != end; ++it) {
-        const boost::shared_ptr<Attribute>& attr = it->second;
+        const std::shared_ptr<Attribute>& attr = it->second;
 
         // iterate over all elements and collect all is_tag()-typed ones
         for (Uint i=0; i < attr->get_listsize(); ++i) {
@@ -486,7 +485,7 @@ SERIAL::Serializable *Attribute_set::deserialize(
         Attribute *attr = (Attribute *)deser->deserialize();
         m_attrs.insert(
             std::make_pair(
-                attr->get_id(),boost::shared_ptr<Attribute>(attr)));
+                attr->get_id(),std::shared_ptr<Attribute>(attr)));
     }
     return this+1;
 }
@@ -535,7 +534,7 @@ void Attribute_set::print(
 
     Const_iter it, end = m_attrs.end();
     for (it=m_attrs.begin(); it != end; ++it) {
-        boost::shared_ptr<Attribute> attr = (*it).second;
+        std::shared_ptr<Attribute> attr = (*it).second;
         print_attribute(attr.get(), transaction);
     }
 }

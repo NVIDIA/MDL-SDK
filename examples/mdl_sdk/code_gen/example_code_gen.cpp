@@ -73,6 +73,7 @@ public:
     /// The expressions to generate code for.
     std::vector<TD> m_descs;
     std::vector<std::unique_ptr<std::string> > m_desc_strs;  // collection for storing the strings
+
 };
 
 /// The main content of the example
@@ -123,20 +124,25 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
             trans->access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
         if (!module)
             exit_failure("Failed to access the loaded module.");
-
+        
         // ----------------------------------------------------------------------------------------
 
         // Access the material definition of the selected material.
         // A module can export multiple materials or none at all.
-        std::string material_db_name = module_db_name->get_c_str();
-        material_db_name += "::" + material_name;
+        std::string material_db_name
+            = std::string(module_db_name->get_c_str()) + "::" + material_name;
+        material_db_name = mi::examples::mdl::add_missing_material_signature(
+            module.get(), material_db_name);
+        if (material_db_name.empty())
+            exit_failure("Failed to find the material %s in the module %s.",
+                material_name.c_str(), module_name.c_str());
 
         // Check if there is such a definition.
         // This is not really required here because the definition wrapper in the next step
         // will also check if the definition is valid.
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_defintion(
+        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
             trans->access<mi::neuraylib::IMaterial_definition>(material_db_name.c_str()));
-        if (!material_defintion)
+        if (!material_definition)
             exit_failure("Failed to access the material definition.");
 
         // ----------------------------------------------------------------------------------------
@@ -157,7 +163,7 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 module_name.c_str(), material_name.c_str(), result);
 
         // Alternatively, the instance can be created without the definition wrapper using:
-        // material_defintion->create_material_instance(...)
+        // material_definition->create_material_instance(...)
         // In that case the API user needs to provide a argument list at least for those parameters
         // that do not have a default value.
 
@@ -181,8 +187,9 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         context->set_option("fold_all_enum_parameters", options.m_fold_all_enum_parameters);
         context->set_option("ignore_noinline", options.m_ignore_noinline);
 
-        mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
+        mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
             material_instance->create_compiled_material(flags, context.get()));
+
 
         // ----------------------------------------------------------------------------------------
 
@@ -195,8 +202,8 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
             backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_HLSL);
         else if (options.m_backend == "ptx")
             backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX);
-        else if (options.m_backend == "glsl")
-            backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_GLSL);
+        else if (options.m_backend == "llvm")
+            backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_LLVM_IR);
         else
             exit_failure("Selected back-end '%s' is invalid or not supported.",
                 options.m_backend.c_str());
@@ -282,26 +289,31 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         // The target code can also be serialized for later reuse.
         // This can make sense to reduce startup time for larger scenes that have been loaded
         // before. A key for this kind of cache is the hash of a compiled material:
-        /*mi::base::Uuid hash =*/ compiled_material->get_hash();
+        mi::base::Uuid hash = compiled_material->get_hash();
+        std::cout << "compiled material hash: \n" << std::hex << hash.m_id1 << " " << hash.m_id2
+                  << " " << hash.m_id3 << " " << hash.m_id4 << std::dec  <<"\n";
 
-        // If disabled, instance specific data is discarded. this makes sense for applications that
-        // use class compilation and reuse materials that only differ in their parameter set,
-        // meaning that they have the same hash and thereby the same generated code but different
-        // argument blocks. These argument blocks be created separately using the target code and
-        // also the deserialized target code.
-        context->set_option("serialize_class_instance_data", true);
+        // Serialization is not supported by the LLVM-IR backend.
+        if (options.m_backend != "llvm") {
+            // If disabled, instance specific data is discarded. this makes sense for applications
+            // that use class compilation and reuse materials that only differ in their parameter
+            // set, meaning that they have the same hash and thereby the same generated code but
+            // different argument blocks. These argument blocks be created separately using the
+            // target code and also the deserialized target code.
+            context->set_option("serialize_class_instance_data", true);
 
-        // Serialize the target code object into a buffer.
-        mi::base::Handle<const mi::neuraylib::IBuffer> tc_buffer(
-            target_code->serialize(context.get()));
-        if (!print_messages(context.get()))
-            exit_failure("MDL target code serialization failed.");
+            // Serialize the target code object into a buffer.
+            mi::base::Handle<const mi::neuraylib::IBuffer> tc_buffer(
+                target_code->serialize(context.get()));
+            if (!print_messages(context.get()))
+                exit_failure("MDL target code serialization failed.");
 
-        // Access the serialized target code data.
-        // This is usually stored in some kind of cache along with other application data.
-        // For deserialization, use backend->deserialize_target_code(...)
-        /*const size_t tc_buffer_size =*/ tc_buffer->get_data_size();
-        /*const mi::Uint8* tc_buffer_data =*/ tc_buffer->get_data();
+            // Access the serialized target code data.
+            // This is usually stored in some kind of cache along with other application data.
+            // For deserialization, use backend->deserialize_target_code(...)
+            /*const size_t tc_buffer_size =*/ tc_buffer->get_data_size();
+            /*const mi::Uint8* tc_buffer_data =*/ tc_buffer->get_data();
+        }
     }
 
     // All transactions need to get committed or aborted before closing the application.
@@ -330,6 +342,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
     // Apply the search path setup described on the command line
     configure_options.additional_mdl_paths = options.m_mdl_paths;
+
     if (options.m_nostdpath)
     {
         configure_options.add_admin_space_search_paths = false;
@@ -345,6 +358,7 @@ int MAIN_UTF8(int argc, char* argv[])
     // Configure the MDL SDK
     if (!mi::examples::mdl::configure(neuray.get(), configure_options))
         exit_failure("Failed to initialize the SDK.");
+
 
     // Start the MDL SDK
     mi::Sint32 ret = neuray->start();
@@ -378,22 +392,24 @@ code_gen [options] <qualified_material_name>
 
 options:
 
-  -h|--help                     Prints this usage message and exits.
-  -p|--mdl_path <path>          Adds the given path to the MDL search path.
-  -n|--nostdpath                Prevents adding the MDL system and user search
+  -h|--help                     Print this usage message and exit.
+  -p|--mdl_path <path>          Add the given path to the MDL search path.
+  -n|--nostdpath                Prevent adding the MDL system and user search
                                 path(s) to the MDL search path.
-  -o|--output <file>            Exports the module to this file. Default: stdout
-  -b|--backend <backend>        Select the back-end to generate code for. {HLSL, PTX, GLSL}
+  -o|--output <file>            Export the module to this file. Default: stdout
+  -b|--backend <backend>        Select the back-end to generate code for. {HLSL, PTX, LLVM}
                                 Default: HLSL
   -e|--expr_path <path>         Add an MDL expression path to generate, like \"surface.scattering\".
-                                Defaults to a set of expression paths
+                                Defaults to a set of expression paths.
   -d|--derivatives              Generate code with derivative support.
-  -i|--instance_compilation     If set, instance compilation is used instead of class compilation.
+  -i|--instance_compilation     Use instance compilation instead of class compilation.
   --ft                          Fold ternary operators when used on distribution functions.
   --fb                          Fold boolean parameters.
   --fe                          Fold enum parameters.
-  --dian                        Disable ignoring anno::noinline() annotations.
-)";
+  --dian                        Disable ignoring anno::noinline() annotations.)";
+
+
+    s << std::endl;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -485,7 +501,7 @@ bool Options::parse(int argc, char* argv[])
             return false;
         }
 
-        if (m_backend != "hlsl" && m_backend != "ptx" && m_backend != "glsl")
+        if (m_backend != "hlsl" && m_backend != "ptx" && m_backend != "llvm")
         {
             std::cerr << "error: Back-end is missing or invalid." << std::endl;
             return false;
@@ -493,3 +509,4 @@ bool Options::parse(int argc, char* argv[])
     }
     return true;
 }
+

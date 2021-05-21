@@ -1,5 +1,5 @@
 /***************************************************************************************************
-* Copyright 2020 NVIDIA Corporation. All rights reserved.
+* Copyright 2021 NVIDIA Corporation. All rights reserved.
 **************************************************************************************************/
 
 #ifndef MDL_ARNOLD_BSDF_H

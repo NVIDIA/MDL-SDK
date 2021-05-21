@@ -71,3 +71,11 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         freeimage
         mdl::base-system-version
     )
+
+# -------------------------------------------------------------------------------------------------
+# Create installion rules to copy the build directory
+# -------------------------------------------------------------------------------------------------
+add_target_install(
+    TARGET ${PROJECT_NAME}
+    DESTINATION "lib"
+    )

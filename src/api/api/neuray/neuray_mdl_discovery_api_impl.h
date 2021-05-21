@@ -391,7 +391,7 @@ class Mdl_package_info_impl
         // returns the index of the existing child or -1 if it does not exist
         mi::Sint32 check_package(Mdl_package_info_impl* child);
 
-        const Mdl_package_info_impl* merge_packages(
+        Mdl_package_info_impl* merge_packages(
             const Mdl_package_info_impl* p1,
             const Mdl_package_info_impl* p2);
 
@@ -572,8 +572,8 @@ class Mdl_discovery_api_impl
             mi::Uint32 filter) const;
 
         mi::neuraylib::INeuray*                          m_neuray;
-        MI::SYSTEM::Access_module<MI::MDLC::Mdlc_module> m_mdlc_module;
-        MI::SYSTEM::Access_module<PATH::Path_module> m_path_module;
+        SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;
+        SYSTEM::Access_module<PATH::Path_module> m_path_module;
 };
 
 /// This class implements the discover result.

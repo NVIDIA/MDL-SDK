@@ -72,7 +72,6 @@ class IValue_bsdf_measurement;
 class IValue_light_profile;
 class IValue_texture;
 class Symbol_importer;
-class ICall;
 
 using Mdl_ident = mi::Uint64;
 using Mdl_tag_ident = std::pair<DB::Tag, Mdl_ident>;
@@ -87,8 +86,7 @@ public:
     std::string m_name;
     /// Indicates whether the parameter should be forced to be uniform.
     bool m_enforce_uniform;
-    /// The annotations for the parameter. The name of the annotation needs to be the
-    /// fully-qualified MDL name (starting with a double colon, with signature). \n
+    /// The annotations for the parameter. The annotation name is the MDL name. \n
     /// Note that the values in \p m_annotations are copied; passing an annotation block obtained
     /// from another MDL interface does not create a link between both instances. \n
     /// \c NULL is a valid value which is handled like an empty annotation block.
@@ -100,18 +98,17 @@ public:
 class Mdl_data
 {
 public:
-    /// The name of the new definition (non-qualified, without module prefix). The DB name of the new
-    /// material is created by prefixing this name with the DB name of the new module plus "::".
-    std::string m_definition_name;
-    /// The tag of the prototype (material instance or function call)
-    /// for the new definition.
+    /// The simple name of the new definition.
+    std::string m_simple_name;
+    /// The tag of the prototype (material instance or function call) for the new definition.
+    /// Note: this is not really the prototype, but rather the expression for the material/function
+    /// body plus defaults.
     DB::Tag m_prototype_tag;
     /// The parameters of the new definition.
     std::vector<Parameter_data> m_parameters;
     /// The material does not inherit any annotations from the prototype. This member allows to
     /// specify annotations for the definition, i.e., for the definition declaration itself (but
-    /// not for its arguments). The name of the annotation needs to be the fully-qualified MDL name
-    /// (starting with a double colon, with signature). \n
+    /// not for its arguments). The annotation name is the MDL name. \n
     /// Note that the values in \p m_annotations are copied; passing an annotation block obtained
     /// from another MDL interface does not create a link between both instances. \n
     /// \c NULL is a valid value which is handled like an empty annotation block.
@@ -128,8 +125,8 @@ public:
 class Variant_data
 {
 public:
-    /// The name of the variant (non-qualified, without module prefix). The DB name of the variant
-    /// is created by prefixing this name with the DB name of the new module plus "::".
+    /// The simple name of the variant (non-qualified, without module prefix). The DB name of the
+    /// variant is created by prefixing this name with the DB name of the new module plus "::".
     std::string m_variant_name;
     /// The tag of the prototype (material or function definition) for this variant.
     DB::Tag m_prototype_tag;
@@ -142,8 +139,7 @@ public:
     mi::base::Handle<const IExpression_list> m_defaults;
     /// The variant does not inherit any annotations from the prototype. This member allows to
     /// specify annotations for the variant, i.e., for the material declaration itself (but not for
-    /// its arguments). The name of the annotation needs to be the fully-qualified MDL name
-    /// (starting with a double colon, with signature). \n
+    /// its arguments). The annotation name is the MDL name. \n
     /// Note that the values in \p m_annotations are copied; passing an annotation block obtained
     /// from another MDL interface does not create a link between both instances. \n
     /// \c NULL is a valid value which is handled like an empty annotation block.
@@ -166,22 +162,21 @@ public:
     /// modules are created recursively, too.
     ///
     /// \param transaction     The DB transaction to use.
-    /// \param module_name     The fully-qualified MDL module name (including package names, starts
-    ///                        with "::") or an MDLE file path (absolute or relative to the current
-    ///                        working directory).
+    /// \param argument        The MDL module name (for non-MDLE modules), or an MDLE file path
+    ///                        (absolute or relative to the current working directory).
     /// \param[inout] context  Execution context used to pass options to and store messages from
     ///                        the MDL compiler.
     /// \return
     ///           -  1: Success (module exists already, loading from file was skipped).
     ///           -  0: Success (module was actually loaded from file).
-    ///           - -1: The module name \p module_name is invalid.
-    ///           - -2: Failed to find or to compile the module \p module_name.
+    ///           - -1: The module name/MDLE file path \p argument is invalid.
+    ///           - -2: Failed to find or to compile the module \p argument.
     ///           - -3: The DB name for an imported module is already in use but is not an MDL
     ///                 module, or the DB name for a definition in this module is already in use.
     ///           - -4: Initialization of an imported module failed.
     static mi::Sint32 create_module(
         DB::Transaction* transaction,
-        const char* module_name,
+        const char* argument,
         Execution_context* context);
 
     /// Factory (public, loads the module from string and creates the DB element if needed).
@@ -193,8 +188,7 @@ public:
     /// modules are created recursively, too.
     ///
     /// \param transaction     The DB transaction to use.
-    /// \param module_name     The fully-qualified MDL module name (including package names, starts
-    ///                        with "::").
+    /// \param module_name     The MDL module name.
     /// \param module_source   The source code of the MDL module.
     /// \param[inout] context  Execution context used to pass options to and store messages from
     ///                        the MDL compiler.
@@ -216,8 +210,7 @@ public:
     /// needed).
     ///
     /// \param transaction     The DB transaction to use.
-    /// \param module_name     The fully-qualified MDL name of the MDL module (including package
-    ///                        names, starting with "::").
+    /// \param module_name     The MDL module name.
     /// \param variant_data    An array with the data for each variant to be created. For details
     ///                        see #Variant_data. Array elements which are \c NULL are replaced by
     ///                        empty ennotation blocks.
@@ -243,7 +236,7 @@ public:
     ///                  type).
     ///           - -10: One of the annotations does not exist or it has a currently unsupported
     ///                  parameter type like deferred-sized arrays.
-    static mi::Sint32 create_module(
+    static mi::Sint32 deprecated_create_module(
         DB::Transaction* transaction,
         const char* module_name,
         Variant_data* variant_data,
@@ -262,11 +255,10 @@ public:
     /// forward slash, which has to be added in case there is none already.
     ///
     /// \param transaction   The DB transaction to be used for checking if the module is loaded.
-    /// \param module_name   The fully-qualified MDL name of the MDL module (including package
-    ///                      names, starting with "::") or an MDLE filename (absolute or relative
-    ///                      to the current working directory). For MDLE, the sub-path '/../' is
-    ///                      allowed explicitly as long the resulting path is not exceeding
-    ///                      the root.
+    /// \param module        The  MDL module name (for non-MDLE modules), or an MDLE filename
+    ///                      (absolute or relative to the current working directory). For MDLE, the
+    ///                      sub-path '/../' is allowed explicitly as long the resulting path is
+    ///                      not exceeding the root.
     /// \param context       The execution context can be used to pass options to control the
     ///                      behavior of the MDL compiler. Messages like errors or warnings are also
     ///                      stored in the context. Can be \c NULL.
@@ -275,7 +267,7 @@ public:
     ///                      provided module name was not a valid module name.
     static const char* deprecated_get_module_db_name(
         DB::Transaction* transaction,
-        const char* module_name,
+        const char* module,
         Execution_context* context);
 
 
@@ -418,7 +410,7 @@ public:
 
     const IAnnotation_definition* get_annotation_definition(mi::Size index) const;
 
-    const IAnnotation_definition* get_annotation_definition(const char *name) const;
+    const IAnnotation_definition* get_annotation_definition(const char* name) const;
 
     bool is_standard_module() const;
 
@@ -493,45 +485,43 @@ public:
 
     void get_scene_element_references( DB::Tag_set* result) const;
 
-    /// Check if the given function signature exists in the module.
+    /// Check if the given signature exists in the module.
+    ///
+    /// \param def_name   The DB name of the function definition.
+    ///
     /// \return
     ///         -   0 the signature exists and matches the given \p def_ident
     ///         -  -1 the signature does not exist
     ///         -  -2 the signature exists but its \p def_ident has changed
-    mi::Sint32 has_function_definition(const std::string& def_name, Mdl_ident def_ident) const;
+    mi::Sint32 has_definition(
+        bool is_material, const std::string& def_name, Mdl_ident def_ident) const;
 
-    /// Check if the given material name exists in the module.
-    /// \return
-    ///         -   0 the name exists and matches the given \p def_ident
-    ///         -  -1 the name does not exist
-    ///         -  -2 the name exists but its \p def_ident has changed
-    mi::Sint32 has_material_definition(const std::string& def_name, Mdl_ident def_ident) const;
-
-    /// Returns the index of the definition named \p definition_name.
-    /// \param definition_name  DB name of the definition
-    /// \param def_ident        definition identifier.
-    /// \return the index or -1 in case the definition does no longer exist or has
+    /// Returns the index of the given definition.
+    ///
+    /// \param is_material      Material or function.
+    /// \param def_name         DB name of the definition,
+    /// \param def_ident        Definition identifier.
+    /// \return                 The index or -1 in case the definition does no longer exist or has
     ///                         an outdated identifier.
-    mi::Size get_function_definition_index(
-        const std::string& definition_name,
-        Mdl_ident def_ident) const;
+    mi::Size get_definition_index(
+        bool is_material, const std::string& def_name, Mdl_ident def_ident) const;
 
-    /// Returns the index of the definition named \p definition_name.
-    /// \param definition_name  DB name of the definition
-    /// \param def_ident        definition identifier. Passing -1 will return the index of
-    ///                         the current definition with the given name.
-    /// \return the index or -1 in case the definition does no longer exist or has
-    ///                         an outdated identifier.
-    mi::Size get_material_definition_index(
-        const std::string& definition_name,
-        Mdl_ident def_ident) const;
+    /// Returns the definition indicated by \p is_material and \p index.
+    ///
+    /// Wrapper for #get_function() and #get_material().
+    DB::Tag get_definition( bool is_material, mi::Size index) const;
 
     /// Returns the identifier of this module.
     Mdl_ident get_ident() const;
 
-private:
+    /// Indicates whether the module supports reloading (or editing).
+    ///
+    /// Reloading is not supported for standard or builtin modules plus ::base.
+    bool supports_reload() const;
 
-    /// Factory (private, takes an mi::mdl::IModule and creates the DB element if needed).
+    /// Factory (public, takes an mi::mdl::IModule and creates the DB element if needed).
+    ///
+    /// Used by Mdl_module_builder.
     ///
     /// Looks up the DB element for \p module. If it exists, the method stores its tag in
     /// \p module_tag and returns 1. Otherwise, the method creates the DB element, and stores it in
@@ -561,10 +551,11 @@ private:
         Execution_context* context,
         Mdl_tag_ident* module_ident = nullptr);
 
+private:
     /// Constructor.
     ///
     /// This constructor is used by the factory #create_module_internal(). The parameters are used
-    /// to initialize the parameters in the obvious way (m_name and m_filename are taken from
+    /// to initialize the parameters in the obvious way (m_mdl_name and m_filename are taken from
     /// module). The annotations are taken from m_code_dag and converted using the transaction.
     Mdl_module(
         DB::Transaction* transaction,
@@ -599,6 +590,7 @@ private:
         std::set<DB::Tag>& done,
         Execution_context* context);
 
+public:
     /// Replaces the module of this DB element with the given \p module.
     ///
     /// \param transaction       The DB transaction to use.
@@ -615,18 +607,14 @@ private:
         const mi::mdl::IModule* mdl_module,
         Execution_context* context);
 
+private:
     /// Initializes the module by converting and storing types, constants and annotations.
     ///
-    /// Contains code shared by the contructor and reload_module_internal().
+    /// Contains code shared by the constructor and reload_module_internal().
     ///
     /// \param transaction     The DB transaction to use.
     /// \param load_resources  If \c true, resources are loaded into the database.
     void init_module( DB::Transaction* transaction, bool load_resources);
-
-    /// Indicates whether the module supports reloading.
-    ///
-    /// Reloading is not supported for standard or built-in modules plus ::base.
-    bool supports_reload() const;
 
     /// The main MDL interface.
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
@@ -639,7 +627,7 @@ private:
     mi::base::Handle<IValue_factory> m_vf;       ///< The value factory.
     mi::base::Handle<IExpression_factory> m_ef;  ///< The expression factory.
 
-    std::string m_name;                                 ///< The MDL name.
+    std::string m_mdl_name;                             ///< The MDL name.
     std::string m_simple_name;                          ///< The simple (MDL) name.
     std::vector<std::string> m_package_component_names; ///< The package component (MDL) names.
 
@@ -663,9 +651,9 @@ private:
     /// This module's annotation definitions.
     mi::base::Handle<IAnnotation_definition_list> m_annotation_definitions;
 
-    std::vector<Mdl_tag_ident> m_functions;     ///< tags of the contained function definitions.
-    std::vector<Mdl_tag_ident> m_materials;     ///< tags of the contained material definitions.
-    std::vector<DB::Tag> m_annotation_proxies;  ///< tags of the contained annotation def. proxies.
+    std::vector<Mdl_tag_ident> m_functions;     ///< Tags of the contained function definitions.
+    std::vector<Mdl_tag_ident> m_materials;     ///< Tags of the contained material definitions.
+    std::vector<DB::Tag> m_annotation_proxies;  ///< Tags of the contained annotation def. proxies.
 
     // Resource tags
     // This vector has en entry for each item in mi::mdl::IModules' resource table
@@ -674,13 +662,13 @@ private:
     // db element). It may contain invalid tags for non-existing resources.
     std::vector<std::vector<DB::Tag> > m_resource_reference_tags;
 
-    /// Maps functions definition names to indices as used in m_functions.
+    /// Maps functions definition DB names to indices as used in #m_functions.
     std::map <std::string, mi::Size> m_function_name_to_index;
 
-    /// Maps material definition names to indices as used in m_functions.
+    /// Maps material definition DB names to indices as used in #m_functions.
     std::map <std::string, mi::Size> m_material_name_to_index;
 
-    /// Maps annotation definition names to indices as used in m_annotatoin_proxies.
+    /// Maps annotation definition DB names to indices as used in #m_annotatoin_proxies.
     std::map <std::string, mi::Size> m_annotation_name_to_index;
 };
 

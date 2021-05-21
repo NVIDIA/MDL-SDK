@@ -153,13 +153,23 @@ mi::Sint32 Mdl_module_transformer_impl::export_module(
         return add_error_message( context_impl,
             std::string( "Failed to open \"") + filename + "\" for write operations.", -2);
 
-    return Mdl_impexp_api_impl::export_module_common(
+    mi::Sint32 old_keep_original_resource_file_paths
+        = context_impl->get_option<bool>( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS);
+    context_impl->set_option(
+        MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, true);
+
+    mi::Sint32 result = Mdl_impexp_api_impl::export_module_common(
         m_transaction.get(),
         m_db_module_name.c_str(),
         module.get(),
         &writer,
         filename,
         context_impl);
+
+    context_impl->set_option(
+        MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, old_keep_original_resource_file_paths);
+
+    return result;
 }
 
 mi::Sint32 Mdl_module_transformer_impl::export_module_to_string(
@@ -177,6 +187,11 @@ mi::Sint32 Mdl_module_transformer_impl::export_module_to_string(
     mi::base::Handle<const mi::mdl::IModule> module( m_impl->get_module());
     DISK::Memory_writer_impl writer;
 
+    mi::Sint32 old_keep_original_resource_file_paths
+        = context_impl->get_option<bool>( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS);
+    context_impl->set_option(
+        MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, true);
+
     mi::Sint32 result = Mdl_impexp_api_impl::export_module_common(
         m_transaction.get(),
         m_db_module_name.c_str(),
@@ -184,6 +199,9 @@ mi::Sint32 Mdl_module_transformer_impl::export_module_to_string(
         &writer,
         /*filename*/ nullptr,
         context_impl);
+
+    context_impl->set_option(
+        MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, old_keep_original_resource_file_paths);
 
     mi::base::Handle<mi::neuraylib::IBuffer> buffer( writer.get_buffer());
     const mi::Uint8* data = buffer->get_data();

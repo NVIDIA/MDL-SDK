@@ -143,10 +143,11 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
     delete m_mdl_sdk;
     delete m_resource_descriptor_heap;
     delete m_render_target_descriptor_heap;
+    set_dred_device(nullptr);
     m_device = nullptr;
     m_factory = nullptr;
 
-    #if defined(_DEBUG)
+    if (options->gpu_debug)
     {
         ComPtr<IDXGIDebug1> debugController;
         if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&debugController))))
@@ -154,7 +155,6 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
             debugController->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_ALL);
         }
     }
-    #endif
 
     return return_code;
 }
@@ -206,7 +206,7 @@ bool Base_application::initialize_internal(Base_options* options)
     UINT dxgi_factory_flags = 0;
     D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
 
-    #if defined(_DEBUG)
+    if(options->gpu_debug)
     {
         ComPtr<ID3D12Debug> debugController;
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
@@ -229,8 +229,18 @@ bool Base_application::initialize_internal(Base_options* options)
             dxgiInfoQueue->SetBreakOnSeverity(
                 DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_MESSAGE, false);
         }
+
+        // Turn on auto-breadcrumbs and page fault reporting.
+        // available from 10.0.18362.0
+        #if WDK_NTDDI_VERSION > NTDDI_WIN10_RS5
+            ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dredSettings;
+            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings))))
+            {
+                dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+                dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+            }
+        #endif
     }
-    #endif
 
     if (log_on_failure(CreateDXGIFactory2(dxgi_factory_flags, IID_PPV_ARGS(&m_factory)),
         "Failed to create DXGI Factory.", SRC))
@@ -327,7 +337,7 @@ bool Base_application::initialize_internal(Base_options* options)
         return false;
     }
 
-    #if defined(_DEBUG)
+    if (options->gpu_debug)
     {
         ComPtr<ID3D12InfoQueue> pInfoQueue;
         if (SUCCEEDED(m_device.As(&pInfoQueue)))
@@ -349,8 +359,9 @@ bool Base_application::initialize_internal(Base_options* options)
                 "Failed to setup D3D debug messages", SRC))
                 return false;
         }
+
+        set_dred_device(m_device.Get());
     }
-    #endif
 
     // check if the device context is still valid
     if(log_on_failure(m_device->GetDeviceRemovedReason(),
@@ -394,12 +405,12 @@ void Base_application::update()
     // compute elapsed time
     if (m_update_args.frame_number == 0)
     {
-        m_mainloop_start_time = std::chrono::high_resolution_clock::now();
+        m_mainloop_start_time = std::chrono::steady_clock::now();
     }
     else
     {
-        auto now = std::chrono::high_resolution_clock::now();
-        double new_total_time = (now - m_mainloop_start_time).count() * 1e-9;
+        auto now = std::chrono::steady_clock::now();
+        double new_total_time = std::chrono::duration<double>(now - m_mainloop_start_time).count();
 
         m_update_args.elapsed_time = new_total_time - m_update_args.total_time;
         m_update_args.total_time = new_total_time;

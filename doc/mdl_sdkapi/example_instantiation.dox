@@ -89,11 +89,15 @@ function calls.
         a single new material definition: a variant of \c "::example::diffuse_material", but with
         a green default for \c "tint".
 
-        To do so, one has to prepare a structure of type \c "Variant_data" with all the required
-        information: the name of the definition, the name of the prototype it is based on, the new
-        defaults, and (optionally) an annotation for the variant. All such structures are combined
-        in an array (one for each variant to be created, just one in this example). The annotation
-        is created via #mi::neuraylib::IMdl_factory::create_variants().
+        Variants are created with the help of the module builder. Use
+        #mi::neuraylib::IMdl_factory::create_module_builder() to create an instance of the module
+        builder, passing the module name and the minimal and maximal desired MDL version of the new
+        module.
+
+        Use #mi::neuraylib::IMdl_module_builder::add_variant() to create new variants. This
+        requires the name of the new variant, and the name of the prototype it is based on.
+        Optionally, you can specify other properties, like new defaults, annotations, return
+        annotations, and the flag for the 'export' key.
 
         A dump of the instantiated definition as well as the exported module show that the new
         material definition really is a variant of the prototype but with different defaults.

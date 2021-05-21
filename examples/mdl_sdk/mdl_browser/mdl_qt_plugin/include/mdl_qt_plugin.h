@@ -57,7 +57,7 @@ class QQmlApplicationEngine;
 
 struct Mdl_browser_callbacks
 {
-    std::function<void(const std::string&)> on_accepted;
+    std::function<void(const char*)> on_accepted;
     std::function<void()> on_rejected;
 };
 
@@ -136,7 +136,7 @@ public:
         QString path;
         if (plugin_path)
         {
-            // user provided path that contains the module folder, 
+            // user provided path that contains the module folder,
             // which contains the plugin dll and the qmldir
             std::string plugin_path_s = mi::examples::io::normalize(std::string(plugin_path));
             if (plugin_path_s.back() == '/')

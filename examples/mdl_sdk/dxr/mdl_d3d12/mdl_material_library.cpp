@@ -814,7 +814,7 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
         // get and copy data to GPU
         for (size_t l = 0; l < tex_layers; ++l)
         {
-            mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(0, 0, l));
+            mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(l));
             const uint8_t* tex_data = static_cast<const uint8_t*>(tile->get_data());
 
             // copy line by line if required

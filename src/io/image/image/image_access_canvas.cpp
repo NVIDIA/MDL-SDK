@@ -112,7 +112,7 @@ void Access_canvas::set( const mi::neuraylib::ICanvas* canvas)
                 ASSERT( M_IMAGE, index < m_nr_of_tiles);
                 mi::Uint32 pixel_x = tile_x * m_tile_width;
                 mi::Uint32 pixel_y = tile_y * m_tile_height;
-                m_tiles[index] = m_canvas->get_tile( pixel_x, pixel_y, z);
+                m_tiles[index] = m_canvas->deprecated_get_tile( pixel_x, pixel_y, z);
             }
 }
 
@@ -122,7 +122,7 @@ const mi::neuraylib::ICanvas* Access_canvas::get() const
     if( !m_lockless) block.set( &m_tiles_lock);
 
     if( !m_canvas)
-        return 0;
+        return nullptr;
     m_canvas->retain();
     return m_canvas.get();
 }
@@ -182,7 +182,7 @@ bool Access_canvas::read_rect(
             // tile, and stride per row (canvas, source).
             mi::Difference source_stride = m_tile_width * canvas_bytes_per_pixel;
             mi::base::Handle<const mi::neuraylib::ITile> tile(
-                m_canvas->get_tile( x, y, canvas_layer));
+                m_canvas->deprecated_get_tile( x, y, canvas_layer));
             const mi::Uint8* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
             mi::Uint32 local_x = std::max( canvas_x, x) % m_tile_width;
             mi::Uint32 local_y = std::max( canvas_y, y) % m_tile_height;
@@ -228,7 +228,7 @@ bool Access_canvas::lookup(
     if( !m_lockless) {
         block.set( &m_tiles_lock);
         if( !m_tiles[tile_index])
-            m_tiles[tile_index] = m_canvas->get_tile( x, y, z);
+            m_tiles[tile_index] = m_canvas->deprecated_get_tile( x, y, z);
     }
 
     m_tiles[tile_index]->get_pixel( local_x, local_y, &color.r);
@@ -306,7 +306,7 @@ void Edit_canvas::set( mi::neuraylib::ICanvas* canvas)
                 ASSERT( M_IMAGE, index < m_nr_of_tiles);
                 mi::Uint32 pixel_x = tile_x * m_tile_width;
                 mi::Uint32 pixel_y = tile_y * m_tile_height;
-                m_tiles[index] = m_canvas->get_tile( pixel_x, pixel_y, z);
+                m_tiles[index] = m_canvas->deprecated_get_tile( pixel_x, pixel_y, z);
             }
 }
 
@@ -316,7 +316,7 @@ mi::neuraylib::ICanvas* Edit_canvas::get() const
     if( !m_lockless) block.set( &m_tiles_lock);
 
     if( !m_canvas)
-        return 0;
+        return nullptr;
     m_canvas->retain();
     return m_canvas.get();
 }
@@ -376,7 +376,7 @@ bool Edit_canvas::read_rect(
             // tile, and stride per row (canvas, source).
             mi::Difference source_stride = m_tile_width * canvas_bytes_per_pixel;
             mi::base::Handle<const mi::neuraylib::ITile> tile(
-                m_canvas->get_tile( x, y, canvas_layer));
+                m_canvas->deprecated_get_tile( x, y, canvas_layer));
             const mi::Uint8* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
             mi::Uint32 local_x = std::max( canvas_x, x) % m_tile_width;
             mi::Uint32 local_y = std::max( canvas_y, y) % m_tile_height;
@@ -459,7 +459,7 @@ bool Edit_canvas::write_rect(
             // Compute the pointer to the lower left corner of the rectangle that falls into this
             // tile, and stride per row (canvas, dest).
             mi::Difference dest_stride = m_tile_width * canvas_bytes_per_pixel;
-            mi::base::Handle<mi::neuraylib::ITile> tile( m_canvas->get_tile( x, y, canvas_layer));
+            mi::base::Handle<mi::neuraylib::ITile> tile( m_canvas->deprecated_get_tile( x, y, canvas_layer));
             mi::Uint8* tile_data = static_cast<mi::Uint8*>( tile->get_data());
             mi::Uint32 local_x = std::max( canvas_x, x) % m_tile_width;
             mi::Uint32 local_y = std::max( canvas_y, y) % m_tile_height;
@@ -505,7 +505,7 @@ bool Edit_canvas::lookup(
     if( !m_lockless) {
         block.set( &m_tiles_lock);
         if( !m_tiles[tile_index])
-            m_tiles[tile_index] = m_canvas->get_tile( x, y, z);
+            m_tiles[tile_index] = m_canvas->deprecated_get_tile( x, y, z);
     }
 
     m_tiles[tile_index]->get_pixel( local_x, local_y, &color.r);
@@ -529,7 +529,7 @@ bool Edit_canvas::store(
     if( !m_lockless) {
         block.set( &m_tiles_lock);
         if( !m_tiles[tile_index])
-            m_tiles[tile_index] = m_canvas->get_tile( x, y, z);
+            m_tiles[tile_index] = m_canvas->deprecated_get_tile( x, y, z);
     }
 
     m_tiles[tile_index]->set_pixel( local_x, local_y, &color.r);

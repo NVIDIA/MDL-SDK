@@ -77,7 +77,7 @@ mi::neuraylib::ICanvas_cuda* Image_api_impl::create_canvas_cuda(
     return nullptr;
 }
 
-mi::neuraylib::ICanvas* Image_api_impl::create_canvas(
+mi::neuraylib::ICanvas* Image_api_impl::deprecated_create_tiled_canvas(
     const char* pixel_type,
     mi::Uint32 width,
     mi::Uint32 height,
@@ -96,8 +96,30 @@ mi::neuraylib::ICanvas* Image_api_impl::create_canvas(
     if( tile_height == 0)
         tile_height = height;
 
+    if( tile_width != width || tile_height != height)
+        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_RENDER,
+                "Support for tiled canvases is deprecated "
+                "and will be dropped in the next major release.");
+
     return m_image_module->create_canvas(
         pixel_type_enum, width, height, tile_width, tile_height, layers, is_cubemap, gamma);
+}
+
+mi::neuraylib::ICanvas* Image_api_impl::create_canvas(
+    const char* pixel_type,
+    mi::Uint32 width,
+    mi::Uint32 height,
+    mi::Uint32 layers,
+    mi::neuraylib::Boolean is_cubemap,
+    mi::Float32 gamma) const
+{
+    // TODO clean up
+    const IMAGE::Pixel_type pixel_type_enum = IMAGE::convert_pixel_type_string_to_enum( pixel_type);
+    if( pixel_type_enum == IMAGE::PT_UNDEF)
+        return nullptr;
+
+    return m_image_module->create_canvas(
+        pixel_type_enum, width, height, width, height, layers, is_cubemap, gamma);
 }
 
 mi::neuraylib::ITile* Image_api_impl::create_tile(
@@ -171,7 +193,8 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
     const mi::neuraylib::ICanvas* canvas,
     const char* image_format,
     const char* pixel_type,
-    const char* quality) const
+    const char* quality,
+    bool force_default_gamma) const
 {
     if( !canvas || !image_format || !pixel_type)
         return nullptr;
@@ -185,7 +208,7 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
         return nullptr;
 
     return m_image_module->create_buffer_from_canvas(
-        canvas, image_format, pixel_type, quality_uint32);
+        canvas, image_format, pixel_type, quality_uint32, force_default_gamma);
 }
 
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_buffer(
