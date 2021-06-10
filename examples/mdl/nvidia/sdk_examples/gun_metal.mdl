@@ -49,7 +49,7 @@ export material gun_metal (
     [[ 
         anno::display_name("Particle Size"), 
         anno::soft_range(0.0, 1.0),
-        anno::description("The size of the particles in millimeters. If the paticles don't appear "
+        anno::description("The size of the particles in millimeters. If the particles don't appear "
 		"at all, check whether you are using the correct units in yout scene. The materials is built to "
 		"use meters as scene unit")
     ]]

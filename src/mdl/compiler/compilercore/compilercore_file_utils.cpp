@@ -39,6 +39,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <cctype>
+
 #ifndef MI_PLATFORM_WINDOWS
 #include <unistd.h>
 #include <dirent.h>
