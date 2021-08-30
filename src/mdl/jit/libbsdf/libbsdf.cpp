@@ -3139,7 +3139,7 @@ BSDF_API void tint_rt_bsdf_auxiliary(
     const float3 &transmission_tint,
     const BSDF &base)
 {
-    const float3 factor = math::saturate((reflection_tint + reflection_tint) * 0.5f);
+    const float3 factor = math::saturate((reflection_tint + transmission_tint) * 0.5f);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
