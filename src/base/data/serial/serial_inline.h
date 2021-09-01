@@ -188,6 +188,9 @@ inline void write(S* serial, float value)  { serial->write( &value, 1 ); }
 template <typename S, typename>
 inline void write(S* serial, double value) { serial->write( &value, 1 ); }
 
+template <typename T, typename S, typename, typename>
+inline void write(S* serial, T value) { write_enum(serial,value); }
+
 inline void write(
     Serializer* serial,
     const DB::Tag& value)
@@ -302,6 +305,8 @@ template <typename D, typename>
 inline void read(D* deser, float* value_pointer)  { deser->read( value_pointer, 1 ); }
 template <typename D, typename>
 inline void read(D* deser, double* value_pointer) { deser->read( value_pointer, 1 ); }
+template <typename T, typename D, typename, typename>
+inline void read(D* deser, T* enum_ptr) { read_enum(deser,enum_ptr); }
 
 inline void read(Deserializer* deser, DB::Tag* value_pointer)
 {

@@ -599,6 +599,7 @@ private:
 // - adapt the Execution_context constructor to register the default and its type
 // - adapt create_thread_context() if necessary
 
+#define MDL_CTX_OPTION_WARNING                            "warning"
 #define MDL_CTX_OPTION_OPTIMIZATION_LEVEL                 "optimization_level"
 #define MDL_CTX_OPTION_INTERNAL_SPACE                     "internal_space"
 #define MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT         "fold_meters_per_scene_unit"

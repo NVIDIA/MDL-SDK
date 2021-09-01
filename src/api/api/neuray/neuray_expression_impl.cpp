@@ -606,20 +606,12 @@ mi::neuraylib::IExpression_list* Expression_factory::create_expression_list() co
 mi::neuraylib::IAnnotation* Expression_factory::create_annotation(
     const char* name, const mi::neuraylib::IExpression_list* arguments) const
 {
-    // The name should be checked in the MDL integration, but this requires other changes first.
-    if( !name)
-        return nullptr;
-    const std::string& db_name = MDL::get_db_name_annotation_definition( name);
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    DB::Tag definition_proxy_tag = db_transaction->name_to_tag( db_name.c_str());
-    if( !definition_proxy_tag)
-        return nullptr;
-
     mi::base::Handle<const MDL::IExpression_list> arguments_int(
         get_internal_expression_list( arguments));
     mi::base::Handle<MDL::IAnnotation> result_int(
-        m_ef->create_annotation( name, arguments_int.get()));
+        m_ef->create_annotation( db_transaction, name, arguments_int.get()));
     return create_annotation( result_int.get(), /*owner*/ nullptr);
 }
 

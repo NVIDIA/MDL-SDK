@@ -55,6 +55,7 @@
 #include <mdl/compiler/compilercore/compilercore_mdl.h>
 #include <mdl/compiler/compilercore/compilercore_file_utils.h>
 #include <mdl/compiler/compilercore/compilercore_code_cache.h>
+#include <mdl/compiler/compilercore/compilercore_errors.h>
 
 #ifdef DEBUG
 #define USE_MDL_DEBUG_ALLOCATOR
@@ -229,6 +230,11 @@ bool Mdlc_module_impl::init()
 
     // neuray always runs in "relaxed" mode for compatibility with old releases
     options.set_option(mi::mdl::MDL::option_strict, "false");
+
+    // disable "deprecated entity" warning by default
+    MDL_ASSERT(mi::mdl::DEPRECATED_ENTITY == 275);
+    options.set_option(mi::mdl::MDL::option_warn, "275=off");
+
 
 
     mi::mdl::Allocator_builder builder(m_allocator.get());

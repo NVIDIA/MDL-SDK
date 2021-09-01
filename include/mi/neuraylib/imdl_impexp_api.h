@@ -392,8 +392,8 @@ public:
     /// \param transaction       The transaction to be used.
     /// \param module_name       The serialized name of a module.
     /// \param function_name_without_module_name    The serialized name of a function or material
-    ///                                             definition without the module name (starts with
-    ///                                             \c "::", as returned by
+    ///                                             definition without the module name and \c "::"
+    ///                                             (as returned by
     ///         #mi::neuraylib::ISerialized_function_name::get_function_name_without_module_name()).
     /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
     ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
@@ -453,7 +453,7 @@ public:
 
     /// Returns the serialized module name.
     ///
-    /// Useful for serialization schemes that support two string entity entities.
+    /// Useful for serialization schemes that support two string entities.
     ///
     /// Pass to #mi::neuraylib::IMdl_impexp_api::deserialize_module_name() or the second overload
     /// of #mi::neuraylib::IMdl_impexp_api::deserialize_function_name() during deserialization.
@@ -461,7 +461,7 @@ public:
 
     /// Returns the serialized function name (without the module name).
     ///
-    /// Useful for serialization schemes that support two string entity entities.
+    /// Useful for serialization schemes that support two string entities.
     ///
     /// Pass to the second overload
     /// of #mi::neuraylib::IMdl_impexp_api::deserialize_function_name() during deserialization.

@@ -30,11 +30,11 @@
 
 #include "freeimage_utilities.h"
 
-#ifndef AARCH64
+#ifndef MI_ARCH_ARM_64
 #  if defined(MI_COMPILER_GCC)
 #    include <x86intrin.h>
 #  endif
-#endif  // ifndef AARCH64
+#endif  // ifndef MI_ARCH_ARM_64
 
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/iwriter.h>
@@ -196,7 +196,7 @@ static char* get_scanline( FIBITMAP* bitmap, mi::Uint32 y)
 
 // Rotate p_val32 by p_nBits bits to the left
 #ifndef ROL32
-#if defined(_MSC_VER) || defined(MI_COMPILER_ICC) || (defined(MI_COMPILER_GCC) && !defined(MI_COMPILER_CLANG) && !defined(AARCH64))
+#if defined(_MSC_VER) || defined(MI_COMPILER_ICC) || (defined(MI_COMPILER_GCC) && !defined(MI_COMPILER_CLANG) && !defined(MI_ARCH_ARM_64))
 #define ROL32(p_val32,p_nBits) _rotl(p_val32,p_nBits)
 #else
 #define ROL32(p_val32,p_nBits) (((p_val32)<<(p_nBits))|((p_val32)>>(32-(p_nBits))))

@@ -1,9 +1,48 @@
 Change Log
 ==========
-MDL SDK 2021.0 (344800.2052): 01 Jun 2021
+MDL SDK 2021.0.1 (344800.4174): 17 Aug 2021
 -----------------------------------------------
 
-ABI compatible with the MDL SDK 2021.0 (344800.2052) binary release
+ABI compatible with the MDL SDK 2021.0.1 (344800.4174) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+
+    - Reduced memory usage for DDS textures with subformat BC7.
+    - Added a new execution context option "warning" to silence compiler warnings or to promote
+      them to errors. See `IMdl_execution_context` for details.
+    - Disabled warnings for deprecated MDL materials and functions by default.
+
+- MDL Compiler and Backends
+
+    - Reduced compilation times.
+    - Updated `nvidia::core_definitions` with new functionality.
+
+- MDL SDK examples
+
+    - Example Code Generation
+        - Added an option to set number of texture result slots.
+
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+
+    - Fixed handling of `nvidia::baking` annotations.
+    - Fixed lambda results handling in single-init mode for non-HLSL.
+    - Fixed uncomputed cosine in `sheen_bsdf`'s multiscatter (was broken for a
+      transmitting multiscatter component, libbsdf).
+    - Improved numerical stability in `base::coordinate_projection`.
+    - Fixed missing `color_weighted_layer()` inside the transmission analysis.
+    - Fixed thin film factor implementation (libbsdf).
+
+
+
+MDL SDK 2021 (344800.2052): 01 Jun 2021
+---------------------------------------
+
+ABI compatible with the MDL SDK 2021 (344800.2052) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
 
 **Added and Changed Features**
@@ -1215,7 +1254,7 @@ ABI compatible with the MDL SDK 2018.1.2 (312200.1281) binary release
   have been added.
     - The handling of (wrong) function references inside array constructor and init constructor has been fixed, producing better MDL compiler error messages.
     - The hash computation of lambda functions with parameters has been fixed.
-    - If an absolute file url is given for a module to be resolved AND this module exists in the module cache, the module cache is used to determine its file name. This can speed up file resolution and allows the creation of presets even if the original module is not in the module path anymore.
+    - If an absolute file URL is given for a module to be resolved AND this module exists in the module cache, the module cache is used to determine its file name. This can speed up file resolution and allows the creation of presets even if the original module is not in the module path anymore.
     - A memory leak in the JIT backend has been fixed.
     - The generated names of passed expressions for code generation have been fixed.
 

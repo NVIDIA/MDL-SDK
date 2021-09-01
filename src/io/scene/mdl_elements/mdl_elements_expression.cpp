@@ -554,7 +554,7 @@ IExpression_temporary* Expression_factory::create_temporary(
 }
 
 IAnnotation* Expression_factory::create_annotation(
-    const char* name, const IExpression_list* arguments) const
+    DB::Transaction* transaction, const char* name, const IExpression_list* arguments) const
 {
     if( !name || !arguments)
         return nullptr;
@@ -563,6 +563,14 @@ IAnnotation* Expression_factory::create_annotation(
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
         if( argument->get_kind() != IExpression::EK_CONSTANT)
+            return nullptr;
+    }
+
+    // No annotation present during deserialization, skip sanity check then.
+    if( transaction) {
+        const std::string& db_name = get_db_name_annotation_definition( name);
+        DB::Tag definition_proxy_tag = transaction->name_to_tag( db_name.c_str());
+        if( !definition_proxy_tag)
             return nullptr;
     }
 
@@ -1032,7 +1040,7 @@ IAnnotation* Expression_factory::deserialize_annotation(
     std::string name;
     SERIAL::read(deserializer,  &name);
     mi::base::Handle<IExpression_list> arguments( deserialize_list( deserializer));
-    return create_annotation( name.c_str(), arguments.get());
+    return create_annotation( /*transaction*/ nullptr, name.c_str(), arguments.get());
 }
 
 void Expression_factory::serialize_annotation_definition(

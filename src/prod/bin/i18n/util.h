@@ -61,14 +61,6 @@ public:
         std::string get_directory() const;
     public:
         static bool Test();
-        /// Convert symbolic name directory (e.g. SYSTEM, USER) to
-        /// their actual directory location on disk.
-        /// Return true if the input directory was modified
-        /// Return false if the input directory was not modified
-        static bool convert_symbolic_directory(std::string & directory);
-    public:
-        static File SYSTEM;
-        static File USER;
     };
 public:
     /// Utility routines for logging messages
@@ -111,12 +103,6 @@ public:
 
     /// Return true if string ends with another string
     static bool has_ending(std::string const &fullString, std::string const &ending);
-
-    /// Get the SYSTEM directory (e.g. "C:\ProgramData\NVIDIA Corporation\mdl" on Windows)
-    static std::string get_mdl_system_directory();
-
-    /// Get the USER directory (e.g. "C:\Users\%USERNAME%\Documents\mdl" on Windows)
-    static std::string get_mdl_user_directory();
 
     /// Normalize path, see MI::HAL::Ospath::normpath()
     static std::string normalize(const std::string & path);

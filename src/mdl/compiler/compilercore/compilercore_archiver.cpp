@@ -2161,6 +2161,7 @@ MDL_zip_container_archive *MDL_zip_container_archive::open(
         if (!m.is_valid_interface()) {
             // MANIFEST missing or parse error occurred
             builder.destroy(archiv);
+            zip_close(za);
             err = EC_MANIFEST_PARSER;
             return NULL;
         }

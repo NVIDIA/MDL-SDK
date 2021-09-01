@@ -896,6 +896,7 @@ private:
         case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
+        case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
             return check_layer(lbsdf, rbsdf);
 
         case IDefinition::DS_INTRINSIC_DF_TINT:

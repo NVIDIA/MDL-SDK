@@ -56,11 +56,13 @@ Image::Image()
 
 void Image::create(
     IMAGE::Pixel_type pixel_type,
+    mi::Float32 gamma,
     const Texture& texture,
     bool is_cubemap,
     Dds_compress_fmt format)
 {
     assert( pixel_type != IMAGE::PT_UNDEF);
+    assert( gamma != 0.0f);
     if( is_cubemap) {
         assert( texture.get_surface( 0).get_depth() == 6);
     }
@@ -70,6 +72,7 @@ void Image::create(
     m_texture_type = is_cubemap ? TEXTURE_CUBEMAP :
         texture.get_surface( 0).get_depth() == 1 ? TEXTURE_FLAT : TEXTURE_3D;
     m_pixel_type = pixel_type;
+    m_gamma = gamma;
     m_texture = texture;
     m_compress_format = format;
     m_valid = true;
@@ -79,6 +82,7 @@ void Image::clear()
 {
     m_compress_format = DXTC_none;
     m_pixel_type = IMAGE::PT_UNDEF;
+    m_gamma = 0.0f;
     m_texture_type = TEXTURE_NONE;
     m_valid = false;
     m_texture.clear();
@@ -90,6 +94,7 @@ bool Image::load_header(
     Header_dx10& header_dx10,
     bool& is_header_dx10,
     IMAGE::Pixel_type& pixel_type,
+    mi::Float32& gamma,
     Dds_compress_fmt& compress_format)
 {
     is_header_dx10 = false;
@@ -144,6 +149,7 @@ bool Image::load_header(
     case DDSF_##format: \
         log( mi::base::MESSAGE_SEVERITY_WARNING, "Experimental DDS subformat " #format "."); \
         pixel_type = our_format; \
+        gamma = get_default_gamma( pixel_type); \
         return true;
 
     // Check the pixel format
@@ -155,13 +161,16 @@ bool Image::load_header(
             // Supported floating point formats
             case DDSF_R32F:
                 pixel_type = IMAGE::PT_FLOAT32;
+                gamma = get_default_gamma( pixel_type);
                 return true;
             case DDSF_A32B32G32R32F:
                 pixel_type = IMAGE::PT_COLOR; //-V1037 PVS
+                gamma = get_default_gamma( pixel_type);
                 return true;
             case DDSF_A16B16G16R16F:
-                pixel_type = IMAGE::PT_COLOR; // Note: the half data needs to be converted
-                return true;                  // to float first.
+                pixel_type = IMAGE::PT_COLOR;            // Note: the half data needs to be
+                gamma = get_default_gamma( pixel_type);  // converted to float first,
+                return true;
 
             // Unsupported floating point formats
             DDS_UNSUPPORTED( R16F);
@@ -172,20 +181,23 @@ bool Image::load_header(
             case FOURCC_DXT1:
                 compress_format = DXTC1;
                 pixel_type = IMAGE::PT_RGBA;
+                gamma = get_default_gamma( pixel_type);
                 return true;
             case FOURCC_DXT3:
                 compress_format = DXTC3;
                 pixel_type = IMAGE::PT_RGBA;
+                gamma = get_default_gamma( pixel_type);
                 return true;
             case FOURCC_DXT5:
                 compress_format = DXTC5;
                 pixel_type = IMAGE::PT_RGBA;
+                gamma = get_default_gamma( pixel_type);
                 return true;
 
             // DX10 header
             case FOURCC_DX10: {
                 is_header_dx10 = true;
-                return load_header_dx10( reader, header_dx10, pixel_type);
+                return load_header_dx10( reader, header_dx10, pixel_type, gamma);
             }
 
 
@@ -241,21 +253,25 @@ bool Image::load_header(
     // Standard RGBA color formats
     if( header.m_ddspf.m_flags == DDSF_RGBA && header.m_ddspf.m_rgb_bit_count == 32) {
         pixel_type = IMAGE::PT_RGBA;
+        gamma = get_default_gamma( pixel_type);
         return true;
     }
 
     if( header.m_ddspf.m_flags == DDSF_RGB  && header.m_ddspf.m_rgb_bit_count == 32) {
         pixel_type = IMAGE::PT_RGBA;
+        gamma = get_default_gamma( pixel_type);
         return true;
     }
 
     if( header.m_ddspf.m_flags == DDSF_RGB  && header.m_ddspf.m_rgb_bit_count == 24) {
         pixel_type = IMAGE::PT_RGB;
+        gamma = get_default_gamma( pixel_type);
         return true;
     }
 
     if( header.m_ddspf.m_rgb_bit_count == 8) {
         pixel_type = IMAGE::PT_SINT8;
+        gamma = get_default_gamma( pixel_type);
         return true;
     }
 
@@ -265,7 +281,8 @@ bool Image::load_header(
 bool Image::load_header_dx10(
     mi::neuraylib::IReader* reader,
     Header_dx10& header_dx10,
-    IMAGE::Pixel_type& pixel_type)
+    IMAGE::Pixel_type& pixel_type,
+    mi::Float32& gamma)
 {
     if( !reader)
         return false;
@@ -294,7 +311,8 @@ bool Image::load( mi::neuraylib::IReader* reader)
     Header_dx10 header_dx10;
     bool is_header_dx10;
 
-    if( !load_header( reader, header, header_dx10, is_header_dx10, m_pixel_type, m_compress_format))
+    if( !load_header(
+        reader, header, header_dx10, is_header_dx10, m_pixel_type, m_gamma, m_compress_format))
         return false;
 
 

@@ -27,77 +27,83 @@
  *****************************************************************************/
 mdl 1.6;
 
-export annotation soft_range(int     min, int     max);
-export annotation soft_range(float   min, float   max);
-export annotation soft_range(double  min, double  max);
-export annotation soft_range(color   min, color   max); // since(1,2)
-export annotation soft_range(float2  min, float2  max); // since(1,2)
-export annotation soft_range(float3  min, float3  max); // since(1,2)
-export annotation soft_range(float4  min, float4  max); // since(1,2)
-export annotation soft_range(double2 min, double2 max); // since(1,2)
-export annotation soft_range(double3 min, double3 max); // since(1,2)
-export annotation soft_range(double4 min, double4 max); // since(1,2)
-export annotation soft_range(int2    min, int2    max); // since(1,2)
-export annotation soft_range(int3    min, int3    max); // since(1,2)
-export annotation soft_range(int4    min, int4    max); // since(1,2)
+export annotation soft_range(int     min, int     max) [[ intrinsic() ]];
+export annotation soft_range(float   min, float   max) [[ intrinsic() ]];
+export annotation soft_range(double  min, double  max) [[ intrinsic() ]];
+export annotation soft_range(color   min, color   max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(float2  min, float2  max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(float3  min, float3  max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(float4  min, float4  max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(double2 min, double2 max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(double3 min, double3 max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(double4 min, double4 max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(int2    min, int2    max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(int3    min, int3    max) [[ intrinsic(), since(1,2) ]];
+export annotation soft_range(int4    min, int4    max) [[ intrinsic(), since(1,2) ]];
 
-export annotation hard_range(int     min, int     max);
-export annotation hard_range(float   min, float   max);
-export annotation hard_range(double  min, double  max);
-export annotation hard_range(color   min, color   max); // since(1,2)
-export annotation hard_range(float2  min, float2  max); // since(1,2)
-export annotation hard_range(float3  min, float3  max); // since(1,2)
-export annotation hard_range(float4  min, float4  max); // since(1,2)
-export annotation hard_range(double2 min, double2 max); // since(1,2)
-export annotation hard_range(double3 min, double3 max); // since(1,2)
-export annotation hard_range(double4 min, double4 max); // since(1,2)
-export annotation hard_range(int2    min, int2    max); // since(1,2)
-export annotation hard_range(int3    min, int3    max); // since(1,2)
-export annotation hard_range(int4    min, int4    max); // since(1,2)
+export annotation hard_range(int     min, int     max) [[ intrinsic() ]];
+export annotation hard_range(float   min, float   max) [[ intrinsic() ]];
+export annotation hard_range(double  min, double  max) [[ intrinsic() ]];
+export annotation hard_range(color   min, color   max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(float2  min, float2  max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(float3  min, float3  max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(float4  min, float4  max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(double2 min, double2 max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(double3 min, double3 max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(double4 min, double4 max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(int2    min, int2    max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(int3    min, int3    max) [[ intrinsic(), since(1,2) ]];
+export annotation hard_range(int4    min, int4    max) [[ intrinsic(), since(1,2) ]];
 
-export annotation display_name(string name);
+export annotation display_name(string name) [[ intrinsic() ]];
 
-export annotation in_group(string group);
-export annotation in_group(string group, string subgroup);
-export annotation in_group(string group, string subgroup, string subsubgroup);
+export annotation in_group(string group) [[ intrinsic() ]];
+export annotation in_group(string group, string subgroup) [[ intrinsic() ]];
+export annotation in_group(string group, string subgroup, string subsubgroup) [[ intrinsic() ]];
 
-export annotation hidden();
+export annotation hidden() [[ intrinsic() ]];
 
-export annotation description(string description);
+export annotation description(string description) [[ intrinsic() ]];
 
-export annotation author(string name);
+export annotation author(string name) [[ intrinsic() ]];
 
-export annotation contributor(string name);
+export annotation contributor(string name) [[ intrinsic() ]];
 
-export annotation copyright_notice(string copyright);
+export annotation copyright_notice(string copyright) [[ intrinsic() ]];
 
-export annotation created(int year, int month, int day, string notes);
+export annotation created(int year, int month, int day, string notes) [[ intrinsic() ]];
 
-export annotation modified(int year, int month, int day, string notes);
+export annotation modified(int year, int month, int day, string notes) [[ intrinsic() ]];
 
-export annotation version_number(int major, int minor, int branch, int build); // removed(1,3)
+export annotation version_number(
+    int major, int minor, int branch, int build) [[ intrinsic(), removed(1,3) ]];
 
-export annotation key_words(string[<N>] words);
+export annotation key_words(string[<N>] words) [[ intrinsic() ]];
 
-export annotation unused();
-export annotation unused(string description);
+export annotation unused() [[ intrinsic() ]];
+export annotation unused(string description) [[ intrinsic() ]];
 
-export annotation noinline();
+export annotation noinline() [[ intrinsic() ]];
 
-export annotation deprecated();                   // since(1,3)
-export annotation deprecated(string description); // since(1,3)
+export annotation deprecated()                    [[ intrinsic(), since(1,3) ]];
+export annotation deprecated(string description)  [[ intrinsic(), since(1,3) ]];
 
-export annotation version(int major, int minor, int patch, string prerelease = ""); // since(1,3)
+export annotation version(
+    int major, int minor, int patch, string prerelease = "")  [[ intrinsic(), since(1,3) ]];
 
 export annotation dependency(
-    string module_name, int major, int minor, int patch, string prerelease = ""); // since(1,3)
+    string module_name,
+    int major,
+    int minor,
+    int patch,
+    string prerelease = "") [[ intrinsic(), since(1,3) ]];
 
-export annotation ui_order(int order); // since(1,4)
+export annotation ui_order(int order) [[ intrinsic(), since(1,4) ]];
 
-export annotation usage(string hint);  // since(1,4)
+export annotation usage(string hint) [[ intrinsic(), since(1,4) ]];
 
-export annotation enable_if(string condition); // since(1,4)
+export annotation enable_if(string condition) [[ intrinsic(), since(1,4) ]];
 
-export annotation thumbnail(string name); // since(1,4)
+export annotation thumbnail(string name) [[ intrinsic(), since(1,4) ]];
 
-export annotation origin(string name); // since(1,5)
+export annotation origin(string name) [[ intrinsic(), since(1,5) ]];

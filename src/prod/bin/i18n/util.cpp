@@ -43,10 +43,6 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
-// Forward declarations
-string get_mdl_system_directory();
-string get_mdl_user_directory();
-
 /// File
 bool Util::File::Test()
 {
@@ -104,9 +100,6 @@ bool Util::File::Test()
     }
     return true;
 }
-
-Util::File Util::File::SYSTEM(get_mdl_system_directory());
-Util::File Util::File::USER(get_mdl_user_directory());
 
 Util::File::File(const string& path)
     : m_path(path)
@@ -277,21 +270,6 @@ std::string Util::File::get_directory() const
     return "";
 }
 
-bool Util::File::convert_symbolic_directory(std::string & directory)
-{
-    if (directory == "SYSTEM")
-    {
-        directory = SYSTEM.get_directory();
-        return true;
-    }
-    else if (directory == "USER")
-    {
-        directory = USER.get_directory();
-        return true;
-    }
-    return false;
-}
-
 /// log
 void log(const string & msg)
 {
@@ -438,16 +416,6 @@ bool Util::has_ending(string const &fullString, string const &ending)
     {
         return false;
     }
-}
-
-std::string Util::get_mdl_system_directory()
-{
-    return ::get_mdl_system_directory();
-}
-
-std::string Util::get_mdl_user_directory()
-{
-    return ::get_mdl_user_directory();
 }
 
 bool Util::remove_duplicate_directories(vector<string> & directories)
@@ -666,112 +634,6 @@ bool Util::is_valid_mdl_identifier(const std::string & identifier)
 //-----------------------------------------------------------------------------
 //
 //
-
-#ifdef _WIN32
-#include <Shlobj.h>
-#include <Knownfolders.h>
-#else
-#include <dlfcn.h>
-#include <unistd.h>
-#endif
-
-#ifdef _WIN32
-//-----------------------------------------------------------------------------
-// helper function to create standard mdl path inside the known folder. WINDOWS only
-//
-std::string get_mdl_path_in_known_folder(
-    KNOWNFOLDERID id,
-    const std::string &postfix)
-{
-    // Fetch the 'knownFolder' path.
-    std::string result;
-#if(_WIN32_WINNT >= 0x0600)
-    wchar_t* knownFolderPath = 0;
-    HRESULT hr = SHGetKnownFolderPath(id, 0, NULL, &knownFolderPath);
-    if (SUCCEEDED(hr) && knownFolderPath != NULL)
-    {
-        // convert from wstring to string and append the postfix
-        std::wstring s(knownFolderPath);
-        int len;
-        int slength = (int)s.length();
-        len = WideCharToMultiByte(CP_ACP, 0, s.c_str(), slength, 0, 0, 0, 0);
-        result = std::string(len, '\0');
-        WideCharToMultiByte(CP_ACP, 0, s.c_str(), slength, &result[0], len, 0, 0);
-
-        result.append(postfix);
-        CoTaskMemFree(static_cast<void*>(knownFolderPath));
-    }
-#endif
-    return result;
-}
-#endif // _WIN32
-
-std::string get_environment(const char* env_var)
-{
-    std::string value;
-#ifdef _WIN32
-    char* buf = nullptr;
-    size_t sz = 0;
-    if (_dupenv_s(&buf, &sz, env_var) == 0 && buf != NULL)
-    {
-        value = buf;
-        free(buf);
-    }
-#else
-    const char* v = getenv(env_var);
-    if (v)
-        value = v;
-#endif
-    return value;
-}
-
-std::string get_mdl_user_directory()
-{
-    std::string path = get_environment("MDL_USER_PATH");
-    if (!path.empty())
-        return path;
-
-#ifdef _WIN32
-    return get_mdl_path_in_known_folder(FOLDERID_Documents, "/mdl");
-#else
-    const std::string home = getenv("HOME");
-    return home + "/mdl";
-#endif
-}
-
-std::string get_mdl_system_directory()
-{
-    std::string path = get_environment("MDL_SYSTEM_PATH");
-    if (!path.empty())
-        return path;
-
-#ifdef _WIN32
-    return get_mdl_path_in_known_folder(FOLDERID_ProgramData, "/NVIDIA Corporation/mdl");
-#else // WIN32
-#ifdef MACOSX
-    return "/Library/Application Support/NVIDIA Corporation/mdl";
-#else // NOT MACOSX (-> LINUX)
-    return "/usr/share/NVIDIA Corporation/mdl";
-#endif // MACOSX
-#endif // WIN32
-}
-
-std::string get_module_name(const std::string& qualified_material_name)
-{
-    std::string stripped_mdl_name;
-    size_t p = qualified_material_name.find('(');
-    if (p == std::string::npos)
-        stripped_mdl_name = qualified_material_name;
-    else // strip function signature
-        stripped_mdl_name = qualified_material_name.substr(0, p);
-
-    p = stripped_mdl_name.rfind("::");
-    if (p == std::string::npos)
-        return qualified_material_name;
-
-    return stripped_mdl_name.substr(0, p);
-}
-
 string Util::normalize(const std::string & path)
 {
     return MI::HAL::Ospath::normpath(path);

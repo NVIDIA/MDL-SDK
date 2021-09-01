@@ -51,7 +51,13 @@ Image_file_reader_impl::Image_file_reader_impl( mi::neuraylib::IReader* reader)
 
     Dds_compress_fmt compress_format = DXTC_none; // avoid warning
     m_image.load_header(
-        m_reader, m_header, m_header_dx10, m_is_header_dx10, m_pixel_type, compress_format);
+        m_reader,
+        m_header,
+        m_header_dx10,
+        m_is_header_dx10,
+        m_pixel_type,
+        m_gamma,
+        compress_format);
 }
 
 Image_file_reader_impl::~Image_file_reader_impl()
@@ -112,7 +118,7 @@ bool Image_file_reader_impl::get_is_cubemap() const
 
 mi::Float32 Image_file_reader_impl::get_gamma() const
 {
-    return IMAGE::get_default_gamma( m_pixel_type);
+    return m_gamma;
 }
 
 bool Image_file_reader_impl::read(

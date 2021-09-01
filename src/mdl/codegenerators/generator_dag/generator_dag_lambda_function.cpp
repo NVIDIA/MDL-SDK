@@ -3057,6 +3057,9 @@ private:
 /// Creates expression lambda functions for all non-DF DAG nodes.
 class Distribution_function_builder
 {
+    typedef ptr_hash_map<DAG_node const, DAG_node const*>::Type Node_cache;
+    typedef ptr_hash_set<DAG_node const>::Type Node_set;
+
 public:
     enum Eval_state {
         ES_BEGIN_STATE,             ///< The node is evaluated before the end of the evaluation
@@ -3630,16 +3633,32 @@ public:
     /// multiple times. Do this in post-order to make sure, that all required
     /// expression lambda function calls used in sub-expressions already exist.
     void prepare_expr_lambda_calls(
-        DAG_node const *expr,
-        Eval_state     eval_state)
+        DAG_node const* expr,
+        Eval_state      eval_state)
     {
+        Node_set visited_nodes(0, Node_set::hasher(), Node_set::key_equal(), m_alloc);
+        do_prepare_expr_lambda_calls(expr, eval_state, visited_nodes);
+    }
+
+    /// Prepare calls to expression lambda functions for nodes which are used
+    /// multiple times. Do this in post-order to make sure, that all required
+    /// expression lambda function calls used in sub-expressions already exist.
+    void do_prepare_expr_lambda_calls(
+        DAG_node const *expr,
+        Eval_state     eval_state,
+        Node_set       &visited_nodes)
+    {
+        if (visited_nodes.count(expr))
+            return;
+        visited_nodes.insert(expr);
+
         switch (expr->get_kind()) {
         case DAG_node::EK_TEMPORARY:
             {
                 // should not happen, but we can handle it
                 DAG_temporary const *t = cast<DAG_temporary>(expr);
                 expr = t->get_expr();
-                prepare_expr_lambda_calls(expr, eval_state);
+                do_prepare_expr_lambda_calls(expr, eval_state, visited_nodes);
                 return;
             }
         case DAG_node::EK_CONSTANT:
@@ -3651,7 +3670,7 @@ public:
 
                 int n_args = call->get_argument_count();
                 for (int i = 0; i < n_args; ++i) {
-                    prepare_expr_lambda_calls(call->get_argument(i), eval_state);
+                    do_prepare_expr_lambda_calls(call->get_argument(i), eval_state, visited_nodes);
                 }
 
                 Node_info &info = m_node_info_map[expr];
@@ -3957,8 +3976,27 @@ private:
         DAG_node const   *expr,
         Eval_state       eval_state)
     {
+        Node_cache import_cache(0, Node_cache::hasher(), Node_cache::key_equal(), m_alloc);
+        return do_import_mat_expr(lambda, expr, eval_state, import_cache);
+    }
+
+    /// Import an expression into a lambda function while using the node cache to
+    /// take expression lambda calls into account.
+    DAG_node const *do_import_mat_expr(
+        ILambda_function *lambda,
+        DAG_node const   *expr,
+        Eval_state       eval_state,
+        Node_cache       &import_cache)
+    {
+        Node_cache::iterator it = import_cache.find(expr);
+        if (it != import_cache.end()) {
+            return it->second;
+        }
+
         if (DAG_node const *cache_node = get_result_node(expr, eval_state)) {
-            return lambda->import_expr(cache_node);
+            DAG_node const *res = lambda->import_expr(cache_node);
+            import_cache[expr] = res;
+            return res;
         }
 
         DAG_node const *res;
@@ -3968,7 +4006,7 @@ private:
                 // should not happen, but we can handle it
                 DAG_temporary const *t = cast<DAG_temporary>(expr);
                 expr = t->get_expr();
-                res = import_mat_expr(lambda, expr, eval_state);
+                res = do_import_mat_expr(lambda, expr, eval_state, import_cache);
             }
             break;
         case DAG_node::EK_CONSTANT:
@@ -3983,7 +4021,11 @@ private:
 
                 for (int i = 0; i < n_args; ++i) {
                     DAG_call::Call_argument &arg = args[i];
-                    arg.arg        = import_mat_expr(lambda, call->get_argument(i), eval_state);
+                    arg.arg = do_import_mat_expr(
+                        lambda,
+                        call->get_argument(i),
+                        eval_state,
+                        import_cache);
                     arg.param_name = call->get_parameter_name(i);
                 }
 
@@ -4003,6 +4045,7 @@ private:
             m_deriv_infos->mark_calc_derivatives(res);
         }
 
+        import_cache[expr] = res;
         return res;
     }
 

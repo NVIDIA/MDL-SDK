@@ -790,8 +790,10 @@ BSDF_INLINE void microfacet_sample(
                 return;
 
             BSDF_pdf_data pdf_data = to_pdf_data(data);
-            float nk2;            
+            float nk2 = -1.0f;
             microfacet_evaluate(ph, &pdf_data, state, g, ior, thin_walled, mode, nk1, nk2);
+            if (nk2 < 0.0f) // compute nk2 in case it hasn't been computed
+                nk2 = math::abs(math::dot(g.n.shading_normal, data->k2));
             
             coord.x = multiscatter::compute_lookup_coordinate_x(type, nk2);
             const float rho2 = state->tex_lookup_float3_3d(
@@ -3228,12 +3230,13 @@ BSDF_API void thin_film_sample(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    if ((data->event_type & BSDF_EVENT_TRANSMISSION) != 0)
+        return;
+    
     const float2 mat_ior = process_ior(data, state);
-    const float coating_ior = math::luminance(ior); //!!TODO: no color support here
 
     data->bsdf_over_pdf *= thin_film_factor(
-        coating_ior, thickness, mat_ior, data->k1, data->k2, shading_normal,
-        (data->event_type & BSDF_EVENT_TRANSMISSION) != 0, get_material_thin_walled(state));
+        ior, thickness, mat_ior, data->k1, data->k2, shading_normal);
 }
 
 // we need an extra function, as clang doesn't allow to inline and export the same function
@@ -3248,14 +3251,12 @@ BSDF_INLINE float3 thin_film_get_factor_impl(
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
+    if (math::dot(data->k2, geometry_normal) < 0.0f)
+        return make_float3(1.0f, 1.0f, 1.0f);
+    
     const float2 mat_ior = process_ior(data, state);
-    const float coating_ior = math::luminance(ior); //!!TODO: no color support here
 
-    const float3 factor = thin_film_factor(
-        coating_ior, thickness, mat_ior, data->k1, data->k2, shading_normal,
-        (math::dot(data->k2, geometry_normal) < 0.0f), get_material_thin_walled(state));
-
-    return factor;
+    return thin_film_factor(ior, thickness, mat_ior, data->k1, data->k2, shading_normal);
 }
 
 BSDF_API float3 thin_film_get_factor(
@@ -3309,19 +3310,11 @@ BSDF_API void thin_film_auxiliary(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
 
     const float2 mat_ior = process_ior(data, state);
-    const float coating_ior = math::luminance(ior); //!!TODO: no color support here
-
-    //!! clamped to avoid total internal reflection
-    const float eta = math::min(mat_ior.x, coating_ior) / coating_ior;
 
     // assuming perfect reflection of k1, so the half-vector equals the normal
     const float kh = math::abs(math::dot(data->k1, shading_normal));
-    const float costheta_refr = refraction_cosine(kh, eta);
-    const float phase_shift_dist = 2.0f * coating_ior * costheta_refr * thickness;
-    const float coating_fresnel = ior_fresnel(1.0f / eta, kh);
 
-    const float3 factor = compute_interference_factor(
-        coating_fresnel, 1.0f - coating_fresnel, phase_shift_dist);
+    const float3 factor = thin_film_factor(ior, thickness, mat_ior, kh);
 
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }

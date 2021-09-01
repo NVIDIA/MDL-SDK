@@ -448,8 +448,6 @@ MDLM_option_parser::MDLM_option_parser()
     option.add_help_string("Add path to the MDL search paths");
     option.add_help_string(
         "Note: SYSTEM and USER path are added by default to MDL search paths");
-    option.add_help_string("SYSTEM is \"" + Util::get_mdl_system_directory() + "\"");
-    option.add_help_string("USER is \"" + Util::get_mdl_user_directory() + "\"");
     m_known_options.push_back(option);
 
     option = Option(QUIET);

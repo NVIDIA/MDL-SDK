@@ -279,7 +279,7 @@ public:
 
     const IAnnotation_block* get_annotations() const;
 
-    const IAnnotation* create_annotation(const IExpression_list* arguments) const;
+    const IAnnotation* create_annotation( const IExpression_list* arguments) const;
 
     // internal
 
@@ -417,7 +417,7 @@ public:
     IExpression_list* create_expression_list() const;
 
     IAnnotation* create_annotation(
-        const char* name, const IExpression_list* arguments) const;
+        DB::Transaction* transaction, const char* name, const IExpression_list* arguments) const;
 
     IAnnotation_definition* create_annotation_definition(
         const char* name,

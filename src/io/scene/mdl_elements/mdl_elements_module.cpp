@@ -676,6 +676,27 @@ mi::Sint32 Mdl_module::create_module_internal(
 
     Mdl_ident module_id = generate_unique_id();
 
+    // Compute DB names of the annotation definitions in this module.
+    mi::Size annotation_definition_count = code_dag->get_annotation_count();
+    std::vector<std::string> annotation_names;
+    annotation_names.reserve( annotation_definition_count);
+    std::vector<DB::Tag> annotation_tags;
+    annotation_tags.reserve( annotation_definition_count);
+
+    for( mi::Size i = 0; i < annotation_definition_count; ++i) {
+        std::string db_annotation_name = get_db_name_annotation_definition(
+            MDL::get_mdl_annotation_name( code_dag.get(), i));
+        annotation_names.push_back( db_annotation_name);
+        DB::Tag annotation_tag = transaction->name_to_tag( db_annotation_name.c_str());
+        if( annotation_tag) {
+            return add_error_message( context,
+                STRING::formatted_string(
+                    "DB name for annotation definition \"%s\" already in use.",
+                    db_annotation_name.c_str()), -3);
+        }
+        annotation_tags.push_back( transaction->reserve_tag());
+    }
+
     // Compute DB names of the function definitions in this module.
     mi::Size function_count = code_dag->get_function_count();
     std::vector<std::string> function_names;
@@ -718,27 +739,6 @@ mi::Sint32 Mdl_module::create_module_internal(
         material_tags.emplace_back( transaction->reserve_tag(), module_id);
     }
 
-    // Compute DB names of the annotation definitions in this module.
-    mi::Size annotation_definition_count = code_dag->get_annotation_count();
-    std::vector<std::string> annotation_names;
-    annotation_names.reserve( annotation_definition_count);
-    std::vector<DB::Tag> annotation_tags;
-    annotation_tags.reserve( annotation_definition_count);
-
-    for( mi::Size i = 0; i < annotation_definition_count; ++i) {
-        std::string db_annotation_name = get_db_name_annotation_definition(
-            MDL::get_mdl_annotation_name( code_dag.get(), i));
-        annotation_names.push_back( db_annotation_name);
-        DB::Tag annotation_tag = transaction->name_to_tag( db_annotation_name.c_str());
-        if( annotation_tag) {
-            return add_error_message( context,
-                STRING::formatted_string(
-                    "DB name for annotation definition \"%s\" already in use.",
-                    db_annotation_name.c_str()), -3);
-        }
-        annotation_tags.push_back( transaction->reserve_tag());
-    }
-
     if( !mdl->is_builtin_module( core_module_name)) {
         if( !module_filename)
             add_info_message( context,
@@ -760,6 +760,14 @@ mi::Sint32 Mdl_module::create_module_internal(
         imports, function_tags, material_tags, annotation_tags, load_resources);
 
     DB::Privacy_level privacy_level = transaction->get_scope()->get_level();
+
+    // Create DB elements for the annotation definition proxies in this module.
+    for( mi::Size i = 0; i < annotation_definition_count; ++i) {
+        Mdl_annotation_definition_proxy* db_annotation = new Mdl_annotation_definition_proxy(
+            mdl_module_name.c_str());
+        transaction->store_for_reference_counting(
+            annotation_tags[i], db_annotation, annotation_names[i].c_str(), privacy_level);
+    }
 
     // Create DB elements for the function definitions in this module.
     for( mi::Size i = 0; i < function_count; ++i) {
@@ -792,14 +800,6 @@ mi::Sint32 Mdl_module::create_module_internal(
             load_resources);
         transaction->store_for_reference_counting(
             material_tags[i].first, db_material, material_names[i].c_str(), privacy_level);
-    }
-
-    // Create DB elements for the annotation definition proxies in this module.
-    for( mi::Size i = 0; i < annotation_definition_count; ++i) {
-        Mdl_annotation_definition_proxy* db_annotation = new Mdl_annotation_definition_proxy(
-            mdl_module_name.c_str());
-        transaction->store_for_reference_counting(
-            annotation_tags[i], db_annotation, annotation_names[i].c_str(), privacy_level);
     }
 
     // Store the module in the DB.

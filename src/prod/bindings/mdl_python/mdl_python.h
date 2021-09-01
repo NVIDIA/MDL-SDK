@@ -32,13 +32,7 @@
 #include <map>
 #include <cassert>
 
-namespace mi
-{
-    namespace base
-    {
-        class IInterface;
-    }
-}
+#include <mi/base/iinterface.h>
 
 // Ref count tracking for debugging
 class SmartPtrBase

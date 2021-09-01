@@ -102,6 +102,9 @@ private:
     /// The pixel type (decoded from the header).
     IMAGE::Pixel_type m_pixel_type;
 
+    /// The gamma value (decoded from the header).
+    mi::Float32 m_gamma;
+
     /// The DDS image.
     mutable Image m_image;
 };

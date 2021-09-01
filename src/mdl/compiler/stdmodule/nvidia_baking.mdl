@@ -10,6 +10,7 @@ export annotation target_material_model(
     [[ anno::description("If set, the override rendering material will be loaded from this module. "
         "Otherwise the module of the target model will be used. Absolute and relative MDL paths are supported here.") ]]
 ) [[
+    intrinsic(),
     anno::author("NVIDIA Corporation"),
     anno::description("Marks the material for baking. "
         "The first material in the material definition chain that has this annotation is selected for baking.")
@@ -37,7 +38,8 @@ export annotation bake_to_texture(
     string user_data = ""
     [[ anno::description("User defined parameter to control application specific behavior. "
         "Encoding/decoding multiple values is in the responsibility of the application." ) ]]
-)[[
+) [[
+    intrinsic(),
     anno::author("NVIDIA Corporation"),
     anno::description("Marks parameters in the target material model for baking and controls the mapping to the rendering material.")
 ]];

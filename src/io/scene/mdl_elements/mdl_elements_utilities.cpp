@@ -418,8 +418,7 @@ mi::neuraylib::IFunction_definition::Semantics mdl_semantics_to_ext_semantics(
 mi::neuraylib::IAnnotation_definition::Semantics mdl_semantics_to_ext_annotation_semantics(
     mi::mdl::IDefinition::Semantics semantic)
 {
-    if ((semantic < mi::mdl::IDefinition::DS_ANNOTATION_FIRST ||
-         semantic > mi::mdl::IDefinition::DS_ANNOTATION_LAST) &&
+    if (!mi::mdl::semantic_is_annotation(semantic) &&
         semantic != mi::mdl::IDefinition::DS_UNKNOWN) {
 
         ASSERT(M_SCENE, false);
@@ -953,75 +952,75 @@ int hex_to_int( unsigned char c)
     return -1;
 }
 
-size_t strfind( char const* s, size_t l, char const *what, size_t w_l)
+size_t strfind( const char* s, size_t len_s, const char* what, size_t len_what)
 {
-    if (w_l <= l) {
-        for (size_t i = 0; i < l - w_l; ++i) {
-            if (s[i] == what[0]) {
-                size_t j = 1;
-                for (; j < w_l; ++j) {
-                    if (s[i + j] != what[j]) {
-                        break;
-                    }
-                }
-                if (j == w_l) {
-                    return i;
-                }
-            }
-        }
+    if( len_what > len_s)
+        return std::string::npos;
+
+    for( size_t i = 0; i < len_s - len_what; ++i) {
+
+        if (s[i] != what[0])
+            continue;
+
+        size_t j = 1;
+        for( ; j < len_what; ++j)
+            if (s[i + j] != what[j])
+                break;
+        if( j == len_what)
+            return i;
     }
+
     return std::string::npos;
 }
 
-size_t chrfind(char const *s, size_t l, char what)
+size_t chrfind( const char* s, size_t n, char what)
 {
-    for (size_t i = 0; i < l; ++i) {
-        if (s[i] == what) {
+    for( size_t i = 0; i < n; ++i)
+        if( s[i] == what)
             return i;
+
+    return std::string::npos;
+}
+
+void encode( const char* s, size_t n, std::string& result)
+{
+    for( size_t i = 0; i < n; ++i) {
+        unsigned char c = s[i];
+
+        switch( s[i]) {
+            case '(':
+            case ')':
+            case '<':
+            case '>':
+            case ',':
+            case ':':
+            case '$':
+            case '%':
+            case '#':
+            case '?':
+            case '@':
+                result += '%';
+                result += int_to_hex( c >> 4);
+                result += int_to_hex( c % 16);
+                break;
+            default:
+                result += c;
         }
     }
-    return std::string::npos;
 }
 
 } // namespace
 
-static void encode( std::string& result, const char* s, size_t l)
-{
-    for (size_t i = 0; i < l; ++i) {
-        unsigned char c = s[i];
-
-        switch (s[i]) {
-        case '(':
-        case ')':
-        case '<':
-        case '>':
-        case ',':
-        case ':':
-        case '$':
-        case '%':
-        case '#':
-        case '?':
-        case '@':
-            result += '%';
-            result += int_to_hex(c >> 4);
-            result += int_to_hex(c % 16);
-            break;
-        default:
-            result += c;
-        }
-    }
-}
-
-std::string encode( char const* s)
+std::string encode( const char* s)
 {
     if( !get_encoded_names_enabled())
         return s;
 
-    size_t l = strlen(s);
     std::string result;
-    result.reserve(2 * l);
+    size_t n = strlen( s);
+    result.reserve( 2*n);
 
-    encode(result, s, l);
+    encode( s, n, result);
     return result;
 }
 
@@ -1031,8 +1030,10 @@ std::string decode( const std::string& s, bool strict, Execution_context* contex
         return s;
 
     std::string result;
+    size_t n = s.size();
+    result.reserve( n);
 
-    for( size_t i = 0, n = s.size(); i < n; ) {
+    for( size_t i = 0; i < n; ) {
 
         if( s[i] != '%') {
 
@@ -1131,31 +1132,38 @@ std::string decode_for_error_msg( const std::string& s)
     return decode( s, /*strict*/ false);
 }
 
-static void encode_module_name( std::string& result, char const* s, size_t l)
+// Note the difference between "j" and "k" in methods below. "j" counts from the start of the
+// string, whereas "k" is the offset w.r.t. "i", i.e., j == i+k.
+
+namespace {
+
+void encode_module_name( const char* s, size_t n, std::string& result)
 {
     size_t i = 0;
-    size_t j = strfind( s, l, "::", 2);
+    size_t k = strfind( s, n, "::", 2);
 
-    while( j != std::string::npos) {
-        encode( result, s + i, j);
+    while( k != std::string::npos) {
+        encode( s + i, k, result);
         result += "::";
-        i += j + 2;
-        j = strfind( s + i, l - i, "::", 2);
+        i += k + 2;
+        k = strfind( s + i, n - i, "::", 2);
     }
 
-    encode( result, s + i, l - i);
+    encode( s + i, n - i, result);
 }
 
-std::string encode_module_name(const std::string &s)
+} // namespace
+
+std::string encode_module_name( const std::string& s)
 {
-    if (!get_encoded_names_enabled())
+    if( !get_encoded_names_enabled())
         return s;
 
-    size_t l = s.size();
     std::string result;
-    result.reserve(l * 2);
+    size_t n = s.size();
+    result.reserve( 2*n);
 
-    encode_module_name( result, s.c_str(), l);
+    encode_module_name( s.c_str(), n, result);
     return result;
 }
 
@@ -1165,7 +1173,8 @@ std::string decode_module_name( const std::string& s)
         return s;
 
     std::string result;
-    result.reserve( s.size() * 2);
+    size_t n = s.size();
+    result.reserve( n);
 
     size_t i = 0;
     size_t j = s.find( "::");
@@ -1190,38 +1199,42 @@ std::string decode_module_name( const std::string& s)
     return result;
 }
 
-static void encode_name_without_signature( std::string& result, const char* s, size_t l)
+namespace {
+
+void encode_name_without_signature( const char* s, size_t n, std::string& result)
 {
     size_t i = 0;
-    size_t j = strfind( s, l, "::", 2);
+    size_t k = strfind( s, n, "::", 2);
 
-    while( j != std::string::npos) {
-        encode( result, s + i, j);
+    while( k != std::string::npos) {
+        encode( s + i, k, result);
         result += "::";
-        i += j + 2;
-        j = strfind( s + i, l - i, "::", 2);
+        i += k + 2;
+        k = strfind( s + i, n - i, "::", 2);
     }
 
-    j = chrfind( s + i, l - i, '$');
-    if( j != std::string::npos) {
-        encode( result, s + i, j);
+    k = chrfind( s + i, n - i, '$');
+    if( k != std::string::npos) {
+        encode( s + i, k, result);
         result += '$';
-        i += j + 1;
+        i += k + 1;
     }
 
-    encode( result, s + i, l - i);
+    encode( s + i, n - i, result);
 }
 
-std::string encode_name_without_signature(const std::string &s)
+} // namespace
+
+std::string encode_name_without_signature( const std::string& s)
 {
-    if (!get_encoded_names_enabled())
+    if( !get_encoded_names_enabled())
         return s;
 
-    size_t l = s.size();
     std::string result;
-    result.reserve(l * 2);
+    size_t n = s.size();
+    result.reserve( 2*n);
 
-    encode_name_without_signature( result, s.c_str(), l);
+    encode_name_without_signature( s.c_str(), n, result);
     return result;
 }
 
@@ -1231,7 +1244,8 @@ std::string decode_name_without_signature( const std::string& s)
         return s;
 
     std::string result;
-    result.reserve( s.size() * 2);
+    size_t n = s.size();
+    result.reserve( n);
 
     size_t i = 0;
     size_t j = s.find( "::");
@@ -1268,39 +1282,43 @@ std::string decode_name_without_signature( const std::string& s)
     return result;
 }
 
-static void encode_name_with_signature( std::string& result, const char* s, size_t l)
+namespace {
+
+void encode_name_with_signature( const char* s, size_t n, std::string& result)
 {
     size_t i = 0;
-    size_t j = chrfind( s + i, l - i, '(');
-    ASSERT( M_SCENE, (j != std::string::npos) || !"missing signature");
-    encode_name_without_signature( result, s + i, j);
+    size_t k = chrfind( s + i, n - i, '(');
+    ASSERT( M_SCENE, (k != std::string::npos) || !"missing signature");
+    encode_name_without_signature( s + i, k, result);
     result += '(';
-    i += j + 1;
+    i += k + 1;
 
-    j = chrfind( s + i, l - i, ',');
-    while( j != std::string::npos) {
-        encode_name_without_signature( result, s + i, j);
+    k = chrfind( s + i, n - i, ',');
+    while( k != std::string::npos) {
+        encode_name_without_signature( s + i, k, result);
         result += ',';
-        i += j + 1;
-        j = chrfind( s + i, l - i, ',');
+        i += k + 1;
+        k = chrfind( s + i, n - i, ',');
     }
 
-    j = chrfind( s + i, l - i, ')');
-    ASSERT( M_SCENE, (j != std::string::npos) || !"broken signature");
-    encode_name_without_signature( result, s + i, j);
+    k = chrfind( s + i, n - i, ')');
+    ASSERT( M_SCENE, (k != std::string::npos) || !"broken signature");
+    encode_name_without_signature( s + i, k, result);
     result += ')';
 }
 
-std::string encode_name_with_signature(const std::string &s)
+} // namespace
+
+std::string encode_name_with_signature( const std::string& s)
 {
-    if (!get_encoded_names_enabled())
+    if( !get_encoded_names_enabled())
         return s;
 
-    size_t l = s.size();
     std::string result;
-    result.reserve(l * 2);
+    size_t n = s.size();
+    result.reserve( 2*n);
 
-    encode_name_with_signature( result, s.c_str(), l);
+    encode_name_with_signature( s.c_str(), n, result);
     return result;
 }
 
@@ -1320,7 +1338,7 @@ std::string encode_name_plus_signature(
     result += '(';
     for( size_t i = 0, n = parameter_types.size(); i < n; ++i) {
         const std::string& s = parameter_types[i];
-        encode_name_without_signature( result, s.c_str(), s.size());
+        encode_name_without_signature( s.c_str(), s.size(), result);
         if( i+1 < n)
             result += ',';
     }
@@ -1342,7 +1360,7 @@ std::string get_dag_name_without_signature(
 
     std::string result = code_dag->get_function_name( index_uint32);
     size_t left_paren = result.find( '(');
-    return  result.substr( 0, left_paren);
+    return result.substr( 0, left_paren);
 }
 
 } // namespace
@@ -1545,7 +1563,7 @@ std::string serialize_mdle_module_name(
     //
     // Do \em not use get_db_name() here since "result" is not guaranteed to be a
     // syntactical valid name, e.g., it is not required to start with a slash.
-    result = "mdle::" + encode_module_name( result);
+    result = "mdle::" + MDL::encode_module_name( result);
     return result;
 }
 
@@ -3268,7 +3286,7 @@ const IType_enum* create_enum(
             (*value_annotations)[i], /*qualified_name*/ symbol);
 
     mi::Sint32 errors;
-    std::string mdl_symbol = encode_name_without_signature( symbol);
+    std::string mdl_symbol = MDL::encode_name_without_signature( symbol);
     const IType_enum* type_enum_int = tf->create_enum(
         mdl_symbol.c_str(), id_int, values, annotations_int, value_annotations_int, &errors);
     boost::ignore_unused(can_fail);
@@ -3327,7 +3345,7 @@ const IType_struct* create_struct(
             (*field_annotations)[i], /*qualified_name*/ symbol);
 
     mi::Sint32 errors;
-    std::string mdl_symbol = encode_name_without_signature( symbol);
+    std::string mdl_symbol = MDL::encode_name_without_signature( symbol);
     const IType_struct* type_int = tf->create_struct(
         mdl_symbol.c_str(), id_int, fields, annotations_int, field_annotations_int, &errors);
     boost::ignore_unused(can_fail);
@@ -3988,7 +4006,7 @@ IAnnotation* Mdl_dag_converter::mdl_dag_call_to_int_annotation(
 
     const char* name = call->get_name();
     std::string mdl_name = encode_name_add_missing_signature( m_transaction, m_code_dag, name);
-    return m_ef->create_annotation( mdl_name.c_str(), arguments.get());
+    return m_ef->create_annotation( m_transaction, mdl_name.c_str(), arguments.get());
 }
 
 namespace {
@@ -4447,7 +4465,7 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
         mdl_gamma = mi::mdl::IValue_texture::gamma_default;
 
     // FIXME:
-    char const *selector = "";
+    const char* selector = "";
     mi::Uint32 hash = volume_tag ? 0 : get_hash( resource_name, gamma, tag_version, image_tag_version);
     return vf->create_texture(
         mdl_type, resource_name.c_str(), mdl_gamma, selector, tag.get_uint(), hash);
@@ -7459,6 +7477,9 @@ Message::Message(const mi::mdl::IMessage *message)
     if ((file && file[0]) || (line > 0))
         msg += ": ";
 
+    // add message number
+    msg += message->get_class() + std::to_string(message->get_code()) + ' ';
+
     m_message = msg + m_message;
 
     for (size_t i = 0; i < message->get_note_count(); ++i)
@@ -7466,6 +7487,44 @@ Message::Message(const mi::mdl::IMessage *message)
 }
 
 namespace {
+
+bool validate_warning(const boost::any& value)
+{
+    if (value.type() != typeid(std::string))
+        return false;
+    const std::string& s = boost::any_cast<const std::string&>(value);
+    const char *opt = s.c_str();
+    for (;;) {
+        if (opt[0] == 'e' && opt[1] == 'r' && opt[2] == 'r') {
+            // "err" : all warnings are errors
+            opt += 3;
+        } else {
+            // digit+ = (on|off|err)
+            while (::isdigit(opt[0])) {
+                ++opt;
+            }
+            if (opt[0] == '=') {
+                ++opt;
+            }
+            if (opt[0] == 'o') {
+                if (opt[1] == 'f' && opt[2] == 'f') {
+                    opt += 3;
+                } else if (opt[1] == 'n') {
+                    opt += 2;
+                }
+            }
+            if (opt[0] == 'e' && opt[1] == 'r' && opt[2] == 'r') {
+                opt += 3;
+            }
+        }
+
+        if (opt[0] != ',') {
+            break;
+        }
+        ++opt;
+    }
+    return opt[0] == '\0';
+}
 
 bool validate_optimization_level(const boost::any& value)
 {
@@ -7490,6 +7549,8 @@ bool validate_internal_space(const boost::any& value)
 
 Execution_context::Execution_context() : m_result(0)
 {
+    add_option(Option(MDL_CTX_OPTION_WARNING, std::string(""), false,
+        validate_warning));
     add_option(Option(MDL_CTX_OPTION_OPTIMIZATION_LEVEL, static_cast<mi::Sint32>( 2), false,
         validate_optimization_level));
     add_option(Option(MDL_CTX_OPTION_INTERNAL_SPACE, std::string("coordinate_world"), false,
@@ -7662,6 +7723,9 @@ mi::mdl::IThread_context* create_thread_context( mi::mdl::IMDL* mdl, Execution_c
 
     if( context) {
         mi::mdl::Options& options = thread_context->access_options();
+
+        std::string warnings = context->get_option<std::string>( MDL_CTX_OPTION_WARNING);
+        options.set_option( MDL_OPTION_WARN, warnings.c_str());
 
         mi::Sint32 optimization_level = context->get_option<mi::Sint32>( MDL_CTX_OPTION_OPTIMIZATION_LEVEL);
         std::ostringstream optimization_level_str;

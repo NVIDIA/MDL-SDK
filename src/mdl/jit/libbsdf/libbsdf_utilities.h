@@ -988,34 +988,149 @@ BSDF_INLINE float refraction_cosine(
     return math::sqrt(1.0f - sintheta2_sqr);
 }
 
+// Fresnel s/p-polarized reflectance/transmittance factors
+BSDF_INLINE float fresnel_rs(const float n1, const float n2, const float cos1, const float cos2) {
+    return (n1 * cos1 - n2 * cos2) / (n1 * cos1 + n2 * cos2);
+}
+BSDF_INLINE float fresnel_rp(const float n1, const float n2, const float cos1, const float cos2) {
+    return (n2 * cos1 - n1 * cos2) / (n1 * cos2 + n2 * cos1);
+}
+BSDF_INLINE float fresnel_ts(const float n1, const float n2, const float cos1, const float cos2) {
+    return 2.0f * n1 * cos1 / (n1 * cos1 + n2 * cos2);
+}
+BSDF_INLINE float fresnel_tp(const float n1, const float n2, const float cos1, const float cos2) {
+    return 2.0f * n1 * cos1 / (n1 * cos2 + n2 * cos1);
+}
 
-// compute the color tint caused by a thin-film coating
+
+// compute the reflection color tint caused by a thin-film coating
+// good reference:
+// https://www.gamedev.net/tutorials/_/technical/graphics-programming-and-theory/thin-film-interference-for-computer-graphics-r2962/
 BSDF_INLINE float3 thin_film_factor(
-    const float coating_ior,
+    const float3 coating_ior3,
     const float coating_thickness,
-    const float2 ior,
+    const float2 material_ior,
+    const float kh)
+{
+    float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
+
+    //!! using low res color matching functions here
+    const float lambda_min = 400.0f;
+    const float lambda_step = (float)((700.0 - 400.0) / 16.0);
+    const float3 cie_xyz[16] = {
+        {0.02986f, 0.00310f, 0.13609f}, {0.20715f, 0.02304f, 0.99584f},
+        {0.36717f, 0.06469f, 1.89550f}, {0.28549f, 0.13661f, 1.67236f},
+        {0.08233f, 0.26856f, 0.76653f}, {0.01723f, 0.48621f, 0.21889f},
+        {0.14400f, 0.77341f, 0.05886f}, {0.40957f, 0.95850f, 0.01280f},
+        {0.74201f, 0.97967f, 0.00060f}, {1.03325f, 0.84591f, 0.00000f},
+        {1.08385f, 0.62242f, 0.00000f}, {0.79203f, 0.36749f, 0.00000f},
+        {0.38751f, 0.16135f, 0.00000f}, {0.13401f, 0.05298f, 0.00000f},
+        {0.03531f, 0.01375f, 0.00000f}, {0.00817f, 0.00317f, 0.00000f}};
+
+    //!! poor handling of color data here... just using "closest" color component of color IOR
+    float coating_ior = coating_ior3.z;
+    float lambda = lambda_min;
+    unsigned int i = 0;
+    while (i < 16)
+    {
+        const float eta01 = material_ior.x / coating_ior;
+        const float eta01_sqr = eta01 * eta01;
+        const float sin1_sqr = eta01_sqr * (1.0f - kh * kh);
+
+        const float eta02 = material_ior.x / material_ior.y;
+        const float eta02_sqr = eta02 * eta02;
+        const float sin2_sqr = eta02_sqr * (1.0f - kh * kh);
+        
+        if (sin1_sqr > 1.0f || sin2_sqr > 1.0f) {
+
+            while (i < 16) {
+
+                xyz += cie_xyz[i]; // * 1.0f
+
+                lambda += lambda_step;
+                ++i;
+
+                const float d_x = math::abs(lambda - 700.0f);
+                const float d_y = math::abs(lambda - 546.1f);
+                const float d_z = math::abs(lambda - 435.8f);
+                const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.x);
+
+                if (coating_ior_next != coating_ior) {
+                    coating_ior = coating_ior_next;
+                    break;
+                }
+            }
+            continue;
+        }
+        
+        const float cos1 = math::sqrt(1.0f - sin1_sqr);
+        const float cos2 = math::sqrt(1.0f - sin2_sqr);
+
+        const float alpha_s = fresnel_rs(coating_ior, material_ior.x, cos1, kh) * fresnel_rs(coating_ior, material_ior.y, cos1, cos2);
+        const float alpha_p = fresnel_rp(coating_ior, material_ior.x, cos1, kh) * fresnel_rp(coating_ior, material_ior.y, cos1, cos2);
+        const float beta_s = fresnel_ts(material_ior.x, coating_ior, kh, cos1) * fresnel_ts(coating_ior, material_ior.y, cos1, cos2);
+        const float beta_p = fresnel_tp(material_ior.x, coating_ior, kh, cos1) * fresnel_tp(coating_ior, material_ior.y, cos1, cos2);
+
+        const float d10 = coating_ior > material_ior.x ? 0.0f : (float)M_PI;
+        const float d12 = coating_ior > material_ior.y ? 0.0f : (float)M_PI;
+        const float delta = d10 + d12;
+
+        while (i < 16) {
+
+            const float phi = (float)(4.0 * M_PI) * coating_ior * coating_thickness * cos1 / lambda + delta;
+            const float cosphi = math::cos(phi);
+        
+            const float ts = beta_s * beta_s / ((alpha_s * alpha_s) - 2.0f * alpha_s * cosphi + 1.0f);
+            const float tp = beta_p * beta_p / ((alpha_p * alpha_p) - 2.0f * alpha_p * cosphi + 1.0f);
+            const float val = 1.0f - 0.5f * (ts + tp) * (material_ior.y * cos2) / (material_ior.x * kh);
+
+            xyz += cie_xyz[i] * val;
+
+            lambda += lambda_step;
+            ++i;
+
+            //!! poor handling of color data here... just using "closest" color component of color IOR
+            const float d_x = math::abs(lambda - 700.0f);
+            const float d_y = math::abs(lambda - 546.1f);
+            const float d_z = math::abs(lambda - 435.8f);
+            const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.x);
+
+            if (coating_ior_next != coating_ior) {
+                coating_ior = coating_ior_next;
+                break;
+            }
+        }
+    }
+
+    xyz *= float(1.0 / 16.0);
+
+    // ("normalized" such that the loop for no shifted wave gives reflectivity (1,1,1))
+    return make_float3(
+        xyz.x * (float)( 3.240600 / 0.433509) + xyz.y * (float)(-1.537200 / 0.433509)
+                                              + xyz.z * (float)(-0.498600 / 0.433509),
+        xyz.x * (float)(-0.968900 / 0.341582) + xyz.y * (float)( 1.875800 / 0.341582)
+                                              + xyz.z * (float)( 0.041500 / 0.341582),
+        xyz.x * (float)( 0.055700 / 0.326950) + xyz.y * (float)(-0.204000 / 0.326950)
+                                              + xyz.z * (float)( 1.057000 / 0.326950));
+}
+
+BSDF_INLINE float3 thin_film_factor(
+    const float3 coating_ior3,
+    const float coating_thickness,
+    const float2 material_ior,
     const float3 &k1,
     const float3 &k2,
-    const float3 &normal,
-    const bool transmission,
-    const bool thin_walled)
+    const float3 &normal)
 {
     const float nk2 = math::abs(math::dot(k2, normal));
 
     const float3 h = compute_half_vector(
         k1, k2, normal, nk2,
-        transmission);
+        /*transmission=*/false);
 
     const float kh = math::abs(math::dot(k1, h));
 
-    //!! clamped to avoid total internal reflection
-    const float eta = math::min(ior.x, coating_ior) / coating_ior;
-
-    const float costheta_refr = refraction_cosine(kh, eta);
-    const float phase_shift_dist = 2.0f * coating_ior * costheta_refr * coating_thickness;
-    const float coating_fresnel = ior_fresnel(1.0f / eta, kh);
-
-    return compute_interference_factor(coating_fresnel, 1.0f - coating_fresnel, phase_shift_dist);
+    return thin_film_factor(coating_ior3, coating_thickness, material_ior, kh);
 }
 
 // evaluate measured color curve

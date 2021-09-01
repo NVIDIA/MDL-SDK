@@ -98,7 +98,7 @@ Image_file_writer_impl::~Image_file_writer_impl()
     }
 
     Image image;
-    image.create( m_pixel_type, texture, m_is_cubemap);
+    image.create( m_pixel_type, m_gamma, texture, m_is_cubemap);
     if( !image.save( m_writer)) {
         log( mi::base::MESSAGE_SEVERITY_ERROR,
             "The image plugin \"dds\" failed to export an image.");

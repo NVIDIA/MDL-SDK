@@ -530,8 +530,8 @@ inline bool semantic_is_operator(IDefinition::Semantics sema)
     return IDefinition::DS_OP_BASE <= sema && sema <= IDefinition::DS_OP_END;
 }
 
-/// Checks if a definition semantics is an annotation.
-inline bool semantic_is_annotation(IDefinition::Semantics sema)
+/// Checks if a definition semantics is an anno annotation.
+inline bool semantic_is_anno_annotation(IDefinition::Semantics sema)
 {
     return IDefinition::DS_ANNOTATION_FIRST <= sema && sema <= IDefinition::DS_ANNOTATION_LAST;
 }
@@ -540,6 +540,12 @@ inline bool semantic_is_annotation(IDefinition::Semantics sema)
 inline bool semantic_is_baking_annotation(IDefinition::Semantics sema)
 {
     return IDefinition::DS_BAKING_FIRST <= sema && sema <= IDefinition::DS_BAKING_LAST;
+}
+
+/// Checks if a definition semantics is an annotation.
+inline bool semantic_is_annotation(IDefinition::Semantics sema)
+{
+    return semantic_is_anno_annotation(sema) || semantic_is_baking_annotation(sema);
 }
 
 /// Converts a definition semantics to an expression operator.

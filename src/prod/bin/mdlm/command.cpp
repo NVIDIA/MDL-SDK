@@ -340,8 +340,6 @@ Create_archive::Create_archive(const std::string & mdl_directory, const std::str
     : m_mdl_directory(mdl_directory)
     , m_archive(Archive::with_extension(archive))
 {
-    // Convert SYSTEM, USER to real directory locations
-    Util::File::convert_symbolic_directory(m_mdl_directory);
 }
 
 int Create_archive::execute()
@@ -432,7 +430,6 @@ Install::Install(const std::string & archive, const std::string & mdl_path)
     , m_force(false)
     , m_dryrun(false)
 {
-    Util::File::convert_symbolic_directory(m_mdl_directory);
 }
 
 Compatibility::COMPATIBILITY Install::test_compatibility(const std::string & directory) const

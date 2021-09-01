@@ -100,6 +100,11 @@ public:
 /// The context supports the following options:
 ///
 /// Options for module loading
+/// - \c std::string "warning": Silence compiler warnings or promote them to errors.
+///   Format: options = (option ',')* option. option = 'err' | number '=' ('on' | 'off' | err').
+///   A single 'err' promotes all compiler warnings to errors.
+///   Otherwise, warning number is either enabled ('on'), disabled ('off'), or promoted
+///   to an error ('err').
 /// - #mi::Sint32 "optimization_level": Sets the optimization level. Possible values: 0 (all
 ///   optimizations are disabled), 1 (only intra procedural optimizations are enabled), 2 (intra
 ///   and inter procedural optimizations are enabled). Default: 2.

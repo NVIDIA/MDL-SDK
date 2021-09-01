@@ -57,6 +57,7 @@ public:
     /// Calls clear() first. The texture is copied. The image becomes valid afterwards.
     void create(
         IMAGE::Pixel_type pixel_type,
+        mi::Float32 gamma,
         const Texture& texture,
         bool is_cubemap = false,
         Dds_compress_fmt format = DXTC_none);
@@ -74,6 +75,7 @@ public:
     /// \param is_header_dx10[out]    Indicates whether a DX10 header is present and \p header_dx10
     ///                               is valid.
     /// \param pixel_type[out]        The pixel type (decoded from the header) is stored here.
+    /// \param gamma[out]             The gamma value (decoded form the header) is stored here.
     /// \param compress_format[out]   The compression format (dec. from the header) is stored here.
     ///                               Only valid for non-DX10 headers.
     /// \return                       \c true if the file format can be read, \c false otherwise.
@@ -83,6 +85,7 @@ public:
         Header_dx10& header_dx10,
         bool& is_header_dx10,
         IMAGE::Pixel_type& pixel_type,
+        mi::Float32& gamma,
         Dds_compress_fmt& compress_format);
 
     /// Loads a DDS image.
@@ -113,6 +116,9 @@ public:
 
     /// Returns the pixel format.
     IMAGE::Pixel_type get_pixel_type() const { return m_pixel_type; }
+
+    /// Return the gamma value.
+    mi::Float32 get_gamma() const { return m_gamma; }
 
     /// Returns Get the number of components in the image
     mi::Uint32 get_components() const { return IMAGE::get_components_per_pixel( m_pixel_type); }
@@ -152,11 +158,13 @@ private:
     /// \param reader                 The reader to load the DDS header from.
     /// \param header_dx10[out]       The DX10 header information is stored here.
     /// \param pixel_type[out]        The pixel type (decoded from the header) is stored here.
+    /// \param gamma[out]             The gamma value (decoded from the header) is stored here.
     /// \return                       \c true if the file format can be read, \c false otherwise.
     static bool load_header_dx10(
         mi::neuraylib::IReader* reader,
         Header_dx10& header_dx10,
-        IMAGE::Pixel_type& pixel_type);
+        IMAGE::Pixel_type& pixel_type,
+        mi::Float32& gamma);
 
 
     /// Returns the size of an surface with the given width and height and depth 1.
@@ -196,6 +204,9 @@ private:
 
     /// The pixel type of the pixel data.
     IMAGE::Pixel_type m_pixel_type;
+
+    /// The gamma value of the pixel data.
+    mi::Float32 m_gamma;
 
     /// The type of the texture.
     Texture_type m_texture_type;

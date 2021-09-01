@@ -11067,57 +11067,6 @@ bool NT_analysis::pre_visit(IDeclaration_annotation *anno_decl)
         visit(anno);
     }
 
-    if (m_is_stdlib) {
-        // handle standard annotations known by the compiler
-        string abs_name(m_module.get_name(), m_module.get_allocator());
-        abs_name += "::";
-        abs_name += a_def->get_sym()->get_name();
-
-        IDefinition::Semantics sema = m_compiler->get_builtin_semantic(abs_name.c_str());
-
-        if (sema != IDefinition::DS_UNKNOWN) {
-            a_def->set_semantic(sema);
-
-            switch (sema) {
-            case IDefinition::DS_SOFT_RANGE_ANNOTATION:
-            case  IDefinition::DS_HARD_RANGE_ANNOTATION:
-                {
-                    for (size_t i = 0; i < n_params; ++i) {
-                        if (!is<IType_atomic>(params[i].p_type)) {
-                            // range annotations for non-atomic types are available from MDL 1.2
-                            replace_since_version(a_def, 1, 2);
-                            break;
-                        }
-                    }
-                }
-                break;
-            case IDefinition::DS_VERSION_NUMBER_ANNOTATION:
-                // removed from MDL 1.3
-                replace_removed_version(a_def, 1, 3);
-                break;
-            case IDefinition::DS_DEPRECATED_ANNOTATION:
-            case IDefinition::DS_VERSION_ANNOTATION:
-            case IDefinition::DS_DEPENDENCY_ANNOTATION:
-                // these annotations are available from MDL 1.3
-                replace_since_version(a_def, 1, 3);
-                break;
-            case IDefinition::DS_UI_ORDER_ANNOTATION:
-            case IDefinition::DS_USAGE_ANNOTATION:
-            case IDefinition::DS_ENABLE_IF_ANNOTATION:
-            case IDefinition::DS_THUMBNAIL_ANNOTATION:
-                // these annotations are available from MDL 1.4
-                replace_since_version(a_def, 1, 4);
-                break;
-            case IDefinition::DS_ORIGIN_ANNOTATION:
-                // these annotations are available from MDL 1.5
-                replace_since_version(a_def, 1, 5);
-                break;
-            default:
-                break;
-            }
-        }
-    }
-
     // don't visit children anymore
     return false;
 }
@@ -13773,6 +13722,12 @@ static bool is_function(IDefinition const *def)
     return !is_material_type(f_type->get_return_type());
 }
 
+/// Check if the given definition is an annotation.
+static bool is_annotation(IDefinition const *def)
+{
+    return def->get_kind() == IDefinition::DK_ANNOTATION;
+}
+
 // Handle known annotations.
 Definition const *NT_analysis::handle_known_annotation(
     Definition const *def,
@@ -13895,7 +13850,7 @@ Definition const *NT_analysis::handle_known_annotation(
 
     switch (def->get_semantics()) {
     case Definition::DS_INTRINSIC_ANNOTATION:
-        if (is_function(m_annotated_def)) {
+        if (is_function(m_annotated_def) || is_annotation(m_annotated_def)) {
             // handle the intrinsic() annotation
             string abs_name(m_module.get_name(), m_module.get_allocator());
             abs_name += "::";
@@ -14424,6 +14379,10 @@ Definition const *NT_analysis::handle_known_annotation(
         break;
     case Definition::DS_ORIGIN_ANNOTATION:
         // allowed on any entity
+        break;
+    case Definition::DS_BAKING_TMM_ANNOTATION:
+    case Definition::DS_BAKING_BAKE_TO_TEXTURE_ANNOTATION:
+        // these are used by the DAG backend only
         break;
     default:
         MDL_ASSERT(!"missing handler for known annotation");

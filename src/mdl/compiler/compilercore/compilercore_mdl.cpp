@@ -535,7 +535,8 @@ MDL::MDL(IAllocator *alloc)
             m_builder.get_allocator(),
             mdl_module_nvidia_baking, sizeof(mdl_module_nvidia_baking), ""));
         Module *baking_mod = load_module(
-            NULL, ctx.get(), "::nvidia::baking", s.get(), Module::MF_IS_OWNED);
+            NULL, ctx.get(), "::nvidia::baking", s.get(),
+            Module::MF_IS_STDLIB | Module::MF_IS_OWNED);
 
         // takes ownership
         register_builtin_module(baking_mod);

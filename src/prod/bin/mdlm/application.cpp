@@ -33,6 +33,7 @@
 #include "neuray_factory.h"
 #include "options.h"
 #include "search_path.h"
+#include <cassert>
 #include <fstream>
 #include <iterator>
 #include <iostream>
@@ -78,36 +79,67 @@ namespace mdlm
     }
 }
 
+/// Add System path path to the input list
+void add_system_path(IMdl_configuration* mdl_config, vector<string>& directories)
+{
+    assert(mdl_config);
+    for (mi::Size i(0); i < mdl_config->get_mdl_system_paths_length(); i++)
+    {
+        std::string dir(mdl_config->get_mdl_system_path(i));
+        if (Util::File(dir).exist())
+        {
+            directories.push_back(dir);
+        }
+    }
+}
+
+void add_user_path(IMdl_configuration* mdl_config, vector<string>& directories)
+{
+    assert(mdl_config);
+    for (mi::Size i(0); i < mdl_config->get_mdl_user_paths_length(); i++)
+    {
+        std::string dir(mdl_config->get_mdl_user_path(i));
+        if (Util::File(dir).exist())
+        {
+            directories.push_back(dir);
+        }
+    }
+}
+
 /// Configure the MDL SDK with module search paths and load necessary plugins.
 void configuration(INeuray* neuray, ILogger* logger, Application::Options* options)
 {
     mi::base::Handle<IMdl_configuration> mdl_config(neuray->get_api_component<IMdl_configuration>());
     mdl_config->set_logger(logger);
 
-    // Start removing the current directory "." from the list of search paths
-    mdl_config->remove_mdl_path(".");
-
     // Gather list of path to add to MDL search path
     vector<string> directories;
     if (!options->m_nostdpath)
     {
         // Add standard path
-        string dir = Util::get_mdl_system_directory();
-        if (Util::File(dir).exist())
-        {
-            directories.push_back(dir);
-        }
-        dir = Util::get_mdl_user_directory();
-        if (Util::File(dir).exist())
-        {
-            directories.push_back(dir);
-        }
+        add_system_path(mdl_config.get(), directories);
+        add_user_path(mdl_config.get(), directories);
     }
 
     // Add command line paths
     for (size_t i = 0; i < options->m_paths.size(); ++i)
     {
-        directories.push_back(options->m_paths[i]);
+        std::string path(options->m_paths[i]);
+        if (path == "SYSTEM")
+        {
+            add_system_path(mdl_config.get(), directories);
+        }
+        else if (path == "USER")
+        {
+            add_user_path(mdl_config.get(), directories);
+        }
+        else
+        {
+            if (Util::File(path).exist())
+            {
+                directories.push_back(path);
+            }
+        }
     }
     Util::remove_duplicate_directories(directories);
 
@@ -116,7 +148,6 @@ void configuration(INeuray* neuray, ILogger* logger, Application::Options* optio
         it++)
     {
         string path(* it);
-        Util::File::convert_symbolic_directory(path);
         check_success3(
               mdl_config->add_mdl_path(path.c_str()) == 0
             , Errors::ERR_MODULE_PATH_FAILURE

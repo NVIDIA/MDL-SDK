@@ -73,6 +73,7 @@ enum Attr_resv_id {
     MATTE_CONNECT_TO_ENV,       ///< connect matte to environment or backplate instead
     MATTE_CONNECT_FROM_CAM,     ///< connect matte from camera or use real incoming ray
     BACKPLATE_MESH,             ///< is the object a 3D-environment/backplate mesh
+    NOT_PICKABLE,               ///< "invisible" to pick rays
     N_FLAGS,			///< number of reserved flags, <= 31
     N_MAXFLAGS		= 32,	///< can't have more than 32 reserved flags
 

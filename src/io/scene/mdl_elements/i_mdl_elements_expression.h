@@ -355,7 +355,9 @@ public:
     virtual IExpression_list* create_expression_list() const = 0;
 
     virtual IAnnotation* create_annotation(
-        const char* name, const IExpression_list* arguments) const = 0;
+        DB::Transaction* transaction,
+        const char* name,
+        const IExpression_list* arguments) const = 0;
 
     virtual IAnnotation_definition* create_annotation_definition(
         const char* name,

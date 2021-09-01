@@ -480,6 +480,7 @@ public:
 private:
     /// Helper structure collecting information about expression lambdas and their dependencies.
     struct Lambda_info {
+        typedef ptr_hash_set<DAG_node const>::Type Node_set;
         typedef set<unsigned>::Type Index_set;
 
         /// Local cost of the lambda function without costs of dependencies.
@@ -541,14 +542,30 @@ private:
         ///
         /// \param expr   The expression to walk.
         /// \param infos  The lambda information list.
-        void calc_dependencies(DAG_node const *expr, mi::mdl::vector<Lambda_info>::Type &infos) {
+        void calc_dependencies(DAG_node const* expr, mi::mdl::vector<Lambda_info>::Type& infos) {
+            Node_set visited_nodes(
+                0, Node_set::hasher(), Node_set::key_equal(), infos.get_allocator());
+            do_calc_dependencies(expr, infos, visited_nodes);
+        }
+
+    private:
+        /// Calculate the dependencies based on the given expression.
+        void do_calc_dependencies(
+                DAG_node const *expr,
+                mi::mdl::vector<Lambda_info>::Type &infos,
+                Node_set &visited_nodes)
+        {
+            if (visited_nodes.count(expr))
+                return;
+            visited_nodes.insert(expr);
+
             switch (expr->get_kind()) {
             case DAG_node::EK_TEMPORARY:
                 {
                     // should not happen, but we can handle it
                     DAG_temporary const *t = mi::mdl::cast<DAG_temporary>(expr);
                     expr = t->get_expr();
-                    calc_dependencies(expr, infos);
+                    do_calc_dependencies(expr, infos, visited_nodes);
                     return;
                 }
             case DAG_node::EK_CONSTANT:
@@ -565,7 +582,7 @@ private:
 
                     int n_args = call->get_argument_count();
                     for (int i = 0; i < n_args; ++i) {
-                        calc_dependencies(call->get_argument(i), infos);
+                        do_calc_dependencies(call->get_argument(i), infos, visited_nodes);
                     }
                     return;
                 }
@@ -1370,6 +1387,23 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
                     m_captured_args_type != NULL ? next_arg_block_index : ~0));
 
             Function_context context(alloc, *this, inst, func, flags);
+
+            // allocate the lambda results struct and make it available in the context
+            llvm::Value* lambda_results = NULL;
+            if (target_supports_lambda_results_parameter()) {
+                lambda_results = context.create_local(
+                    m_lambda_results_struct_type, "lambda_results");
+                context.override_lambda_results(
+                    context->CreateBitCast(lambda_results, m_type_mapper.get_void_ptr_type()));
+            }
+
+            // calculate all required non-constant expression lambdas
+            for (size_t i = 0, n = lambda_result_exprs_others.size(); i < n; ++i) {
+                size_t expr_index = lambda_result_exprs_others[i];
+                size_t result_index = m_lambda_result_indices[expr_index];
+
+                generate_expr_lambda_call(context, expr_index, lambda_results, result_index);
+            }
 
             // translate function body
             Expression_result res = translate_node(context, lambda.get_body(), resolver);

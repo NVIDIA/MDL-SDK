@@ -682,7 +682,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         anno_expr_list->add_expression("name", anno_expr.get());
 
         mi::base::Handle<MDL::IAnnotation> anno(ef.create_annotation(
-            "::anno::origin(string)", anno_expr_list.get()));
+            db_transaction, "::anno::origin(string)", anno_expr_list.get()));
         new_annotations_int->add_annotation(anno.get());
     }
 
@@ -709,7 +709,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         anno_expr_list->add_expression("name", anno_expr.get());
 
         mi::base::Handle<MDL::IAnnotation> anno(ef.create_annotation(
-            "::anno::thumbnail(string)", anno_expr_list.get()));
+            db_transaction, "::anno::thumbnail(string)", anno_expr_list.get()));
         new_annotations_int->add_annotation(anno.get());
     }
 

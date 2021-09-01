@@ -435,6 +435,8 @@ template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial
 template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, Sint64 value);
 template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, float value);
 template <typename S, typename = enable_if_serializer_t<S>> void write(S* serial, double value);
+template <typename T, typename S, typename = enable_if_serializer_t<S>, typename = std::enable_if_t<std::is_enum_v<T>>>
+void write(S* serial, T value);
 
 /// These functions offer a default implementation build atop the above functions.
 void write(Serializer* serial, const DB::Tag& value);
@@ -470,6 +472,8 @@ template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Sint
 template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, Sint64* value_pointer);
 template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, float* value_pointer);
 template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, double* value_pointer);
+template <typename T, typename D, typename = enable_if_deserializer_t<D>, typename = std::enable_if_t<std::is_enum_v<T>>>
+void read(D*, T* enum_ptr);
 
 /// These functions offer a default implementation build atop the above functions.
 void read(Deserializer* deser, DB::Tag* value_pointer);

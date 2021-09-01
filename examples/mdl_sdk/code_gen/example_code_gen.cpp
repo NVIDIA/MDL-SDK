@@ -66,6 +66,7 @@ public:
     bool m_ignore_noinline = true;
     std::string m_backend = "hlsl";
     bool m_use_derivatives = false;
+    std::string m_num_texture_results = "16";
 
     /// MDL qualified material name to generate code for.
     std::string m_qualified_material_name = "::nvidia::sdk_examples::tutorials::example_material";
@@ -211,7 +212,7 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         // back-end specific options
         backend->set_option("texture_runtime_with_derivs",
             options.m_use_derivatives ? "on" : "off");
-        backend->set_option("num_texture_results", "16");
+        backend->set_option("num_texture_results", options.m_num_texture_results.c_str());
         backend->set_option("num_texture_spaces", "4");
 
         // ----------------------------------------------------------------------------------------
@@ -403,6 +404,7 @@ options:
                                 Defaults to a set of expression paths.
   -d|--derivatives              Generate code with derivative support.
   -i|--instance_compilation     Use instance compilation instead of class compilation.
+  -t|--text_results <num>       Number of float4 texture result slots in the state. Default: 16
   --ft                          Fold ternary operators when used on distribution functions.
   --fb                          Fold boolean parameters.
   --fe                          Fold enum parameters.
@@ -481,6 +483,15 @@ bool Options::parse(int argc, char* argv[])
             m_descs.push_back(TD(
                 m_desc_strs[m_desc_strs.size() - 2].get()->c_str(),
                 m_desc_strs.back().get()->c_str()));
+        }
+        else if (arg == "-t" || arg == "--text_results")
+        {
+            if (i == argc - 1)
+            {
+                std::cerr << "error: Argument for -t|--text_results missing." << std::endl;
+                return false;
+            }
+            m_num_texture_results = argv[++i];
         }
         else
         {
