@@ -329,7 +329,7 @@ BSDF_INLINE float complex_ior_fresnel(
     const float t0 = eta2 - eta_k2 - sintheta2;
     const float a2plusb2 = math::sqrt(t0 * t0 + 4.0f * eta2 * eta_k2);
     const float t1 = a2plusb2 + costheta2;
-    const float a = math::sqrt(0.5f * (a2plusb2 + t0));
+    const float a = math::sqrt(math::max(0.5f * (a2plusb2 + t0), 0.f));
     const float t2 = 2.0f * a * costheta;
     const float rs = (t1 - t2) / (t1 + t2);
 
