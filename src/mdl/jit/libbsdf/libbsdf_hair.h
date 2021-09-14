@@ -248,7 +248,9 @@ BSDF_API void chiang_hair_bsdf_sample(
     // all the clamping below avoids issues with total internal reflection (eta < 1)
     // (fresnel will be 1.0 and angles computed here will have no actual effect in computations)
     const float cos_theta_t = math::sqrt(math::max(1.0f - sin_theta_t * sin_theta_t, 0.0f));
-    const float eta_p = math::sqrt(math::max(eta * eta - sin_theta_o * sin_theta_o, 0.0f)) / cos_theta_o;
+          float eta_p = math::sqrt(math::max(eta * eta - sin_theta_o * sin_theta_o, 0.0f)) / cos_theta_o;
+    if (!math::isfinite(eta_p))
+        eta_p = 0.0f;
     const float sin_gamma_t = math::max(math::min(sin_gamma_o / eta_p, 1.0f), -1.0f);
     const float cos_gamma_t = math::sqrt(1.0f - sin_gamma_t * sin_gamma_t);
     const float gamma_t = math::asin(sin_gamma_t);
@@ -351,7 +353,7 @@ BSDF_API void chiang_hair_bsdf_sample(
         const float sin_theta = math::sqrt(math::max(1.0f - cos_theta * cos_theta, 0.0f));
         const float cos_phi = math::cos(float(2.0 * M_PI) * xi_z);
         sin_theta_i = -cos_theta * sin_theta_o + sin_theta * cos_phi * cos_theta_o;
-        cos_theta_i = math::sqrt(1.0f - sin_theta_i * sin_theta_i);
+        cos_theta_i = math::sqrt(math::max(1.0f - sin_theta_i * sin_theta_i, 0.0f));
         
         {
             float sti, cti;
