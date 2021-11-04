@@ -1012,6 +1012,9 @@ BSDF_INLINE float3 thin_film_factor(
     const float2 material_ior,
     const float kh)
 {
+    if (coating_thickness <= 0.0f)
+        return make_float3(1.0f, 1.0f, 1.0f);
+
     float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
 
     //!! using low res color matching functions here
@@ -1053,7 +1056,7 @@ BSDF_INLINE float3 thin_film_factor(
                 const float d_x = math::abs(lambda - 700.0f);
                 const float d_y = math::abs(lambda - 546.1f);
                 const float d_z = math::abs(lambda - 435.8f);
-                const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.x);
+                const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.z);
 
                 if (coating_ior_next != coating_ior) {
                     coating_ior = coating_ior_next;
@@ -1071,13 +1074,9 @@ BSDF_INLINE float3 thin_film_factor(
         const float beta_s = fresnel_ts(material_ior.x, coating_ior, kh, cos1) * fresnel_ts(coating_ior, material_ior.y, cos1, cos2);
         const float beta_p = fresnel_tp(material_ior.x, coating_ior, kh, cos1) * fresnel_tp(coating_ior, material_ior.y, cos1, cos2);
 
-        const float d10 = coating_ior > material_ior.x ? 0.0f : (float)M_PI;
-        const float d12 = coating_ior > material_ior.y ? 0.0f : (float)M_PI;
-        const float delta = d10 + d12;
-
         while (i < 16) {
 
-            const float phi = (float)(4.0 * M_PI) * coating_ior * coating_thickness * cos1 / lambda + delta;
+            const float phi = (float)(4.0 * M_PI) * coating_ior * coating_thickness * cos1 / lambda;
             const float cosphi = math::cos(phi);
         
             const float ts = beta_s * beta_s / ((alpha_s * alpha_s) - 2.0f * alpha_s * cosphi + 1.0f);
@@ -1093,7 +1092,7 @@ BSDF_INLINE float3 thin_film_factor(
             const float d_x = math::abs(lambda - 700.0f);
             const float d_y = math::abs(lambda - 546.1f);
             const float d_z = math::abs(lambda - 435.8f);
-            const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.x);
+            const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.z);
 
             if (coating_ior_next != coating_ior) {
                 coating_ior = coating_ior_next;

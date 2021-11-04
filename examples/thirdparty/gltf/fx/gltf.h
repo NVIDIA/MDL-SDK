@@ -13,6 +13,7 @@
 #include <system_error>
 #include <unordered_map>
 #include <vector>
+#include <limits>
 
 #include <nlohmann/json.hpp>
 
@@ -329,8 +330,11 @@ namespace gltf
         constexpr std::array<float, 4> IdentityVec4{ 1, 1, 1, 1 };
         constexpr std::array<float, 3> IdentityVec3{ 1, 1, 1 };
         constexpr std::array<float, 3> NullVec3{ 0, 0, 0 };
+        constexpr std::array<float, 2> IdentityVec2{ 1, 1 };
+        constexpr std::array<float, 2> NullVec2{ 0, 0 };
         constexpr float IdentityScalar = 1;
         constexpr float FloatSentinel = 10000;
+        constexpr float FloatMaxValue = std::numeric_limits<float>::max();
 
         constexpr bool AccessorNormalized = false;
 
@@ -595,10 +599,21 @@ namespace gltf
             Blend
         };
 
+        struct KHR_TextureTransform
+        {
+            std::array<float, 2> offset = { defaults::NullVec2 };
+            float rotation{ 0.0f };
+            std::array<float, 2> scale = { defaults::IdentityVec2 };
+            int32_t texCoord{ -1 };
+
+            nlohmann::json extensionsAndExtras{};
+        };
+
         struct Texture
         {
             int32_t index{ -1 };
-            int32_t texCoord{};
+            int32_t texCoord{ 0 };
+            KHR_TextureTransform transform{};
 
             nlohmann::json extensionsAndExtras{};
 
@@ -648,11 +663,26 @@ namespace gltf
 
             bool empty() const
             {
-                return diffuseTexture.empty() && 
+                return diffuseTexture.empty() &&
                        specularGlossinessTexture.empty() &&
-                       specularFactor == defaults::IdentityVec3 && 
-                       glossinessFactor == 1.0f && 
+                       specularFactor == defaults::IdentityVec3 &&
+                       glossinessFactor == 1.0f &&
                        diffuseFactor == defaults::IdentityVec4;
+            }
+        };
+
+        struct KHR_MaterialsTransmission
+        {
+            float transmissionFactor = 0.0f;
+            Texture transmissionTexture;
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return
+                    transmissionFactor == 0.0f &&
+                    transmissionTexture.empty();
             }
         };
 
@@ -669,13 +699,79 @@ namespace gltf
 
             bool empty() const
             {
-                return 
+                return
                     clearcoatFactor == 0.0f &&
                     clearcoatTexture.empty() &&
                     clearcoatRoughnessFactor == 0.0f &&
                     clearcoatRoughnessTexture.empty() &&
-                    clearcoatRoughnessTexture.empty() &&
                     clearcoatNormalTexture.empty();
+            }
+        };
+
+        struct KHR_MaterialsSheen
+        {
+            std::array<float, 3> sheenColorFactor = { defaults::NullVec3 };
+            Texture sheenColorTexture;
+            float sheenRoughnessFactor = 0.0f;
+            Texture sheenRoughnessTexture;
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return
+                    sheenColorFactor == defaults::NullVec3 &&
+                    sheenColorTexture.empty() &&
+                    sheenRoughnessFactor == 0.0f &&
+                    sheenRoughnessTexture.empty();
+            }
+        };
+
+        struct KHR_MaterialsSpecular
+        {
+            float specularFactor = 1.0f;
+            Texture specularTexture;
+            std::array<float, 3> specularColorFactor = { defaults::IdentityVec3 };
+            Texture specularColorTexture;
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return
+                    specularFactor == 1.0f &&
+                    specularTexture.empty() &&
+                    specularColorFactor == defaults::IdentityVec3 &&
+                    specularColorTexture.empty();
+            }
+        };
+
+        struct KHR_MaterialsIOR
+        {
+            float ior = 1.5f;
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return ior == 1.5f;
+            }
+        };
+
+        struct KHR_MaterialsVolume
+        {
+            float thicknessFactor = 0.0f;
+            float attenuationDistance = defaults::FloatMaxValue;
+            std::array<float, 3> attenuationColor = { defaults::IdentityVec3 };
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return
+                    thicknessFactor == 0.0f &&
+                    attenuationDistance == defaults::FloatMaxValue &&
+                    attenuationColor == defaults::IdentityVec3;
             }
         };
 
@@ -688,7 +784,12 @@ namespace gltf
         OcclusionTexture occlusionTexture;
         PBRMetallicRoughness pbrMetallicRoughness;
         KHR_PBRSpecularGlossiness pbrSpecularGlossiness;
+        KHR_MaterialsTransmission materialsTransmission;
         KHR_MaterialsClearcoat materialsClearcoat;
+        KHR_MaterialsSheen materialsSheen;
+        KHR_MaterialsSpecular materialsSpecular;
+        KHR_MaterialsIOR materialsIOR;
+        KHR_MaterialsVolume materialsVolume;
 
         Texture emissiveTexture;
         std::array<float, 3> emissiveFactor = { defaults::NullVec3 };
@@ -783,14 +884,14 @@ namespace gltf
         MagFilter magFilter{ MagFilter::None };
         MinFilter minFilter{ MinFilter::None };
 
-        WrappingMode wrapS{ WrappingMode::Repeat };
-        WrappingMode wrapT{ WrappingMode::Repeat };
+        WrappingMode wrap_s{ WrappingMode::Repeat };
+        WrappingMode wrap_t{ WrappingMode::Repeat };
 
         nlohmann::json extensionsAndExtras{};
 
         bool empty() const noexcept
         {
-            return name.empty() && magFilter == MagFilter::None && minFilter == MinFilter::None && wrapS == WrappingMode::Repeat && wrapT == WrappingMode::Repeat && extensionsAndExtras.empty();
+            return name.empty() && magFilter == MagFilter::None && minFilter == MinFilter::None && wrap_s == WrappingMode::Repeat && wrap_t == WrappingMode::Repeat && extensionsAndExtras.empty();
         }
     };
 
@@ -1121,6 +1222,13 @@ namespace gltf
         detail::ReadRequiredField("index", json, materialTexture.index);
         detail::ReadOptionalField("texCoord", json, materialTexture.texCoord);
 
+
+        const nlohmann::json::const_iterator iterExtensions = json.find("extensions");
+        if (iterExtensions != json.end())
+        {
+            detail::ReadOptionalField("KHR_texture_transform", *iterExtensions, materialTexture.transform);
+        }
+
         detail::ReadExtensionsAndExtras(json, materialTexture.extensionsAndExtras);
     }
 
@@ -1162,6 +1270,23 @@ namespace gltf
         detail::ReadExtensionsAndExtras(json, pbrSpecularGlossiness.extensionsAndExtras);
     }
 
+    inline void from_json(nlohmann::json const& json, Material::KHR_TextureTransform& textureTransform)
+    {
+        detail::ReadOptionalField("offset", json, textureTransform.offset);
+        detail::ReadOptionalField("rotation", json, textureTransform.rotation);
+        detail::ReadOptionalField("scale", json, textureTransform.scale);
+        detail::ReadOptionalField("texCoord", json, textureTransform.texCoord);
+
+        detail::ReadExtensionsAndExtras(json, textureTransform.extensionsAndExtras);
+    }
+
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsTransmission& materialsTransmission)
+    {
+        detail::ReadOptionalField("transmissionFactor", json, materialsTransmission.transmissionFactor);
+        detail::ReadOptionalField("transmissionTexture", json, materialsTransmission.transmissionTexture);
+
+        detail::ReadExtensionsAndExtras(json, materialsTransmission.extensionsAndExtras);
+    }
 
     inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsClearcoat& materialsClearcoat)
     {
@@ -1172,6 +1297,42 @@ namespace gltf
         detail::ReadOptionalField("clearcoatNormalTexture", json, materialsClearcoat.clearcoatNormalTexture);
 
         detail::ReadExtensionsAndExtras(json, materialsClearcoat.extensionsAndExtras);
+    }
+
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsSheen& materialsSheen)
+    {
+        detail::ReadOptionalField("sheenColorFactor", json, materialsSheen.sheenColorFactor);
+        detail::ReadOptionalField("sheenColorTexture", json, materialsSheen.sheenColorTexture);
+        detail::ReadOptionalField("sheenRoughnessFactor", json, materialsSheen.sheenRoughnessFactor);
+        detail::ReadOptionalField("sheenRoughnessTexture", json, materialsSheen.sheenRoughnessTexture);
+
+        detail::ReadExtensionsAndExtras(json, materialsSheen.extensionsAndExtras);
+    }
+
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsSpecular& materialsSpecular)
+    {
+        detail::ReadOptionalField("specularFactor", json, materialsSpecular.specularFactor);
+        detail::ReadOptionalField("specularTexture", json, materialsSpecular.specularTexture);
+        detail::ReadOptionalField("specularColorFactor", json, materialsSpecular.specularColorFactor);
+        detail::ReadOptionalField("specularColorTexture", json, materialsSpecular.specularColorTexture);
+
+        detail::ReadExtensionsAndExtras(json, materialsSpecular.extensionsAndExtras);
+    }
+
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsIOR& materialsIOR)
+    {
+        detail::ReadOptionalField("ior", json, materialsIOR.ior);
+
+        detail::ReadExtensionsAndExtras(json, materialsIOR.extensionsAndExtras);
+    }
+
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsVolume& materialsVolume)
+    {
+        detail::ReadOptionalField("thicknessFactor", json, materialsVolume.thicknessFactor);
+        detail::ReadOptionalField("attenuationDistance", json, materialsVolume.attenuationDistance);
+        detail::ReadOptionalField("attenuationColor", json, materialsVolume.attenuationColor);
+
+        detail::ReadExtensionsAndExtras(json, materialsVolume.extensionsAndExtras);
     }
 
     inline void from_json(nlohmann::json const & json, Material & material)
@@ -1190,7 +1351,12 @@ namespace gltf
         if (iterExtensions != json.end())
         {
             detail::ReadOptionalField("KHR_materials_pbrSpecularGlossiness", *iterExtensions, material.pbrSpecularGlossiness);
+            detail::ReadOptionalField("KHR_materials_transmission", *iterExtensions, material.materialsTransmission);
             detail::ReadOptionalField("KHR_materials_clearcoat", *iterExtensions, material.materialsClearcoat);
+            detail::ReadOptionalField("KHR_materials_sheen", *iterExtensions, material.materialsSheen);
+            detail::ReadOptionalField("KHR_materials_specular", *iterExtensions, material.materialsSpecular);
+            detail::ReadOptionalField("KHR_materials_ior", *iterExtensions, material.materialsIOR);
+            detail::ReadOptionalField("KHR_materials_volume", *iterExtensions, material.materialsVolume);
         }
 
         detail::ReadExtensionsAndExtras(json, material.extensionsAndExtras);
@@ -1238,8 +1404,8 @@ namespace gltf
         detail::ReadOptionalField("magFilter", json, sampler.magFilter);
         detail::ReadOptionalField("minFilter", json, sampler.minFilter);
         detail::ReadOptionalField("name", json, sampler.name);
-        detail::ReadOptionalField("wrapS", json, sampler.wrapS);
-        detail::ReadOptionalField("wrapT", json, sampler.wrapT);
+        detail::ReadOptionalField("wrapS", json, sampler.wrap_s);
+        detail::ReadOptionalField("wrapT", json, sampler.wrap_t);
 
         detail::ReadExtensionsAndExtras(json, sampler.extensionsAndExtras);
     }
@@ -1608,8 +1774,8 @@ namespace gltf
             detail::WriteField("name", json, sampler.name);
             detail::WriteField("magFilter", json, sampler.magFilter, Sampler::MagFilter::None);
             detail::WriteField("minFilter", json, sampler.minFilter, Sampler::MinFilter::None);
-            detail::WriteField("wrapS", json, sampler.wrapS, Sampler::WrappingMode::Repeat);
-            detail::WriteField("wrapT", json, sampler.wrapT, Sampler::WrappingMode::Repeat);
+            detail::WriteField("wrapS", json, sampler.wrap_s, Sampler::WrappingMode::Repeat);
+            detail::WriteField("wrapT", json, sampler.wrap_t, Sampler::WrappingMode::Repeat);
             detail::WriteExtensions(json, sampler.extensionsAndExtras);
         }
         else

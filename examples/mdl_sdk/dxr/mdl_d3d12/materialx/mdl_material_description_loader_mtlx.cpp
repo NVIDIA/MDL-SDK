@@ -28,10 +28,20 @@
 
 #include "mdl_material_description_loader_mtlx.h"
 #include "mdl_generator.h"
+#include "../base_application.h"
 #include <algorithm>
 
 namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
 {
+
+Mdl_material_description_loader_mtlx::Mdl_material_description_loader_mtlx(
+    const Base_options& options)
+    : m_paths(options.mtlx_paths)
+    , m_libraries(options.mtlx_libraries)
+{
+}
+
+// ------------------------------------------------------------------------------------------------
 
 bool Mdl_material_description_loader_mtlx::match_gltf_name(const std::string& gltf_name) const
 {
@@ -47,27 +57,20 @@ std::string Mdl_material_description_loader_mtlx::generate_mdl_source_code(
     mdl_d3d12::materialx::Mdl_generator mtlx2mdl;
     mdl_d3d12::materialx::Mdl_generator_result result;
 
-    // currently dependencies are added manually
-    // until a discover mechanism is implemented
-    std::string mx_repo = mi::examples::io::get_executable_folder() + "/autodesk_materialx";
-    if (mx_repo.empty())
-    {
-        log_error("MATERIALX_REPOSITORY environment variable is not set. "
-            "Currently static dependencies can not be resolved. "
-            "Continuing with gltf material parameters.", SRC);
-        return "";
-    }
-
-    bool valid = true;
-    valid &= mtlx2mdl.add_dependency(mx_repo + "/libraries/bxdf/standard_surface.mtlx");
-    valid &= mtlx2mdl.add_dependency(mx_repo + "/libraries/bxdf/usd_preview_surface.mtlx");
-
     // set the material file to load
     std::string mtlx_material_file = mi::examples::io::is_absolute_path(gltf_name)
         ? gltf_name
         : scene_directory + "/" + gltf_name;
 
+    // allow to configure MaterialX search and library paths by the user
+    for (auto& p : m_paths)
+        mtlx2mdl.add_path(p);
+
+    for (auto& l : m_libraries)
+        mtlx2mdl.add_library(l);
+
     // set the materials main source file
+    bool valid = true;
     valid &= mtlx2mdl.set_source(mtlx_material_file);
 
     // generate the mdl code
@@ -83,7 +86,7 @@ std::string Mdl_material_description_loader_mtlx::generate_mdl_source_code(
 
     if (!valid)
     {
-        log_error("Generated MDL from materialX: " + gltf_name, SRC);
+        log_error("Generated MDL from materialX is not valid: " + gltf_name, SRC);
         return "";
     }
 

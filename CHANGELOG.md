@@ -1,7 +1,47 @@
 Change Log
 ==========
-MDL SDK 2021.0.1 (344800.4174): 17 Aug 2021
+MDL SDK 2021.0.2 (344800.7839): 07 Oct 2021
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2021.0.2 (344800.7839) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL SDK examples
+
+    - Example DXR
+        - Added support for various glTF extensions to the example renderer and the MDL support
+          module. The new supported extensions are: `KHR_texture_transform`,
+          `KHR_materials_transmission`, `KHR_materials_sheen`, `KHR_materials_specular`,
+          `KHR_materials_ior`, and `KHR_materials_volume`.
+        - Added support for `state::animation_time()` when the animation mode is enabled in the
+          renderer settings.
+        - Added support for volume attenuation to the renderer.
+        - Update MaterialX dependency to version 1.38.1.
+
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+
+    - Fixed incorrect BSDF evaluation for `df::sheen_bsdf` with a transmitting `"multiscatter"`
+      BSDF parameter.
+    - Fixed `df::thin_film` implementation for the case material IOR < thin film IOR
+      (libbsdf).
+    - Creation of compiled materials fails now (instead of crashing) if some internal error
+      condition is detected.
+
+- MDL SDK examples
+
+    - Example DXR
+        - Fixed the UV coordinate transformations to match the glTF specification. Now the
+          V-coordinate is simply flipped by applying v = 1.0f - v to improve UDIM support.
+        - Metallic-roughness texture lookups are fixed and will now be handled strict to the glTF
+          specification.
+
+
+MDL SDK 2021.0.1 (344800.4174): 17 Aug 2021
+-------------------------------------------
 
 ABI compatible with the MDL SDK 2021.0.1 (344800.4174) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))

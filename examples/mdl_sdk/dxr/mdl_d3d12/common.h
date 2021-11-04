@@ -66,6 +66,7 @@
 #include <functional>
 #include <mutex>
 #include <atomic>
+#include <limits>
 
 #include "utils.h"
 

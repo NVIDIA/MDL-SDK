@@ -145,6 +145,9 @@ Descriptor_heap_handle Descriptor_heap::reserve_views(size_t count)
 
     // try to reuse a free entry of this size or larger
     auto it = m_unused_entries_by_size.lower_bound(count);
+    while (it != m_unused_entries_by_size.end() && it->second.empty())
+        it++;
+
     if (it != m_unused_entries_by_size.end() && !it->second.empty())
     {
         size_t index = it->second.top();

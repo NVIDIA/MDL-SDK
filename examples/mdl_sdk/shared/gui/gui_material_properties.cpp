@@ -314,6 +314,7 @@ public:
         , m_name(std::string(name))
         , m_display_name("")
         , m_enable_if_enabled(true)
+        , m_light_weight_parameter(false)
         , m_parameters()
         , m_parameters_to_index()
         , m_parent_call(parenting_call)
@@ -340,7 +341,8 @@ protected:
     /// Processes common parameter data, mainly annotations.
     /// Deriving class are extending this functionality.
     void initialize(
-        const mi::neuraylib::IAnnotation_block* annos)
+        const mi::neuraylib::IAnnotation_block* annos,
+        const Argument_block_field_info* block_info)
     {
         // read annotations that are type independent
         if (annos)
@@ -447,6 +449,88 @@ protected:
                 m_ui_order = anno_value;
             }
         }
+
+        m_light_weight_parameter = block_info != nullptr;
+        m_tooltip = "";
+        if (!m_description.empty())
+            m_tooltip += "Description\n" + m_description;
+
+        if (!m_usages.empty())
+        {
+            m_tooltip += std::string(m_tooltip.empty() ? "" : "\n\n") + "Usage";
+            for (auto& u : m_usages)
+                m_tooltip += "\n" + u;
+        }
+
+        if (m_marked_unused && !m_marked_unused_description.empty())
+        {
+            m_tooltip += std::string(m_tooltip.empty() ? "" : "\n\n") + "Info";
+            m_tooltip += "\nThis parameter is marked as unused. ";
+            m_tooltip += m_marked_unused_description;
+        }
+        else if (m_marked_unused && m_marked_unused_description.empty())
+        {
+            m_tooltip += std::string(m_tooltip.empty() ? "" : "\n\n") + "Info";
+            m_tooltip += "\nThis parameter is marked as unused.";
+        }
+
+        m_tooltip_warning = "";
+        if (m_marked_deprecated)
+        {
+            m_tooltip_warning += std::string(m_tooltip_warning.empty() ? "" : "\n");
+            m_tooltip_warning += "This parameter is marked as deprecated.";
+            if (m_marked_deprecated_description.empty())
+                m_tooltip_warning += " " + m_marked_deprecated_description;
+        }
+
+        m_show_tooltip = std::function<void()>([&]() {
+
+            bool enable_if_enabled = get_enabled();
+            if (m_tooltip.empty() && m_tooltip_warning.empty() &&
+                enable_if_enabled && m_light_weight_parameter)
+                return;
+
+            ImGui::BeginTooltip();
+            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+            if (!m_tooltip.empty())
+            {
+                ImGui::TextUnformatted(m_tooltip.c_str());
+                if (!m_tooltip_warning.empty() || !enable_if_enabled)
+                    ImGui::NewLine();
+            }
+            if (!enable_if_enabled)
+            {
+                ImGui::TextUnformatted(
+                    "This parameter is disabled because of other parameter values.");
+                if (!m_tooltip_warning.empty())
+                    ImGui::NewLine();
+            }
+            else if (!m_light_weight_parameter)
+            {
+                ImGui::TextUnformatted(
+                    "Changing this parameter triggers recompilation.");
+                if (!m_tooltip_warning.empty())
+                    ImGui::NewLine();
+            }
+
+            if (!m_tooltip_warning.empty())
+            {
+                ImGui::PushStyleColor(
+                    ImGuiCol_Text,
+                    mi::examples::gui::Root::Colors_ext[mi::examples::gui::ImGuiColExt_Warning]);
+                ImGui::TextUnformatted(m_tooltip_warning.c_str());
+                ImGui::PopStyleColor();
+            }
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+            });
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    const std::function<void()>& get_tooltip_function() const
+    {
+        return m_show_tooltip;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -591,6 +675,15 @@ public:
 
     // --------------------------------------------------------------------------------------------
 
+    /// If true, the parameter is a class compilation parameter that is exposed in argument block.
+    /// In that case changing the parameter will not required recompilation of the material.
+    bool get_is_light_weight() const
+    {
+        return m_light_weight_parameter;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
 protected:
     const Kind m_node_kind;
     std::string m_description;
@@ -608,6 +701,11 @@ private:
     const std::string m_name;
     std::string m_display_name;
     bool m_enable_if_enabled;
+
+    bool m_light_weight_parameter;
+    std::string m_tooltip;
+    std::string m_tooltip_warning;
+    std::function<void()> m_show_tooltip;
 
     std::vector<Parameter_node_base*> m_parameters;
     std::unordered_map<Parameter_node_base*, mi::Size> m_parameters_to_index;
@@ -669,7 +767,6 @@ public:
         Parameter_node_call* parenting_call,
         const Parameter_context* context)
         : Parameter_node_base(kind, name, parenting_call, context)
-        , m_light_weight_parameter(false)
         , m_constant_value(nullptr)
     {
     }
@@ -690,82 +787,7 @@ protected:
         const Argument_block_field_info* block_info)
     {
         m_constant_value = mi::base::make_handle_dup(value);
-        Parameter_node_base::initialize(annos);
-        m_light_weight_parameter = block_info != nullptr;
-
-        m_tooltip = "";
-        if (!m_description.empty())
-            m_tooltip += "Description\n" + m_description;
-
-        if (!m_usages.empty())
-        {
-            m_tooltip += std::string(m_tooltip.empty() ? "" : "\n\n") + "Usage";
-            for (auto& u : m_usages)
-                m_tooltip += "\n" + u;
-        }
-
-        if (m_marked_unused && !m_marked_unused_description.empty())
-        {
-            m_tooltip += std::string(m_tooltip.empty() ? "" : "\n\n") + "Info";
-            m_tooltip += "\nThis parameter is marked as unused. ";
-            m_tooltip += m_marked_unused_description;
-        }
-        else if (m_marked_unused && m_marked_unused_description.empty())
-        {
-            m_tooltip += std::string(m_tooltip.empty() ? "" : "\n\n") + "Info";
-            m_tooltip += "\nThis parameter is marked as unused.";
-        }
-
-        m_tooltip_warning = "";
-        if (m_marked_deprecated)
-        {
-            m_tooltip_warning += std::string(m_tooltip_warning.empty() ? "" : "\n");
-            m_tooltip_warning += "This parameter is marked as deprecated.";
-            if (m_marked_deprecated_description.empty())
-                m_tooltip_warning += " " + m_marked_deprecated_description;
-        }
-
-        m_show_tooltip = std::function<void()>([&]() {
-
-            bool enable_if_enabled = get_enabled();
-            if (m_tooltip.empty() && m_tooltip_warning.empty() &&
-                enable_if_enabled && m_light_weight_parameter)
-                    return;
-
-            ImGui::BeginTooltip();
-            ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-            if (!m_tooltip.empty())
-            {
-                ImGui::TextUnformatted(m_tooltip.c_str());
-                if (!m_tooltip_warning.empty() || !enable_if_enabled)
-                    ImGui::NewLine();
-            }
-            if (!enable_if_enabled)
-            {
-                ImGui::TextUnformatted(
-                    "This parameter is disabled because of other parameter values.");
-                if (!m_tooltip_warning.empty())
-                    ImGui::NewLine();
-            }
-            else if (!m_light_weight_parameter)
-            {
-                ImGui::TextUnformatted(
-                    "Changing this parameter triggers recompilation.");
-                if (!m_tooltip_warning.empty())
-                    ImGui::NewLine();
-            }
-
-            if (!m_tooltip_warning.empty())
-            {
-                ImGui::PushStyleColor(
-                    ImGuiCol_Text,
-                    mi::examples::gui::Root::Colors_ext[mi::examples::gui::ImGuiColExt_Warning]);
-                ImGui::TextUnformatted(m_tooltip_warning.c_str());
-                ImGui::PopStyleColor();
-            }
-            ImGui::PopTextWrapPos();
-            ImGui::EndTooltip();
-            });
+        Parameter_node_base::initialize(annos, block_info);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -785,22 +807,7 @@ public:
 
     // --------------------------------------------------------------------------------------------
 
-    /// If true, the parameter is a class compilation parameter that is exposed in argument block.
-    /// In that case changing the parameter will not required recompilation of the material.
-    bool get_is_light_weight() const
-    {
-        return m_light_weight_parameter;
-    }
-
-    // --------------------------------------------------------------------------------------------
-
 protected:
-    const std::function<void()>& get_tooltip_function() const
-    {
-        return m_show_tooltip;
-    }
-
-    // --------------------------------------------------------------------------------------------
 
     bool get_unused() const
     {
@@ -811,10 +818,6 @@ protected:
     // --------------------------------------------------------------------------------------------
 
 private:
-    bool m_light_weight_parameter;
-    std::string m_tooltip;
-    std::string m_tooltip_warning;
-    std::function<void()> m_show_tooltip;
     mi::base::Handle<mi::neuraylib::IValue> m_constant_value;
 };
 
@@ -842,9 +845,12 @@ public:
     // show the UI control for this parameter, which is a button to navigate down the hierarchy.
     bool show()
     {
-        return Control::button(
-            get_name(), m_button_text,
-            "Show options of child expressions.", Control::Flags::None);
+        bool pressed = false;
+        ImGui::PushID(this);
+        pressed = Control::button(
+            get_name(), m_button_text, get_tooltip_function(), Control::Flags::None);
+        ImGui::PopID();
+        return pressed;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -886,7 +892,7 @@ public:
         const Argument_block_field_info* block_info)
     {
         m_compound_value = mi::base::make_handle_dup(value);
-        Parameter_node_base::initialize(annos);
+        Parameter_node_base::initialize(annos, block_info);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1679,7 +1685,7 @@ public:
 
     void initialize(const mi::neuraylib::IAnnotation_block* annos, const char* db_name)
     {
-        Parameter_node_base::initialize(annos);
+        Parameter_node_base::initialize(annos, nullptr);
         m_db_name = db_name;
     }
 
@@ -2362,10 +2368,10 @@ Section_material::IParameter_node* Section_material::create(
                 params->get_expression(arg_name));
 
             mi::base::Handle<const mi::neuraylib::IExpression> param_default(
-                param_defaults->get_expression(name));
+                param_defaults->get_expression(arg_name));
 
             mi::base::Handle<const mi::neuraylib::IAnnotation_block> param_anno(
-                param_annotations->get_annotation_block(name));
+                param_annotations->get_annotation_block(arg_name));
 
             std::string child_name = name_prefix + arg_name;
             Parameter_node_base* child = static_cast<Parameter_node_base*>(create(

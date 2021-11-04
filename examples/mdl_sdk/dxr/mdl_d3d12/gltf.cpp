@@ -85,7 +85,7 @@ const uint8_t* get_index_data(
         return buf.data.data() + bv.byteOffset + acc.byteOffset;
     }
 
-    assert(false || "Unsupported index format");
+    assert(false && "Unsupported index format");
     return nullptr;
 }
 
@@ -348,8 +348,8 @@ void compute_tangent_frame(
 
             float s1 = texcoord_b.x - texcoord_a.x;
             float s2 = texcoord_c.x - texcoord_a.x;
-            float t1 = (1.0f - texcoord_b.y) - (1.0f - texcoord_a.y);
-            float t2 = (1.0f - texcoord_c.y) - (1.0f - texcoord_a.y);
+            float t1 = texcoord_b.y - texcoord_a.y;
+            float t2 = texcoord_c.y - texcoord_a.y;
 
             if ((s1 * s1 + t1 * t1) < 0.000001f && (s2 * s2 + t2 * t2) < 0.000001f)
                 continue;
@@ -423,14 +423,49 @@ void compute_tangent_frame(
 
 // ------------------------------------------------------------------------------------------------
 
-std::string get_texture_uri(
+IScene_loader::Material::Texture_info get_texture(
     const fx::gltf::Document& doc, const fx::gltf::Material::Texture& tex)
 {
+    IScene_loader::Material::Texture_info info;
+
     int32_t tex_index = tex.index;
-    if (tex_index < 0) return "";
+    if (tex_index < 0)
+        return info;
     int32_t src_index = doc.textures[tex_index].source;
-    if (src_index < 0) return "";
-    return doc.images[src_index].uri;
+    if (src_index < 0)
+        return info;
+
+    // use the KHR_texture_transform texCoord to override if set
+    // the spec mentions this is a note to allow baking of texture transforms as fall back
+    info.texCoord = tex.transform.texCoord != -1 ? tex.transform.texCoord : tex.texCoord;
+    info.resource_identifier = doc.images[src_index].uri;
+    info.offset = { tex.transform.offset[0], tex.transform.offset[1] };
+    info.rotation = tex.transform.rotation;
+    info.scale = { tex.transform.scale[0], tex.transform.scale[1] };
+
+    int32_t sampler_index = doc.textures[tex_index].sampler;
+    if (sampler_index != -1)
+    {
+        auto convertWrapMode = [](fx::gltf::Sampler::WrappingMode mode) {
+            switch (mode)
+            {
+            case fx::gltf::Sampler::WrappingMode::ClampToEdge:
+                return IScene_loader::Material::Texture_info::WrapMode::ClampToEdge;
+            case fx::gltf::Sampler::WrappingMode::MirroredRepeat:
+                return IScene_loader::Material::Texture_info::WrapMode::MirroredRepeat;
+            case fx::gltf::Sampler::WrappingMode::Repeat:
+                return IScene_loader::Material::Texture_info::WrapMode::Repeat;
+            }
+
+            assert(false && "Unhandled Wrapping Mode while parsing glTF");
+            return IScene_loader::Material::Texture_info::WrapMode::Repeat;
+        };
+
+        info.wrap_s = convertWrapMode(doc.samplers[sampler_index].wrap_s);
+        info.wrap_t = convertWrapMode(doc.samplers[sampler_index].wrap_t);
+    }
+
+    return info;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -559,6 +594,21 @@ std::vector<Scene_data::Value> read_scene_data(const nlohmann::json& json)
 
 // ------------------------------------------------------------------------------------------------
 
+void add_transmission(
+    const fx::gltf::Document& doc,
+    IScene_loader::Material::Model_data_materials_transmission& material_transmission,
+    const fx::gltf::Material::KHR_MaterialsTransmission& gltf_transmission)
+{
+    if (gltf_transmission.empty())
+        return;
+
+    material_transmission.transmission_factor = gltf_transmission.transmissionFactor;
+    material_transmission.transmission_texture =
+        get_texture(doc, gltf_transmission.transmissionTexture);
+}
+
+// ------------------------------------------------------------------------------------------------
+
 void add_clear_coat(
     const fx::gltf::Document& doc,
     IScene_loader::Material::Model_data_materials_clearcoat& material_clearcoat,
@@ -569,13 +619,70 @@ void add_clear_coat(
 
     material_clearcoat.clearcoat_factor = gltf_clearcoat.clearcoatFactor;
     material_clearcoat.clearcoat_texture =
-        get_texture_uri(doc, gltf_clearcoat.clearcoatTexture);
+        get_texture(doc, gltf_clearcoat.clearcoatTexture);
     material_clearcoat.clearcoat_roughness_factor = gltf_clearcoat.clearcoatRoughnessFactor;
     material_clearcoat.clearcoat_roughness_texture =
-        get_texture_uri(doc, gltf_clearcoat.clearcoatRoughnessTexture);
+        get_texture(doc, gltf_clearcoat.clearcoatRoughnessTexture);
     material_clearcoat.clearcoat_normal_texture =
-        get_texture_uri(doc, gltf_clearcoat.clearcoatNormalTexture);
+        get_texture(doc, gltf_clearcoat.clearcoatNormalTexture);
 }
+
+// ------------------------------------------------------------------------------------------------
+
+void add_specular(
+    const fx::gltf::Document& doc,
+    IScene_loader::Material::Model_data_materials_specular& material_specular,
+    const fx::gltf::Material::KHR_MaterialsSpecular& gltf_specular)
+{
+    if (gltf_specular.empty())
+        return;
+
+    material_specular.specular_factor = gltf_specular.specularFactor;
+    material_specular.specular_texture = get_texture(doc, gltf_specular.specularTexture);
+    material_specular.specular_color_factor = {
+        gltf_specular.specularColorFactor[0],
+        gltf_specular.specularColorFactor[1],
+        gltf_specular.specularColorFactor[2] };
+    material_specular.specular_color_texture = get_texture(doc, gltf_specular.specularColorTexture);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void add_sheen(
+    const fx::gltf::Document& doc,
+    IScene_loader::Material::Model_data_materials_sheen& material_sheen,
+    const fx::gltf::Material::KHR_MaterialsSheen& gltf_sheen)
+{
+    if (gltf_sheen.empty())
+        return;
+
+    material_sheen.sheen_color_factor = {
+        gltf_sheen.sheenColorFactor[0],
+        gltf_sheen.sheenColorFactor[1],
+        gltf_sheen.sheenColorFactor[2] };
+    material_sheen.sheen_color_texture = get_texture(doc, gltf_sheen.sheenColorTexture);
+    material_sheen.sheen_roughness_factor = gltf_sheen.sheenRoughnessFactor;
+    material_sheen.sheen_roughness_texture = get_texture(doc, gltf_sheen.sheenRoughnessTexture);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void add_volume(
+    const fx::gltf::Document& doc,
+    IScene_loader::Material::Model_data_materials_volume& material_volume,
+    const fx::gltf::Material::KHR_MaterialsVolume& gltf_volume)
+{
+    if (gltf_volume.empty())
+        return;
+
+    material_volume.thin_walled = gltf_volume.thicknessFactor == 0.0f;
+    material_volume.attenuation_distance = gltf_volume.attenuationDistance;
+    material_volume.attenuation_color = {
+        gltf_volume.attenuationColor[0],
+        gltf_volume.attenuationColor[1],
+        gltf_volume.attenuationColor[2] };
+}
+
 
 } // anonymous
 
@@ -701,6 +808,8 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
                 bool is_position = part.vertex_element_layout[s].semantic == "POSITION";
                 bool is_normal = part.vertex_element_layout[s].semantic == "NORMAL";
                 bool is_tangent = part.vertex_element_layout[s].semantic == "TANGENT";
+                bool is_texcoord = examples::strings::starts_with(
+                    part.vertex_element_layout[s].semantic, "TEXCOORD_");
 
                 // skip if the value is missing, can happen for e.g. for tangents
                 if (input[s].base_element == nullptr)
@@ -750,7 +859,16 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
                             *vec3 = normalize(*vec3);
                         else
                             fix_tangents = true;
-
+                    }
+                    if (is_texcoord)
+                    {
+                        // glTF importers and exporters seem to flip coords in order to
+                        // scope with the upper left origin in glTF. Especially for
+                        // coords outside of the [0,1] interval I don't see a more reasonable
+                        // approach that keeps continuity across the texture space,
+                        // especially in the context of UDIM and uv-tiles.
+                        auto vec2 = reinterpret_cast<DirectX::XMFLOAT2*>(dest_ptr);
+                        vec2->y = 1.0f - vec2->y;
                     }
                 }
             }
@@ -854,7 +972,7 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             mat.pbr_model = Material::Pbr_model::Khr_specular_glossiness;
 
             mat.khr_specular_glossiness.diffuse_texture =
-                get_texture_uri(doc, m.pbrSpecularGlossiness.diffuseTexture);
+                get_texture(doc, m.pbrSpecularGlossiness.diffuseTexture);
             mat.khr_specular_glossiness.diffuse_factor = {
                 m.pbrSpecularGlossiness.diffuseFactor[0],
                 m.pbrSpecularGlossiness.diffuseFactor[1],
@@ -862,7 +980,7 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
                 m.pbrSpecularGlossiness.diffuseFactor[3] };
 
             mat.khr_specular_glossiness.specular_glossiness_texture =
-                get_texture_uri(doc, m.pbrSpecularGlossiness.specularGlossinessTexture);
+                get_texture(doc, m.pbrSpecularGlossiness.specularGlossinessTexture);
             mat.khr_specular_glossiness.specular_factor = {
                 m.pbrSpecularGlossiness.specularFactor[0],
                 m.pbrSpecularGlossiness.specularFactor[1],
@@ -870,7 +988,12 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             mat.khr_specular_glossiness.glossiness_factor =
                 m.pbrSpecularGlossiness.glossinessFactor;
 
+            // no transmission as defined by the extension spec
             // no clear coat as defined by the extension spec
+            // no sheen as defined by the extension spec
+            // no specular as defined by the extension spec
+            // no ior as defined by the extension spec
+            // no volume as defined by the extension spec
         }
         // metallic roughness (Default)
         else
@@ -878,7 +1001,7 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             mat.pbr_model = Material::Pbr_model::Metallic_roughness;
 
             mat.metallic_roughness.base_color_texture =
-                get_texture_uri(doc, m.pbrMetallicRoughness.baseColorTexture);
+                get_texture(doc, m.pbrMetallicRoughness.baseColorTexture);
             mat.metallic_roughness.base_color_factor = {
                 m.pbrMetallicRoughness.baseColorFactor[0],
                 m.pbrMetallicRoughness.baseColorFactor[1],
@@ -886,20 +1009,25 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
                 m.pbrMetallicRoughness.baseColorFactor[3] };
 
             mat.metallic_roughness.metallic_roughness_texture =
-                get_texture_uri(doc, m.pbrMetallicRoughness.metallicRoughnessTexture);
+                get_texture(doc, m.pbrMetallicRoughness.metallicRoughnessTexture);
             mat.metallic_roughness.metallic_factor = m.pbrMetallicRoughness.metallicFactor;
             mat.metallic_roughness.roughness_factor = m.pbrMetallicRoughness.roughnessFactor;
 
+            add_transmission(doc, mat.metallic_roughness.transmission, m.materialsTransmission);
             add_clear_coat(doc, mat.metallic_roughness.clearcoat, m.materialsClearcoat);
+            add_sheen(doc, mat.metallic_roughness.sheen, m.materialsSheen);
+            add_specular(doc, mat.metallic_roughness.specular, m.materialsSpecular);
+            mat.metallic_roughness.ior.ior = m.materialsIOR.ior;
+            add_volume(doc, mat.metallic_roughness.volume, m.materialsVolume);
         }
 
-        mat.normal_texture = get_texture_uri(doc, m.normalTexture);
+        mat.normal_texture = get_texture(doc, m.normalTexture);
         mat.normal_scale_factor = m.normalTexture.scale;
 
-        mat.occlusion_texture = get_texture_uri(doc, m.occlusionTexture);
+        mat.occlusion_texture = get_texture(doc, m.occlusionTexture);
         mat.occlusion_strength = m.occlusionTexture.strength;
 
-        mat.emissive_texture = get_texture_uri(doc, m.emissiveTexture);
+        mat.emissive_texture = get_texture(doc, m.emissiveTexture);
         mat.emissive_factor = {
             m.emissiveFactor[0],
             m.emissiveFactor[1],
@@ -921,7 +1049,9 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
         }
         mat.alpha_cutoff = m.alphaCutoff;
 
-        mat.single_sided = !m.doubleSided;
+        // single sided is not working in ray-tracer, at least not
+        // physically plausible
+        // mat.single_sided = !m.doubleSided;
 
         m_scene.materials.push_back(std::move(mat));
     }

@@ -34,9 +34,12 @@
 #include <fstream>
 #include <mutex>
 #include <thread>
+#include <set>
 #include <atomic>
 #include <utils/strings.h>
 #include <chrono>
+#include <TlHelp32.h>
+#include <processthreadsapi.h>
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -551,6 +554,42 @@ void Profiling::print_statistics() const
         msg += mi::examples::strings::format("\n    %-60s %10.3fs (n = %d)",
             pair.first.c_str(), pair.second.average, pair.second.count);
     }
+    log_info(msg);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Diagnostics::list_loaded_libraries()
+{
+    DWORD process_id = GetCurrentProcessId();
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, process_id);
+    MODULEENTRY32W module;
+    memset(&module, 0, sizeof(MODULEENTRY32W));
+    module.dwSize = sizeof(MODULEENTRY32W);
+    bool has_next;
+    DWORD last_error = ERROR_BAD_LENGTH;
+    while (last_error == ERROR_BAD_LENGTH)
+    {
+        SetLastError(0);
+        has_next = Module32FirstW(snapshot, &module);
+        last_error = GetLastError();
+        if (last_error == ERROR_NO_MORE_FILES)
+            break;
+    }
+
+    std::set<std::string> module_list; // use a set for sorting
+    while (has_next)
+    {
+        std::string path = mi::examples::strings::wstr_to_str(module.szExePath);
+        std::replace(path.begin(), path.end(), '\\', '/');
+        module_list.insert(path);
+        has_next = Module32NextW(snapshot, &module);
+    }
+
+    std::string msg = "Loaded libraries:";
+    for(auto& e : module_list)
+        msg += mi::examples::strings::format("\n    %s", e.c_str());
+
     log_info(msg);
 }
 

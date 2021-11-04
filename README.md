@@ -152,7 +152,7 @@ libraries. These additional libraries are:
 -   **Arnold SDK** *(6.0.0.0)*
     Please follow the instructions on the [Arnold Website](https://www.arnoldrenderer.com/arnold/download/) to download the Arnold SDK.
 
--   **MaterialX** *(github repository, branch: v1.38, soon master)*  
+-   **MaterialX** *(github repository, tag: v1.38.1)*  
     Please checkout the repository from [github](https://github.com/materialx/MaterialX)
     and build the libraries using CMake for Debug, Release and RelWithDebInfo.  
 

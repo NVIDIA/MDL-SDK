@@ -11,6 +11,2220 @@
 
 <h1 id="materials-and-building-blocks" style="clear:both;" class="headerlink"><span class="sectionnumber">2</span>Materials and building blocks</h1>
 
+
+<h2 id="simple-materials" class="headerlink"><span class="sectionnumber">2.1</span>Simple materials</h2>
+
+
+
+<h3 id="simple-diffuse" class="headerlink"><span class="sectionnumber">2.1.1</span>Simple diffuse</h3>
+
+
+<img id="diffuse" src="pages/img/diffuse.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2001">MDL identifier: <span class="monospace">core_definitions::diffuse</span></p>
+
+<p id="2002">A basic diffuse material</p>
+
+<table>
+<tr>
+<td id="2003" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2004" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2005" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2006" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2007" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Diffuse&#160;roughness</td>
+<td id="2008" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead a powdery appearance</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2009" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2010" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2011" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2012" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2013" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2014" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2015" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2016" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2017" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse_color</td>
+<td id="2018" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.8)</td>
+</tr>
+<tr>
+<td id="2019" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Diffuse&#160;roughness</td>
+<td id="2020" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2021" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2022" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2023" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2024" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2025" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2026" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="metal" class="headerlink"><span class="sectionnumber">2.1.2</span>Metal</h3>
+
+
+<img id="scratched-metal" src="pages/img/scratched_metal.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2027">MDL identifier: <span class="monospace">core_definitions::scratched_metal_v2</span></p>
+
+<p id="2028">A metallic material with stretched reflections</p>
+
+<table>
+<tr>
+<td id="2029" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2030" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2031" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2032" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the metal</td>
+</tr>
+<tr>
+<td id="2033" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2034" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2035" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2036" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity of highlights and glossy reflections and highlights</td>
+</tr>
+<tr>
+<td id="2037" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy</td>
+<td id="2038" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher values will stretch the highlight</td>
+</tr>
+<tr>
+<td id="2039" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy&#160;rotation</td>
+<td id="2040" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees.</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2041" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2042" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2043" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2044" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2045" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2046" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2047" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2048" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2049" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">metal_color</td>
+<td id="2050" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.9)</td>
+</tr>
+<tr>
+<td id="2051" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2052" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2053" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2054" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.2</td>
+</tr>
+<tr>
+<td id="2055" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2056" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2057" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">glossy_weight</td>
+<td id="2058" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.9</td>
+</tr>
+<tr>
+<td id="2059" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy</td>
+<td id="2060" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2061" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">anisotropy</td>
+<td id="2062" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2063" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy&#160;rotation</td>
+<td id="2064" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2065" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">anisotropy_rotation</td>
+<td id="2066" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2067" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2068" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2069" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2070" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="plastic" class="headerlink"><span class="sectionnumber">2.1.3</span>Plastic</h3>
+
+
+<img id="scratched-plastic" src="pages/img/scratched_plastic.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2071">MDL identifier: <span class="monospace">core_definitions::scratched_plastic_v2</span></p>
+
+<p id="2072">A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights.</p>
+
+<table>
+<tr>
+<td id="2073" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2074" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2075" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2076" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2077" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2078" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2079" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy</td>
+<td id="2080" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher values will stretch the highlight</td>
+</tr>
+<tr>
+<td id="2081" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy&#160;rotation</td>
+<td id="2082" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees.</td>
+</tr>
+<tr>
+<td id="2083" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2084" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity</td>
+</tr>
+<tr>
+<td id="2085" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2086" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Additional reflectivity control</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2087" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2088" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2089" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2090" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2091" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2092" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2093" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2094" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2095" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse_color</td>
+<td id="2096" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.5)</td>
+</tr>
+<tr>
+<td id="2097" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2098" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2099" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2100" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.2</td>
+</tr>
+<tr>
+<td id="2101" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy</td>
+<td id="2102" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2103" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">anisotropy</td>
+<td id="2104" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2105" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy&#160;rotation</td>
+<td id="2106" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2107" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">anisotropy_rotation</td>
+<td id="2108" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2109" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2110" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2111" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2112" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.4</td>
+</tr>
+<tr>
+<td id="2113" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2114" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2115" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">reflectivity</td>
+<td id="2116" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2117" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2118" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2119" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2120" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="retroreflective" class="headerlink"><span class="sectionnumber">2.1.4</span>Retroreflective</h3>
+
+
+<img id="retroreflective" src="pages/img/retroreflective.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2121">MDL identifier: <span class="monospace">core_definitions::retroreflective</span></p>
+
+<p id="2122">A material with a retroreflective component, works well for road signs and retroreflective stickers</p>
+
+<table>
+<tr>
+<td id="2123" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2124" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2125" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2126" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2127" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;color</td>
+<td id="2128" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the retroreflection</td>
+</tr>
+<tr>
+<td id="2129" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2130" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2131" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight&#160;facing</td>
+<td id="2132" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflectivity control for geometry facing the viewer</td>
+</tr>
+<tr>
+<td id="2133" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight&#160;edge</td>
+<td id="2134" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflectivity control for the reflectivity at geometry edges</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2135" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2136" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2137" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2138" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2139" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2140" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2141" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2142" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2143" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_color</td>
+<td id="2144" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.2,0.23,0.23)</td>
+</tr>
+<tr>
+<td id="2145" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;color</td>
+<td id="2146" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2147" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">reflection_color</td>
+<td id="2148" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.8,0.8,0.83)</td>
+</tr>
+<tr>
+<td id="2149" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2150" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2151" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2152" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.15</td>
+</tr>
+<tr>
+<td id="2153" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight&#160;facing</td>
+<td id="2154" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2155" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal_reflectivity</td>
+<td id="2156" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.05</td>
+</tr>
+<tr>
+<td id="2157" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight&#160;edge</td>
+<td id="2158" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2159" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">grazing_reflectivity</td>
+<td id="2160" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2161" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2162" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2163" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2164" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="flexible-material-model" class="headerlink"><span class="sectionnumber">2.1.5</span>Flexible material model</h3>
+
+
+<img id="flex-material" src="pages/img/flex_material.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2165">MDL identifier: <span class="monospace">core_definitions::flex_material_v2</span></p>
+
+<p id="2166">A complex material that can be configured to a wide variety of looks</p>
+
+<table>
+<tr>
+<td id="2167" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2168" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2169" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;color</td>
+<td id="2170" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2171" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Diffuse&#160;roughness</td>
+<td id="2172" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to a more &#8220;powdery&#8221; look</td>
+</tr>
+<tr>
+<td id="2173" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Metallic&#160;material</td>
+<td id="2174" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If 1.0, reflection will be colored and independent of view direction. If 0.0, reflection will be white and direction dependent. Directional dependence is in this case based on the IOR (Fresnel effect).</td>
+</tr>
+<tr>
+<td id="2175" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2176" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the amount of reflection</td>
+</tr>
+<tr>
+<td id="2177" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2178" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to more blurry reflections</td>
+</tr>
+<tr>
+<td id="2179" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;anisotropy</td>
+<td id="2180" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher values will stretch the highlight</td>
+</tr>
+<tr>
+<td id="2181" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy&#160;rotation</td>
+<td id="2182" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Changes the orientation of the anisotropy. A value of 1 will rotate the orientation 360 degrees.</td>
+</tr>
+<tr>
+<td id="2183" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;weight</td>
+<td id="2184" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Weights how much light passes through the object compared to its diffuse reflectivity.</td>
+</tr>
+<tr>
+<td id="2185" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2186" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color effect for transmission independent of thickness of the object, similar to stained glass.</td>
+</tr>
+<tr>
+<td id="2187" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;color</td>
+<td id="2188" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If the material is not &#8220;Thin walled&#8221;, &#8220;Volume color&#8221; will be reached at &#8220;Volume reference distance&#8221; (m).</td>
+</tr>
+<tr>
+<td id="2189" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;roughness</td>
+<td id="2190" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">higher values lead to objects seen through the material to appear blurry</td>
+</tr>
+<tr>
+<td id="2191" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;reference&#160;distance</td>
+<td id="2192" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If the material is not &#8220;Thin walled&#8221;, &#8220;Volume color&#8221; will be reached at this distance (m). Enter a typical thickness of objects made of this material here.</td>
+</tr>
+<tr>
+<td id="2193" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2194" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines refraction in the volume. It also influences the reflectivity for materials that are not metallic.</td>
+</tr>
+<tr>
+<td id="2195" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Thin&#160;walled</td>
+<td id="2196" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Thin walled materials do not refract and do not have volume effects. Good for soap bubbles or window glass.</td>
+</tr>
+<tr>
+<td id="2197" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2198" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2199" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Abbe&#160;number</td>
+<td id="2200" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls dispersion. A value of 0 switches dispersion off. Dispersive materials have Abbe numbers between 25 and 85</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2201" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2202" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2203" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2204" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2205" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;color</td>
+<td id="2206" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2207" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_color</td>
+<td id="2208" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.5)</td>
+</tr>
+<tr>
+<td id="2209" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Diffuse&#160;roughness</td>
+<td id="2210" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2211" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse_roughness</td>
+<td id="2212" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2213" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Metallic&#160;material</td>
+<td id="2214" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2215" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">is_metal</td>
+<td id="2216" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2217" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2218" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2219" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">reflectivity</td>
+<td id="2220" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2221" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2222" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2223" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">reflection_roughness</td>
+<td id="2224" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.3</td>
+</tr>
+<tr>
+<td id="2225" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;anisotropy</td>
+<td id="2226" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2227" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">anisotropy</td>
+<td id="2228" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2229" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Anisotropy&#160;rotation</td>
+<td id="2230" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2231" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">anisotropy_rotation</td>
+<td id="2232" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2233" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;weight</td>
+<td id="2234" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2235" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">transparency</td>
+<td id="2236" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2237" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2238" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2239" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">transmission_color</td>
+<td id="2240" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+<tr>
+<td id="2241" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;color</td>
+<td id="2242" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2243" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">volume_color</td>
+<td id="2244" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+<tr>
+<td id="2245" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;roughness</td>
+<td id="2246" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2247" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">transmission_roughness</td>
+<td id="2248" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2249" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;reference&#160;distance</td>
+<td id="2250" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2251" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_thickness</td>
+<td id="2252" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.1</td>
+</tr>
+<tr>
+<td id="2253" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2254" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2255" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2256" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.5</td>
+</tr>
+<tr>
+<td id="2257" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Thin&#160;walled</td>
+<td id="2258" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="2259" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">thin_walled</td>
+<td id="2260" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+</tr>
+<tr>
+<td id="2261" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2262" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2263" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2264" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2265" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Abbe&#160;number</td>
+<td id="2266" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2267" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">abbe_number</td>
+<td id="2268" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+</table>
+
+
+<h3 id="thin-glass" class="headerlink"><span class="sectionnumber">2.1.6</span>Thin glass</h3>
+
+
+<img id="thin-glass" src="pages/img/thin_glass.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2269">MDL identifier: <span class="monospace">core_definitions::thin_glass_v2</span></p>
+
+<p id="2270">A basic transmissive dielectric without refraction or volume</p>
+
+<table>
+<tr>
+<td id="2271" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2272" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2273" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2274" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2275" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2276" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2277" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2278" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2279" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2280" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2281" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2282" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2283" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2284" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2285" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2286" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2287" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">glass_color</td>
+<td id="2288" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.95)</td>
+</tr>
+<tr>
+<td id="2289" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2290" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2291" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2292" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2293" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2294" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2295" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2296" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.4</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2297" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2298" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2299" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2300" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="thin-translucent" class="headerlink"><span class="sectionnumber">2.1.7</span>Thin translucent</h3>
+
+
+<img id="thin-translucent" src="pages/img/thin_translucent.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2301">MDL identifier: <span class="monospace">core_definitions::thin_translucent_v2</span></p>
+
+<p id="2302">A diffuse transmissive dielectric material</p>
+
+<table>
+<tr>
+<td id="2303" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2304" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2305" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Diffuse&#160;color</td>
+<td id="2306" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2307" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Translucence&#160;color</td>
+<td id="2308" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the volume of the material</td>
+</tr>
+<tr>
+<td id="2309" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Translucence&#160;weight</td>
+<td id="2310" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Fraction of the incoming light that should be visible on the backside</td>
+</tr>
+<tr>
+<td id="2311" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2312" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2313" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2314" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2315" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2316" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2317" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2318" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2319" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2320" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2321" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Diffuse&#160;color</td>
+<td id="2322" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2323" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">surface_color</td>
+<td id="2324" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.95)</td>
+</tr>
+<tr>
+<td id="2325" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Translucence&#160;color</td>
+<td id="2326" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2327" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translucent_color</td>
+<td id="2328" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.95)</td>
+</tr>
+<tr>
+<td id="2329" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Translucence&#160;weight</td>
+<td id="2330" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2331" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translucency</td>
+<td id="2332" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.5</td>
+</tr>
+<tr>
+<td id="2333" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2334" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2335" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2336" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2337" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2338" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2339" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2340" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.4</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2341" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2342" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2343" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2344" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="thick-glass" class="headerlink"><span class="sectionnumber">2.1.8</span>Thick glass</h3>
+
+
+<img id="thick-glass" src="pages/img/thick_glass.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2345">MDL identifier: <span class="monospace">core_definitions::thick_glass_v2</span></p>
+
+<p id="2346">A basic transmissive dielectric with refraction and coloring in the volume</p>
+
+<table>
+<tr>
+<td id="2347" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2348" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2349" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2350" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Colors the light entering the volume, similar to stained glass</td>
+</tr>
+<tr>
+<td id="2351" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;color</td>
+<td id="2352" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the glass body</td>
+</tr>
+<tr>
+<td id="2353" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2354" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2355" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2356" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity as well as amount of refraction</td>
+</tr>
+<tr>
+<td id="2357" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;reference&#160;distance</td>
+<td id="2358" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#8220;Volume color&#8221; will be reached at this distance (m). Enter a typical thickness of objects made of this material here.</td>
+</tr>
+<tr>
+<td id="2359" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2360" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2361" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Abbe&#160;number</td>
+<td id="2362" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls dispersion. 0 switches dispersion off. Dispersive materials have Abbe numbers between 25 and 85.</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2363" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2364" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2365" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2366" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2367" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2368" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2369" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">transmission_color</td>
+<td id="2370" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+<tr>
+<td id="2371" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;color</td>
+<td id="2372" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2373" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">glass_color</td>
+<td id="2374" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.95)</td>
+</tr>
+<tr>
+<td id="2375" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2376" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2377" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2378" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2379" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2380" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2381" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2382" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.4</td>
+</tr>
+<tr>
+<td id="2383" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;reference&#160;distance</td>
+<td id="2384" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2385" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_thickness</td>
+<td id="2386" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.1</td>
+</tr>
+<tr>
+<td id="2387" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2388" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2389" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2390" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2391" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Abbe&#160;number</td>
+<td id="2392" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2393" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">abbe_number</td>
+<td id="2394" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+</table>
+
+
+<h3 id="thick-translucent" class="headerlink"><span class="sectionnumber">2.1.9</span>Thick translucent</h3>
+
+
+<img id="thick-translucent" src="pages/img/thick_translucent.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2395">MDL identifier: <span class="monospace">core_definitions::thick_translucent_v2</span></p>
+
+<p id="2396">A subsurface scattering material</p>
+
+<table>
+<tr>
+<td id="2397" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2398" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2399" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2400" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2401" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;color</td>
+<td id="2402" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the volume at &#8220;Volume reference distance&#8221;</td>
+</tr>
+<tr>
+<td id="2403" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;scattering</td>
+<td id="2404" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Amount of scattering for objects at &#8220;Volume reference distance&#8221;</td>
+</tr>
+<tr>
+<td id="2405" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2406" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2407" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2408" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Overall reflectivity of the material</td>
+</tr>
+<tr>
+<td id="2409" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;reference&#160;distance</td>
+<td id="2410" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#8220;Volume color&#8221; and &#8220;Volume scattering&#8221; will be reached at this distance (m). Enter a typical thickness of objects made of this material here.</td>
+</tr>
+<tr>
+<td id="2411" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2412" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+<tr>
+<td id="2413" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2414" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity as well as amount of refraction</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2415" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Abbe&#160;number</td>
+<td id="2416" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls dispersion. A value of 0 switches dispersion off, Dispersive materials have Abbe numbers between 25 and 85.</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2417" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2418" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2419" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2420" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2421" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Transmission&#160;color</td>
+<td id="2422" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2423" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">transmission_color</td>
+<td id="2424" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.95)</td>
+</tr>
+<tr>
+<td id="2425" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;color</td>
+<td id="2426" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2427" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">volume_color</td>
+<td id="2428" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.95)</td>
+</tr>
+<tr>
+<td id="2429" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;scattering</td>
+<td id="2430" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2431" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">volume_scattering</td>
+<td id="2432" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.5</td>
+</tr>
+<tr>
+<td id="2433" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2434" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2435" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2436" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2437" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2438" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2439" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">reflectivity</td>
+<td id="2440" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2441" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Volume&#160;reference&#160;distance</td>
+<td id="2442" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2443" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_thickness</td>
+<td id="2444" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.1</td>
+</tr>
+<tr>
+<td id="2445" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2446" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2447" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2448" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+<tr>
+<td id="2449" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2450" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2451" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2452" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.4</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2453" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Abbe&#160;number</td>
+<td id="2454" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2455" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">abbe_number</td>
+<td id="2456" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+</table>
+
+
+<h2 id="modifier-materials" class="headerlink"><span class="sectionnumber">2.2</span>Modifier materials</h2>
+
+
+
+<h3 id="surface-blender" class="headerlink"><span class="sectionnumber">2.2.1</span>Surface blender</h3>
+
+
+<img id="blend" src="pages/img/blend.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2457">MDL identifier: <span class="monospace">core_definitions::blend</span></p>
+
+<p id="2458">Blend surface characteristics of 2 materials or mask them using a texture</p>
+
+<table>
+<tr>
+<td id="2459" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2460" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2461" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2462" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material the blend is based on</td>
+</tr>
+<tr>
+<td id="2463" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;Material</td>
+<td id="2464" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Surface properties to use for the blend</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2465" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight</td>
+<td id="2466" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend weight or mask texture</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2467" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2468" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2469" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2470" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2471" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2472" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2473" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2474" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_plastic_v2()</td>
+</tr>
+<tr>
+<td id="2475" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;Material</td>
+<td id="2476" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2477" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">blend</td>
+<td id="2478" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_metal_v2()</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2479" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight</td>
+<td id="2480" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2481" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">weight</td>
+<td id="2482" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+</table>
+
+
+<h3 id="surface-falloff" class="headerlink"><span class="sectionnumber">2.2.2</span>Surface falloff</h3>
+
+
+<img id="surface-falloff" src="pages/img/surface_falloff.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2483">MDL identifier: <span class="monospace">core_definitions::surface_falloff</span></p>
+
+<p id="2484">Blend surface characteristics of 2 materials or mask them using a texture</p>
+
+<table>
+<tr>
+<td id="2485" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2486" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2487" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2488" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material the blend is based on</td>
+</tr>
+<tr>
+<td id="2489" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;Material</td>
+<td id="2490" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Surface properties to use for the blend</td>
+</tr>
+<tr>
+<td id="2491" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight&#160;facing</td>
+<td id="2492" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend weight or mask texture</td>
+</tr>
+<tr>
+<td id="2493" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight&#160;edge</td>
+<td id="2494" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend weight or mask texture</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2495" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;bias</td>
+<td id="2496" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls how fast the transition should happen. 5.0 results in fresnel like transition.</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2497" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2498" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2499" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2500" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2501" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2502" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2503" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2504" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_plastic_v2()</td>
+</tr>
+<tr>
+<td id="2505" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;Material</td>
+<td id="2506" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2507" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">blend</td>
+<td id="2508" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_metal_v2()</td>
+</tr>
+<tr>
+<td id="2509" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight&#160;facing</td>
+<td id="2510" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2511" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">facing_weight</td>
+<td id="2512" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2513" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight&#160;edge</td>
+<td id="2514" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2515" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">edge_weight</td>
+<td id="2516" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2517" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;bias</td>
+<td id="2518" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2519" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">blend_bias</td>
+<td id="2520" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+</table>
+
+
+<h3 id="apply-clear-coating" class="headerlink"><span class="sectionnumber">2.2.3</span>Apply clear coating</h3>
+
+
+<img id="apply-clearcoat" src="pages/img/apply_clearcoat.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2521">MDL identifier: <span class="monospace">core_definitions::apply_clearcoat_v2</span></p>
+
+<p id="2522">Apply clear coat to an existing material</p>
+
+<table>
+<tr>
+<td id="2523" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2524" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2525" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2526" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a clear coating applied</td>
+</tr>
+<tr>
+<td id="2527" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2528" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity of the clear coat</td>
+</tr>
+<tr>
+<td id="2529" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2530" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines roughness of the clear coat</td>
+</tr>
+<tr>
+<td id="2531" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;visibility</td>
+<td id="2532" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines visibility of the clear coat</td>
+</tr>
+<tr>
+<td id="2533" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2534" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2535" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;filter&#160;color</td>
+<td id="2536" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">For simulating coatings with colored resins that modulate the color of underlying layers</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2537" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2538" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2539" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2540" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2541" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2542" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2543" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2544" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse(diffuse_color:&#160;color(0.0))</td>
+</tr>
+<tr>
+<td id="2545" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2546" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2547" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2548" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.6</td>
+</tr>
+<tr>
+<td id="2549" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2550" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2551" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2552" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2553" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;visibility</td>
+<td id="2554" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2555" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">visibility</td>
+<td id="2556" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2557" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2558" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2559" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2560" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2561" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;filter&#160;color</td>
+<td id="2562" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2563" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">coat_filter_color</td>
+<td id="2564" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+</table>
+
+
+<h3 id="apply-thin-film" class="headerlink"><span class="sectionnumber">2.2.4</span>Apply thin film</h3>
+
+
+<img id="apply-thinfilm" src="pages/img/apply_thinfilm.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2565">MDL identifier: <span class="monospace">core_definitions::apply_thinfilm</span></p>
+
+<p id="2566">Apply thin film to an existing material</p>
+
+<table>
+<tr>
+<td id="2567" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2568" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2569" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2570" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get shows a thin film effect</td>
+</tr>
+<tr>
+<td id="2571" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2572" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The IOR of the thin film interface</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2573" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Thickness</td>
+<td id="2574" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Thickness of the thin film in nm</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2575" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2576" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2577" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2578" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2579" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2580" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2581" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2582" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_metal_v2()</td>
+</tr>
+<tr>
+<td id="2583" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2584" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2585" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2586" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.6</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2587" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Thickness</td>
+<td id="2588" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2589" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">thickness</td>
+<td id="2590" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">400.0</td>
+</tr>
+</table>
+
+
+<h3 id="apply-thin-metal-coating" class="headerlink"><span class="sectionnumber">2.2.5</span>Apply thin metal coating</h3>
+
+
+<img id="apply-metalcoat" src="pages/img/apply_metalcoat.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2591">MDL identifier: <span class="monospace">core_definitions::apply_metalcoat_v2</span></p>
+
+<p id="2592">Apply metal coat to an existing material</p>
+
+<table>
+<tr>
+<td id="2593" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2594" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2595" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2596" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a metallic coating applied</td>
+</tr>
+<tr>
+<td id="2597" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;color</td>
+<td id="2598" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the metal</td>
+</tr>
+<tr>
+<td id="2599" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2600" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The opacity of the coat</td>
+</tr>
+<tr>
+<td id="2601" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2602" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines roughness of the metal coat</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2603" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2604" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2605" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2606" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2607" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2608" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2609" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2610" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2611" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2612" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse(diffuse_color:&#160;color(0.0))</td>
+</tr>
+<tr>
+<td id="2613" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;color</td>
+<td id="2614" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2615" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">metal_color</td>
+<td id="2616" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.95)</td>
+</tr>
+<tr>
+<td id="2617" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;weight</td>
+<td id="2618" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2619" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">visibility</td>
+<td id="2620" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.3</td>
+</tr>
+<tr>
+<td id="2621" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Reflection&#160;roughness</td>
+<td id="2622" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2623" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2624" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2625" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2626" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2627" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2628" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="apply-a-cover-of-dust" class="headerlink"><span class="sectionnumber">2.2.6</span>Apply a cover of dust</h3>
+
+
+<img id="apply-dustcover" src="pages/img/apply_dustcover.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2629">MDL identifier: <span class="monospace">core_definitions::apply_dustcover</span></p>
+
+<p id="2630">Apply a diffuse cover of dust or dirt</p>
+
+<table>
+<tr>
+<td id="2631" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2632" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2633" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2634" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a clear coating applied</td>
+</tr>
+<tr>
+<td id="2635" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Dust&#160;color</td>
+<td id="2636" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the dust</td>
+</tr>
+<tr>
+<td id="2637" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Dust&#160;density</td>
+<td id="2638" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The opacity of the cover</td>
+</tr>
+<tr>
+<td id="2639" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Dust&#160;amount</td>
+<td id="2640" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">How dusty the material is</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2641" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2642" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2643" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2644" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2645" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2646" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2647" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2648" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2649" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2650" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse(diffuse_color:&#160;color(0.0))</td>
+</tr>
+<tr>
+<td id="2651" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Dust&#160;color</td>
+<td id="2652" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2653" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">dust_color</td>
+<td id="2654" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.7)</td>
+</tr>
+<tr>
+<td id="2655" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Dust&#160;density</td>
+<td id="2656" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2657" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">visibility</td>
+<td id="2658" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2659" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Dust&#160;amount</td>
+<td id="2660" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2661" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">dust_density</td>
+<td id="2662" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.5</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2663" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bumps</td>
+<td id="2664" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2665" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2666" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="apply-a-color-falloff" class="headerlink"><span class="sectionnumber">2.2.7</span>Apply a color falloff</h3>
+
+
+<img id="apply-colorfalloff" src="pages/img/apply_colorfalloff.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2667">MDL identifier: <span class="monospace">core_definitions::apply_colorfalloff_v2</span></p>
+
+<p id="2668">Makes the color view dependent</p>
+
+<table>
+<tr>
+<td id="2669" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2670" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2671" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2672" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a clear coating applied</td>
+</tr>
+<tr>
+<td id="2673" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="2674" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color 1 (facing direction)</td>
+</tr>
+<tr>
+<td id="2675" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="2676" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color 2</td>
+</tr>
+<tr>
+<td id="2677" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;3</td>
+<td id="2678" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color 3</td>
+</tr>
+<tr>
+<td id="2679" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;4</td>
+<td id="2680" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color 4</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2681" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;5</td>
+<td id="2682" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color 5 (object edges)</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2683" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2684" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2685" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2686" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2687" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2688" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2689" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2690" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_metal_v2(metal_color:&#160;color(1.0))</td>
+</tr>
+<tr>
+<td id="2691" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="2692" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2693" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_0</td>
+<td id="2694" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0,&#160;1.0,&#160;1.0)</td>
+</tr>
+<tr>
+<td id="2695" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="2696" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2697" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_1</td>
+<td id="2698" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0,&#160;0.0,&#160;0.0)</td>
+</tr>
+<tr>
+<td id="2699" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;3</td>
+<td id="2700" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2701" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_2</td>
+<td id="2702" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0,&#160;0.0,&#160;0.0)</td>
+</tr>
+<tr>
+<td id="2703" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;4</td>
+<td id="2704" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2705" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_3</td>
+<td id="2706" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0,&#160;1.0,&#160;1.0)</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2707" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;5</td>
+<td id="2708" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color</td>
+<td id="2709" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_4</td>
+<td id="2710" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0,&#160;0.0,&#160;0.0)</td>
+</tr>
+</table>
+
+
+<h3 id="apply-flake-coating" class="headerlink"><span class="sectionnumber">2.2.8</span>Apply flake coating</h3>
+
+
+<img id="apply-metallicflakes" src="pages/img/apply_metallicflakes.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2711">MDL identifier: <span class="monospace">core_definitions::apply_metallicflakes</span></p>
+
+<p id="2712">Apply layer of metallic flakes to an existing material</p>
+
+<table>
+<tr>
+<td id="2713" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2714" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2715" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2716" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a flake layer applied</td>
+</tr>
+<tr>
+<td id="2717" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2718" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the flakes</td>
+</tr>
+<tr>
+<td id="2719" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2720" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines roughness of the metallic flakes</td>
+</tr>
+<tr>
+<td id="2721" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;size</td>
+<td id="2722" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines size of the metallic flakes, in mm</td>
+</tr>
+<tr>
+<td id="2723" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;amount</td>
+<td id="2724" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines amount of visible metallic flakes</td>
+</tr>
+<tr>
+<td id="2725" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;opacity</td>
+<td id="2726" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines visibility of the metallic flakes</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2727" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;orientation&#160;randomness</td>
+<td id="2728" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Larger numbers will increase the sparkle radius around highlights</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2729" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2730" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2731" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2732" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2733" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2734" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2735" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2736" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse(diffuse_color:&#160;color(0.0))</td>
+</tr>
+<tr>
+<td id="2737" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2738" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2739" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">flake_color</td>
+<td id="2740" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.9,0.9,0.9)</td>
+</tr>
+<tr>
+<td id="2741" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Roughness</td>
+<td id="2742" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2743" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2744" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr>
+<td id="2745" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;size</td>
+<td id="2746" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2747" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">size</td>
+<td id="2748" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2749" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;amount</td>
+<td id="2750" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2751" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">amount</td>
+<td id="2752" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.5</td>
+</tr>
+<tr>
+<td id="2753" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;opacity</td>
+<td id="2754" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2755" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">opacity</td>
+<td id="2756" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.5</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2757" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;orientation&#160;randomness</td>
+<td id="2758" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2759" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">bump</td>
+<td id="2760" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+</table>
+
+
+<h3 id="flaky-paint" class="headerlink"><span class="sectionnumber">2.2.9</span>Flaky paint</h3>
+
+
+<img id="flake-paint" src="pages/img/flake_paint.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2761">MDL identifier: <span class="monospace">core_definitions::flake_paint</span></p>
+
+<p id="2762">A multi layer paint material containing flakes</p>
+
+<table>
+<tr>
+<td id="2763" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2764" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2765" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;color</td>
+<td id="2766" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the base paint</td>
+</tr>
+<tr>
+<td id="2767" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;color</td>
+<td id="2768" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the flakes</td>
+</tr>
+<tr>
+<td id="2769" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;roughness</td>
+<td id="2770" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines roughness of the metallic flakes</td>
+</tr>
+<tr>
+<td id="2771" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;size</td>
+<td id="2772" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines size of the metallic flakes, in mm</td>
+</tr>
+<tr>
+<td id="2773" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;amount</td>
+<td id="2774" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines amount of visible metallic flakes</td>
+</tr>
+<tr>
+<td id="2775" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;weight</td>
+<td id="2776" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines visibility of the metallic flakes</td>
+</tr>
+<tr>
+<td id="2777" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;orientation&#160;randomness</td>
+<td id="2778" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Larger numbers will increase the sparkle radius around highlights</td>
+</tr>
+<tr>
+<td id="2779" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2780" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity of the clear coat</td>
+</tr>
+<tr>
+<td id="2781" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;roughness</td>
+<td id="2782" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines roughness of the clear coat</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2783" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;bump</td>
+<td id="2784" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2785" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2786" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2787" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2788" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2789" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;color</td>
+<td id="2790" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2791" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_color</td>
+<td id="2792" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.3,0.31,0.31)</td>
+</tr>
+<tr>
+<td id="2793" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;color</td>
+<td id="2794" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2795" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">flake_color</td>
+<td id="2796" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.6,1,0.6)</td>
+</tr>
+<tr>
+<td id="2797" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;roughness</td>
+<td id="2798" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2799" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2800" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.15</td>
+</tr>
+<tr>
+<td id="2801" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;size</td>
+<td id="2802" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2803" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">size</td>
+<td id="2804" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2805" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;amount</td>
+<td id="2806" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2807" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">amount</td>
+<td id="2808" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.4</td>
+</tr>
+<tr>
+<td id="2809" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;weight</td>
+<td id="2810" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2811" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">opacity</td>
+<td id="2812" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.8</td>
+</tr>
+<tr>
+<td id="2813" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flake&#160;orientation&#160;randomness</td>
+<td id="2814" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2815" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">bump</td>
+<td id="2816" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2817" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IOR</td>
+<td id="2818" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2819" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2820" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.6</td>
+</tr>
+<tr>
+<td id="2821" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;roughness</td>
+<td id="2822" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2823" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">coat_roughness</td>
+<td id="2824" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2825" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Coat&#160;bump</td>
+<td id="2826" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2827" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">coat_bump</td>
+<td id="2828" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="add-cut-outs" class="headerlink"><span class="sectionnumber">2.2.10</span>Add cut-outs</h3>
+
+
+<img id="add-cutout" src="pages/img/add_cutout.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2829">MDL identifier: <span class="monospace">core_definitions::add_cutout</span></p>
+
+<p id="2830">Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences.</p>
+
+<table>
+<tr>
+<td id="2831" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2832" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2833" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2834" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a cut-out</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2835" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cutout</td>
+<td id="2836" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines where the object is visible</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2837" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2838" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2839" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2840" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2841" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2842" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2843" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2844" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_plastic_v2()</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2845" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cutout</td>
+<td id="2846" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2847" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">cutout</td>
+<td id="2848" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+</table>
+
+
+<h3 id="add-simple-sticker" class="headerlink"><span class="sectionnumber">2.2.11</span>Add simple sticker</h3>
+
+
+<img id="add-simple-sticker" src="pages/img/add_simple_sticker.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2849">MDL identifier: <span class="monospace">core_definitions::add_simple_sticker</span></p>
+
+<p id="2850">A quick way for adding simple stickers to a material. The sticker is a simple dielectric and needs a mask to define its extent.</p>
+
+<table>
+<tr>
+<td id="2851" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2852" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2853" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;color</td>
+<td id="2854" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the material</td>
+</tr>
+<tr>
+<td id="2855" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;roughness</td>
+<td id="2856" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher roughness values lead to bigger highlights and blurry reflections</td>
+</tr>
+<tr>
+<td id="2857" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;IOR</td>
+<td id="2858" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines reflectivity</td>
+</tr>
+<tr>
+<td id="2859" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;reflectivity</td>
+<td id="2860" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Additional Reflectivity control</td>
+</tr>
+<tr>
+<td id="2861" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;bumps</td>
+<td id="2862" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach bump or normal maps here</td>
+</tr>
+<tr>
+<td id="2863" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;mask</td>
+<td id="2864" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Determines extent of the sticker</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2865" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2866" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a sticker added</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2867" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2868" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2869" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2870" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2871" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;color</td>
+<td id="2872" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2873" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse_color</td>
+<td id="2874" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.5)</td>
+</tr>
+<tr>
+<td id="2875" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;roughness</td>
+<td id="2876" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2877" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">roughness</td>
+<td id="2878" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.05</td>
+</tr>
+<tr>
+<td id="2879" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;IOR</td>
+<td id="2880" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2881" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">ior</td>
+<td id="2882" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.4</td>
+</tr>
+<tr>
+<td id="2883" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;reflectivity</td>
+<td id="2884" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2885" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">reflectivity</td>
+<td id="2886" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="2887" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;bumps</td>
+<td id="2888" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2889" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">sticker_normal</td>
+<td id="2890" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+<tr>
+<td id="2891" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Sticker&#160;mask</td>
+<td id="2892" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2893" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">sticker_mask</td>
+<td id="2894" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2895" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2896" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2897" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2898" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_plastic_v2()</td>
+</tr>
+</table>
+
+
+<h3 id="add-global-bumpmap" class="headerlink"><span class="sectionnumber">2.2.12</span>Add global bumpmap</h3>
+
+
+<img id="add-globalbump" src="pages/img/add_globalbump.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2899">MDL identifier: <span class="monospace">core_definitions::add_globalbump</span></p>
+
+<p id="2900">Adds global bumpmap to existing materials. Local bump map of the base material is preserved.</p>
+
+<table>
+<tr>
+<td id="2901" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2902" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2903" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2904" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a bump map</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2905" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump</td>
+<td id="2906" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">An additional global bump map for the material. Local bump map of the base material is preserved.</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2907" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2908" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2909" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2910" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2911" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2912" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2913" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2914" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_plastic_v2()</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2915" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump</td>
+<td id="2916" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
+<td id="2917" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">normal</td>
+<td id="2918" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+</tr>
+</table>
+
+
+<h3 id="add-displacement" class="headerlink"><span class="sectionnumber">2.2.13</span>Add displacement</h3>
+
+
+<img id="add-displacement" src="pages/img/add_displacement.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2919">MDL identifier: <span class="monospace">core_definitions::add_displacement</span></p>
+
+<p id="2920">Adds displacement to existing materials</p>
+
+<table>
+<tr>
+<td id="2921" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2922" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2923" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2924" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get a bump map</td>
+</tr>
+<tr>
+<td id="2925" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Displacement&#160;amount</td>
+<td id="2926" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Attach displacement texture here. Note that the object needs to be set up correctly to have good displacement results.</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2927" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Displacement&#160;scale</td>
+<td id="2928" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">A global scale factor for the displacement amount</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2929" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2930" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2931" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2932" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2933" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2934" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2935" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2936" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scratched_plastic_v2()</td>
+</tr>
+<tr>
+<td id="2937" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Displacement&#160;amount</td>
+<td id="2938" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
+<td id="2939" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">displacement</td>
+<td id="2940" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2941" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Displacement&#160;scale</td>
+<td id="2942" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2943" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">displacement_scale</td>
+<td id="2944" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+</table>
+
+
+<h3 id="add-emission" class="headerlink"><span class="sectionnumber">2.2.14</span>Add emission</h3>
+
+
+<img id="add-emission" src="pages/img/add_emission.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2945">MDL identifier: <span class="monospace">core_definitions::add_emission</span></p>
+
+<p id="2946">Adds emission to a material</p>
+
+<table>
+<tr>
+<td id="2947" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2948" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2949" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2950" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get emission added</td>
+</tr>
+<tr>
+<td id="2951" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2952" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the light</td>
+</tr>
+<tr>
+<td id="2953" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="2954" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The brightness of the light source</td>
+</tr>
+<tr>
+<td id="2955" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="2956" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Modeling unit to meter conversion factor</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2957" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="2958" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The physical unit of &#8220;Intensity&#8221;</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2959" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2960" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2961" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2962" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2963" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2964" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="2965" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="2966" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse(diffuse_color:&#160;color(0.0))</td>
+</tr>
+<tr>
+<td id="2967" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="2968" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="2969" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">tint</td>
+<td id="2970" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+<tr>
+<td id="2971" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="2972" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2973" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">intensity</td>
+<td id="2974" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1000</td>
+</tr>
+<tr>
+<td id="2975" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="2976" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="2977" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit_scale</td>
+<td id="2978" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2979" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="2980" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;emission_type</td>
+<td id="2981" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit</td>
+<td id="2982" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">lumen_m2</td>
+</tr>
+</table>
+
+
+<h3 id="add-thermal-emission" class="headerlink"><span class="sectionnumber">2.2.15</span>Add thermal emission</h3>
+
+
+<img id="add-thermal-emission" src="pages/img/add_thermal_emission.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="2983">MDL identifier: <span class="monospace">core_definitions::add_thermal_emission</span></p>
+
+<p id="2984">Adds emission to a material, color is based on a &#8220;color temperature&#8221;</p>
+
+<table>
+<tr>
+<td id="2985" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2986" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="2987" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="2988" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The material that will get emission added</td>
+</tr>
+<tr>
+<td id="2989" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Temperature</td>
+<td id="2990" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color temperature of the light in Kelvin</td>
+</tr>
+<tr>
+<td id="2991" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="2992" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The brightness of the light source</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="2993" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="2994" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The physical unit of &#8220;Intensity&#8221;</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="2995" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="2996" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="2997" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="2998" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="2999" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;material</td>
+<td id="3000" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">material</td>
+<td id="3001" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base</td>
+<td id="3002" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">diffuse(diffuse_color:&#160;color(0.0))</td>
+</tr>
+<tr>
+<td id="3003" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Temperature</td>
+<td id="3004" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3005" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">temperature</td>
+<td id="3006" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">6500.0</td>
+</tr>
+<tr>
+<td id="3007" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="3008" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3009" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">intensity</td>
+<td id="3010" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1000</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="3011" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="3012" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;emission_type</td>
+<td id="3013" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit</td>
+<td id="3014" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">lumen_m2</td>
+</tr>
+</table>
+
+
+<h2 id="emissive-materials" class="headerlink"><span class="sectionnumber">2.3</span>Emissive materials</h2>
+
+
+
+<h3 id="diffuse-emission" class="headerlink"><span class="sectionnumber">2.3.1</span>Diffuse emission</h3>
+
+
+<img id="light-omni" src="pages/img/light_omni.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="3015">MDL identifier: <span class="monospace">core_definitions::light_omni</span></p>
+
+<p id="3016">Emissive material emitting in all directions</p>
+
+<table>
+<tr>
+<td id="3017" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3018" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="3019" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="3020" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the light</td>
+</tr>
+<tr>
+<td id="3021" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="3022" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The brightness of the light source</td>
+</tr>
+<tr>
+<td id="3023" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="3024" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Modeling unit to meter conversion factor</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="3025" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="3026" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The physical unit of &#8220;Intensity&#8221;</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="3027" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3028" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3029" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3030" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="3031" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="3032" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="3033" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">tint</td>
+<td id="3034" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+<tr>
+<td id="3035" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="3036" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3037" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">intensity</td>
+<td id="3038" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1000</td>
+</tr>
+<tr>
+<td id="3039" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="3040" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3041" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit_scale</td>
+<td id="3042" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="3043" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="3044" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;emission_type</td>
+<td id="3045" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit</td>
+<td id="3046" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">lumen_m2</td>
+</tr>
+</table>
+
+
+<h3 id="spotlight-emission" class="headerlink"><span class="sectionnumber">2.3.2</span>Spotlight emission</h3>
+
+
+<img id="light-spot" src="pages/img/light_spot.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="3047">MDL identifier: <span class="monospace">core_definitions::light_spot</span></p>
+
+<p id="3048">Emissive material emitting focused in one direction</p>
+
+<table>
+<tr>
+<td id="3049" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3050" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="3051" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="3052" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the light</td>
+</tr>
+<tr>
+<td id="3053" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="3054" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The brightness of the light source</td>
+</tr>
+<tr>
+<td id="3055" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="3056" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Modeling unit to meter conversion factor</td>
+</tr>
+<tr>
+<td id="3057" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Spot&#160;focus</td>
+<td id="3058" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">larger values lead to more focused spotlights</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="3059" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="3060" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The physical unit of &#8220;Intensity&#8221;</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="3061" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3062" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3063" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3064" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="3065" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="3066" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="3067" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">tint</td>
+<td id="3068" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+<tr>
+<td id="3069" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="3070" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3071" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">intensity</td>
+<td id="3072" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1000</td>
+</tr>
+<tr>
+<td id="3073" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="3074" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3075" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit_scale</td>
+<td id="3076" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+<tr>
+<td id="3077" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Spot&#160;focus</td>
+<td id="3078" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3079" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">spot_exponent</td>
+<td id="3080" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">30</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="3081" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;for&#160;emission</td>
+<td id="3082" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;emission_type</td>
+<td id="3083" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit</td>
+<td id="3084" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">lumen_m2</td>
+</tr>
+</table>
+
+
+<h3 id="ies-file-based-emission" class="headerlink"><span class="sectionnumber">2.3.3</span>IES file based emission</h3>
+
+
+<img id="light-ies" src="pages/img/light_ies.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
+<p id="3085">MDL identifier: <span class="monospace">core_definitions::light_ies</span></p>
+
+<p id="3086">Emissive material emitting as described in an IES file</p>
+
+<table>
+<tr>
+<td id="3087" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3088" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+</tr>
+<tr>
+<td id="3089" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IES&#160;light&#160;profile&#160;data</td>
+<td id="3090" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Data to describe the distribution of the light</td>
+</tr>
+<tr>
+<td id="3091" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="3092" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The color of the light</td>
+</tr>
+<tr>
+<td id="3093" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="3094" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The brightness of the light source</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="3095" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="3096" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Modeling unit to meter conversion factor</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td id="3097" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3098" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3099" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3100" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+</tr>
+<tr>
+<td id="3101" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">IES&#160;light&#160;profile&#160;data</td>
+<td id="3102" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;light_profile</td>
+<td id="3103" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">profile</td>
+<td id="3104" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+</tr>
+<tr>
+<td id="3105" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color</td>
+<td id="3106" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
+<td id="3107" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">tint</td>
+<td id="3108" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+</tr>
+<tr>
+<td id="3109" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Intensity</td>
+<td id="3110" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3111" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">intensity</td>
+<td id="3112" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1</td>
+</tr>
+<tr style=" border-bottom: solid 1px black;">
+<td id="3113" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Unit&#160;scale</td>
+<td id="3114" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3115" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">unit_scale</td>
+<td id="3116" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+</tr>
+</table>
+
 <div id="bottomspacer"></div>
 </div>
 

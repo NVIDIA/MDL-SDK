@@ -55,9 +55,15 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         /// Destructor.
         ~Mdl_generator() = default;
 
-        /// add mtlx library that is required for code generation.
-        /// TODO: - find a way to resolve this dependencies automatically.
-        bool add_dependency(const std::string& mtlx_library);
+        /// Specify an additional absolute search path location (e.g. '/projects/MaterialX').
+        /// This path will be queried when locating standard data libraries,
+        /// XInclude references, and referenced images.
+        void add_path(const std::string& mtlx_path);
+
+        /// Specify an additional relative path to a custom data library folder
+        /// (e.g. 'libraries/custom'). MaterialX files at the root of this folder will be included
+        /// in all content documents.
+        void add_library(const std::string& mtlx_library);
 
         /// set the main mtlx file of the material to generate code from.
         bool set_source(const std::string& mtlx_material);
@@ -68,7 +74,8 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         bool generate(Mdl_generator_result& inout_result) const;
 
     private:
-        std::vector<std::string> m_dependencies;
+        std::vector<std::string> m_mtlx_search_paths;
+        std::vector<std::string> m_mtlx_relative_library_paths;
         std::string m_mtlx_source;
     };
 

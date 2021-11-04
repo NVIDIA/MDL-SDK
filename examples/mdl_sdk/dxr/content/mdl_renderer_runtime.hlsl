@@ -69,7 +69,7 @@ struct Mdl_resource_info
 
         uv_tile -= gpu_resource_udim_min;
         const int offset = uv_tile.x + uv_tile.y * int(gpu_resource_udim_width);
-        if (offset < 0 || offset >= gpu_resource_array_size)
+        if (offset < 0 || uv_tile.x >= int(gpu_resource_udim_width) || offset >= gpu_resource_array_size)
             return -1; // out of bounds
 
         return int(gpu_resource_array_start) + offset;

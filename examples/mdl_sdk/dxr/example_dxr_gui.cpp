@@ -56,6 +56,7 @@ Gui_section_rendering::Gui_section_rendering(
     , m_scene_data(scene_data)
     , m_options(options)
     , m_enable_firefly_clamping(scene_data->firefly_clamp_threshold > 0.0f)
+    , m_enable_animation(false)
 {
     if (m_options->lpe == "albedo")
         m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo);
@@ -126,6 +127,14 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
             m_scene_data->firefly_clamp_threshold = -1.0f;
             m_scene_data->restart_progressive_rendering();
         }
+    }
+
+    if (Gui_control::checkbox(
+        "Enable Animation", "Pass animation time to materials and limit progressive rendering.",
+        &m_enable_animation, &default_false, Gui_control::Flags::None))
+    {
+        m_scene_data->enable_animiation = m_enable_animation ? 1u : 0u;
+        m_scene_data->restart_progressive_rendering();
     }
 }
 

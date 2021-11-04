@@ -232,7 +232,7 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
     const std::string old_hash = m_compiled_hash;
     const mi::base::Uuid hash = compiled_material->get_hash();
     m_compiled_hash = mi::examples::strings::format(
-        "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
+        "%08x_%08x_%08x_%08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
 
     if (old_hash.empty())
         log_verbose("Hash: " + get_name() + ": " + m_compiled_hash);
@@ -392,6 +392,12 @@ size_t Mdl_material::register_resource(
     const std::string& resource_name)
 {
     std::vector<Mdl_resource_assignment>& vec = m_resources[kind];
+
+    // check if that texture is know already
+    for (auto& a : vec)
+        if (a.resource_name == resource_name)
+            return a.runtime_resource_id;
+
     size_t runtime_id = vec.empty() ? 1 : vec.back().runtime_resource_id + 1;
 
     Mdl_resource_assignment set(kind);
@@ -431,7 +437,7 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
 
     const mi::base::Uuid hash = compiled_material->get_hash();
     m_resource_hash = mi::examples::strings::format(
-        "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
+        "%08x_%08x_%08x_%08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
 
 
     // copy resource list from target an re-fill it

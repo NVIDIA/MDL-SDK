@@ -101,7 +101,7 @@ cbuffer Material_constants : register(b0, MDL_MATERIAL_REGISTER_SPACE)
     int emission_function_index;
     int emission_intensity_function_index;
     int thin_walled_function_index;
-    int hair_function_index;
+    int volume_absorption_coefficient_function_index;
 
     // individual properties of the different material instances
     int material_id;
@@ -272,7 +272,7 @@ void setup_mdl_shading_state(
     #else
         mdl_state.position = hit_position;
     #endif
-    mdl_state.animation_time = 0.0f;
+    mdl_state.animation_time = enable_animiation ? total_time : 0.0f;
     mdl_state.tangent_u[0] = world_tangent;
     mdl_state.tangent_v[0] = world_binormal;
     // #if defined(USE_TEXTURE_RESULTS)
@@ -299,10 +299,7 @@ void setup_mdl_shading_state(
     // defined as `SCENE_DATA_ID_TEXCOORD_0`
     // (see end of target code generation on application side)
     float2 texcoord0 = scene_data_lookup_float2(
-        mdl_state, SCENE_DATA_ID_TEXCOORD_0, float2(0.0f, 1.0f), false);
-
-    // flip v-coordinate without compromising the UDIM tile mapping
-    texcoord0 = float2(texcoord0.x, floor(texcoord0.y) + 1.0f - frac(texcoord0.y));
+        mdl_state, SCENE_DATA_ID_TEXCOORD_0, float2(0.0f, 0.0f), false);
 
     #if defined(USE_DERIVS)
         // would make sense in a rasterizer. for a ray tracers this is not straight forward
@@ -358,6 +355,31 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     // keep the shading normal, this has to be reset before calling a second df::init
     float3 shading_normal = mdl_state.normal;
 
+    // for thin walled materials there is no 'inside'
+    const bool thin_walled = mdl_thin_walled(thin_walled_function_index, mdl_state);
+
+    const bool inside = has_flag(payload.flags, FLAG_INSIDE);
+    const float ior1 = (inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
+    const float ior2 = (inside && !thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
+
+    // apply volume attenuation
+    //---------------------------------------------------------------------------------------------
+    if (!thin_walled && inside && volume_absorption_coefficient_function_index >= 0)
+    {
+        const float3 abs_coeff =
+            mdl_absorption_coefficient(volume_absorption_coefficient_function_index, mdl_state);
+
+        #if defined(USE_DERIVS)
+            const float distance = length(mdl_state.position.val - payload.ray_origin_next);
+        #else
+            const float distance = length(mdl_state.position - payload.ray_origin_next);
+        #endif
+
+        payload.weight.x *= abs_coeff.x > 0.0f ? exp(-abs_coeff.x * distance) : 1.0f;
+        payload.weight.y *= abs_coeff.y > 0.0f ? exp(-abs_coeff.y * distance) : 1.0f;
+        payload.weight.z *= abs_coeff.z > 0.0f ? exp(-abs_coeff.z * distance) : 1.0f;
+    }
+
     // add emission
     //---------------------------------------------------------------------------------------------
     if (emission_function_index >= 0 && emission_intensity_function_index >= 0)
@@ -388,13 +410,6 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     // pre-compute and cache data that shared among 'mdl_bsdf_evaluate' and 'mdl_bsdf_sample' calls
     mdl_state.normal = shading_normal; // reset normal (init calls can change the normal due to maps)
     mdl_bsdf_init(scattering_function_index, mdl_state);
-
-    // for thin walled materials there is no 'inside'
-    const bool thin_walled = mdl_thin_walled(thin_walled_function_index, mdl_state);
-
-    const bool inside = has_flag(payload.flags, FLAG_INSIDE);
-    const float ior1 = (inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
-    const float ior2 = (inside && !thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
 
     // Write Auxiliary Buffers
     //---------------------------------------------------------------------------------------------

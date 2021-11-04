@@ -878,11 +878,31 @@ mi::IDynamic_array* Factory_impl::clone( const mi::IDynamic_array* source, mi::U
     if( !target)
         return nullptr;
 
-    mi::Uint32 result = assign_from_to( source, target, options);
-    if( result != 0) {
-        // might happen for non-IData's
-        target->release();
-        return nullptr;
+    mi::Size n = source->get_length();
+    for( mi::Size i = 0; i < n; ++i) {
+
+        // get i-th element
+        mi::base::Handle<const mi::base::IInterface> source_value_interface(
+            source->get_element( i));
+
+        // check if source value is of type IData
+        mi::base::Handle<const mi::IData> source_value_data(
+            source_value_interface->get_interface<mi::IData>());
+        if( !source_value_data.is_valid_interface()) {
+            target->release();
+            return nullptr;
+        }
+
+        // clone source value
+        mi::base::Handle<mi::IData> target_value_data( clone( source_value_data.get(), options));
+        if( !target_value_data.is_valid_interface()) {
+            // might happen for non-IData's or no longer registered type names
+            target->release();
+            return nullptr;
+        }
+
+        // and set clone in target
+        target->push_back( target_value_data.get());
     }
 
     return target;
@@ -896,11 +916,31 @@ mi::IArray* Factory_impl::clone( const mi::IArray* source, mi::Uint32 options)
     if( !target)
         return nullptr;
 
-    mi::Uint32 result = assign_from_to( source, target, options);
-    if( result != 0) {
-        // might happen for non-IData's
-        target->release();
-        return nullptr;
+    mi::Size n = source->get_length();
+    for( mi::Size i = 0; i < n; ++i) {
+
+        // get i-th element
+        mi::base::Handle<const mi::base::IInterface> source_value_interface(
+            source->get_element( i));
+
+        // check if source value is of type IData
+        mi::base::Handle<const mi::IData> source_value_data(
+            source_value_interface->get_interface<mi::IData>());
+        if( !source_value_data.is_valid_interface()) {
+            target->release();
+            return nullptr;
+        }
+
+        // clone source value
+        mi::base::Handle<mi::IData> target_value_data( clone( source_value_data.get(), options));
+        if( !target_value_data.is_valid_interface()) {
+            // might happen for non-IData's or no longer registered type names
+            target->release();
+            return nullptr;
+        }
+
+        // and set clone in target
+        target->set_value( i, target_value_data.get());
     }
 
     return target;

@@ -90,6 +90,7 @@ namespace mi { namespace examples { namespace dxr
         const Example_dxr_options* m_options;
         uint32_t m_default_output_buffer_index;
         bool m_enable_firefly_clamping;
+        bool m_enable_animation;
     };
 
     // --------------------------------------------------------------------------------------------

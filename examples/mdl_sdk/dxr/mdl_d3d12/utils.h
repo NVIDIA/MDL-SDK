@@ -273,5 +273,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
         v1.z += v2.z;
     }
 
+    // --------------------------------------------------------------------------------------------
+    // Diagnostics
+    // --------------------------------------------------------------------------------------------
+    class Diagnostics
+    {
+    private:
+        Diagnostics();
+    public:
+
+        static void list_loaded_libraries();
+    };
+
 }}} // mi::examples::mdl_d3d12
 #endif

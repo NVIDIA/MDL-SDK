@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-mdl 1.6;
+mdl 1.7;
 
 import ::anno::*;
 import ::base::*;
@@ -35,11 +35,30 @@ import ::math::*;
 import ::state::*;
 import ::tex::*;
 import ::scene::*;
+import ::limits::*;
 
 export enum gltf_alpha_mode {
     opaque,
     mask,
     blend
+};
+
+export enum gltf_wrapping_mode {
+    clamp_to_edge = 33071,
+    mirrored_repeat = 33648,
+    repeat = 10497
+};
+
+export struct gltf_texture_lookup_value
+{
+    bool valid = false;
+    float4 value = float4(0.0, 0.0, 0.0, 1.0);
+};
+
+export struct gltf_normal_texture_lookup_value
+{
+    bool valid = false;
+    float3 value = float3(0.0);
 };
 
 float compute_opacity(gltf_alpha_mode mode, float alpha, float cutoff) {
@@ -53,173 +72,464 @@ float compute_opacity(gltf_alpha_mode mode, float alpha, float cutoff) {
     }
 }
 
-float4 gltf_prepare_tex_float4(uniform texture_2d texture, int tex_coord_index) {
-    float3 tex_coord = state::texture_coordinate(tex_coord_index);
-    return tex::texture_isvalid(texture)
-        ? tex::lookup_float4(texture, float2(tex_coord.x, tex_coord.y))
-        : float4(1.0);
+float4 gltf_prepare_tex_float4(gltf_texture_lookup_value sample) {
+    return sample.valid ? sample.value : float4(1.0);
 }
 
-float3 gltf_prepare_tex_float3(uniform texture_2d texture, int tex_coord_index) {
-    float3 tex_coord = state::texture_coordinate(tex_coord_index);
-    return tex::texture_isvalid(texture)
-        ? tex::lookup_float3(texture, float2(tex_coord.x, tex_coord.y))
-        : float3(1.0);
+float3 gltf_prepare_tex_float3(gltf_texture_lookup_value sample) {
+    return sample.valid ? float3(sample.value.x, sample.value.y, sample.value.z) : float3(1.0);
 }
 
-float3 gltf_prepare_normal(uniform texture_2d texture, int tex_coord_index, int tex_tangent_index, uniform float scale_factor) {
-    base::texture_coordinate_info coordinate_info = base::texture_coordinate_info(
-        position: state::texture_coordinate(tex_coord_index),
-        tangent_u: state::texture_tangent_u(tex_tangent_index),
-        tangent_v: state::texture_tangent_v(tex_tangent_index));
-    return tex::texture_isvalid(texture)
-            ? base::tangent_space_normal_texture(
-                texture: texture,
-                uvw: coordinate_info,
-                factor: scale_factor)
-            : state::normal();
+float3 gltf_prepare_normal(gltf_normal_texture_lookup_value sample) {
+    return sample.valid ? sample.value : state::normal();
 }
 
-float gltf_prepare_occlusion(uniform texture_2d texture, int coord_index, float occlusion_strength) {
-    return math::lerp(1.0, gltf_prepare_tex_float3(texture, coord_index).x, occlusion_strength);
+float gltf_prepare_occlusion(gltf_texture_lookup_value sample, float occlusion_strength) {
+    float occulusion = sample.valid ? sample.value.x : 1.0;
+    return math::lerp(1.0, occulusion, occlusion_strength);
 }
 
-color gltf_perpare_emission(uniform texture_2d texture, int coord_index, color emissive_factor) {
-    return emissive_factor * color(gltf_prepare_tex_float3(texture, coord_index));
+color gltf_perpare_emission(gltf_texture_lookup_value sample, color emissive_factor) {
+    return emissive_factor * color(gltf_prepare_tex_float3(sample));
+}
+
+::tex::wrap_mode convert_wrap_mode(gltf_wrapping_mode mode)
+{
+    if (mode == clamp_to_edge)
+        return ::tex::wrap_clamp;
+    if (mode == mirrored_repeat)
+        return ::tex::wrap_mirrored_repeat;
+
+    return ::tex::wrap_repeat;
+}
+
+float2 khr_texture_transform_apply(
+    float2 coord,
+    float2 offset,
+    float rotation,
+    float2 scale
+)
+{
+    // MDL expects the texture coordinate origin at the bottom left (gltf at top left)
+    // Assuming the renderer follows the MDL specification in which case the coordinates
+    // have been flipped either while loading the glTF geometry or while setting up the state.
+
+    // Undo the flipping for the transformation to get into the original glTF texture space.
+    coord = float2(coord.x, 1.0f - coord.y);
+
+    // first scale
+    coord = coord * scale;
+    // then rotate
+    float cos_rotation = ::math::cos(rotation);
+    float sin_rotation = ::math::sin(rotation);
+    coord = float2(cos_rotation * coord.x + sin_rotation * coord.y, cos_rotation * coord.y - sin_rotation * coord.x);
+    // then translate
+    coord = coord + offset;
+
+    // flip back
+    coord = float2(coord.x, 1.0f - coord.y);
+    return coord;
+}
+
+export gltf_texture_lookup_value gltf_texture_lookup(
+    uniform texture_2d texture = texture_2d()
+    [[
+        anno::in_group("Source"),
+        anno::display_name("Texture"),
+        anno::description("Texture File")
+    ]],
+    uniform int tex_coord_index = 0 
+    [[ 
+        anno::in_group("Source"),
+        anno::display_name("Coordinate Set"),
+        anno::description("Texture coordinate set (UV-Set). KHR_texture_transform overrides the textureInfo texCoord value if supplied."),
+        anno::enable_if("::tex::texture_isvalid(texture)")
+    ]],
+
+    uniform float2 offset = float2(0.0f, 0.0)
+    [[
+        anno::in_group("Texture Transform"),
+        anno::display_name("Offset"),
+        anno::description("The offset of the UV coordinate origin as a factor of the texture dimensions."),
+        anno::enable_if("::tex::texture_isvalid(texture)")
+    ]],
+    uniform float rotation = 0.0
+    [[
+        anno::hard_range(0.0, 2.0 * ::math::PI),
+        anno::in_group("Texture Transform"),
+        anno::display_name("Rotation"),
+        anno::description("Rotate the UVs by this many radians counter-clockwise around the origin. This is equivalent to a similar rotation of the image clockwise."),
+        anno::enable_if("::tex::texture_isvalid(texture)")
+    ]],
+    uniform float2 scale = float2(1.0f, 1.0f)
+    [[
+        anno::in_group("Texture Transform"),
+        anno::display_name("Scale"),
+        anno::description("The scale factor applied to the components of the UV coordinates."),
+        anno::enable_if("::tex::texture_isvalid(texture)")
+    ]],
+
+    uniform gltf_wrapping_mode wrap_s = repeat
+    [[ 
+        anno::in_group("Sampler"),
+        anno::display_name("Wrap S"),
+        anno::description("S (U) wrapping mode."),
+        anno::enable_if("::tex::texture_isvalid(texture)")
+    ]],
+    uniform gltf_wrapping_mode wrap_t = repeat
+    [[
+        anno::in_group("Sampler"),
+        anno::display_name("Wrap T"),
+        anno::description("T (V) wrapping mode."),
+        anno::enable_if("::tex::texture_isvalid(texture)")
+    ]]
+)
+[[
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("GLTF Texture Lookup"),
+    anno::description("Function to read a color or color with alpha channel texture.")
+]]
+{
+    gltf_texture_lookup_value tex_ret;
+    if (!tex::texture_isvalid(texture))
+        return tex_ret;
+
+    float3 tex_coord3 = state::texture_coordinate(tex_coord_index);
+    float2 tex_coord = khr_texture_transform_apply(
+        coord: float2(tex_coord3.x, tex_coord3.y),
+        offset: offset,
+        rotation: rotation,
+        scale: scale);
+    
+    tex_ret.value = tex::lookup_float4(
+        tex: texture,
+        coord: tex_coord,
+        wrap_u: convert_wrap_mode(wrap_s),
+        wrap_v: convert_wrap_mode(wrap_t));
+    tex_ret.valid = true;
+    return tex_ret;
+}
+
+
+export gltf_normal_texture_lookup_value gltf_normal_texture_lookup(
+    uniform texture_2d texture = texture_2d()
+    [[
+        anno::in_group("Source"),
+        anno::display_name("Texture"),
+        anno::description("Texture File")
+    ]],
+    uniform float normal_scale_factor = 1.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Source"),
+        anno::display_name("Normal Scale Factor"),
+        anno::description("Strength of the base layer normal mapping."),
+        anno::enable_if("::tex::texture_isvalid(texture)")
+    ]],
+    uniform int tex_coord_index = 0 
+    [[
+        anno::in_group("Source"),
+        anno::display_name("Coordinate Set"),
+        anno::description("Texture coordinate set (UV-Set). KHR_texture_transform overrides the textureInfo texCoord value if supplied."),
+        anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
+    ]],
+    uniform int tex_tangent_index = 0 
+    [[
+        anno::hidden(),
+        anno::in_group("Source"),
+        anno::display_name("Coordinate Set"),
+        anno::description("Tangent to be to construct the tangent frame."),
+        anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
+    ]],
+
+    uniform float2 offset = float2(0.0f, 0.0)
+    [[
+        anno::in_group("Texture Transform"),
+        anno::display_name("Offset"),
+        anno::description("The offset of the UV coordinate origin as a factor of the texture dimensions."),
+        anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
+    ]],
+    uniform float rotation = 0.0
+    [[
+        anno::hard_range(0.0, 2.0 * ::math::PI),
+        anno::in_group("Texture Transform"),
+        anno::display_name("Rotation"),
+        anno::description("Rotate the UVs by this many radians counter-clockwise around the origin. This is equivalent to a similar rotation of the image clockwise."),
+        anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
+    ]],
+    uniform float2 scale = float2(1.0f, 1.0f)
+    [[
+        anno::in_group("Texture Transform"),
+        anno::display_name("Scale"),
+        anno::description("The scale factor applied to the components of the UV coordinates."),
+        anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
+    ]],
+
+    uniform gltf_wrapping_mode wrap_s = repeat
+    [[
+        anno::in_group("Sampler"),
+        anno::display_name("Wrap S"),
+        anno::description("S (U) wrapping mode."),
+        anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
+    ]],
+    uniform gltf_wrapping_mode wrap_t = repeat
+    [[
+        anno::in_group("Sampler"),
+        anno::display_name("Wrap T"),
+        anno::description("T (V) wrapping mode."),
+        anno::enable_if("::tex::texture_isvalid(texture) && normal_scale_factor>0.0")
+    ]]
+)
+[[
+    anno::author("NVIDIA Corporation"),
+    anno::display_name("GLTF Normal Texture Lookup"),
+    anno::description("Function to read a normal texture.")
+]]
+{
+    gltf_normal_texture_lookup_value tex_ret;
+    if (!::tex::texture_isvalid(texture))
+        return tex_ret;
+
+    float3 tex_coord3 = state::texture_coordinate(tex_coord_index);
+    float2 tex_coord = khr_texture_transform_apply(
+        coord: float2(tex_coord3.x, tex_coord3.y),
+        offset: offset,
+        rotation: rotation,
+        scale: scale);
+
+    tex_ret.value = base::tangent_space_normal_texture(
+        texture: texture,
+        factor: normal_scale_factor,
+        uvw: base::texture_coordinate_info(
+            position: float3(tex_coord.x, tex_coord.y, tex_coord3.z),
+            tangent_u: state::texture_tangent_u(tex_tangent_index),
+            tangent_v: state::texture_tangent_v(tex_tangent_index)),
+        wrap_u: convert_wrap_mode(wrap_s),
+        wrap_v: convert_wrap_mode(wrap_t));
+    tex_ret.valid = true;
+    return tex_ret;
 }
 
 export material gltf_material(
     // base color
     uniform color base_color_factor = color(1.0)
     [[
-        anno::in_group("PBR Metallic Roughness"),
-        anno::display_name("Base color factor"),
-        anno::description("The base color of the material. Multiplied to the base color texture if available.")
+        anno::in_group("Metallic Roughness"),
+        anno::display_name("Base Color Factor"),
+        anno::description("The base color of the material. Multiplied to the 'Base Color Texture' if available.")
     ]],
-    uniform texture_2d base_color_texture = texture_2d()
+    gltf_texture_lookup_value base_color_texture = gltf_texture_lookup()
     [[
-        anno::in_group("PBR Metallic Roughness"),
-        anno::display_name("Base color texture"),
-        anno::description("The base color of the material. Influenced by the base color factor.")
+        anno::in_group("Metallic Roughness"),
+        anno::display_name("Base Color Texture"),
+        anno::description("The base color of the material. Influenced by the 'Base Color Factor'.")
     ]],
-    uniform int base_color_texture_coord_index = 0 [[ anno::hidden() ]],
+
+    // KHR_materials_specular
+    uniform float specular_factor = 1.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Specular"),
+        anno::display_name("Specular Factor"),
+        anno::description("The strength of the specular reflection. Multiplied to the 'Specular Texture' if available.")
+    ]],
+    gltf_texture_lookup_value specular_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Specular"),
+        anno::display_name("Specular Texture"),
+        anno::description("A texture that defines the strength of the specular reflection, stored in the alpha (A) channel. This will be multiplied by the 'Specular Factor'.")
+    ]],
+        uniform color specular_color_factor = color(1.0)
+    [[
+        anno::in_group("Specular"),
+        anno::display_name("Specular Color Factor"),
+        anno::description("The F0 color of the specular reflection (linear RGB). Multiplied to the 'Specular Color Texture' if available.")
+    ]],
+    gltf_texture_lookup_value specular_color_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Specular"),
+        anno::display_name("Specular Color Texture"),
+        anno::description("A texture that defines the F0 color of the specular reflection, stored in the RGB channels and encoded in sRGB. This texture will be multiplied by 'Specular Color Factor'.")
+    ]],
 
     // metallic roughness
     uniform float metallic_factor = 1.0
     [[
         anno::hard_range(0.0, 1.0),
-        anno::in_group("PBR Metallic Roughness"),
-        anno::display_name("Metallic factor"),
-        anno::description("The metalness of the material. Select between dielectric (0.0) and metallic (1.0). Multiplied to the base metallic texture value if available.")
+        anno::in_group("Metallic Roughness"),
+        anno::display_name("Metallic Factor"),
+        anno::description("The metalness of the material. Select between dielectric (0.0) and metallic (1.0). Multiplied to the 'Metal/Rough Texture' value if available.")
     ]],
 
     uniform float roughness_factor = 1.0
     [[
         anno::hard_range(0.0, 1.0),
-        anno::in_group("PBR Metallic Roughness"),
-        anno::display_name("Roughness factor"),
-        anno::description("The roughness of the material. Select between very glossy (0.0) and dull (1.0). Multiplied to the base roughness texture value if available.")
+        anno::in_group("Metallic Roughness"),
+        anno::display_name("Roughness Factor"),
+        anno::description("The roughness of the material. Select between very glossy (0.0) and dull (1.0). Multiplied to the 'Metal/Rough Texture' value if available.")
     ]],
-    uniform texture_2d metallic_roughness_texture = texture_2d()
+    gltf_texture_lookup_value metallic_roughness_texture = gltf_texture_lookup()
     [[
-        anno::in_group("PBR Metallic Roughness"),
-        anno::display_name("Metal/rough texture"),
-        anno::description("Metallic in the red or blue component and roughness in the green component. Influenced by the metallic and roughness factors."),
+        anno::in_group("Metallic Roughness"),
+        anno::display_name("Metal/Rough Texture"),
+        anno::description("Metallic in the red or blue component and roughness in the green component. Influenced by the 'Metallic Factor' and 'Roughness Factor'."),
         anno::enable_if("metallic_factor>0.0 || roughness_factor>0.0")
     ]],
-    uniform int metallic_roughness_texture_coord_index = 0 [[ anno::hidden() ]],
+
+    // KHR_materials_ior
+    uniform float ior = 1.5
+    [[
+        anno::hard_range(1.00, 5.0),
+        anno::in_group("Metallic Roughness"),
+        anno::display_name("IOR"),
+        anno::description("The index of refraction.")
+    ]],
 
     // normal map
-    uniform texture_2d normal_texture = texture_2d()
+    gltf_normal_texture_lookup_value normal_texture = gltf_normal_texture_lookup()
     [[
-        anno::in_group("Normal mapping"),
-        anno::display_name("Normal texture"),
-        anno::description("Base layer normal map. Influenced by the normal scale factor.")
-    ]],
-    uniform int normal_texture_coord_index = 0 [[ anno::hidden() ]],
-    uniform int normal_texture_tangent_index = 0 [[ anno::hidden() ]],
-    uniform float normal_scale_factor = 1.0
-    [[
-        anno::hard_range(0.0, 1.0),
-        anno::in_group("Normal mapping"),
-        anno::display_name("Normal scale factor"),
-        anno::description("Strength of the base layer normal mapping."),
-        anno::enable_if("::tex::texture_isvalid(normal_texture)")
+        anno::in_group("Normal Mapping"),
+        anno::display_name("Normal Texture"),
+        anno::description("Base layer normal map.")
     ]],
 
-    // clear coat
+    // KHR_materials_transmission
+    uniform float transmission_factor = 0.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Transmission"),
+        anno::display_name("Transmission Factor"),
+        anno::description("The base percentage of light that is transmitted through the surface. Multiplied to the 'Transmission Texture' if available.")
+    ]],
+    gltf_texture_lookup_value transmission_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Transmission"),
+        anno::display_name("Transmission Texture"),
+        anno::description("A texture that defines the transmission percentage of the surface, stored in the R channel. Influenced by the 'Transmission Factor'."),
+        anno::enable_if("transmission_factor>0")
+    ]],
+
+    // KHR_materials_sheen
+    uniform color sheen_color_factor = color(0.0)
+    [[
+        anno::in_group("Sheen"),
+        anno::display_name("Sheen Color Factor"),
+        anno::description("The sheen color in linear space. Multiplied to the 'Sheen Color Texture' if available.")
+    ]],
+    gltf_texture_lookup_value sheen_color_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Sheen"),
+        anno::display_name("Sheen Color Texture"),
+        anno::description("The sheen color (RGB). The sheen color is in sRGB transfer function. Influenced by the 'Sheen Color Factor'.")
+    ]],
+    uniform float sheen_roughness_factor = 0.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Sheen"),
+        anno::display_name("Sheen Roughness Factor"),
+        anno::description("The sheen roughness. Multiplied to the 'Sheen Roughness Texture' if available.")
+    ]],
+    gltf_texture_lookup_value sheen_roughness_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Sheen"),
+        anno::display_name("Sheen Roughness Texture"),
+        anno::description("The sheen roughness (Alpha) texture. Influenced by the 'Sheen Roughness Factor'.")
+    ]],
+
+    // KHR_materials_clearcoat
     uniform float clearcoat_factor = 0.0
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("Clearcoat"),
-        anno::display_name("Clearcoat factor"),
-        anno::description("Strength of the clearcoat. Multiplied to the clearcoat texture if available.")
+        anno::display_name("Clearcoat Factor"),
+        anno::description("Strength of the clearcoat. Multiplied to the 'Clearcoat Texture' if available.")
     ]],
-    uniform texture_2d clearcoat_texture = texture_2d()
+    gltf_texture_lookup_value clearcoat_texture = gltf_texture_lookup()
     [[
         anno::in_group("Clearcoat"),
-        anno::display_name("Clearcoat texture"),
-        anno::description("Strength of the clearcoat. Influenced by the clearcoat factor."),
+        anno::display_name("Clearcoat Texture"),
+        anno::description("Strength of the clearcoat. Influenced by the 'Clearcoat Factor'."),
         anno::enable_if("clearcoat_factor>0")
     ]],
-    uniform int clearcoat_texture_coord_index = 0 [[ anno::hidden() ]],
     uniform float clearcoat_roughness_factor = 0.0
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("Clearcoat"),
         anno::display_name("Clearcoat Roughness Factor"),
+        anno::description("The clearcoat layer roughness. Multiplied to the 'Clearcoat Roughness Texture' if available."),
         anno::enable_if("clearcoat_factor>0.0")
     ]],
-    uniform texture_2d clearcoat_roughness_texture = texture_2d()
+    gltf_texture_lookup_value clearcoat_roughness_texture = gltf_texture_lookup()
     [[
         anno::in_group("Clearcoat"),
         anno::display_name("Clearcoat Roughness Texture"),
+        anno::description("The clearcoat layer roughness texture. Influenced by the 'Clearcoat Roughness Texture'."),
         anno::enable_if("clearcoat_factor>0.0 && clearcoat_roughness_factor>0.0")
     ]],
-    uniform int clearcoat_roughness_texture_coord_index = 0 [[ anno::hidden() ]],
-    uniform texture_2d clearcoat_normal_texture = texture_2d()
+    gltf_normal_texture_lookup_value clearcoat_normal_texture = gltf_normal_texture_lookup()
     [[
         anno::in_group("Clearcoat"),
         anno::display_name("Clearcoat Normal"),
+        anno::description("The clearcoat normal map texture."),
         anno::enable_if("clearcoat_factor>0.0")
     ]],
-    uniform int clearcoat_normal_texture_coord_index = 0 [[ anno::hidden() ]],
-    uniform int clearcoat_normal_texture_tangent_index = 0 [[ anno::hidden() ]],
 
     // emission
-    uniform color emissive_factor = color(1.0)
+    uniform color emissive_factor = color(0.0)
     [[
         anno::in_group("Emission"),
-        anno::display_name("Emission factor")
+        anno::display_name("Emissive Factor"),
+        anno::description("The emissive color of the material. Multiplied to the 'Emissive Texture' if available.")
     ]],
-    uniform texture_2d emissive_texture = texture_2d()
+    gltf_texture_lookup_value emissive_texture = gltf_texture_lookup()
     [[
         anno::in_group("Emission"),
-        anno::display_name("Emission texture"),
+        anno::display_name("Emissive Texture"),
+        anno::description("The emissive map texture. Influenced by the 'Emissive Factor'."),
         anno::enable_if("::math::average(emissive_factor)>0.0")
     ]],
-    uniform int emissive_texture_coord_index = 0 [[ anno::hidden() ]],
+
+    // KHR_materials_volume
+    uniform bool thin_walled = true
+    [[
+        anno::in_group("Volume"),
+        anno::display_name("Thin-walled"),
+        anno::description("If true the material is thin-walled. Otherwise the material is a volume boundary. The doubleSided property has no effect on volume boundaries. Note, the thickness parameters are ignored since ray-tracing is used to compute the travelled distance within the volume.")
+    ]],
+    uniform float attenuation_distance = ::limits::FLOAT_MAX
+    [[
+        anno::soft_range(0.0, 10.0),
+        anno::in_group("Volume"),
+        anno::display_name("Attenuation Distance"),
+        anno::description("Density of the medium given as the average distance that light travels in the medium before interacting with a particle. The value is given in world space.")
+    ]],
+    uniform color attenuation_color = color(1.0)
+    [[
+        anno::in_group("Volume"),
+        anno::display_name("Attenuation Color"),
+        anno::description("The color that white light turns into due to absorption when reaching the attenuation distance.")
+    ]],
 
     // ambient occlusion
-    uniform texture_2d occlusion_texture = texture_2d()
+    gltf_texture_lookup_value occlusion_texture = gltf_texture_lookup()
     [[
         anno::in_group("Occlusion"),
-        anno::display_name("Occlusion texture")
+        anno::display_name("Occlusion Texture"),
+        anno::description("The occlusion map texture. Influenced by the 'Occlusion Strength'.")
     ]],
     uniform float occlusion_strength = 1.0
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("Occlusion"),
-        anno::display_name("Occlusion strength"),
-        anno::enable_if("::tex::texture_isvalid(occlusion_texture)")
+        anno::display_name("Occlusion Strength"),
+        anno::description("A scalar multiplier controlling the amount of occlusion applied. Multiplied to the 'Occlusion Texture'.")
     ]],
-    uniform int occlusion_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // alpha
     uniform gltf_alpha_mode alpha_mode = opaque
     [[
         anno::in_group("Opacity"),
-        anno::display_name("Alpha mode"),
+        anno::display_name("Alpha Mode"),
         anno::description("Select how to interpret the alpha value.")
     ]],
     uniform float base_alpha = 1.0
@@ -235,37 +545,50 @@ export material gltf_material(
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("Opacity"),
-        anno::display_name("Alpha cutoff"),
+        anno::display_name("Alpha Cutoff"),
         anno::description("Threshold to decide between fully transparent and fully opaque when alpha mode is 'mask'."),
         anno::enable_if("alpha_mode==mask")
     ]]
 ) [[
     anno::author("NVIDIA Corporation"),
     anno::display_name("GLTF Material - Metallic-Roughness"),
-    anno::description("Metallic-Roughness Material that takes the GLTF pbr model parameters as input.")
+    anno::description("Metallic-Roughness Material that takes the GLTF PBR model and KHR extension parameters as input.")
 ]] = let {
 
     // handling GLTF parameters
     // ------------------------------------------------------------------------
-    float4 base_float4 = gltf_prepare_tex_float4(base_color_texture, base_color_texture_coord_index) *
-                         scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
+    float4 base_float4 = gltf_prepare_tex_float4(base_color_texture) * scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color base_color = base_color_factor * color(base_float4.x, base_float4.y, base_float4.z);
     float alpha = base_alpha * base_float4.w;
 
-    float3 metallic_roughness = gltf_prepare_tex_float3(metallic_roughness_texture, metallic_roughness_texture_coord_index);
-    float metallic = metallic_factor * math::max(metallic_roughness.x, metallic_roughness.z);
+    float3 metallic_roughness = gltf_prepare_tex_float3(metallic_roughness_texture);
+    float metallic = metallic_factor * metallic_roughness.z;
     float roughness = roughness_factor * metallic_roughness.y;
 
-    float3 normal = gltf_prepare_normal(normal_texture, normal_texture_coord_index, normal_texture_tangent_index, normal_scale_factor);
-    float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_texture_coord_index, occlusion_strength);
-    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_texture_coord_index, emissive_factor);
+    float3 normal = gltf_prepare_normal(normal_texture);
+    float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_strength);
+    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_factor);
 
-    // clearcoat
+    // KHR_materials_specular
     // ------------------------------------------------------------------------
-    float clearcoat_blend = gltf_prepare_tex_float3(clearcoat_texture, clearcoat_texture_coord_index).x * clearcoat_factor;
-    float clearcoat_roughness = gltf_prepare_tex_float3(clearcoat_roughness_texture, clearcoat_roughness_texture_coord_index).y * clearcoat_roughness_factor;
+    color specular_color = color(gltf_prepare_tex_float3(specular_color_texture)) * specular_color_factor;
+    float specular = gltf_prepare_tex_float4(specular_texture).w * specular_factor;
+
+    // KHR_materials_transmission
+    // ------------------------------------------------------------------------
+    float transmission = gltf_prepare_tex_float4(transmission_texture).x * transmission_factor;
+
+    // KHR_materials_sheen
+    // ------------------------------------------------------------------------
+    color sheen_color = color(gltf_prepare_tex_float3(sheen_color_texture)) * sheen_color_factor;
+    float sheen_roughness = gltf_prepare_tex_float4(sheen_roughness_texture).w * sheen_roughness_factor;
+
+    // KHR_materials_clearcoat
+    // ------------------------------------------------------------------------
+    float clearcoat_blend = gltf_prepare_tex_float3(clearcoat_texture).x * clearcoat_factor;
+    float clearcoat_roughness = gltf_prepare_tex_float3(clearcoat_roughness_texture).y * clearcoat_roughness_factor;
     float clearcoat_roughness2 = clearcoat_roughness * clearcoat_roughness;
-    float3 clearcoat_normal = gltf_prepare_normal(clearcoat_normal_texture, clearcoat_normal_texture_coord_index, clearcoat_normal_texture_tangent_index, 1.0f);
+    float3 clearcoat_normal = gltf_prepare_normal(clearcoat_normal_texture);
     float grazing_refl_coat = math::max((1.0 - clearcoat_roughness), 0.0);
 
     // metallic roughness model
@@ -278,14 +601,23 @@ export material gltf_material(
     // for high roughness due to the layering
     float grazing_refl = math::max((1.0 - roughness), 0.0);
 
+    // fresnel term based on ior
+    float f0 = math::pow((ior - 1.0)/(ior + 1.0), 2.0);
+
     // for the dielectric component we layer the glossy component on top of the diffuse one,
     // the glossy layer has no color tint
-    bsdf dielectric_component = df::custom_curve_layer(
-        weight: 1.0, // roughness is used to weight between diffuse and glossy
-        normal_reflectivity: 0.04,
-        grazing_reflectivity: grazing_refl,
+    bsdf dielectric_component = df::color_custom_curve_layer(
+        weight: color(1.0), // roughness is used to weight between diffuse and glossy
+        normal_reflectivity: math::min(f0 * specular_color, color(1.0)) * specular,
+        grazing_reflectivity: color(grazing_refl * specular),
         layer: df::microfacet_ggx_vcavities_bsdf(roughness_u: roughness2),
-        base: df::diffuse_reflection_bsdf(tint: base_color * occlusion),
+        base: df::weighted_layer(
+            weight: transmission,
+            base: df::diffuse_reflection_bsdf(tint: base_color * occlusion),
+            layer: df::microfacet_ggx_vcavities_bsdf(
+                roughness_u: roughness2,
+                tint: base_color * occlusion,
+                mode: df::scatter_transmit)),
         normal: normal
         );
 
@@ -295,10 +627,23 @@ export material gltf_material(
         tint: base_color * occlusion, 
         roughness_u: roughness2);
 
+    // apply sheen to the dielectic component
+    // add the sheen_color as weight in an outer layer to be able to blend and disable on default 
+    // otherwise, sheen would be applied and tinted black
+    bsdf dielectric_sheen_component = df::color_weighted_layer(
+        weight: sheen_color, 
+        layer: df::sheen_bsdf(
+            roughness: sheen_roughness * sheen_roughness,
+            tint:  color(1.0),
+            multiscatter_tint: color(1.0),
+            multiscatter: dielectric_component
+        ),
+        base: dielectric_component);
+
     // final BSDF is a linear blend between dielectric and metallic component
     bsdf dielectric_metal_mix = df::weighted_layer(
         weight: metallic,
-        base: dielectric_component,
+        base: dielectric_sheen_component,
         layer: metallic_component,
         normal: normal);
 
@@ -317,6 +662,7 @@ export material gltf_material(
         normal: clearcoat_normal);
 
 } in material(
+    thin_walled: thin_walled,
     surface: material_surface(
         scattering: clearcoated,
         emission:  material_emission (
@@ -324,6 +670,10 @@ export material gltf_material(
             intensity: emissive_color * ::math::PI
         )
     ),
+    volume: material_volume(
+        absorption_coefficient: thin_walled ? color(0.0) : -math::log(attenuation_color) / attenuation_distance
+    ),
+    ior: color(ior),
     geometry: material_geometry(
         cutout_opacity: compute_opacity(alpha_mode, alpha, alpha_cutoff) 
     )
@@ -335,91 +685,80 @@ export material gltf_material_khr_specular_glossiness(
     uniform color diffuse_factor = color(1.0)
     [[
         anno::in_group("PBR Specular Glossiness"),
-        anno::display_name("Diffuse factor"),
-        anno::description("The diffuse color of the material. Multiplied to the diffuse texture if available.")
+        anno::display_name("Diffuse Factor"),
+        anno::description("The diffuse color of the material. Multiplied to the 'Diffuse Texture' if available.")
     ]],
-    uniform texture_2d diffuse_texture = texture_2d()
+    gltf_texture_lookup_value diffuse_texture = gltf_texture_lookup()
     [[
         anno::in_group("PBR Specular Glossiness"),
-        anno::display_name("Diffuse texture"),
-        anno::description("The diffuse color of the material. Influenced by the diffuse factor.")
+        anno::display_name("Diffuse Texture"),
+        anno::description("The diffuse color of the material. Influenced by the 'Diffuse Factor'.")
     ]],
-    uniform int diffuse_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // specular glossiness
     uniform color specular_factor = 1.0
     [[
         anno::in_group("PBR Specular Glossiness"),
-        anno::display_name("Specular factor"),
-        anno::description("The specular color of the material. Multiplied to the rgb values of the specular glossy texture if available.")
+        anno::display_name("Specular Factor"),
+        anno::description("The specular color of the material. Multiplied to the rgb values of the 'Specular/Glossy Texture' if available.")
     ]],
     uniform float glossiness_factor = 1.0
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("PBR Specular Glossiness"),
-        anno::display_name("Glossiness factor"),
-        anno::description("The glossiness of the material. Select between diffuse (0.0) and nearly specular (1.0). Multiplied to the alpha values of the specular glossy texture if available.")
+        anno::display_name("Glossiness Factor"),
+        anno::description("The glossiness of the material. Select between diffuse (0.0) and nearly specular (1.0). Multiplied to the alpha value of the 'Specular/Glossy Texture' if available.")
     ]],
-    uniform texture_2d specular_glossiness_texture = texture_2d()
+    gltf_texture_lookup_value specular_glossiness_texture = gltf_texture_lookup()
     [[
         anno::in_group("PBR Specular Glossiness"),
-        anno::display_name("Specular Glossy texture"),
-        anno::description("The diffuse color of the material. Influenced by the diffuse factor.")
+        anno::display_name("Specular/Glossy Texture"),
+        anno::description("The specular-glossiness texture. Influenced by the 'Specular Factor' and 'Glossiness Factor'.")
     ]],
-    uniform int specular_glossiness_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // normal map
-    uniform texture_2d normal_texture = texture_2d()
+    gltf_normal_texture_lookup_value normal_texture = gltf_normal_texture_lookup()
     [[
-        anno::in_group("Normal mapping"),
-        anno::display_name("Normal texture"),
-        anno::description("Base layer normal map. Influenced by the normal scale factor.")
-    ]],
-    uniform int normal_texture_coord_index = 0 [[ anno::hidden() ]],
-    uniform int normal_texture_tangent_index = 0 [[ anno::hidden() ]],
-    uniform float normal_scale_factor = 1.0
-    [[
-        anno::hard_range(0.0, 1.0),
-        anno::in_group("Normal mapping"),
-        anno::display_name("Normal scale factor"),
-        anno::description("Strength of the base layer normal mapping."),
-        anno::enable_if("::tex::texture_isvalid(normal_texture)")
+        anno::in_group("Normal Mapping"),
+        anno::display_name("Normal Texture"),
+        anno::description("Base layer normal map.")
     ]],
     
     // emission
-    uniform color emissive_factor = color(1.0)
+    uniform color emissive_factor = color(0.0)
     [[
         anno::in_group("Emission"),
-        anno::display_name("Emission factor")
+        anno::display_name("Emissive Factor"),
+        anno::description("The emissive color of the material. Multiplied to the 'Emissive Texture' if available.")
     ]],
-    uniform texture_2d emissive_texture = texture_2d()
+    gltf_texture_lookup_value emissive_texture = gltf_texture_lookup()
     [[
         anno::in_group("Emission"),
-        anno::display_name("Emission texture"),
+        anno::display_name("Emissive Texture"),
+        anno::description("The emissive map texture. Influenced by the 'Emissive Factor'."),
         anno::enable_if("::math::average(emissive_factor)>0.0")
     ]],
-    uniform int emissive_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // ambient occlusion
-    uniform texture_2d occlusion_texture = texture_2d()
+    gltf_texture_lookup_value occlusion_texture = gltf_texture_lookup()
     [[
         anno::in_group("Occlusion"),
-        anno::display_name("Occlusion texture")
+        anno::display_name("Occlusion Texture"),
+        anno::description("The occlusion map texture. Influenced by the 'Occlusion Strength'.")
     ]],
     uniform float occlusion_strength = 1.0
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("Occlusion"),
-        anno::display_name("Occlusion strength"),
-        anno::enable_if("::tex::texture_isvalid(occlusion_texture)")
+        anno::display_name("Occlusion Strength"),
+        anno::description("A scalar multiplier controlling the amount of occlusion applied. Multiplied to the 'Occlusion Texture'.")
     ]],
-    uniform int occlusion_texture_coord_index = 0 [[ anno::hidden() ]],
 
     // alpha
     uniform gltf_alpha_mode alpha_mode = opaque
     [[
         anno::in_group("Opacity"),
-        anno::display_name("Alpha mode"),
+        anno::display_name("Alpha Mode"),
         anno::description("Select how to interpret the alpha value.")
     ]],
     uniform float base_alpha = 1.0
@@ -435,31 +774,29 @@ export material gltf_material_khr_specular_glossiness(
     [[
         anno::hard_range(0.0, 1.0),
         anno::in_group("Opacity"),
-        anno::display_name("Alpha cutoff"),
+        anno::display_name("Alpha Cutoff"),
         anno::description("Threshold to decide between fully transparent and fully opaque when alpha mode is 'mask'."),
         anno::enable_if("alpha_mode==mask")
     ]]
 ) [[
     anno::author("NVIDIA Corporation"),
-    anno::display_name("GLTF Material"),
     anno::display_name("GLTF Material - Specular-Glossiness"),
     anno::description("Specular-Glossiness Material that takes the GLTF KHR extension parameters as input.")
 ]] = let {
 
     // handling GLTF parameters
     // ------------------------------------------------------------------------
-    float4 diffuse_float4 = gltf_prepare_tex_float4(diffuse_texture, diffuse_texture_coord_index) *
-                            scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
+    float4 diffuse_float4 = gltf_prepare_tex_float4(diffuse_texture) * scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color diffuse = diffuse_factor * color(diffuse_float4.x, diffuse_float4.y, diffuse_float4.z);
     float alpha = base_alpha * diffuse_float4.w;
 
-    float4 specular_glossiness = gltf_prepare_tex_float4(specular_glossiness_texture, specular_glossiness_texture_coord_index);
+    float4 specular_glossiness = gltf_prepare_tex_float4(specular_glossiness_texture);
     color specular = specular_factor * color(specular_glossiness.x, specular_glossiness.y, specular_glossiness.z);
     float glossiness = glossiness_factor * specular_glossiness.w;
 
-    float3 normal = gltf_prepare_normal(normal_texture, normal_texture_coord_index, normal_texture_tangent_index, normal_scale_factor);
-    float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_texture_coord_index, occlusion_strength);
-    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_texture_coord_index, emissive_factor);
+    float3 normal = gltf_prepare_normal(normal_texture);
+    float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_strength);
+    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_factor);
 
     // specular glossiness model
     // ------------------------------------------------------------------------

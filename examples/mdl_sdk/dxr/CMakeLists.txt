@@ -183,6 +183,7 @@ if(MDL_ENABLE_MATERIALX)
             "libraries/stdlib/genmdl/stdlib_genmdl_unit_impl.mtlx"
             "libraries/stdlib/stdlib_defs.mtlx"
             "libraries/stdlib/stdlib_ng.mtlx"
+            "libraries/targets/genmdl.mtlx"
             "source/MaterialXGenMdl/mdl/materialx/cm.mdl"
             "source/MaterialXGenMdl/mdl/materialx/core.mdl"
             "source/MaterialXGenMdl/mdl/materialx/hsv.mdl"

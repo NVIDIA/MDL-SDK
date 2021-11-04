@@ -41,6 +41,8 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
     class Mdl_material_description_loader_mtlx : public IMdl_material_description_loader
     {
     public:
+        explicit Mdl_material_description_loader_mtlx(const Base_options& options);
+
         bool match_gltf_name(const std::string& gltf_name) const final;
 
         std::string generate_mdl_source_code(
@@ -54,6 +56,10 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         size_t get_file_type_count() const final;
         std::string get_file_type_extension(size_t index) const final;
         std::string get_file_type_description(size_t index) const final;
+
+    private:
+        std::vector<std::string> m_paths;
+        std::vector<std::string> m_libraries;
     };
 
 }}}}

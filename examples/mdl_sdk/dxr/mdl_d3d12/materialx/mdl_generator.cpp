@@ -31,7 +31,7 @@
 #include <example_shared.h>
 #include <utils/io.h>
 
-#include <MaterialXCore/MaterialNode.h>
+#include <MaterialXCore/Material.h>
 #include <MaterialXFormat/Util.h>
 #include <MaterialXGenMdl/MdlShaderGenerator.h>
 #include <MaterialXGenShader/DefaultColorManagementSystem.h>
@@ -45,23 +45,26 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
 namespace mx = MaterialX;
 
 Mdl_generator::Mdl_generator()
-    : m_dependencies()
+    : m_mtlx_search_paths()
+    , m_mtlx_relative_library_paths()
 {
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Mdl_generator::add_dependency(const std::string& mtlx_library)
+void Mdl_generator::add_path(const std::string& mtlx_path)
 {
-    if (!mi::examples::io::file_exists(mtlx_library))
-    {
-        log_error("[MTLX] Library path does not exist: " + mtlx_library, SRC);
-        return false;
-    }
+    m_mtlx_search_paths.push_back(mtlx_path);
+    std::replace(m_mtlx_search_paths.back().begin(), m_mtlx_search_paths.back().end(), '/', '\\');
+}
 
-    m_dependencies.push_back(mtlx_library);
-    std::replace(m_dependencies.back().begin(), m_dependencies.back().end(), '/', '\\');
-    return true;
+// ------------------------------------------------------------------------------------------------
+
+void Mdl_generator::add_library(const std::string& mtlx_library)
+{
+    m_mtlx_relative_library_paths.push_back(mtlx_library);
+    std::replace(m_mtlx_relative_library_paths.back().begin(),
+        m_mtlx_relative_library_paths.back().end(), '/', '\\');
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -83,197 +86,215 @@ bool Mdl_generator::set_source(const std::string& mtlx_material)
 
 bool Mdl_generator::generate(Mdl_generator_result& inout_result) const
 {
-    auto generator = mx::MdlShaderGenerator::create();
-    const std::string language = generator->getLanguage();
-    mx::GenOptions generateOptions;
+    // Initialize the standard library
+    mx::DocumentPtr mtlx_std_lib;
+    mx::StringSet mtlx_include_files;
+    mx::FilePathVec mtlx_library_folders = { "libraries" };
+    mx::FileSearchPath mtlx_search_path;
+    mtlx_search_path.append(
+        mx::FilePath{ mi::examples::io::get_executable_folder() + "/autodesk_materialx" });
 
-    // standard library
-    std::string libSearchPath_s =
-        mi::examples::io::get_executable_folder() + "/autodesk_materialx/libraries";
-    const mx::FilePath libSearchPath_fp = mx::FilePath(libSearchPath_s);
-    const mx::FileSearchPath libSearchPath(libSearchPath_fp.asString());
-    if (!libSearchPath_fp.exists())
+    // add additional search paths
+    for (auto& p : m_mtlx_search_paths)
+        mtlx_search_path.append(mx::FilePath{ p });
+
+    // add additional relative library paths
+    for (auto& l : m_mtlx_relative_library_paths)
+        mtlx_library_folders.push_back(mx::FilePath{ l });
+
+    try
     {
-        log_error("[MTLX] Library path does not exist: " + libSearchPath_s, SRC);
-        return false;
+        mtlx_std_lib = mx::createDocument();
+        mtlx_include_files = mx::loadLibraries(
+            mtlx_library_folders, mtlx_search_path, mtlx_std_lib);
+        if (mtlx_include_files.empty())
+        {
+            log_error("[MTLX] Could not find standard data libraries on the given search path: " +
+                mtlx_search_path.asString(), SRC);
+        }
+
+    }
+    catch (std::exception& e)
+    {
+        log_error("[MTLX] Failed to initialize standard libraries:", e, SRC);
     }
 
-    // target language standard library
-    mx::FileSearchPath srcSearchPath = libSearchPath;
-    srcSearchPath.append(libSearchPath_fp / mx::FilePath("stdlib/genmdl"));
+    // Initialize unit management.
+    mx::UnitConverterRegistryPtr mtlx_unit_registry = mx::UnitConverterRegistry::create();
+    mx::UnitTypeDefPtr distanceTypeDef = mtlx_std_lib->getUnitTypeDef("distance");
+    mx::LinearUnitConverterPtr _distanceUnitConverter = mx::LinearUnitConverter::create(distanceTypeDef);
+    mtlx_unit_registry->addUnitConverter(distanceTypeDef, _distanceUnitConverter);
+    mx::UnitTypeDefPtr angleTypeDef = mtlx_std_lib->getUnitTypeDef("angle");
+    mx::LinearUnitConverterPtr angleConverter = mx::LinearUnitConverter::create(angleTypeDef);
+    mtlx_unit_registry->addUnitConverter(angleTypeDef, angleConverter);
 
-    // setup dependencies
-    auto _dependLib = mx::createDocument();
+    // Create the list of supported distance units.
+    mx::StringVec _distanceUnitOptions;
+    auto unitScales = _distanceUnitConverter->getUnitScale();
+    _distanceUnitOptions.resize(unitScales.size());
+    for (auto unitScale : unitScales)
     {
-        // load the standard libraries.
-        const mx::FilePathVec libraries = { "stdlib", "pbrlib", "lights" };
-        mx::loadLibraries(libraries, libSearchPath, _dependLib);
-
-        // add color management
-        auto _colorManagementSystem = mx::DefaultColorManagementSystem::create(language);
-        if (_colorManagementSystem)
-        {
-            generator->setColorManagementSystem(_colorManagementSystem);
-            _colorManagementSystem->loadLibrary(_dependLib);
-            generateOptions.targetColorSpaceOverride = "lin_rec709";
-        }
-        else
-        {
-            log_error("[MTLX] Failed to create color management system.", SRC);
-            return false;
-        }
-
-        // add unit system
-        auto _unitSystem = mx::UnitSystem::create(language);
-        if (_unitSystem)
-        {
-            generator->setUnitSystem(_unitSystem);
-            _unitSystem->loadLibrary(_dependLib);
-            _unitSystem->setUnitConverterRegistry(mx::UnitConverterRegistry::create());
-            mx::UnitTypeDefPtr distanceTypeDef = _dependLib->getUnitTypeDef("distance");
-            _unitSystem->getUnitConverterRegistry()->addUnitConverter(distanceTypeDef, mx::LinearUnitConverter::create(distanceTypeDef));
-            generateOptions.targetDistanceUnit = "meter";
-            mx::UnitTypeDefPtr angleTypeDef = _dependLib->getUnitTypeDef("angle");
-            _unitSystem->getUnitConverterRegistry()->addUnitConverter(angleTypeDef, mx::LinearUnitConverter::create(angleTypeDef));
-        }
-        else
-        {
-            log_error("[MTLX] Failed to create unit system.", SRC);
-            return false;
-        }
-
-        // Load dependencies of the current material
-        for(auto& dep : m_dependencies)
-            mx::loadLibrary(mx::FilePath(dep), _dependLib);
+        int location = _distanceUnitConverter->getUnitAsInteger(unitScale.first);
+        _distanceUnitOptions[location] = unitScale.first;
     }
+
+    // Initialize the generator contexts.
+    mx::GenContext generator_context = mx::MdlShaderGenerator::create();
+
+    // Initialize search paths.
+    for (const mx::FilePath& path : mtlx_search_path)
+    {
+        generator_context.registerSourceCodeSearchPath(path / "libraries");
+    }
+
+    // Initialize color management.
+    mx::DefaultColorManagementSystemPtr cms = mx::DefaultColorManagementSystem::create(
+        generator_context.getShaderGenerator().getTarget());
+    cms->loadLibrary(mtlx_std_lib);
+    generator_context.getShaderGenerator().setColorManagementSystem(cms);
+    generator_context.getOptions().targetColorSpaceOverride = "lin_rec709";
+    generator_context.getOptions().fileTextureVerticalFlip = false;
+
+    // Initialize unit management.
+    mx::UnitSystemPtr unitSystem = mx::UnitSystem::create(
+        generator_context.getShaderGenerator().getTarget());
+    unitSystem->loadLibrary(mtlx_std_lib);
+    unitSystem->setUnitConverterRegistry(mtlx_unit_registry);
+    generator_context.getShaderGenerator().setUnitSystem(unitSystem);
+    generator_context.getOptions().targetDistanceUnit = "meter";
 
     // load the actual material
-    mx::DocumentPtr material_document = mx::createDocument();
     {
         if (m_mtlx_source.empty())
         {
-            log_error("[MTLX] Mtlx source file not specified.", SRC);
+            log_error("[MTLX] Source file not specified.", SRC);
             return false;
         }
 
+        // Set up read options.
         mx::XmlReadOptions readOptions;
-        mx::FileSearchPath searchPath(libSearchPath);
-        mx::FilePath material_path(m_mtlx_source);
-        mx::readFromXmlFile(material_document, material_path, searchPath, &readOptions);
+        readOptions.readXIncludeFunction = [](mx::DocumentPtr doc, const mx::FilePath& filename,
+            const mx::FileSearchPath& searchPath, const mx::XmlReadOptions* options)
+        {
+            mx::FilePath resolvedFilename = searchPath.find(filename);
+            if (resolvedFilename.exists())
+            {
+                readFromXmlFile(doc, resolvedFilename, searchPath, options);
+            }
+            else
+            {
+                log_error("[MTLX] Include file not found: " + filename.asString(), SRC);
+            }
+        };
 
-        // Add in dependent libraries
-        bool importedLibrary = false;
-        try
+        // Clear user data on the generator.
+        generator_context.clearUserData();
+
+        // Load source document.
+        mx::DocumentPtr material_document = mx::createDocument();
+        mx::FilePath material_filename = m_mtlx_source;
+        mx::readFromXmlFile(material_document, m_mtlx_source, mtlx_search_path, &readOptions);
+
+        // Import libraries.
+        material_document->importLibrary(mtlx_std_lib);
+
+        // Validate the document.
+        std::string message;
+        if (!material_document->validate(&message))
         {
-            material_document->importLibrary(_dependLib);
-            importedLibrary = true;
-        }
-        catch (std::exception& e)
-        {
-            log_error("[MTLX] Failed to import libraries into material:", e, SRC);
+            log_error("[MTLX] Validation warnings for '" + m_mtlx_source + "'", SRC);
+            std::cerr << message;
             return false;
         }
-    }
 
-    // Find elements to render in the document
-    std::vector<mx::TypedElementPtr> elements;
-    try
-    {
-        mx::findRenderableElements(material_document, elements);
-    }
-    catch (mx::Exception & e)
-    {
-        log_error("[MTLX] Renderables search errors:", e, SRC);
-        return false;
-    }
-
-    // generate code
-    {
-        // Map to replace "/" in Element path names with "_".
-        mx::StringMap pathMap;
-        pathMap["/"] = "_";
-
-        mx::GenContext context(generator);
-        context.getOptions() = generateOptions;
-        context.registerSourceCodeSearchPath(srcSearchPath);
-
-        for (const auto& element : elements)
+        // Find renderable elements.
+        mx::StringVec renderablePaths;
+        std::vector<mx::TypedElementPtr> elems;
+        std::vector<mx::NodePtr> materialNodes;
+        mx::findRenderableElements(material_document, elems);
+        if (elems.empty())
         {
-            mx::TypedElementPtr targetElement = element;
-            mx::OutputPtr output = targetElement->asA<mx::Output>();
-            mx::ShaderRefPtr shaderRef = targetElement->asA<mx::ShaderRef>();
-            mx::NodePtr outputNode = targetElement->asA<mx::Node>();
-            mx::NodeDefPtr nodeDef = nullptr;
-            if (output)
+            log_error("[MTLX] No renderable elements found in '" + m_mtlx_source + "'", SRC);
+            return false;
+        }
+        for (mx::TypedElementPtr elem : elems)
+        {
+            mx::TypedElementPtr renderableElem = elem;
+            mx::NodePtr node = elem->asA<mx::Node>();
+            if (node && node->getType() == mx::MATERIAL_TYPE_STRING)
             {
-                outputNode = output->getConnectedNode();
-                // Handle connected upstream material nodes later on.
-                if (outputNode->getType() != mx::MATERIAL_TYPE_STRING)
+                std::vector<mx::NodePtr> shaderNodes = getShaderNodes(node, mx::SURFACE_SHADER_TYPE_STRING);
+                if (!shaderNodes.empty())
                 {
-                    nodeDef = outputNode->getNodeDef();
+                    renderableElem = *shaderNodes.begin();
                 }
+                materialNodes.push_back(node);
             }
-            else if (shaderRef)
+            else
             {
-                nodeDef = shaderRef->getNodeDef();
+                materialNodes.push_back(nullptr);
             }
+            renderablePaths.push_back(renderableElem->getNamePath());
+        }
 
-            // Handle material node checking. For now only check first surface shader if any
-            if (outputNode)
+        struct Mtlx_material
+        {
+            mx::DocumentPtr document;
+            mx::TypedElementPtr element;
+            mx::NodePtr material_node;
+        };
+        std::vector<Mtlx_material> materials_to_genereate;
+
+        // Create new materials.
+        for (size_t i = 0; i < renderablePaths.size(); i++)
+        {
+            const auto& renderablePath = renderablePaths[i];
+            mx::ElementPtr elem = material_document->getDescendant(renderablePath);
+            mx::TypedElementPtr typedElem = elem ? elem->asA<mx::TypedElement>() : nullptr;
+            if (!typedElem)
             {
-                const std::string& type = outputNode->getType();
-                if (type == mx::MATERIAL_TYPE_STRING)
-                {
-                    std::unordered_set<mx::NodePtr> shaderNodes = getShaderNodes(outputNode, mx::SURFACE_SHADER_TYPE_STRING);
-                    if (!shaderNodes.empty())
-                    {
-                        auto first = shaderNodes.begin();
-                        nodeDef = (*first)->getNodeDef();
-                        targetElement = *first;
-                    }
-                }
+                continue;
             }
 
-            const std::string namePath(targetElement->getNamePath());
-            if (nodeDef)
+            materials_to_genereate.push_back(Mtlx_material{});
+            Mtlx_material& mat = materials_to_genereate.back();
+            mat.document = material_document;
+            mat.element = typedElem;
+            mat.material_node = materialNodes[i];
+        }
+
+        for (Mtlx_material& mat : materials_to_genereate)
+        {
+            // Clear cached implementations, in case libraries on the file system have changed.
+            generator_context.clearNodeImplementations();
+
+            mx::ShaderPtr shader = nullptr;
+            try
             {
-                mx::string elementName = mx::replaceSubstrings(namePath, pathMap);
-                elementName = mx::createValidName(elementName);
-
-                mx::InterfaceElementPtr impl = nodeDef->getImplementation(generator->getTarget(), language);
-                if (impl)
-                {
-                    // generate mdl code
-                    {
-                        mx::ShaderPtr shader = nullptr;
-                        try
-                        {
-                            shader = generator->generate(elementName, targetElement, context);
-                        }
-                        catch (mx::Exception & e)
-                        {
-                            log_error("[MTLX] Code generation failure:", e, SRC);
-                            shader = nullptr;
-                        }
-                        if (!shader)
-                        {
-                            log_error("[MTLX] Failed to generate shader for element: " +
-                                targetElement->getNamePath(), SRC);
-                            continue;
-                        }
-
-                        auto generated = shader->getSourceCode("pixel");
-                        if (generated.empty())
-                        {
-                            log_error("[MTLX] Failed to generate source code for stage.", SRC);
-                            continue;
-                        }
-
-                        inout_result.generated_mdl_code.push_back(generated);
-                        inout_result.materialx_file_name.push_back(m_mtlx_source);
-                    }
-                }
+                shader =
+                    generator_context.getShaderGenerator().generate("Shader", mat.element, generator_context);
             }
+            catch (mx::Exception& e)
+            {
+                log_error("[MTLX] Code generation failure:", e, SRC);
+                shader = nullptr;
+            }
+            if (!shader)
+            {
+                log_error("[MTLX] Failed to generate shader for element: " +
+                    mat.element->getNamePath(), SRC);
+                continue;
+            }
+
+            auto generated = shader->getSourceCode("pixel");
+            if (generated.empty())
+            {
+                log_error("[MTLX] Failed to generate source code for stage.", SRC);
+                continue;
+            }
+
+            inout_result.generated_mdl_code.push_back(generated);
+            inout_result.materialx_file_name.push_back(m_mtlx_source);
         }
     }
     return inout_result.generated_mdl_code.size() > 0;

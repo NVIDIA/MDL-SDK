@@ -106,7 +106,7 @@ mi::Sint32 Lightprofile::reset_file(
     mi::Uint32 flags)
 {
     SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
-    std::string resolved_filename
+    const std::string resolved_filename
         = m_path_module->search( PATH::RESOURCE, original_filename.c_str());
 #if 0
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO,
@@ -129,9 +129,9 @@ mi::Sint32 Lightprofile::reset_file(
     if( !reader.open( resolved_filename.c_str()))
         return -2;
 
-    std::string log_identifier = "light profile \"" + resolved_filename + "\"";
-    mi::base::Uuid impl_hash{0,0,0,0};
-    mi::Sint32 result = reset_shared( transaction,
+    const std::string log_identifier = "light profile \"" + resolved_filename + "\"";
+    const mi::base::Uuid impl_hash{0,0,0,0};
+    const mi::Sint32 result = reset_shared( transaction,
         &reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
     if( result != 0)
         return result;
@@ -153,9 +153,9 @@ mi::Sint32 Lightprofile::reset_reader(
     mi::neuraylib::Lightprofile_degree degree,
     mi::Uint32 flags)
 {
-    std::string log_identifier = "memory-based light profile";
-    mi::base::Uuid impl_hash{0,0,0,0};
-    mi::Sint32 result = reset_shared( transaction,
+    const std::string log_identifier = "memory-based light profile";
+    const mi::base::Uuid impl_hash{0,0,0,0};
+    const mi::Sint32 result = reset_shared( transaction,
         reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
     if( result != 0)
         return result;
@@ -194,7 +194,7 @@ mi::Sint32 Lightprofile::reset_mdl(
     else
         log_identifier = "memory-based light profile";
 
-    mi::Sint32 result = reset_shared( transaction,
+    const mi::Sint32 result = reset_shared( transaction,
         reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
     if( result != 0)
         return result;
@@ -219,8 +219,8 @@ mi::Sint32 Lightprofile::reset_shared(
     mi::Uint32 flags)
 {
     // reject invalid flags
-    bool cw_set  = (flags & mi::neuraylib::LIGHTPROFILE_CLOCKWISE        ) != 0;
-    bool ccw_set = (flags & mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE) != 0;
+    const bool cw_set  = (flags & mi::neuraylib::LIGHTPROFILE_CLOCKWISE        ) != 0;
+    const bool ccw_set = (flags & mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE) != 0;
     if( flags >= 16 || (cw_set && ccw_set) || (!cw_set && !ccw_set))
         return -3;
 
@@ -253,7 +253,7 @@ mi::Sint32 Lightprofile::reset_shared(
     std::vector<mi::Float32> data;
 
     // parse and interpolate data
-    bool success = setup_lightprofile(
+    const bool success = setup_lightprofile(
         reader, log_identifier, degree, flags, resolution_phi, resolution_theta,
         start_phi, start_theta, delta_phi, delta_theta, data);
 
@@ -532,7 +532,7 @@ Lightprofile_impl::Lightprofile_impl(
         if( m_data[i] > m_candela_multiplier)
             m_candela_multiplier = m_data[i];
     if( m_candela_multiplier > 0.0f) {
-        mi::Float32 recipr = 1.0f / m_candela_multiplier;
+        const mi::Float32 recipr = 1.0f / m_candela_multiplier;
         for( mi::Size i = 0; i < m_data.size(); ++i)
             m_data[i] *= recipr;
     }
@@ -541,13 +541,15 @@ Lightprofile_impl::Lightprofile_impl(
     m_power = 0.0f;
     for( mi::Size p = 0; p < m_resolution_phi-1; ++p) {
         mi::Float32 cos_theta0 = cosf( m_start_theta);
-        for( mi::Size t = 0; t < m_resolution_theta-1; ++t) {
-            mi::Float32 cos_theta1 = cosf( m_start_theta + (t+1) * m_delta_theta);
-            mi::Float32 mu_theta = cos_theta0 - cos_theta1;
-            mi::Float32 value = m_data[p * m_resolution_theta + t]
-                              + m_data[p * m_resolution_theta + t + 1]
-                              + m_data[(p+1) * m_resolution_theta + t]
-                              + m_data[(p+1) * m_resolution_theta + t + 1];
+        mi::Size offs0 = p * m_resolution_theta;
+        mi::Size offs1 = (p + 1) * m_resolution_theta;
+        for( mi::Uint32 t = 0; t < m_resolution_theta-1; ++t,++offs0,++offs1) {
+            const mi::Float32 cos_theta1 = cosf( m_start_theta + (float)(t+1) * m_delta_theta);
+            const mi::Float32 mu_theta = cos_theta0 - cos_theta1;
+            const mi::Float32 value = m_data[offs0]
+                                    + m_data[offs0 + 1]
+                                    + m_data[offs1]
+                                    + m_data[offs1 + 1];
             m_power += value * mu_theta;
             cos_theta0 = cos_theta1;
         }
@@ -585,12 +587,12 @@ mi::Float32 Lightprofile_impl::sample( mi::Float32 phi, mi::Float32 theta, bool 
     if( m_data.empty())
         return 0.0f;
 
-    mi::Float32 phi_offset   = phi   - m_start_phi;
-    mi::Float32 theta_offset = theta - m_start_theta;
+          mi::Float32 phi_offset   = phi   - m_start_phi;
+    const mi::Float32 theta_offset = theta - m_start_theta;
 
     // reduce phi_offset mod 2*pi
-    phi_offset -= static_cast<mi::Float32>( floor( phi_offset / (2*M_PI)) * 2*M_PI);
-    if( phi_offset < 0.0f || phi_offset > 2*M_PI-0.0001f)
+    phi_offset -= floor( phi_offset / (float)(2*M_PI)) * (float)(2*M_PI);
+    if( phi_offset < 0.0f || phi_offset > (float)(2*M_PI-0.0001))
         phi_offset = 0.0f;
 
     mi::Difference phi_index   = static_cast<mi::Difference>( floor( phi_offset   / m_delta_phi));
@@ -606,15 +608,15 @@ mi::Float32 Lightprofile_impl::sample( mi::Float32 phi, mi::Float32 theta, bool 
 
     mi::Float32 u = (phi_offset   - phi_index  *m_delta_phi  ) / m_delta_phi;
     mi::Float32 v = (theta_offset - theta_index*m_delta_theta) / m_delta_theta;
-    mi::math::clamp( u, 0.0f, 1.0f);
-    mi::math::clamp( v, 0.0f, 1.0f);
+    u = mi::math::clamp( u, 0.0f, 1.0f);
+    v = mi::math::clamp( v, 0.0f, 1.0f);
 
     // bilinear interpolation
-    mi::Size index0 =  phi_index    * m_resolution_theta + theta_index;
-    mi::Size index1 = (phi_index+1) * m_resolution_theta + theta_index;
+    const mi::Size index0 =  phi_index    * m_resolution_theta + theta_index;
+    const mi::Size index1 = (phi_index+1) * m_resolution_theta + theta_index;
     ASSERT( M_LIGHTPROFILE, index0+1 < m_data.size() && index1+1 < m_data.size());
-    mi::Float32 value = (1.0f-u) * ((1.0f-v) * m_data[index0] + v * m_data[index0 + 1])
-                      +       u  * ((1.0f-v) * m_data[index1] + v * m_data[index1 + 1]);
+    const mi::Float32 value = (1.0f-u) * ((1.0f-v) * m_data[index0] + v * m_data[index0 + 1])
+                            +       u  * ((1.0f-v) * m_data[index1] + v * m_data[index1 + 1]);
 
     return candela ? value * m_candela_multiplier : value;
 }
@@ -698,7 +700,7 @@ float round_3_digits( float x) { return mi::math::round( x*1000.0f)/1000.0f; }
 bool export_to_writer(
     DB::Transaction* transaction, const Lightprofile* lightprofile, mi::neuraylib::IWriter* writer)
 {
-    DB::Tag impl_tag = lightprofile->get_impl_tag();
+    const DB::Tag impl_tag = lightprofile->get_impl_tag();
 
     // reject default-constructed instances
     if( !impl_tag)
@@ -706,22 +708,22 @@ bool export_to_writer(
 
     DB::Access<Lightprofile_impl> impl( impl_tag, transaction);
 
-    mi::Uint32 resolution_phi   = impl->get_resolution_phi();
-    mi::Uint32 resolution_theta = impl->get_resolution_theta();
+    const mi::Uint32 resolution_phi   = impl->get_resolution_phi();
+    const mi::Uint32 resolution_theta = impl->get_resolution_theta();
 
-    mi::Float32 first_phi = round_3_digits( mi::math::degrees( impl->get_phi( 0)));
-    mi::Float32 last_phi  = round_3_digits( mi::math::degrees( impl->get_phi( resolution_phi-1)));
+    const mi::Float32 first_phi = round_3_digits( mi::math::degrees( impl->get_phi( 0)));
+    const mi::Float32 last_phi  = round_3_digits( mi::math::degrees( impl->get_phi( resolution_phi-1)));
 
     bool type_c;
     bool sampling;
 
-    if( first_phi == 0 && last_phi == 360) {
+    if( first_phi == 0.f && last_phi == 360.f) {
         type_c     = true;
         sampling   = false;
-    } else if( first_phi == 270 && last_phi == 450) {
+    } else if( first_phi == 270.f && last_phi == 450.f) {
         type_c     = false;
         sampling   = false;
-    } else if( first_phi == 270 && last_phi == 630) {
+    } else if( first_phi == 270.f && last_phi == 630.f) {
         // The range from -90 to 270 is not valid for IES files. Under certain conditions we still
         // have the original angles as a subset, but in general we need to re-sample the data to
         // obtain values corresponding to angles in a valid range.
@@ -739,11 +741,12 @@ bool export_to_writer(
 
     // number of lamps, lumens, candela multiplier, resolution theta, resolution phi,
     // photometric type, units type, width, length, height
-    std::string line;
-    line = STRING::formatted_string( "1 0 %g %u %u %u 1 0 0 0\r\n",
+    {
+    const std::string line = STRING::formatted_string( "1 0 %g %u %u %u 1 0 0 0\r\n",
         impl->get_candela_multiplier(), resolution_theta, resolution_phi, type_c ? 1 : 2);
     if( line.empty() || !writer->writeline( line.c_str()))
         return false;
+    }
 
     // ballast factor, ballast lamp factor, input watts
     if( !writer->writeline( "1 1 0\r\n"))
@@ -751,11 +754,11 @@ bool export_to_writer(
 
     // theta values
     for( mi::Uint32 j = 0; j < resolution_theta; ++j) {
-        mi::Float32 theta = static_cast<mi::Float32>( type_c
-            ? mi::math::degrees( M_PI - impl->get_theta( resolution_theta-1-j))
-            : mi::math::degrees( impl->get_theta( j) - M_PI/2.0f));
+        const mi::Float32 theta = static_cast<mi::Float32>( type_c
+            ? mi::math::degrees( (float)M_PI - impl->get_theta( resolution_theta-1-j))
+            : mi::math::degrees( impl->get_theta( j) - (float)(M_PI/2.0)));
 
-        line = STRING::formatted_string( "%g ", round_3_digits( theta));
+        const std::string line = STRING::formatted_string( "%g ", round_3_digits( theta));
         if( line.empty() || !writer->writeline( line.c_str()))
             return false;
 
@@ -767,12 +770,13 @@ bool export_to_writer(
         return false;
 
     // phi values
+    const float scale = (float)(360.0 / (resolution_phi - 1));
     for( mi::Uint32 i = 0; i < resolution_phi; ++i) {
-        mi::Float32 phi = sampling
-            ? i * 360.0f / (resolution_phi-1)
+        const mi::Float32 phi = sampling
+            ? (float)i * scale
             : 360.0f - mi::math::degrees( impl->get_phi( resolution_phi-1-i));
 
-        line = STRING::formatted_string( "%g ", round_3_digits( phi));
+        const std::string line = STRING::formatted_string( "%g ", round_3_digits( phi));
         if( line.empty() || !writer->writeline(line.c_str()))
             return false;
 
@@ -784,20 +788,20 @@ bool export_to_writer(
         return false;
 
     // candela values
+    const float scalec = (float)((2.0 * M_PI) / (resolution_phi - 1));
     for( mi::Uint32 i = 0; i < resolution_phi; ++i) {
+        const mi::Float32 phi = (float)(resolution_phi-1 - i) * scalec;
         for( mi::Uint32 j = 0; j < resolution_theta; ++j) {
              mi::Float32 value;
              if( sampling) {
-                 mi::Float32 phi   = static_cast<mi::Float32>(
-                                         (resolution_phi-i-1) * 2.0f * M_PI / (resolution_phi-1));
-                 mi::Float32 theta = impl->get_theta( resolution_theta-1-j);
+                 const mi::Float32 theta = impl->get_theta( resolution_theta-1-j);
                  value = impl->sample( phi, theta, false);
              } else if( type_c)
                  value = impl->get_data( resolution_phi-1-i, resolution_theta-1-j);
              else
                  value = impl->get_data( resolution_phi-1-i, j);
 
-            line = STRING::formatted_string( "%f ", value);
+            const std::string line = STRING::formatted_string( "%f ", value);
             if( line.empty() || !writer->writeline(line.c_str()))
                 return false;
 
@@ -822,7 +826,7 @@ bool export_to_file(
     if( !writer.open(filename.c_str()))
         return false;
 
-    bool success = export_to_writer( transaction, lightprofile, &writer);
+    const bool success = export_to_writer( transaction, lightprofile, &writer);
     writer.close();
     return success;
 }
@@ -873,7 +877,7 @@ DB::Tag load_mdl_lightprofile(
         return tag;
 
     Lightprofile* lp = new Lightprofile();
-    mi::Sint32 result = lp->reset_mdl( transaction,
+    const mi::Sint32 result = lp->reset_mdl( transaction,
         reader, filename, container_filename, container_membername, mdl_file_path, impl_hash);
     ASSERT( M_LIGHTPROFILE, result == 0 || result == -4);
     if( result == -4)

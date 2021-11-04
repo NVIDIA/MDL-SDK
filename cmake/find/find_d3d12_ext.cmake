@@ -124,8 +124,8 @@ function(FIND_D3D12_EXT)
     find_file(_DX_IL_DLL "dxil.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
     set(_D3D12_SHARED
         # ${_D3D12_DLL}
-        ${_D3D12_SDK_LAYER_DLL}
-        ${_D3D12_COMPILER_DLL}
+        # ${_D3D12_SDK_LAYER_DLL}
+        # ${_D3D12_COMPILER_DLL}
         ${_DX_COMPILER_DLL}
         ${_DX_IL_DLL}
     )

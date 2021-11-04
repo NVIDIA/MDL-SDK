@@ -1112,6 +1112,7 @@ DAG_builder::DAG_builder(
 , m_conditional_created(false)
 , m_conditional_df_created(false)
 , m_target_material_model_mode(false)
+, m_error_detected(false)
 {
 }
 
@@ -2698,7 +2699,18 @@ DAG_node const *DAG_builder::try_inline(
     IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
     IDefinition const      *call_def = ref->get_definition();
 
+    if (call_def == NULL) {
+        // this should not happen in a valid module
+        m_error_detected = true;
+        return NULL;
+    }
+
     IDefinition const *orig_call_def = tos_module()->get_original_definition(call_def);
+    if (orig_call_def == NULL) {
+        // this should not happen in a valid module
+        m_error_detected = true;
+        return NULL;
+    }
     if (!orig_call_def->get_property(IDefinition::DP_ALLOW_INLINE)) {
         // inlining forbidden
         return NULL;

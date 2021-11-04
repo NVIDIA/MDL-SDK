@@ -773,11 +773,27 @@ namespace
         return changed;
     }
 
+    // returns a default format if the user_format provided is a nullptr
+    template<typename T>
+    const char* ext_default_format(T& value, const char* user_format, const char* default_format)
+    {
+        if (user_format)
+            return user_format;
+
+        static const char* neg_inf = "-infinity";
+        static const char* pos_inf = "+infinity";
+        if (value == std::numeric_limits<T>::min())
+            return neg_inf;
+        if (value == std::numeric_limits<T>::max())
+            return pos_inf;
+        return default_format;
+    }
+
 } // anonymous
 
 template<>
 bool Control::show_slider_control<mi::Float32>(mi::Float32* value, mi::Float32& min, mi::Float32& max, const char* format) {
-    return show_slider_control_scalar<mi::Float32, ImGuiDataType_Float, 1>(value, &min, &max, format ? format : "%.3f");
+    return show_slider_control_scalar<mi::Float32, ImGuiDataType_Float, 1>(value, &min, &max, ext_default_format(*value, format, "%.3f"));
 }
 
 template<>
@@ -797,7 +813,7 @@ bool Control::show_slider_control<mi::Float32_4>(mi::Float32_4* value, mi::Float
 
 template<>
 bool Control::show_drag_control<mi::Float32>(mi::Float32* value, float speed, mi::Float32& min, mi::Float32& max, const char* format) {
-    return show_drag_control_scalar<mi::Float32, ImGuiDataType_Float, 1>(value, speed, &min, &max, format ? format : "%.3f");
+    return show_drag_control_scalar<mi::Float32, ImGuiDataType_Float, 1>(value, speed, &min, &max, ext_default_format(*value, format, "%.3f"));
 }
 
 template<>
@@ -819,7 +835,7 @@ bool Control::show_drag_control<mi::Float32_4>(mi::Float32_4* value, float speed
 
 template<>
 bool Control::show_slider_control<mi::Float64>(mi::Float64* value, mi::Float64& min, mi::Float64& max, const char* format) {
-    return show_slider_control_scalar<mi::Float64, ImGuiDataType_Double, 1>(value, &min, &max, format ? format : "%.3f");
+    return show_slider_control_scalar<mi::Float64, ImGuiDataType_Double, 1>(value, &min, &max, ext_default_format(*value, format, "%.3f"));
 }
 
 template<>
@@ -839,7 +855,7 @@ bool Control::show_slider_control<mi::Float64_4>(mi::Float64_4* value, mi::Float
 
 template<>
 bool Control::show_drag_control<mi::Float64>(mi::Float64* value, float speed, mi::Float64& min, mi::Float64& max, const char* format) {
-    return show_drag_control_scalar<mi::Float64, ImGuiDataType_Double, 1>(value, speed, &min, &max, format ? format : "%.3f");
+    return show_drag_control_scalar<mi::Float64, ImGuiDataType_Double, 1>(value, speed, &min, &max, ext_default_format(*value, format, "%.3f"));
 }
 
 template<>

@@ -131,6 +131,9 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
     else
         log_error("Loading Applications failed. Freeing already loaded content.", SRC);
 
+    // before unloading list every library that is in use
+    Diagnostics::list_loaded_libraries();
+
     // unload the application
     if (!unload())
         log_error("Unloading Applications failed.", SRC);

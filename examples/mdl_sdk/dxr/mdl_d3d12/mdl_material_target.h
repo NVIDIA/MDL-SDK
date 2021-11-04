@@ -56,6 +56,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         int32_t emission_function_index;
         int32_t emission_intensity_function_index;
         int32_t thin_walled_function_index;
+        int32_t volume_absorption_coefficient_function_index;
     };
 
     // --------------------------------------------------------------------------------------------

@@ -136,6 +136,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool gpu_debug;
         bool enable_shader_cache;
 
+#if MDL_ENABLE_MATERIALX
+        std::vector<std::string> mtlx_paths;
+        std::vector<std::string> mtlx_libraries;
+#endif
+
         std::unordered_map<std::string, std::string> user_options;
 
         bool get_user_options(

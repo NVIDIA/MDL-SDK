@@ -148,9 +148,21 @@ namespace mi { namespace examples { namespace dxr
            "                          window. stdout and stderr streams are also not redirected.\n"
 
         << "--log_file <path>|0       Target path of the log output or '0' to disable\n"
-            "                         the log file. (default: <outputfile-basename>.log)\n"
+           "                          the log file. (default: <outputfile-basename>.log)\n"
 
         << "--enable_shader_cache     Enable shader caching to improve (second) loading times.\n"
+
+        #if MDL_ENABLE_MATERIALX
+        << "--mtlx_path <path>        Specify an additional absolute search path location\n"
+           "                          (e.g. '/projects/MaterialX'). This path will be queried when\n"
+           "                          locating standard data libraries, XInclude references, and\n"
+           "                          referenced images. Can occur multiple times.\n"
+
+        << "--mtlx_library <rel_path> Specify an additional relative path to a custom data\n"
+           "                          library folder (e.g. 'libraries/custom'). MaterialX files\n"
+           "                          at the root of this folder will be included in all content\n"
+           "                          documents. Can occur multiple times.\n"
+        #endif
         ;
 
         mdl_d3d12::log_info(ss.str());
@@ -357,6 +369,30 @@ namespace mi { namespace examples { namespace dxr
                     options.enable_shader_cache = true;
                     mi::examples::io::mkdir(mi::examples::io::get_executable_folder() + "/shader_cache");
                 }
+                #if MDL_ENABLE_MATERIALX
+                    else if (wcscmp(opt, L"--mtlx_path") == 0 && i < argc - 1)
+                    {
+                        std::string path = mi::examples::strings::wstr_to_str(argv[++i]);
+                        if (!mi::examples::strings::remove_quotes(path))
+                        {
+                            log_error("Unexpected quotes in: '" + path + "'.", SRC);
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
+                        options.mtlx_paths.push_back(mi::examples::io::normalize(path));
+                    }
+                    else if (wcscmp(opt, L"--mtlx_library") == 0 && i < argc - 1)
+                    {
+                        std::string path = mi::examples::strings::wstr_to_str(argv[++i]);
+                        if (!mi::examples::strings::remove_quotes(path))
+                        {
+                            log_error("Unexpected quotes in: '" + path + "'.", SRC);
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
+                        options.mtlx_libraries.push_back(mi::examples::io::normalize(path));
+                    }
+                #endif
                 else
                 {
                     log_error("Unknown option: \"" + mi::examples::strings::wstr_to_str(argv[i]) + "\"", SRC);

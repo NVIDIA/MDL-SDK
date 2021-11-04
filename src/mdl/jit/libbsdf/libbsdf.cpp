@@ -669,6 +669,9 @@ BSDF_INLINE float microfacet_evaluate(
     float &nk1,
     float &nk2)
 {
+    nk1 = math::abs(math::dot(g.n.shading_normal, data->k1));
+    nk2 = math::abs(math::dot(g.n.shading_normal, data->k2));
+
     // BTDF or BRDF eval?
     const bool backside_eval = math::dot(data->k2, g.n.geometry_normal) < 0.0f;
 
@@ -677,9 +680,6 @@ BSDF_INLINE float microfacet_evaluate(
         absorb(data);
         return 0.0f;
     }
-
-    nk1 = math::abs(math::dot(g.n.shading_normal, data->k1));
-    nk2 = math::abs(math::dot(g.n.shading_normal, data->k2));
 
     const float3 h = compute_half_vector(
         data->k1, data->k2, g.n.shading_normal, ior, nk2,

@@ -102,6 +102,10 @@ namespace mi { namespace examples { namespace dxr
         /// when auxiliary buffers are enabled, this index is used to select to one to display
         uint32_t display_buffer_index;
 
+        /// enable animation mode, progression is limited to a few iterations and the
+        /// mdl state will have an animation_time different from zero.
+        uint32_t enable_animiation;
+
         /// resets the progressive iteration counter to restart the rendering in the next frame.
         void restart_progressive_rendering();
 

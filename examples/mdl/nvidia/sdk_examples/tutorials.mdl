@@ -508,3 +508,24 @@ export color fd_auto_uniform() = color();
 // An auto-varying function.
 export color fd_auto_varying() = color(state::normal());
 
+// A animated simple material.
+export material blinker_material(
+    color base = color(0.1),
+    color light = color(1.0, 0.9, 0.0),
+    bool enabled = true,
+    float speed = 5.0)
+= let {
+    float sin_curve = math::sin(state::animation_time() * speed);
+    bool shine = enabled && sin_curve > 0.25;
+} in material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: base
+        ),
+        emission: material_emission(
+            emission: df::diffuse_edf(),
+            intensity: shine ? light : color(0.0)
+        )
+    )
+);
+

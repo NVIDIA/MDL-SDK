@@ -151,13 +151,14 @@ void RayGenProgram()
     [loop]
     for (uint it_frame = 0; it_frame < iterations_per_frame; ++it_frame)
     {
-        uint it = progressive_iteration + it_frame;
+        // limit the progression count to 32 if we are in animation mode
+        uint it = it_frame + (enable_animiation ? min(progressive_iteration, 32) : progressive_iteration);
 
         // random number seed
         unsigned int seed = tea(
             16, /*magic (see OptiX path tracing example)*/
             launch_dim.x * launch_index.y + launch_index.x,
-            it);
+            it + (enable_animiation ? asint(total_time) : 0));
 
         // pick (uniform) random position in pixel
         float2 in_pixel_pos = rnd2(seed);

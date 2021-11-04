@@ -71,6 +71,9 @@ cbuffer SceneConstants : register(b1)
 
     // when auxiliary buffers are enabled, this index is used to select to one to display
     uint display_buffer_index;
+
+    // enable animation mode, progression is limited, mdl state will have an animation_time
+    uint enable_animiation;
 }
 
 // Ray typed, has to match with CPU version

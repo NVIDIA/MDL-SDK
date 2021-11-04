@@ -168,7 +168,7 @@ bool Example_dxr::initialize(Base_options* options)
     // add some MaterialX setup
     // this will probably change with a more sophisticated build integration
     // assuming relevant files have been copied manually into the build folder
-    options->mdl_paths.push_back(mi::examples::io::get_executable_folder() + 
+    options->mdl_paths.push_back(mi::examples::io::get_executable_folder() +
         "/autodesk_materialx/source/MaterialXGenMdl/mdl");
 #endif
 
@@ -189,7 +189,7 @@ bool Example_dxr::load()
     // register code generators
     #ifdef MDL_ENABLE_MATERIALX
         get_mdl_sdk().get_library()->register_mdl_material_description_loader(
-            new mi::examples::mdl_d3d12::materialx::Mdl_material_description_loader_mtlx());
+            new mi::examples::mdl_d3d12::materialx::Mdl_material_description_loader_mtlx(*options));
     #endif
 
     // basic resource handling one large descriptor heap (array of different resource views)
@@ -750,7 +750,14 @@ void Example_dxr::recompile_materials(
     // skip updates and rendering while reloading the materials
     set_scene_is_updating(true);
 
-    std::thread([&, selected_material, mat_gui]()
+    // if no material is selected we cannot compile only that
+    if (recompile_only_the_selected_material && !selected_material)
+    {
+        log_error("No material selected for recompiling.", SRC);
+        return;
+    }
+
+    std::thread([this, recompile_only_the_selected_material, selected_material, mat_gui]()
         {
             // unbind the material from the GUI as it can change during the process
             if (mat_gui)
@@ -811,8 +818,11 @@ void Example_dxr::recompile_materials(
                 mat_gui->bind_material(selected_material);
             }
 
-            log_info("Material has been recompiled successfully: " +
-                selected_material->get_name());
+            if (recompile_only_the_selected_material)
+                log_info("Material has been recompiled successfully: " +
+                    selected_material->get_name());
+            else
+                log_info("Materials have been recompiled successfully.");
 
             // continue updates and rendering in the next frame
             m_scene_constants->data().restart_progressive_rendering();

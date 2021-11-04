@@ -291,6 +291,13 @@ IGenerated_code_dag *Code_generator_dag::compile(IModule const *module)
             result->dump_material_dag(i, NULL);
         }
     }
+
+    if (result->error_state()) {
+        // some internal error occurred, drop the compilation
+        result->release();
+        return NULL;
+    }
+
     return result;
 }
 

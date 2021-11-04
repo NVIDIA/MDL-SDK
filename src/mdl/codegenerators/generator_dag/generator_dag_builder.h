@@ -328,6 +328,14 @@ public:
     /// Pop a module from the module stack.
     void pop_module();
 
+    /// Returns true if error were detected (and clear the flag).
+    bool error_state()
+    {
+        bool res = m_error_detected;
+        m_error_detected = false;
+        return res;
+    }
+
 private:
     /// Get the allocator.
     IAllocator *get_allocator() const { return m_alloc; }
@@ -551,6 +559,9 @@ private:
 
     /// if true we are in target model mode.
     bool m_target_material_model_mode;
+
+    /// Set to true if an error during build occurred.
+    bool m_error_detected;
 };
 
 /// RAII helper class to handle the module stack.

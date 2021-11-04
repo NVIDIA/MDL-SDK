@@ -252,6 +252,9 @@ bool Mdl_material_target::add_material_to_link_unit(
 
     std::string thin_walled_name = "mdl_thin_walled_" + std::to_string(material->get_id());
 
+    std::string volume_absorption_coefficient =
+        "mdl_absorption_coefficient_" + std::to_string(material->get_id());
+
     // select expressions to generate HLSL code for
     std::vector<mi::neuraylib::Target_function_description> selected_functions;
 
@@ -269,6 +272,9 @@ bool Mdl_material_target::add_material_to_link_unit(
 
     selected_functions.push_back(mi::neuraylib::Target_function_description(
         "thin_walled", thin_walled_name.c_str()));
+
+    selected_functions.push_back(mi::neuraylib::Target_function_description(
+        "volume.absorption_coefficient", volume_absorption_coefficient.c_str()));
 
     // get the compiled material and add the material to the link unit
     mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
@@ -314,6 +320,12 @@ bool Mdl_material_target::add_material_to_link_unit(
         selected_functions[4].function_index == static_cast<mi::Size>(-1)
         ? -1
         : static_cast<int32_t>(selected_functions[4].function_index);
+
+    // function index for "volume.absorption_coefficient"
+    interface_data.indices.volume_absorption_coefficient_function_index =
+        selected_functions[5].function_index == static_cast<mi::Size>(-1)
+        ? -1
+        : static_cast<int32_t>(selected_functions[5].function_index);
 
     // also constant for the entire material
     interface_data.argument_layout_index = selected_functions[0].argument_block_index;
@@ -820,6 +832,11 @@ bool Mdl_material_target::generate()
         "in Shading_state_material state) {\n"
         "   switch(function_index) {\n";
 
+    std::string abs_coefficient_switch_function =
+        "float3 mdl_absorption_coefficient(in uint function_index, "
+        "in Shading_state_material state) {\n"
+        "   switch(function_index) {\n";
+
     for (size_t f = 0, n = m_target_code->get_callable_function_count(); f < n; ++f)
     {
         mi::neuraylib::ITarget_code::Function_kind func_kind =
@@ -846,6 +863,11 @@ bool Mdl_material_target::generate()
             else if (mi::examples::strings::starts_with(name, "mdl_thin_walled_"))
             {
                 thin_walled_switch_function += "       case " + std::to_string(f) + ": " +
+                    "return " + name + "(state);\n";
+            }
+            else if (mi::examples::strings::starts_with(name, "mdl_absorption_coefficient_"))
+            {
+                abs_coefficient_switch_function += "       case " + std::to_string(f) + ": " +
                     "return " + name + "(state);\n";
             }
         }
@@ -945,6 +967,13 @@ bool Mdl_material_target::generate()
         "   return false;\n"
         "}\n\n";
     m_hlsl_source_code += thin_walled_switch_function;
+
+    abs_coefficient_switch_function+=
+        "       default: break;\n"
+        "   }\n"
+        "   return float3(0.0f, 0.0f, 0.0f);\n"
+        "}\n\n";
+    m_hlsl_source_code += abs_coefficient_switch_function;
 
 
     // this last snipped contains the actual hit shader and the renderer logic

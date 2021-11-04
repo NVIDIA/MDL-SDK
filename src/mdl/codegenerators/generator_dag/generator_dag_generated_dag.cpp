@@ -885,6 +885,7 @@ Generated_code_dag::Generated_code_dag(
 , m_current_function_index(0)
 , m_needs_anno(false)
 , m_mark_generated((options & MARK_GENERATED_ENTITIES) != 0)
+, m_error_detected(false)
 , m_resource_tag_map(alloc)
 , m_resource_tagger(m_resource_tag_map)
 {
@@ -2169,6 +2170,8 @@ void Generated_code_dag::compile(IModule const *module)
     // compilation has finished: clear the CSE table, so it will be safe to
     // update resource values with tags
     m_node_factory.identify_clear();
+
+    m_error_detected |= dag_builder.error_state();
 }
 
 // Helper function, adds a "hidden" annotation to a generated function.

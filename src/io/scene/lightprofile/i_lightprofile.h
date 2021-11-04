@@ -45,7 +45,7 @@ namespace LIGHTPROFILE {
 class Lightprofile_impl;
 
 /// The class ID for the #Lightprofile class.
-static const SERIAL::Class_id ID_LIGHTPROFILE = 0x5f4c7066; // '_Lpf'
+static constexpr SERIAL::Class_id ID_LIGHTPROFILE = 0x5f4c7066; // '_Lpf'
 
 // The DB proxy class for the scene element light profile.
 //
@@ -307,7 +307,7 @@ private:
 };
 
 /// The class ID for the #Lightprofile_impl class.
-static const SERIAL::Class_id ID_LIGHTPROFILE_IMPL = 0x5f4c7069; // '_Lpi'
+static constexpr SERIAL::Class_id ID_LIGHTPROFILE_IMPL = 0x5f4c7069; // '_Lpi'
 
 // The DB implementation class for the scene element light profile.
 //

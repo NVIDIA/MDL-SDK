@@ -49,16 +49,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
-    struct Vertex
-    {
-        DirectX::XMFLOAT3 position;
-        DirectX::XMFLOAT3 normal;
-        DirectX::XMFLOAT2 texcoord0;
-        DirectX::XMFLOAT4 tangent0;
-    };
-
-    // --------------------------------------------------------------------------------------------
-
     inline static DirectX::XMVECTOR vector(const DirectX::XMFLOAT3& vec3, float w)
     {
 
@@ -358,47 +348,117 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 Khr_specular_glossiness
             };
 
+            // corresponds to standard glTF textures, including the sampler state
+            // and extended by KHR_texture_transform
+            struct Texture_info
+            {
+                enum class WrapMode : uint16_t
+                {
+                    ClampToEdge = 33071,
+                    MirroredRepeat = 33648,
+                    Repeat = 10497
+                };
+
+                std::string resource_identifier = "";
+
+                DirectX::XMFLOAT2 offset = { 0.0f, 0.0f };
+                float rotation = 0.0f;
+                DirectX::XMFLOAT2 scale = { 0.0f, 0.0f };
+
+                // Note, if KHR_texture_transform data is available, it will override the
+                // the `texCoord` of the parenting texture.
+                int32_t texCoord = 0;
+
+                WrapMode wrap_s = WrapMode::Repeat;
+                WrapMode wrap_t = WrapMode::Repeat;
+            };
+
+
             // corresponds to glTF Extension: KHR_materials_clearcoat
             struct Model_data_materials_clearcoat
             {
                 float clearcoat_factor = 0.0f;
-                std::string clearcoat_texture = "";
+                Texture_info clearcoat_texture = {};
                 float clearcoat_roughness_factor = 0.0f;
-                std::string clearcoat_roughness_texture = "";
-                std::string clearcoat_normal_texture = "";
+                Texture_info clearcoat_roughness_texture = {};
+                Texture_info clearcoat_normal_texture = {};
+            };
+
+            // corresponds to glTF Extension: KHR_materials_transmission
+            struct Model_data_materials_transmission
+            {
+                float transmission_factor = 0.0f;
+                Texture_info transmission_texture = {};
+            };
+
+            // corresponds to glTF Extension: KHR_materials_sheen
+            struct Model_data_materials_sheen
+            {
+                DirectX::XMFLOAT3 sheen_color_factor = { 0.0f, 0.0f, 0.0f };
+                Texture_info sheen_color_texture = {};
+                float sheen_roughness_factor = 0.0f;
+                Texture_info sheen_roughness_texture = {};
+            };
+
+            // corresponds to glTF Extension: KHR_materials_specular
+            struct Model_data_materials_specular
+            {
+                float specular_factor = 1.0f;
+                Texture_info specular_texture = {};
+                DirectX::XMFLOAT3 specular_color_factor = { 1.0f, 1.0f, 1.0f };
+                Texture_info specular_color_texture = {};
+            };
+
+            // corresponds to glTF Extension: KHR_materials_ior
+            struct Model_data_materials_ior
+            {
+                float ior = 1.5f;
+            };
+
+            // corresponds to glTF Extension: KHR_materials_volume
+            struct Model_data_materials_volume
+            {
+                bool thin_walled = true; // we are using a ray-tracer
+                float attenuation_distance = std::numeric_limits<float>::max();
+                DirectX::XMFLOAT3 attenuation_color = { 1.0f, 1.0f, 1.0f };
             };
 
             struct Pbr_model_data_metallic_roughness
             {
-                std::string base_color_texture = "";
+                Texture_info base_color_texture = {};
                 DirectX::XMFLOAT4 base_color_factor = { 1.0f, 1.0f, 1.0f, 1.0f };
-                std::string metallic_roughness_texture = "";
+                Texture_info metallic_roughness_texture = {};
                 float metallic_factor = 0.0f;
                 float roughness_factor = 0.1f;
 
+                Model_data_materials_transmission transmission;
                 Model_data_materials_clearcoat clearcoat;
+                Model_data_materials_sheen sheen;
+                Model_data_materials_specular specular;
+                Model_data_materials_ior ior;
+                Model_data_materials_volume volume;
             };
 
             // corresponds to glTF Extension: KHR_materials_pbrSpecularGlossiness
             struct Pbr_model_data_khr_specular_glossiness
             {
-                std::string diffuse_texture = "";
+                Texture_info diffuse_texture = {};
                 DirectX::XMFLOAT4 diffuse_factor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-                std::string specular_glossiness_texture = "";
+                Texture_info specular_glossiness_texture = {};
                 DirectX::XMFLOAT3 specular_factor = { 1.0f, 1.0f, 1.0f };
                 float glossiness_factor = 0.9f;
             };
 
             std::string name = "<name>";
 
-            std::string normal_texture = "";
+            Texture_info normal_texture = {};
             float normal_scale_factor = 1.0f;
 
-            std::string occlusion_texture = "";
+            Texture_info occlusion_texture = {};
             float occlusion_strength = 0.0f;
 
-            std::string emissive_texture = "";
+            Texture_info emissive_texture = {};
             DirectX::XMFLOAT3 emissive_factor = { 0.0f, 0.0f, 0.0f };
 
             Alpha_mode alpha_mode = Alpha_mode::Opaque;
