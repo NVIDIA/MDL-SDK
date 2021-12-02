@@ -3425,6 +3425,9 @@ private:
     bool m_in_intrinsic_generator;
 
 
+    /// The target language.
+    Target_language m_target_lang;
+
     /// The runtime creator.
     MDL_runtime_creator *m_runtime;
 
@@ -3693,9 +3696,6 @@ private:
 
     /// Analysis object storing state usage information per function and updating
     State_usage_analysis m_state_usage_analysis;
-
-    /// The target language.
-    Target_language m_target_lang;
 
     /// If true, generate full debug info.
     bool m_enable_full_debug;

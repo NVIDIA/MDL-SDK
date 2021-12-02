@@ -1109,6 +1109,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_use_renderer_adapt_normal(options.get_bool_option(
     MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL))
 , m_in_intrinsic_generator(false)
+, m_target_lang(target_lang)
 , m_runtime(create_mdl_runtime(
     m_arena_builder,
     this,
@@ -1189,7 +1190,6 @@ LLVM_code_generator::LLVM_code_generator(
 , m_sm_version(target_lang == TL_PTX ? sm_version : 0)
 , m_min_ptx_version(0)
 , m_state_usage_analysis(*this)
-, m_target_lang(target_lang)
 , m_enable_full_debug(enable_debug)
 , m_enable_type_debug(target_lang == TL_HLSL)
 , m_exported_funcs_are_entries(false)

@@ -4736,17 +4736,18 @@ const mi::mdl::IType* int_type_to_mdl_type(
             return nullptr;
         }
 
-        if (mi::mdl::IType_enum const *te = tf.lookup_enum(int_enum_type->get_symbol())) {
-            // an enum with this name already exists, assume it's the right one
+        // If an enum with this name already exists, assume it is the right one.
+        const char* int_type_name = int_enum_type->get_symbol();
+        std::string core_type_name = decode_name_without_signature( int_type_name);
+        if( const mi::mdl::IType_enum* te = tf.lookup_enum( core_type_name.c_str()))
             return te;
-        }
 
-        const mi::mdl::ISymbol *s = symtab->create_symbol(int_enum_type->get_symbol());
-        mi::mdl::IType_enum* te = tf.create_enum(s);
-        for (mi::Size i = 0, n = int_enum_type->get_size(); i < n; ++i) {
-
-            const mi::mdl::ISymbol *evs = symtab->create_symbol(int_enum_type->get_value_name(i));
-            te->add_value(evs, int_enum_type->get_value_code(i));
+        // Otherwise create it.
+        const mi::mdl::ISymbol* s = symtab->create_symbol( core_type_name.c_str());
+        mi::mdl::IType_enum* te = tf.create_enum( s);
+        for( mi::Size i = 0, n = int_enum_type->get_size(); i < n; ++i) {
+            const mi::mdl::ISymbol* evs = symtab->create_symbol( int_enum_type->get_value_name( i));
+            te->add_value( evs, int_enum_type->get_value_code( i));
         }
         return te;
     }
@@ -4789,22 +4790,21 @@ const mi::mdl::IType* int_type_to_mdl_type(
             return nullptr;
         }
 
-        if (mi::mdl::IType_struct const *st = tf.lookup_struct(int_struct_type->get_symbol())) {
-            // an struct with this name already exists, assume it's the right one
-            return st;
+        // If a struct with this name already exists, assume it is the right one.
+        const char* int_type_name = int_struct_type->get_symbol();
+        std::string core_type_name = decode_name_without_signature( int_type_name);
+        if( const mi::mdl::IType_struct* ts = tf.lookup_struct( core_type_name.c_str()))
+            return ts;
+
+        // Otherwise create it.
+        const mi::mdl::ISymbol* s = symtab->create_symbol( core_type_name.c_str());
+        mi::mdl::IType_struct* ts = tf.create_struct( s);
+        for( mi::Size i = 0, n = int_struct_type->get_size(); i < n; ++i) {
+            mi::base::Handle<const IType> field( int_struct_type->get_field_type( i));
+            const mi::mdl::ISymbol* fs = symtab->create_symbol( int_struct_type->get_field_name( i));
+            ts->add_field( int_type_to_mdl_type( field.get(), tf), fs);
         }
-
-        const mi::mdl::ISymbol *s = symtab->create_symbol(int_struct_type->get_symbol());
-
-        mi::mdl::IType_struct* st = tf.create_struct(s);
-        for (mi::Size i = 0, n = int_struct_type->get_size(); i < n; ++i) {
-
-            mi::base::Handle<const IType> field(int_struct_type->get_field_type(i));
-            const mi::mdl::ISymbol *fs = symtab->create_symbol(int_struct_type->get_field_name(i));
-
-            st->add_field(int_type_to_mdl_type(field.get(), tf), fs);
-        }
-        return st;
+        return ts;
     }
     case IType::TK_BOOL:
         return tf.create_bool();

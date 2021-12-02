@@ -1,7 +1,38 @@
 Change Log
 ==========
-MDL SDK 2021.0.2 (344800.7839): 07 Oct 2021
+MDL SDK 2021.0.4 (344800.9767): 26 Nov 2021
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2021.0.4 (344800.9767) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Fixed Bugs**
+
+- General
+
+    - Fixed incorrect handling of user-defined type names for structs and enums
+      when encoded names were enabled.
+
+- MDL Compiler and Backends
+
+    - Fixed non-deterministic behavior with `sincos` calls.
+
+
+MDL SDK 2021.0.3 (344800.8726): 02 Nov 2021
+-------------------------------------------
+
+ABI compatible with the MDL SDK 2021.0.3 (344800.8726) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+
+    - Apply thin film only if thickness > 0.0 (libbsdf).
+
+
+MDL SDK 2021.0.2 (344800.7839): 07 Oct 2021
+-------------------------------------------
 
 ABI compatible with the MDL SDK 2021.0.2 (344800.7839) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
