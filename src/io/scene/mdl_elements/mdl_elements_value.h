@@ -160,7 +160,8 @@ private:
 class Value_string : public Value_base<IValue_string, IType_string>
 {
 public:
-    Value_string( const Type* type, const char* value) : Base( type), m_value( value) { }
+    Value_string( const Type* type, const char* value)
+      : Base( type), m_value( value ? value : "") { }
 
     const char* get_value() const { return m_value.c_str(); }
 
@@ -176,7 +177,10 @@ private:
 class Value_string_localized : public Value_base<IValue_string_localized, IType_string>
 {
 public:
-    Value_string_localized( const Type* type, const char* value, const char* original_value) : Base( type), m_value( value), m_original_value( original_value) { }
+    Value_string_localized( const Type* type, const char* value, const char* original_value)
+      : Base( type),
+        m_value( value ? value : ""),
+        m_original_value( original_value ? original_value : "" ) { }
 
     const char* get_value() const { return m_value.c_str(); }
 
@@ -323,19 +327,22 @@ class Value_texture : public Value_base<IValue_texture, IType_texture>
 {
 public:
 
-    Value_texture(const Type* type, DB::Tag value) : Base(type), m_value(value), m_gamma(0.0f) { }
+    Value_texture( const Type* type, DB::Tag value)
+      : Base( type), m_value( value), m_gamma( 0.0f) { }
 
     Value_texture(
         const Type* type,
         DB::Tag value,
         const char* unresolved_mdl_url,
         const char* owner_module,
-        mi::Float32 gamma)
-        : Base( type)
-        , m_value( value)
-        , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
-        , m_owner_module(owner_module ? owner_module : "")
-        , m_gamma(gamma)
+        mi::Float32 gamma,
+        const char* selector)
+      : Base( type),
+        m_value( value),
+        m_unresolved_mdl_url( unresolved_mdl_url ? unresolved_mdl_url : ""),
+        m_owner_module( owner_module ? owner_module : ""),
+        m_gamma( gamma),
+        m_selector( selector ? selector : "")
     { }
 
     DB::Tag get_value() const { return m_value; }
@@ -346,15 +353,15 @@ public:
 
     const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
 
-    void set_unresolved_mdl_url(const char* url) { if (url) m_unresolved_mdl_url = url; }
+    void set_unresolved_mdl_url( const char* url) { if( url) m_unresolved_mdl_url = url; }
 
     const char* get_owner_module() const { return m_owner_module.c_str(); }
 
-    void set_owner_module(const char* module) { if (module) m_owner_module = module; }
-
-    void set_gamma( Float32 gamma) { m_gamma = gamma; }
+    void set_owner_module( const char* module) { if( module) m_owner_module = module; }
 
     mi::Float32 get_gamma() const { return m_gamma; }
+
+    const char* get_selector() const  { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
 
     mi::Size get_memory_consumption() const;
 
@@ -364,6 +371,7 @@ private:
     std::string m_unresolved_mdl_url;
     std::string m_owner_module;
     mi::Float32 m_gamma;
+    std::string m_selector;
 };
 
 
@@ -377,10 +385,11 @@ public:
         DB::Tag value,
         const char* unresolved_mdl_url,
         const char* owner_module)
-        : Base(type)
-        , m_value(value)
-        , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
-        , m_owner_module(owner_module ? owner_module : "") { }
+      : Base( type),
+        m_value( value),
+        m_unresolved_mdl_url( unresolved_mdl_url ? unresolved_mdl_url : ""),
+        m_owner_module( owner_module ? owner_module : "")
+    { }
 
     DB::Tag get_value() const { return m_value; }
 
@@ -390,11 +399,11 @@ public:
 
     const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
 
-    void set_unresolved_mdl_url(const char* url) { if (url) m_unresolved_mdl_url = url; }
+    void set_unresolved_mdl_url( const char* url) { if( url) m_unresolved_mdl_url = url; }
 
     const char* get_owner_module() const { return m_owner_module.c_str(); }
 
-    void set_owner_module(const char* module) { if (module) m_owner_module = module; }
+    void set_owner_module( const char* module) { if( module) m_owner_module = module; }
 
     mi::Size get_memory_consumption() const;
 
@@ -417,10 +426,11 @@ public:
         DB::Tag value,
         const char* unresolved_mdl_url,
         const char* owner_module)
-        : Base(type)
-        , m_value(value)
-        , m_unresolved_mdl_url(unresolved_mdl_url ? unresolved_mdl_url : "")
-        , m_owner_module(owner_module ? owner_module : "") { }
+      : Base( type),
+        m_value( value),
+        m_unresolved_mdl_url( unresolved_mdl_url ? unresolved_mdl_url : ""),
+        m_owner_module( owner_module ? owner_module : "")
+    { }
 
     DB::Tag get_value() const { return m_value; }
 
@@ -430,11 +440,11 @@ public:
 
     const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
 
-    void set_unresolved_mdl_url(const char* url) { if (url) m_unresolved_mdl_url = url; }
+    void set_unresolved_mdl_url( const char* url) { if( url) m_unresolved_mdl_url = url; }
 
     const char* get_owner_module() const { return m_owner_module.c_str(); }
 
-    void set_owner_module(const char* module) { if (module) m_owner_module = module; }
+    void set_owner_module( const char* module) { if( module) m_owner_module = module; }
 
     mi::Size get_memory_consumption() const;
 
@@ -535,7 +545,8 @@ public:
         DB::Tag value,
         const char* unresolved_mdl_url,
         const char* owner_module,
-        mi::Float32 gamma) const;
+        mi::Float32 gamma,
+        const char* selector) const;
 
     IValue_light_profile* create_light_profile( DB::Tag value) const;
 
@@ -555,6 +566,10 @@ public:
 
     IValue* create( const IType* type) const;
 
+    IValue* create( const IAnnotation* annotation) const;
+
+    IValue* create( const IType* type, const IAnnotation_block* annotation_block) const;
+
     using IValue_factory::create;
 
     IValue_list* create_value_list() const;
@@ -565,11 +580,13 @@ public:
 
     IValue_list* clone( const IValue_list* list) const;
 
-    mi::Sint32 compare( const IValue* lhs, const IValue* rhs) const
-    { return compare_static( lhs, rhs); }
+    mi::Sint32 compare(
+        const IValue* lhs, const IValue* rhs, mi::Float64 epsilon = 0.0) const
+    { return compare_static( lhs, rhs, epsilon); }
 
-    mi::Sint32 compare( const IValue_list* lhs, const IValue_list* rhs) const
-    { return compare_static( lhs, rhs); }
+    mi::Sint32 compare(
+        const IValue_list* lhs, const IValue_list* rhs, mi::Float64 epsilon = 0.0) const
+    { return compare_static( lhs, rhs, epsilon); }
 
     const mi::IString* dump(
         DB::Transaction* transaction,
@@ -595,9 +612,11 @@ public:
 
     // internal methods
 
-    static mi::Sint32 compare_static( const IValue* lhs, const IValue* rhs);
+    static mi::Sint32 compare_static(
+        const IValue* lhs, const IValue* rhs, mi::Float64 epsilon);
 
-    static mi::Sint32 compare_static( const IValue_list* lhs, const IValue_list* rhs);
+    static mi::Sint32 compare_static(
+        const IValue_list* lhs, const IValue_list* rhs, mi::Float64 epsilon);
 
     static void dump_static(
         DB::Transaction* transaction,

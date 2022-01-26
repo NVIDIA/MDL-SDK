@@ -73,6 +73,7 @@ public:
     constexpr Bitset_storage_base() = default;
     constexpr explicit Bitset_storage_base(T data);
     constexpr bool equals(const Bitset_storage_base& rhs) const;
+    constexpr bool is_less_than(const Bitset_storage_base& rhs) const;
     void set(std::size_t bit);
     void unset(std::size_t bit);
     constexpr bool is_set(std::size_t bit) const;
@@ -107,6 +108,7 @@ public:
     constexpr Bitset_storage_base() = default;
     constexpr explicit Bitset_storage_base(T data);
     constexpr bool equals(const Bitset_storage_base& rhs) const;
+    constexpr bool is_less_than(const Bitset_storage_base& rhs) const;
     void set(std::size_t bit);
     void unset(std::size_t bit);
     constexpr bool is_set(std::size_t bit) const;
@@ -283,6 +285,10 @@ public:
     constexpr bool operator!=(const Bitset& rhs) const;
 
 
+    /** \brief Checks if this should be ordered before \p rhs. */
+    constexpr bool operator<(const Bitset& rhs) const;
+
+
     /** \brief Turns this set into the intersection of itself with \p rhs. */
     Bitset& operator&=(const Bitset& rhs);
 
@@ -300,7 +306,7 @@ public:
 
 
     /** \brief See \c Bitset::any. */
-    constexpr operator bool() const;
+    explicit constexpr operator bool() const;
 
 
     /** \brief See \c Bitset::none. */

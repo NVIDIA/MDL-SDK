@@ -92,15 +92,15 @@ void instantiate_definitions(
     // Instantiation of a material definition
     {
         // Access the material definition "example_material".
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-            transaction->access<mi::neuraylib::IMaterial_definition>(
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+            transaction->access<mi::neuraylib::IFunction_definition>(
                 material_definition_name));
 
         // Since all parameter of this material definition have defaults we can instantiate the
         // definition without the need to explicitly provide initial arguments.
         mi::Sint32 result = 0;
-        mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-            material_definition->create_material_instance( 0, &result));
+        mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+            material_definition->create_function_call( 0, &result));
         check_success( result == 0);
 
         std::cout << "Dumping material instance \"" << material_instance_name << "\":" << std::endl;
@@ -159,8 +159,8 @@ void change_arguments( mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransacti
     // Changing arguments: cloning the old value and modifying the clone
     {
         // Edit the instance of the material definition "example_material".
-        mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-            transaction->edit<mi::neuraylib::IMaterial_instance>( material_instance_name));
+        mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+            transaction->edit<mi::neuraylib::IFunction_call>( material_instance_name));
         check_success( material_instance.is_valid_interface());
 
         // Get the old argument for the "tint" parameter and clone it.
@@ -296,8 +296,8 @@ void create_variant( mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransaction
         mdl_factory->create_expression_factory( transaction));
 
     // Prepare new defaults as clone of the current arguments of the material instance.
-    mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
-        transaction->access<mi::neuraylib::IMaterial_instance>( material_instance_name));
+    mi::base::Handle<const mi::neuraylib::IFunction_call> material_instance(
+        transaction->access<mi::neuraylib::IFunction_call>( material_instance_name));
     mi::base::Handle<const mi::neuraylib::IExpression_list> arguments(
         material_instance->get_arguments());
     mi::base::Handle<mi::neuraylib::IExpression_list> defaults(
@@ -363,11 +363,11 @@ void create_variant( mi::neuraylib::INeuray* neuray, mi::neuraylib::ITransaction
         context.get()) == 0);
 
     // Instantiate the material definition of the variant.
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-    transaction->access<mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+    transaction->access<mi::neuraylib::IFunction_definition>(
         "mdl::variants::green_example_material(color,float)"));
     mi::Sint32 result = 0;
-    material_instance = material_definition->create_material_instance( 0, &result);
+    material_instance = material_definition->create_function_call( 0, &result);
     check_success( result == 0);
 
     std::cout << "Dumping material instance with defaults of material definition "

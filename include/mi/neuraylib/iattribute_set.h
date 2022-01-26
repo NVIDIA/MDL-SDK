@@ -126,7 +126,7 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 ///   Only effective if the backplate function or backplate color is set. Matte
 ///   objects will then use the environment instead of the backplate for secondary interactions.
 /// - bool \b matte_connect_from_camera \n
-///   Only effective if no backplate function and no backplate color is set, or if 
+///   Only effective if no backplate function and no backplate color is set, or if
 ///   a backplate function or backplate color is set and in addition the
 ///   matte_connect_to_environment flag. Matte objects will then use a local lookup into the real
 ///   world photograph instead of a global one.
@@ -139,7 +139,8 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - bool \b movable \n
 ///   The object may be subject to frequent transformation changes. Render modes might take that
 ///   hint into account and use special data structures to speed up such transformation changes.
-///   This also controls instancing in user mode. See the [:ipmlink rendering Instancing] section for details.
+///   This also controls instancing in user mode. See the [:ipmlink rendering instancing-general]
+///   section for details.
 /// - bool \b reflection_cast \n
 ///   The object is visible as a reflection in reflective objects.
 /// - bool \b reflection_recv \n
@@ -166,7 +167,8 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 ///   for details.
 /// - bool \b shadow_terminator_offset \n
 ///   Controls the automatic shadow terminator handling.
-///   See the [:ipmlink physically_plausible_scene_setup Tessellating curved surfaces] section for details.
+///   See the [:ipmlink physically_plausible_scene_setup Tessellating curved surfaces] section for
+///   details.
 /// - #mi::Sint8 \b volume_priority \n
 ///   A priority value that drives the decision which object's volumetric material properties take
 ///   precedence in case of overlap. The default is 0, vacuum corresponds to -128.

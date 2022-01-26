@@ -44,7 +44,7 @@
 #include <cstddef> // size_t
 
 #include <map>
-#include <boost/unordered_map.hpp>
+#include <unordered_map>
 #include <set>
 #include <string>
 #include <utility> // pair
@@ -532,14 +532,8 @@ inline size_t dynamic_memory_consumption (const set<T1, A>& the_set)
     return total;
 }
 
-} // MISTD
 
-
-// boost::unordered_map
-
-namespace boost {
-
-namespace unordered {
+// std::unordered_map
 
 MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE5(unordered_map<T1,T2,T3,T4,T5>,T1,T2,T3,T4,T5)
 
@@ -548,18 +542,18 @@ inline size_t dynamic_memory_consumption (const unordered_map<T1, T2, T3, T4, T5
 {
     typedef unordered_map<T1, T2, T3, T4, T5> Map_type;
 
-    typedef boost::unordered::detail::map<T5, T1, T2, T3, T4> Internal_map_type;
-
-    // static size of the map elements (buckets are missing)
-    size_t total = the_map.size() * sizeof(typename Internal_map_type::node);
+    // static size of the buckets (approximation)
+    //size_t total = the_map.bucket_count() * (sizeof(size_t) + sizeof(void*));
+    // bucket size is missing
+    size_t total = sizeof(Map_type);
 
     // additional dynamic size of the map elements
     if (the_map.size() > 0) {
-        bool dynamic_memory_T1 = has_dynamic_memory_consumption (the_map.begin()->first);
-        bool dynamic_memory_T2 = has_dynamic_memory_consumption (the_map.begin()->second);
+        const bool dynamic_memory_T1 = has_dynamic_memory_consumption (the_map.begin()->first);
+        const bool dynamic_memory_T2 = has_dynamic_memory_consumption (the_map.begin()->second);
         if (dynamic_memory_T1 || dynamic_memory_T2) {
             typename Map_type::const_iterator it = the_map.begin();
-            typename Map_type::const_iterator it_end = the_map.end();
+            const typename Map_type::const_iterator it_end = the_map.end();
             for (; it != it_end; ++it) {
                 if (dynamic_memory_T1) total += dynamic_memory_consumption (it->first);
                 if (dynamic_memory_T2) total += dynamic_memory_consumption (it->second);
@@ -570,9 +564,7 @@ inline size_t dynamic_memory_consumption (const unordered_map<T1, T2, T3, T4, T5
     return total;
 }
 
-} // namespace unordered
-
-} // namespace boost
+} // namespace std
 
 #undef MI_PLATFORM_MACOSX_USING_RB_TREE_NODE
 #undef MI_PLATFORM_MACOSX_USING_NODE

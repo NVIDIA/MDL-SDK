@@ -196,14 +196,19 @@ private:
                 m_path.c_str(),
                 /*owner_file_path=*/ nullptr,
                 /*owner_name=*/ nullptr,
-                /*pos=*/ nullptr));
+                /*pos=*/ nullptr,
+                /*ctx*/ nullptr));
         if (!resource_set)
             return;
         
         if (resource_set->get_udim_mode() != mi::mdl::NO_UDIM || resource_set->get_count() != 1)
             return;
 
-        mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(resource_set->open_reader(0));
+        mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(resource_set->get_element(0));
+        if (!elem || elem->get_count() != 1)
+            return;
+
+        mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(elem->open_reader(0));
 
         FreeImageIO io;
         io.read_proc = read_handler;
@@ -534,6 +539,7 @@ private:
                 m_cur_lambda->map_tex_resource(
                     tex_val->get_kind(),
                     tex_val->get_string_value(),
+                    tex_val->get_selector(),
                     tex_val->get_gamma_mode(),
                     tex_val->get_bsdf_data_kind(),
                     tex_val->get_type()->get_shape(),
@@ -548,6 +554,7 @@ private:
                 m_cur_lambda->map_tex_resource(
                     tex_val->get_kind(),
                     tex_val->get_string_value(),
+                    tex_val->get_selector(),
                     tex_val->get_gamma_mode(),
                     tex_val->get_bsdf_data_kind(),
                     tex_val->get_type()->get_shape(),
@@ -1502,7 +1509,8 @@ public:
     , m_enable_derivatives(enable_derivatives)
     , m_gen_base_name_suffix_counter(0)
     {
-        // Set the JIT backend options
+        // Set the JIT backend options: e, we use a private code generator here, so it is safe to
+        // modify the backend options and ignore thread contexts
         mi::mdl::Options &options = m_jit_be->access_options();
 
         // Option "enable_ro_segment": Default is disabled.
@@ -1538,6 +1546,7 @@ public:
 
         // After we set the options, we can create a link unit
         m_link_unit = mi::base::make_handle(m_jit_be->create_link_unit(
+            /*ctx=*/nullptr,
             mi::mdl::ICode_generator_jit::CM_PTX,
             /*enable_simd=*/ false,
             /*sm_version=*/ 30,
@@ -1644,8 +1653,9 @@ protected:
 // Generates CUDA PTX target code for the current link unit.
 Ptx_code *Material_ptx_compiler::generate_cuda_ptx()
 {
+    // ctx should be the same value used when the unit was created
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code_ptx(
-        m_jit_be->compile_unit(m_link_unit.get()));
+        m_jit_be->compile_unit(/*ctx=*/nullptr, m_link_unit.get()));
     check_success(code_ptx);
 
 #ifdef DUMP_PTX

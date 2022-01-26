@@ -62,3 +62,15 @@ if(CMAKE_THREAD_LIBS_INIT)
             ${CMAKE_THREAD_LIBS_INIT}
         )
 endif()
+
+# mini dumps
+if(WINDOWS)
+    if(MDL_LOG_DEPENDENCIES)
+        message(STATUS "- depends on:     * dbghelp.lib")
+    endif()
+    target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+    PRIVATE
+        "dbghelp.lib"
+    )
+endif()
+

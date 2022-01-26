@@ -52,8 +52,8 @@ class IMdl_evaluator_api : public
     mi::base::Interface_declare<0x1dc8e8c2,0xa19e,0x4dc9,0xa3,0x0f,0xeb,0xb4,0x0a,0xf1,0x08,0x58>
 {
 public:
-    /// Evaluates if a material instance parameter is enabled (i.e. the enable_if condition
-    /// computes true).
+    /// Evaluates if a material instance parameter is enabled, i.e., the \c enable_if condition
+    /// evaluates to \c true).
     ///
     /// \param[in]  trans  the transaction
     /// \param[in]  fact   the expression factory to create the result value
@@ -68,16 +68,16 @@ public:
     ///                    - -4: An unsupported expression occurred.
     ///                    - -5: The evaluation was aborted, too complex to evaluate.
     ///
-    /// \return NULL if the condition was too complex to evaluate, else true or false
-    virtual IValue_bool const *is_material_parameter_enabled(
-        ITransaction             *trans,
-        IValue_factory           *fact,
-        IMaterial_instance const *inst,
-        Size                     index,
-        Sint32                   *error) const = 0;
+    /// \return NULL if the condition was too complex to evaluate, else \c true or \c false.
+    virtual const IValue_bool* is_material_parameter_enabled(
+        ITransaction* trans,
+        IValue_factory* fact,
+        const IMaterial_instance* inst,
+        Size index,
+        Sint32* error) const = 0;
 
-    /// Evaluates if a function call parameter is enabled (i.e. the enable_if condition
-    /// computes true).
+    /// Evaluates if a function call parameter is enabled, i.e., the \c enable_if condition
+    /// evaluates to \c true).
     ///
     /// \param[in]  trans  the transaction
     /// \param[in]  fact   the expression factory to create the result value
@@ -92,13 +92,13 @@ public:
     ///                    - -4: An unsupported expression occurred.
     ///                    - -5: The evaluation was aborted, too complex to evaluate.
     ///
-    /// \return NULL if the condition was to complex to evaluate, else true or false
-    virtual IValue_bool const *is_function_parameter_enabled(
-        ITransaction             *trans,
-        IValue_factory           *fact,
-        IFunction_call const     *call,
-        Size                     index,
-        Sint32                   *error) const = 0;
+    /// \return NULL if the condition was to complex to evaluate, else \c true or \c false.
+    virtual const IValue_bool* is_function_parameter_enabled(
+        ITransaction* trans,
+        IValue_factory* fact,
+        const IFunction_call* call,
+        Size index,
+        Sint32* error) const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_types

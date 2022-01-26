@@ -269,22 +269,6 @@ inline const T* vector_base_ptr( const Vector_struct<T,4>& vec)
 
 //------ Generic Vector Class -------------------------------------------------
 
-template < class T, Size DIM>
-class Vector;
-// Using a proxy class to make comparison operators a lesser match when it comes
-// to an overload resolution set with the MetaSL definitions of these operators.
-template <typename T, Size DIM>
-struct Vector_proxy_ //-V690 PVS
-{
-    const Vector<T,DIM>& vec;
-    Vector_proxy_( const Vector<T,DIM>& v) : vec( v) { }
-private:
-    /// assignment operator is forbidden
-    Vector_proxy_& operator=( const Vector_proxy_& o);
-};
-
-
-
 /** Fixed-size %math vector class template with generic operations.
 
     This class template provides array-like storage for \c DIM many values of an arithmetic type
@@ -378,6 +362,11 @@ public:
             (*this)[i] = v;
 #endif
     }
+
+#if (__cplusplus >= 201103L)
+    /// Default copy constructor.
+    Vector( const Vector<T,DIM>& vec ) = default;
+#endif
 
     /// Constructor from underlying storage type.
     inline Vector( const Vector_struct<T,DIM>& vec )
@@ -685,51 +674,49 @@ public:
 
 
     //------ Free comparison operators ==, !=, <, <=, >, >= for vectors --------
-    // Using a proxy class to make comparison operators a lesser match when it comes
-    // to an overload resolution set with the MetaSL definitions of these operators.
 
     /// Returns \c true if \c lhs is elementwise equal to \c rhs.
-    inline bool operator==( Vector_proxy_<T,DIM> rhs) const
+    inline bool operator==( Vector<T,DIM> rhs) const
     {
-        return is_equal( *this, rhs.vec);
+        return is_equal( *this, rhs);
     }
 
     /// Returns \c true if \c lhs is elementwise not equal to \c rhs.
-    inline bool operator!=( Vector_proxy_<T,DIM> rhs) const
+    inline bool operator!=( Vector<T,DIM> rhs) const
     {
-        return is_not_equal( *this, rhs.vec);
+        return is_not_equal( *this, rhs);
     }
 
     /// Returns \c true if \c lhs is lexicographically less than \c rhs.
     ///
     /// \see   \ref mi_def_lexicographic_order
-    inline bool operator<( Vector_proxy_<T,DIM> rhs) const
+    inline bool operator<( Vector<T,DIM> rhs) const
     {
-        return lexicographically_less( *this, rhs.vec);
+        return lexicographically_less( *this, rhs);
     }
 
     /// Returns \c true if \c lhs is lexicographically less than or equal to \c rhs.
     ///
     /// \see   \ref mi_def_lexicographic_order
-    inline bool operator<=( Vector_proxy_<T,DIM> rhs) const
+    inline bool operator<=( Vector<T,DIM> rhs) const
     {
-        return lexicographically_less_or_equal( *this, rhs.vec);
+        return lexicographically_less_or_equal( *this, rhs);
     }
 
     /// Returns \c true if \c lhs is lexicographically greater than \c rhs.
     ///
     /// \see   \ref mi_def_lexicographic_order
-    inline bool operator>( Vector_proxy_<T,DIM> rhs) const
+    inline bool operator>( Vector<T,DIM> rhs) const
     {
-        return lexicographically_greater( *this, rhs.vec);
+        return lexicographically_greater( *this, rhs);
     }
 
     /// Returns \c true if \c lhs is lexicographically greater than or equal to \c rhs.
     ///
     /// \see   \ref mi_def_lexicographic_order
-    inline bool operator>=( Vector_proxy_<T,DIM> rhs) const
+    inline bool operator>=( Vector<T,DIM> rhs) const
     {
-        return lexicographically_greater_or_equal( *this, rhs.vec);
+        return lexicographically_greater_or_equal( *this, rhs);
     }
 };
 

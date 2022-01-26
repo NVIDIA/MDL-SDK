@@ -33,8 +33,10 @@
 #include "dds_decompress.h"
 #include "dds_utilities.h"
 
+#include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/itile.h>
+
 #include <io/image/image/i_image_utilities.h>
 
 #include <algorithm>
@@ -44,25 +46,20 @@ namespace MI {
 
 namespace DDS {
 
-Image_file_reader_impl::Image_file_reader_impl( mi::neuraylib::IReader* reader)
+Image_file_reader_impl::Image_file_reader_impl(
+    mi::neuraylib::IImage_api* image_api, mi::neuraylib::IReader* reader)
+  : m_image_api( image_api, mi::base::DUP_INTERFACE),
+    m_reader( reader, mi::base::DUP_INTERFACE)
 {
-    m_reader = reader;
-    m_reader->retain();
-
     Dds_compress_fmt compress_format = DXTC_none; // avoid warning
     m_image.load_header(
-        m_reader,
+        m_reader.get(),
         m_header,
         m_header_dx10,
         m_is_header_dx10,
         m_pixel_type,
         m_gamma,
         compress_format);
-}
-
-Image_file_reader_impl::~Image_file_reader_impl()
-{
-    m_reader->release();
 }
 
 const char* Image_file_reader_impl::get_type() const
@@ -92,20 +89,6 @@ mi::Uint32 Image_file_reader_impl::get_layers_size( mi::Uint32 level) const
     return m_header.m_depth;
 }
 
-mi::Uint32 Image_file_reader_impl::get_tile_resolution_x( mi::Uint32 level) const //-V524 PVS
-{
-    if( level >= m_header.m_mipmap_count)
-        return 0;
-    return std::max( m_header.m_width >> level, 1u);
-}
-
-mi::Uint32 Image_file_reader_impl::get_tile_resolution_y( mi::Uint32 level) const //-V524 PVS
-{
-    if( level >= m_header.m_mipmap_count)
-        return 0;
-    return std::max( m_header.m_height >> level, 1u);
-}
-
 mi::Uint32 Image_file_reader_impl::get_miplevels() const
 {
     return m_header.m_mipmap_count;
@@ -121,41 +104,42 @@ mi::Float32 Image_file_reader_impl::get_gamma() const
     return m_gamma;
 }
 
-bool Image_file_reader_impl::read(
-    mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level) const
+mi::neuraylib::ITile* Image_file_reader_impl::read(
+    mi::Uint32 z, mi::Uint32 level) const
 {
     if( level >= get_miplevels() || z >= get_layers_size( level))
-        return false;
+        return nullptr;
 
     if( !m_image.is_valid()) {
         m_reader->seek_absolute( 0);
-        if( !m_image.load( m_reader))
-            return false;
+        if( !m_image.load( m_reader.get()))
+            return nullptr;
     }
 
     const Surface& surface = m_image.get_surface( level);
     mi::Uint32 image_width  = surface.get_width();
     mi::Uint32 image_height = surface.get_height();
 
+    mi::base::Handle<mi::neuraylib::ITile> tile( m_image_api->create_tile(
+        convert_pixel_type_enum_to_string( m_pixel_type), image_width, image_height));
+
     // Non compressed images
     if( !m_image.is_compressed()) {
 
-        const char* pixel_type = tile->get_type();
-        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
+        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( m_pixel_type);
         mi::Uint32 bytes_per_layer = image_width * image_height * bytes_per_pixel;
         copy_from_dds_to_tile(
-            surface.get_pixels() + z * bytes_per_layer, x, y, image_width, image_height, tile);
+            surface.get_pixels() + z * bytes_per_layer, image_width, image_height, tile.get());
 
     } else {
 
         // Compressed images
-        const char* pixel_type = tile->get_type();
-        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
+        mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( m_pixel_type);
         mi::Uint32 bytes_per_layer = image_width * image_height * bytes_per_pixel;
 
         Dxt_decompressor decompressor;
         decompressor.set_source_format( m_image.get_compressed_format(), image_width, image_height);
-        decompressor.set_target_format( get_components_per_pixel( pixel_type), image_width);
+        decompressor.set_target_format( get_components_per_pixel( m_pixel_type), image_width);
 
         mi::Uint32 block_height = decompressor.get_block_dimension();
         mi::Uint32 bytes_per_block = image_width * block_height * bytes_per_pixel;
@@ -169,15 +153,16 @@ bool Image_file_reader_impl::read(
             memcpy( buffer2 + block * bytes_per_block, buffer1, bytes_per_block);
         }
 
-        copy_from_dds_to_tile( buffer2, x, y, image_width, image_height, tile);
+        copy_from_dds_to_tile( buffer2, image_width, image_height, tile.get());
         delete[] buffer2;
     }
 
-    return true;
+    tile->retain();
+    return tile.get();
 }
 
 bool Image_file_reader_impl::write(
-    const mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level)
+    const mi::neuraylib::ITile* tile, mi::Uint32 z, mi::Uint32 level)
 {
     return false;
 }

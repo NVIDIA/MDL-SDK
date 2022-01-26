@@ -116,7 +116,7 @@ zip_int64_t Layered_zip_source::callback(
 
     case ZIP_SOURCE_OPEN:
         {
-            int res =zip_source_open(src);
+            int res = zip_source_open(src);
             ze = *zip_source_error(src);
             return res;
         }
@@ -238,6 +238,17 @@ zip_int64_t Layered_zip_source::callback(
     case ZIP_SOURCE_WRITE:
         {
             zip_int64_t res = zip_source_write(src, data, len);
+            ze = *zip_source_error(src);
+            return res;
+        }
+
+    case ZIP_SOURCE_GET_FILE_ATTRIBUTES:
+        {
+            if (len < sizeof(zip_file_attributes_t)) {
+                zip_error_set(&ze, ZIP_ER_INVAL, 0);
+                return -1;
+            }
+            zip_int64_t res = zip_source_get_file_attributes(src, (zip_file_attributes_t *)data);
             ze = *zip_source_error(src);
             return res;
         }

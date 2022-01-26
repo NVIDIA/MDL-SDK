@@ -48,17 +48,17 @@ namespace DDS {
 
 bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
 {
-    if( plugin_api) {
-        mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
-            plugin_api->get_api_component<mi::neuraylib::ILogging_configuration>());
-        if( logging_configuration)
-            g_logger = logging_configuration->get_forwarding_logger();
-        else {
-            mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
-                plugin_api->get_api_component<mi::neuraylib::IMdl_configuration>());
-            if( mdl_configuration)
-                g_logger = mdl_configuration->get_logger();
-        }
+    assert( plugin_api);
+
+    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
+        plugin_api->get_api_component<mi::neuraylib::ILogging_configuration>());
+    if( logging_configuration)
+        g_logger = logging_configuration->get_forwarding_logger();
+    else {
+        mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
+            plugin_api->get_api_component<mi::neuraylib::IMdl_configuration>());
+        if( mdl_configuration)
+            g_logger = mdl_configuration->get_logger();
     }
 
     std::string message = "Plugin \"";
@@ -68,11 +68,14 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
     message += ") initialized";
     log( mi::base::MESSAGE_SEVERITY_INFO, message.c_str());
 
+    m_image_api = plugin_api->get_api_component<mi::neuraylib::IImage_api>();
+
     return true;
 }
 
 bool Image_plugin_impl::exit( mi::neuraylib::IPlugin_api* plugin_api)
 {
+    m_image_api = 0;
     g_logger = 0;
     return true;
 }
@@ -145,7 +148,7 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
     if( !reader->supports_absolute_access())
         return 0;
 
-    return new Image_file_reader_impl( reader);
+    return new Image_file_reader_impl( m_image_api.get(), reader);
 }
 
 /// Factory to create an instance of Image_plugin_impl.

@@ -157,11 +157,6 @@ public:
     bool enable_target_material_compilation_mode(bool flag);
 
 
-    /// Check if the given type is a user defined type.
-    ///
-    /// \param type  the type to check
-    static bool is_user_type(IType const *type);
-
     /// Convert a definition to a name.
     ///
     /// \param def                     The definition to convert.

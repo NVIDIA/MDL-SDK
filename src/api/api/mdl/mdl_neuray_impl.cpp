@@ -86,7 +86,7 @@ namespace MDL {
 
 void pull_in_required_modules();
 
-mi::base::Atom32 Neuray_impl::s_instance_count;
+std::atomic_uint32_t Neuray_impl::s_instance_count = 0;
 
 Neuray_impl::Neuray_impl()
   : m_status( PRE_STARTING), m_database( 0)
@@ -229,6 +229,10 @@ mi::Sint32 Neuray_impl::start( bool blocking)
 
 #define CHECK_RESULT if( result) { m_status = FAILURE; return result; }
 
+    // Register IImage_api early (before IImage_api::start()), such that image plugins
+    // can access it in its init() method.
+    register_api_component<mi::neuraylib::IImage_api>( m_image_api_impl);
+
     // Be careful with the ordering
     result = m_database_impl->start( m_database);   CHECK_RESULT;
     result = m_image_api_impl->start();             CHECK_RESULT;
@@ -247,7 +251,6 @@ mi::Sint32 Neuray_impl::start( bool blocking)
 #undef CHECK_RESULT
 
     register_api_component<mi::neuraylib::IDatabase>( m_database_impl);
-    register_api_component<mi::neuraylib::IImage_api>( m_image_api_impl);
     register_api_component<mi::neuraylib::IMdl_factory>( m_mdl_factory_impl);
     register_api_component<mi::neuraylib::IMdl_archive_api>( m_mdl_archive_api_impl);
     register_api_component<mi::neuraylib::IMdl_backend_api>(m_mdl_backend_api_impl);
@@ -256,7 +259,7 @@ mi::Sint32 Neuray_impl::start( bool blocking)
     register_api_component<mi::neuraylib::IMdl_evaluator_api>(m_mdl_evaluator_api_impl);
     register_api_component<mi::neuraylib::IMdl_impexp_api>(m_mdl_impexp_api_impl);
     register_api_component<mi::neuraylib::IMdle_api>(m_mdle_api_impl);
-    
+
     NEURAY::Class_registration::register_structure_declarations( m_class_factory);
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);

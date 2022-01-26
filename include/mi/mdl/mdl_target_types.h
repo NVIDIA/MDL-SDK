@@ -445,7 +445,8 @@ struct Texture_handler_vtable_impl {
         Tex_wrap_mode                    wrap_u,
         Tex_wrap_mode                    wrap_v,
         tct_float const                  crop_u[2],
-        tct_float const                  crop_v[2]);
+        tct_float const                  crop_v[2],
+        tct_float                        frame);
 
     /// Implementation of \c tex::lookup_float3() for a texture_2d texture.
     void (*m_tex_lookup_float3_2d)(
@@ -456,7 +457,8 @@ struct Texture_handler_vtable_impl {
         Tex_wrap_mode                    wrap_u,
         Tex_wrap_mode                    wrap_v,
         tct_float const                  crop_u[2],
-        tct_float const                  crop_v[2]);
+        tct_float const                  crop_v[2],
+        tct_float                        frame);
 
     /// Implementation of \c tex::texel_float4() for a texture_2d texture.
     void (*m_tex_texel_float4_2d)(
@@ -464,7 +466,8 @@ struct Texture_handler_vtable_impl {
         Texture_handler_base const *self,
         tct_uint                   texture_idx,
         tct_int const              coord[2],
-        tct_int const              uv_tile[2]);
+        tct_int const              uv_tile[2],
+        tct_float                  frame);
 
     /// Implementation of \c tex::lookup_float4() for a texture_3d texture.
     void (*m_tex_lookup_float4_3d)(
@@ -477,7 +480,8 @@ struct Texture_handler_vtable_impl {
         Tex_wrap_mode              wrap_w,
         tct_float const            crop_u[2],
         tct_float const            crop_v[2],
-        tct_float const            crop_w[2]);
+        tct_float const            crop_w[2],
+        tct_float                  frame);
 
     /// Implementation of \c tex::lookup_float3() for a texture_3d texture.
     void (*m_tex_lookup_float3_3d)(
@@ -490,14 +494,16 @@ struct Texture_handler_vtable_impl {
         Tex_wrap_mode              wrap_w,
         tct_float const            crop_u[2],
         tct_float const            crop_v[2],
-        tct_float const            crop_w[2]);
+        tct_float const            crop_w[2],
+        tct_float                  frame);
 
     /// Implementation of \c tex::texel_float4() for a texture_3d texture.
     void (*m_tex_texel_float4_3d)(
         tct_float                  result[4],
         Texture_handler_base const *self,
         tct_uint                   texture_idx,
-        tct_int const              coord[3]);
+        tct_int const              coord[3],
+        tct_float                  frame);
 
     /// Implementation of \c tex::lookup_float4() for a texture_cube texture.
     void (*m_tex_lookup_float4_cube)(
@@ -520,7 +526,8 @@ struct Texture_handler_vtable_impl {
         tct_int                    result[2],
         Texture_handler_base const *self,
         tct_uint                   texture_idx,
-        tct_int const              uv_tile[2]);
+        tct_int const              uv_tile[2],
+        tct_float                  frame);
 
     /// Implementation of \c resolution_3d() function needed by generated code,
     /// which retrieves the width, height and depth of the given texture.
@@ -528,10 +535,18 @@ struct Texture_handler_vtable_impl {
     void (*m_tex_resolution_3d)(
         tct_int                    result[3],
         Texture_handler_base const *self,
-        tct_uint                   texture_idx);
+        tct_uint                   texture_idx,
+        tct_float                  frame);
 
     /// Implementation of \c texture_isvalid() for any texture type.
     tct_bool (*m_tex_texture_isvalid)(
+        Texture_handler_base const *self,
+        tct_uint                   texture_idx);
+
+    /// Implementation of \c tex_frame() function needed by generated code,
+    /// which retrieves the first and the last frame number of the given texture.
+    void (*m_tex_frame)(
+        tct_int                    result[2],
         Texture_handler_base const *self,
         tct_uint                   texture_idx);
 
@@ -853,7 +868,7 @@ struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_float3       k2;             ///< input: incoming direction
-    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                      ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     tct_float3       bsdf_diffuse[static_cast<size_t>(N)]; ///< output: (diffuse part of the)
                                                            ///  bsdf * dot(normal, k2)
@@ -870,7 +885,7 @@ struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_float3       k2;             ///< input: incoming direction
-    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of many 
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of many
                                      ///  handles using in multiple steps
     tct_int          handle_count;   ///< input: number of elements of 'bsdf_diffuse', 'bsdf_glossy'
     tct_float3*      bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
@@ -911,7 +926,7 @@ struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
 
-    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                      ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
     tct_float3       albedo[static_cast<size_t>(N)];    ///< output: albedo
     tct_float3       normal[static_cast<size_t>(N)];    ///< output: normal
@@ -923,8 +938,8 @@ struct Bsdf_auxiliary_data<DF_HSM_POINTER> : public Bsdf_auxiliary_data_base
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
-    
-    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+
+    tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                      ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
     tct_int          handle_count;   ///< input: number of elements of 'albedo' and 'normal'
     tct_float3*      albedo;         ///< output: albedo
@@ -1209,7 +1224,7 @@ template<Df_handle_slot_mode N>
 struct Edf_evaluate_data : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
-    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     tct_float       cos;                            ///< output: dot(normal, k1)
     tct_float3      edf[static_cast<size_t>(N)];    ///< output: edf
@@ -1220,7 +1235,7 @@ template<>
 struct Edf_evaluate_data<DF_HSM_POINTER> : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
-    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
     tct_int         handle_count;   ///< input: number of elements of 'edf'
     tct_float       cos;            ///< output: dot(normal, k1)
@@ -1251,7 +1266,7 @@ template<Df_handle_slot_mode N>
 struct Edf_auxiliary_data : public Edf_auxiliary_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
-    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
     // reserved for future use
 };
@@ -1260,7 +1275,7 @@ template<>
 struct Edf_auxiliary_data<DF_HSM_POINTER> : public Edf_auxiliary_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
-    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then  
+    tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
     tct_int         handle_count;   ///< number of elements of 'edf'
 

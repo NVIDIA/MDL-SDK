@@ -32,11 +32,13 @@
 #include <mi/neuraylib/icanvas.h>
 
 #include <mi/base/interface_implement.h>
+#include <mi/base/handle.h>
 #include <mi/base/lock.h>
 
 #include "i_image_utilities.h"
 
 #include <string>
+#include <vector>
 #include <boost/core/noncopyable.hpp>
 
 namespace mi { namespace neuraylib { class IBuffer; class IImage_file; class IReader; } }
@@ -63,8 +65,9 @@ public:
     virtual mi::Size get_size() const = 0;
 
     /// Releases the allocated tile memory.
-    /// \return \c true on success, \c false, if the canvas does not support lazy loading and therefore
-    ///          cannot simply free its data.
+    ///
+    /// \return   \c true on success, \c false, if the canvas does not support lazy loading and
+    ///           therefore cannot simply free its data.
     virtual bool release_tiles() const = 0;
 };
 
@@ -89,11 +92,6 @@ public:
     /// \param pixel_type         The desired pixel type.
     /// \param width              The desired width.
     /// \param height             The desired height.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the image (but this might change without further notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the image (but this might change without further
-    ///                           notice).
     /// \param layers             The desired number of layers (depth).
     /// \param is_cubemap         Flag that indicates whether this mipmap represents a cubemap.
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
@@ -103,8 +101,6 @@ public:
         Pixel_type pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::Uint32 layers,
         bool is_cubemap,
         mi::Float32 gamma);
@@ -115,12 +111,8 @@ public:
     /// canvas in case of errors).
     ///
     /// \param filename           The file that shall be represented by this canvas.
+    /// \param selector           The selector, or \c NULL.
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the image (but this might change without further notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the image (but this might change without further
-    ///                           notice).
     /// \param image_file         An optional pointer to the file \p filename. If the calling code
     ///                           has such a pointer, it can be passed to avoid opening the file
     ///                           once again.
@@ -132,9 +124,8 @@ public:
     ///                           - -5: The image plugin failed to import the file.
     Canvas_impl(
         const std::string& filename,
+        const char* selector,
         mi::Uint32 miplevel,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::neuraylib::IImage_file* image_file = 0,
         mi::Sint32* errors = 0);
 
@@ -147,12 +138,8 @@ public:
     ///                           absolute access.
     /// \param archive_filename   The resolved filename of the archive itself.
     /// \param member_filename    The relative filename of the canvas in the archive.
+    /// \param selector           The selector, or \c NULL.
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the image (but this might change without further notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the image (but this might change without further
-    ///                           notice).
     /// \param image_file         An optional pointer to the file represented by \p reader. If the
     ///                           calling code has such a pointer, it can be passed to avoid opening
     ///                           the file once again.
@@ -168,9 +155,8 @@ public:
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
+        const char* selector,
         mi::Uint32 miplevel,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::neuraylib::IImage_file* image_file = 0,
         mi::Sint32* errors = 0);
 
@@ -182,15 +168,11 @@ public:
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
+    /// \param selector           The selector, or \c NULL.
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
     ///                           or \c NULL in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the image (but this might change without further notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the image (but this might change without further
-    ///                           notice).
     /// \param image_file         An optional pointer to the file represented by \p reader. If the
     ///                           calling code has such a pointer, it can be passed to avoid opening
     ///                           the file once again.
@@ -205,27 +187,24 @@ public:
         Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* selector,
         const char* mdl_file_path,
         mi::Uint32 miplevel,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::neuraylib::IImage_file* image_file = 0,
         mi::Sint32* errors = 0);
 
     /// Constructor.
     ///
-    /// Creates a memory-based canvas with given tile.
+    /// Creates a memory-based canvas with a given array of tile.
     ///
-    /// \param tile         The single tile the canvas will be made of. Note that the tile is not
-    ///                     copied, but shared. See Image_module::copy_tile() if sharing is not
-    ///                     desired.
+    /// \param tile         The array of tiles the canvas will be made of (in z-direction). Note
+    ///                     that the tiles are not copied, but shared. See
+    ///                     Image_module::copy_tile() if sharing is not desired.
     /// \param gamma        The desired gamma value. The special value 0.0 represents the default
     ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
     ///                     Note that the pixel data itself is not changed.
-    Canvas_impl( mi::neuraylib::ITile* tile, mi::Float32 gamma = 0.0f);
-
-    /// Destructor
-    ~Canvas_impl();
+    Canvas_impl(
+        const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles, mi::Float32 gamma = 0.0f);
 
     // methods of mi::neuraylib::ICanvas_base
 
@@ -242,20 +221,6 @@ public:
     void set_gamma( mi::Float32 gamma);
 
     // methods of  mi::neuraylib::ICanvas
-
-    mi::Uint32 get_tile_resolution_x() const { return m_tile_width; }
-
-    mi::Uint32 get_tile_resolution_y() const { return m_tile_height; }
-
-    mi::Uint32 get_tiles_size_x() const { return m_nr_of_tiles_x; }
-
-    mi::Uint32 get_tiles_size_y() const { return m_nr_of_tiles_y; }
-
-    const mi::neuraylib::ITile* deprecated_get_tile(
-        mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer) const;
-
-    mi::neuraylib::ITile* deprecated_get_tile(
-        mi::Uint32 pixel_x, mi::Uint32 pixel_y, mi::Uint32 layer);
 
     const mi::neuraylib::ITile* get_tile( mi::Uint32 layer = 0) const;
 
@@ -275,14 +240,21 @@ private:
 
     /// Loads the tile data for file-based canvases.
     ///
-    /// \param tile   The tile to be loaded from file, or \c NULL to load all tiles at once.
-    /// \param x      The x position of the tile in the canvas, meaningless if \p tile is \c NULL.
-    /// \param y      The y position of the tile in the canvas, meaningless if \p tile is \c NULL.
-    /// \param z      The z position of the tile in the canvas, meaningless if \p tile is \c NULL.
+    /// Wrapper around #do_load_tile() to handle the failure cases.
+    ///
+    /// \param z      The z position of the tile in the canvas.
+    /// \return       The loaded tile, or a dummy tile in case of failures.
     ///
     /// \note The caller needs to hold the lock m_lock.
-    void load_tile(
-        mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z) const;
+     mi::neuraylib::ITile* load_tile( mi::Uint32 z) const;
+
+    /// Really loads the tile data for file-based canvases.
+    ///
+    /// \param z      The z position of the tile in the canvas.
+    /// \return       The loaded tile, or \c NULL in case of failures.
+    ///
+    /// \note The caller needs to hold the lock m_lock.
+     mi::neuraylib::ITile* do_load_tile( mi::Uint32 z) const;
 
     /// Returns the reader used by #load_tile();
     mi::neuraylib::IReader* get_reader( std::string& log_identifier) const;
@@ -298,16 +270,6 @@ private:
     mi::Uint32 m_height;
     /// Number of layers of the canvas
     mi::Uint32 m_nr_of_layers;
-    /// Width of the tiles
-    mi::Uint32 m_tile_width;
-    /// Height of the tiles
-    mi::Uint32 m_tile_height;
-    /// Number of tiles in horizontal direction
-    mi::Uint32 m_nr_of_tiles_x;
-    /// Number of tiles in vertical direction
-    mi::Uint32 m_nr_of_tiles_y;
-    /// Total number of tiles (m_nr_of_tiles_x * m_nr_of_tiles_y * m_nr_of_layers)
-    mi::Uint32 m_nr_of_tiles;
     /// The represented miplevel (only used for file-based canvases)
     mi::Uint32 m_miplevel;
     /// Flag for cubemaps
@@ -321,7 +283,7 @@ private:
     /// contains \c NULL pointers for memory-based canvases.
     ///
     /// \note Any access needs to be protected by m_lock.
-    mutable mi::neuraylib::ITile** m_tiles;
+    mutable std::vector<mi::base::Handle<mi::neuraylib::ITile>> m_tiles;
 
     /// The lock that protects m_tiles;
     mutable mi::base::Lock m_lock;
@@ -342,6 +304,9 @@ private:
     /// Non-empty for memory-based canvases from archives, empty for other memory-based canvases
     /// and file-based canvases.
     std::string m_member_filename;
+
+    /// The selector (or empty).
+    std::string m_selector;
 };
 
 } // namespace IMAGE

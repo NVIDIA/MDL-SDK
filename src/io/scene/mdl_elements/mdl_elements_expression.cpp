@@ -31,11 +31,11 @@
 #include "pch.h"
 
 #include "i_mdl_elements_module.h"
+#include "i_mdl_elements_annotation_definition_proxy.h"
 #include "i_mdl_elements_function_call.h"
 #include "i_mdl_elements_function_definition.h"
 #include "i_mdl_elements_utilities.h"
 
-#include "mdl_elements_annotation_definition_proxy.h"
 #include "mdl_elements_expression.h"
 #include "mdl_elements_detail.h"
 #include "mdl_elements_type.h"
@@ -46,6 +46,8 @@
 #include <sstream>
 
 #include <mi/neuraylib/istring.h>
+// for mi::neuraylib::IExpression_factory::Comparison_options
+#include <mi/neuraylib/iexpression.h>
 #include <base/lib/mem/i_mem_consumption.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/db/i_db_access.h>
@@ -1448,8 +1450,16 @@ void Expression_factory::dump_static(
     s << (n > 0 ? prefix : "") << "]";
 }
 
-mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IExpression* rhs)
+mi::Sint32 Expression_factory::compare_static(
+    const IExpression* lhs,
+    const IExpression* rhs,
+    mi::Uint32 flags,
+    mi::Float64 epsilon,
+    DB::Transaction* transaction)
 {
+    ASSERT( M_SCENE,
+        transaction || ((flags & mi::neuraylib::IExpression_factory::DEEP_CALL_COMPARISONS) == 0));
+
     if( !lhs && !rhs) return 0;
     if( !lhs &&  rhs) return -1;
     if(  lhs && !rhs) return +1;
@@ -1457,6 +1467,10 @@ mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IEx
 
     mi::base::Handle<const IType> lhs_type( lhs->get_type()); //-V522 PVS
     mi::base::Handle<const IType> rhs_type( rhs->get_type()); //-V522 PVS
+    if( (flags & mi::neuraylib::IExpression_factory::SKIP_TYPE_ALIASES) != 0) {
+        lhs_type = lhs_type->skip_all_type_aliases();
+        rhs_type = rhs_type->skip_all_type_aliases();
+    }
     mi::Sint32 result = Type_factory::compare_static( lhs_type.get(), rhs_type.get());
     if( result != 0)
         return result;
@@ -1475,8 +1489,10 @@ mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IEx
                 rhs->get_interface<IExpression_constant>());
             mi::base::Handle<const IValue> lhs_value( lhs_constant->get_value());
             mi::base::Handle<const IValue> rhs_value( rhs_constant->get_value());
-            return Value_factory::compare_static( lhs_value.get(), rhs_value.get());
+            return Value_factory::compare_static(
+                lhs_value.get(), rhs_value.get(), epsilon);
         }
+
         case IExpression::EK_CALL: {
             mi::base::Handle<const IExpression_call> lhs_call(
                 lhs->get_interface<IExpression_call>());
@@ -1484,10 +1500,41 @@ mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IEx
                 rhs->get_interface<IExpression_call>());
             DB::Tag lhs_tag = lhs_call->get_call();
             DB::Tag rhs_tag = rhs_call->get_call();
-            if( lhs_tag < rhs_tag) return -1;
-            if( lhs_tag > rhs_tag) return +1;
-            return 0;
+
+            if( (flags & mi::neuraylib::IExpression_factory::DEEP_CALL_COMPARISONS) != 0) {
+
+                // Get referenced function calls
+                SERIAL::Class_id lhs_class_id = transaction->get_class_id( lhs_tag);
+                SERIAL::Class_id rhs_class_id = transaction->get_class_id( rhs_tag);
+                if( lhs_class_id < rhs_class_id) return -1;
+                if( lhs_class_id > rhs_class_id) return +1;
+                // Not much we can do if both class IDs are equal and wrong.
+                if( lhs_class_id != ID_MDL_FUNCTION_CALL) return 0;
+                DB::Access<Mdl_function_call> lhs_fc( lhs_tag, transaction);
+                DB::Access<Mdl_function_call> rhs_fc( rhs_tag, transaction);
+
+                // Compare underlying function definition
+                DB::Tag lhs_fd_tag = lhs_fc->get_function_definition( transaction);
+                DB::Tag rhs_fd_tag = rhs_fc->get_function_definition( transaction);
+                if( lhs_fd_tag < rhs_fd_tag) return -1;
+                if( lhs_fd_tag > rhs_fd_tag) return +1;
+
+                // Compare arguments
+                mi::base::Handle<const IExpression_list> lhs_arguments( lhs_fc->get_arguments());
+                mi::base::Handle<const IExpression_list> rhs_arguments( rhs_fc->get_arguments());
+                return compare_static(
+                    lhs_arguments.get(), rhs_arguments.get(), flags, epsilon, transaction);
+
+            } else {
+
+                // Simply compare the tags
+                if( lhs_tag < rhs_tag) return -1;
+                if( lhs_tag > rhs_tag) return +1;
+                return 0;
+
+            }
         }
+
         case IExpression::EK_PARAMETER: {
             mi::base::Handle<const IExpression_parameter> lhs_parameter(
                 lhs->get_interface<IExpression_parameter>());
@@ -1499,6 +1546,7 @@ mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IEx
             if( lhs_index > rhs_index) return +1;
             return 0;
         }
+
         case IExpression::EK_DIRECT_CALL: {
             mi::base::Handle<const IExpression_direct_call> lhs_direct_call(
                 lhs->get_interface<IExpression_direct_call>());
@@ -1516,8 +1564,10 @@ mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IEx
                 lhs_direct_call->get_arguments());
             mi::base::Handle<const IExpression_list> rhs_arguments(
                 rhs_direct_call->get_arguments());
-            return compare_static( lhs_arguments.get(), rhs_arguments.get());
+            return compare_static(
+                lhs_arguments.get(), rhs_arguments.get(), flags, epsilon, transaction);
         }
+
         case IExpression::EK_TEMPORARY: {
             mi::base::Handle<const IExpression_temporary> lhs_temporary(
                 lhs->get_interface<IExpression_temporary>());
@@ -1539,8 +1589,15 @@ mi::Sint32 Expression_factory::compare_static( const IExpression* lhs, const IEx
 }
 
 mi::Sint32 Expression_factory::compare_static(
-    const IExpression_list* lhs, const IExpression_list* rhs)
+    const IExpression_list* lhs,
+    const IExpression_list* rhs,
+    mi::Uint32 flags,
+    mi::Float64 epsilon,
+    DB::Transaction* transaction)
 {
+    ASSERT( M_SCENE,
+        transaction || ((flags & mi::neuraylib::IExpression_factory::DEEP_CALL_COMPARISONS) == 0));
+
     if( !lhs && !rhs) return 0;
     if( !lhs &&  rhs) return -1;
     if(  lhs && !rhs) return +1;
@@ -1559,7 +1616,8 @@ mi::Sint32 Expression_factory::compare_static(
         if( result > 0) return +1;
         mi::base::Handle<const IExpression> lhs_expression( lhs->get_expression( i));
         mi::base::Handle<const IExpression> rhs_expression( rhs->get_expression( i));
-        result = compare_static( lhs_expression.get(), rhs_expression.get());
+        result = compare_static(
+            lhs_expression.get(), rhs_expression.get(), flags, epsilon, transaction);
         if( result != 0)
             return result;
     }

@@ -79,11 +79,11 @@ class Linked_list
   public:
     /// Prepend this object at the top of the list.
     Linked_list() : m_next(g_first) {
-	g_first = this;
+        g_first = this;
     }
     /// Erase this element from the list.
     ~Linked_list() {
-	g_first = m_next;
+        g_first = m_next;
     }
 
   protected:
@@ -105,7 +105,7 @@ class Module_registration_entry : private detail::Linked_list
     /// Constructor.
     /// \param the module's name
     Module_registration_entry(
-	const char* name);
+        const char* name);
     /// Destructor.
     virtual ~Module_registration_entry();
 
@@ -132,21 +132,21 @@ class Module_registration_entry : private detail::Linked_list
     virtual void do_exit() = 0;
 
   private:
-    const char* m_name;					///< its name
-    Uint m_reference_count;				///< its ref count
-    Module_state m_status;				///< its status
-    mi::base::Lock m_lock;				///< the lock
-    bool m_enabled;					///< is the module enabled to work?
+    const char* m_name;                                 ///< its name
+    Uint m_reference_count;                             ///< its ref count
+    Module_state m_status;                              ///< its status
+    mi::base::Lock m_lock;                              ///< the lock
+    bool m_enabled;                                     ///< is the module enabled to work?
 
   public:
     /// Initialize. Make this module ready for a(nother) client.
     /// \param the module's name
     static Module_registration_entry* init_module(
-	const char* name);
+        const char* name);
     /// Finalize.
     /// \param the module's name
     static void exit_module(
-	const char* name);
+        const char* name);
 
     /// \name Debug_functionality
     /// The following functions offer some debugging functionality.
@@ -155,7 +155,7 @@ class Module_registration_entry : private detail::Linked_list
     /// \param name the module's name
     /// \return the found entry or 0 else
     static Module_registration_entry* find(
-	const char* name);
+        const char* name);
     /// Dump all the currently registered modules.
     static void dump_registered_modules();
 

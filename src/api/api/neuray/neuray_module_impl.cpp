@@ -242,26 +242,42 @@ mi::Size Module_impl::get_resources_count() const
     return get_db_element()->get_resources_count();
 }
 
-const mi::neuraylib::IType_resource* Module_impl::get_resource_type(mi::Size index) const
+const mi::neuraylib::IValue_resource* Module_impl::get_resource( mi::Size index) const
 {
-    mi::base::Handle<const MDL::IType_resource> int_resource_type(
-        get_db_element()->get_resource_type(index));
+    mi::base::Handle<const MDL::IValue_resource> int_resource(
+        get_db_element()->get_resource( index));
 
-    mi::base::Handle<Type_factory> tf(get_transaction()->get_type_factory());
-    return tf->create<mi::neuraylib::IType_resource>(
-        int_resource_type.get(), this->cast_to_major());
+    mi::base::Handle<Value_factory> vf( get_transaction()->get_value_factory());
+    return vf->create<mi::neuraylib::IValue_resource>(
+        int_resource.get(), this->cast_to_major());
 }
 
-const char* Module_impl::get_resource_mdl_file_path(mi::Size index) const
+const mi::neuraylib::IType_resource* Module_impl::deprecated_get_resource_type(
+    mi::Size index) const
 {
-    return get_db_element()->get_resource_mdl_file_path(index);
+    mi::base::Handle<const mi::neuraylib::IValue_resource> resource( get_resource( index));
+    if( !resource)
+        return nullptr;
+
+    return resource->get_type();
 }
 
-
-const char* Module_impl::get_resource_name(mi::Size index) const
+const char* Module_impl::deprecated_get_resource_mdl_file_path( mi::Size index) const
 {
-    DB::Tag tag(get_db_element()->get_resource_tag(index));
-    return get_db_transaction()->tag_to_name(tag);
+    const MDL::Resource_tag_tuple* rtt = get_db_element()->get_resource_tag_tuple( index);
+    if( !rtt)
+        return nullptr;
+        
+    return rtt->m_mdl_file_path.c_str();
+}
+
+const char* Module_impl::deprecated_get_resource_name( mi::Size index) const
+{
+    mi::base::Handle<const mi::neuraylib::IValue_resource> resource( get_resource( index));
+    if( !resource)
+        return nullptr;
+
+    return resource->get_value();
 }
 
 mi::Size Module_impl::get_annotation_definition_count() const

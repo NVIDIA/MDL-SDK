@@ -224,9 +224,9 @@ public:
     /// This function can be called at any time from any thread, including concurrent calls from
     /// several threads at the same time.
     ///
-    /// \note Severity #mi::base::details::MESSAGE_SEVERITY_FATAL indicates that the caller is unable to
-    ///       recover from the error condition. Therefore, the process will be terminated after a
-    ///       fatal log message has been delivered. To avoid the process termination logger
+    /// \note Severity #mi::base::details::MESSAGE_SEVERITY_FATAL indicates that the caller is
+    ///       unable to recover from the error condition. Therefore, the process will be terminated
+    ///       after a fatal log message has been delivered. To avoid the process termination logger
     ///       implementations might choose not to return from this method for fatal log messages.
     ///       This severity should only be used in exceptional cases.
     ///
@@ -270,9 +270,9 @@ public:
     /// This function can be called at any time from any thread, including concurrent calls from
     /// several threads at the same time.
     ///
-    /// \note Severity #mi::base::details::MESSAGE_SEVERITY_FATAL indicates that the caller is unable to
-    ///       recover from the error condition. Therefore, the process will be terminated after a
-    ///       fatal log message has been delivered. To avoid the process termination logger
+    /// \note Severity #mi::base::details::MESSAGE_SEVERITY_FATAL indicates that the caller is
+    ///       unable to recover from the error condition. Therefore, the process will be terminated
+    ///       after a fatal log message has been delivered. To avoid the process termination logger
     ///       implementations might choose not to return from this method for fatal log messages.
     ///       This severity should only be used in exceptional cases.
     ///
@@ -307,7 +307,11 @@ public:
     /// This overload receives additional details which applications may use to react to
     /// certain events.
     inline void printf(
-        Message_severity level, const char* module_category, const Message_details& details, const char* message, ...)
+        Message_severity level,
+        const char* module_category,
+        const Message_details& details,
+        const char* message,
+        ...)
 #ifdef MI_COMPILER_GCC
         __attribute__((format(printf, 5, 6)))
 #endif

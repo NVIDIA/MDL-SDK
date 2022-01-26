@@ -29,6 +29,8 @@
 #ifndef SHADERS_PLUGIN_FREEIMAGE_FREEIMAGE_IMAGE_PLUGIN_IMPL_H
 #define SHADERS_PLUGIN_FREEIMAGE_FREEIMAGE_IMAGE_PLUGIN_IMPL_H
 
+#include <mi/base/handle.h>
+#include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/iimage_plugin.h>
 
 #include <string>
@@ -130,6 +132,9 @@ private:
 
     /// The pixel types supported by this plugin.
     std::vector<const char*> m_supported_types;
+
+    /// API component IImage_api.
+    mi::base::Handle<mi::neuraylib::IImage_api> m_image_api;
 };
 
 } // namespace FREEIMAGE

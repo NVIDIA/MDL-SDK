@@ -61,16 +61,13 @@ public:
         Pixel_type pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::Uint32 layers,
         bool is_cubemap,
         mi::Float32 gamma) const;
 
     IMipmap* create_mipmap(
         const std::string& filename,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
+        const char* selector,
         bool only_first_level,
         mi::Sint32* errors) const;
 
@@ -79,8 +76,7 @@ public:
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
+        const char* selector,
         bool only_first_level,
         mi::Sint32* errors) const;
 
@@ -88,9 +84,8 @@ public:
         Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* selector,
         const char* mdl_file_path,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         bool only_first_level,
         mi::Sint32* errors) const;
 
@@ -109,17 +104,14 @@ public:
         Pixel_type pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::Uint32 layers,
         bool is_cubemap,
         mi::Float32 gamma) const;
 
     mi::neuraylib::ICanvas* create_canvas(
         const std::string& filename,
+        const char* selector,
         mi::Uint32 miplevel,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::Sint32* errors) const;
 
     mi::neuraylib::ICanvas* create_canvas(
@@ -127,22 +119,22 @@ public:
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
+        const char* selector,
         mi::Uint32 miplevel,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::Sint32* errors) const;
 
     mi::neuraylib::ICanvas* create_canvas(
         Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* selector,
         const char* mdl_file_path,
         mi::Uint32 miplevel,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::Sint32* errors) const;
 
-    mi::neuraylib::ICanvas* create_canvas( mi::neuraylib::ITile* tile, mi::Float32 gamma) const;
+    mi::neuraylib::ICanvas* create_canvas(
+        const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles,
+        mi::Float32 gamma = 0.0f) const;
 
     mi::neuraylib::ITile* create_tile(
         Pixel_type pixel_type,
@@ -174,6 +166,18 @@ public:
         const mi::neuraylib::ITile* tile, Pixel_type pixel_type) const;
 
     void adjust_gamma( mi::neuraylib::ICanvas* canvas, mi::Float32 new_gamma) const;
+
+    Pixel_type get_pixel_type_for_channel(
+        Pixel_type pixel_type, const char* selector) const;
+
+    IMipmap* extract_channel(
+        const IMipmap* mipmap, const char* selector, bool only_first_level) const;
+
+    mi::neuraylib::ICanvas* extract_channel(
+        const mi::neuraylib::ICanvas* canvas, const char* selector) const;
+
+    mi::neuraylib::ITile* extract_channel(
+        const mi::neuraylib::ITile* tile, const char* selector) const;
 
     void serialize_mipmap(
         SERIAL::Serializer* serializer, const IMipmap* mipmap, bool only_first_level) const;

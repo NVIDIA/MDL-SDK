@@ -85,6 +85,7 @@ char const *MDL::option_limits_float_max              = MDL_OPTION_LIMITS_FLOAT_
 char const *MDL::option_limits_double_min             = MDL_OPTION_LIMITS_DOUBLE_MIN;
 char const *MDL::option_limits_double_max             = MDL_OPTION_LIMITS_DOUBLE_MAX;
 char const *MDL::option_state_wavelength_base_max     = MDL_OPTION_STATE_WAVELENGTH_BASE_MAX;
+char const *MDL::option_user_data                     = MDL_OPTION_USER_DATA;
 char const *MDL::option_keep_original_resource_file_paths
                                                   = MDL_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS;
 
@@ -200,107 +201,107 @@ void Syntax_error::Error(int line, int col, int code, Error_params const &params
 // Check if the given token kind is a reserved keyword.
 bool Syntax_error::is_reserved_keyword(int t_kind)
 {
-    return t_kind == Parser::_R_RESERVED;
+    return t_kind == Parser::TOK_R_RESERVED;
 }
 
 void Scanner::initialize_mdl_keywords()
 {
     // The CoCo/R grammar contains always ALL MDL keywords, so
     // first map all non MDL 1.0 keywords to IDENT and enable them later.
-    keywords.set(L"bsdf_measurement", Parser::_IDENT);
-    keywords.set(L"intensity_mode", Parser::_IDENT);
-    keywords.set(L"intensity_radiant_exitance", Parser::_IDENT);
-    keywords.set(L"intensity_power", Parser::_IDENT);
-    keywords.set(L"cast", Parser::_IDENT);
+    keywords.set(L"bsdf_measurement", Parser::TOK_IDENT);
+    keywords.set(L"intensity_mode", Parser::TOK_IDENT);
+    keywords.set(L"intensity_radiant_exitance", Parser::TOK_IDENT);
+    keywords.set(L"intensity_power", Parser::TOK_IDENT);
+    keywords.set(L"cast", Parser::TOK_IDENT);
 
     // the "reserved" identifier is not really reserved
-    keywords.set(L"reserved", Parser::_IDENT);
+    keywords.set(L"reserved", Parser::TOK_IDENT);
 
     // set the reserved MDL 1.0 keywords
-    keywords.set(L"auto",             Parser::_R_RESERVED);
-    keywords.set(L"catch",            Parser::_R_RESERVED);
-    keywords.set(L"char",             Parser::_R_RESERVED);
-    keywords.set(L"class",            Parser::_R_RESERVED);
-    keywords.set(L"const_cast",       Parser::_R_RESERVED);
-    keywords.set(L"delete",           Parser::_R_RESERVED);
-    keywords.set(L"dynamic_cast",     Parser::_R_RESERVED);
-    keywords.set(L"explicit",         Parser::_R_RESERVED);
-    keywords.set(L"extern",           Parser::_R_RESERVED);
-    keywords.set(L"foreach",          Parser::_R_RESERVED);
-    keywords.set(L"friend",           Parser::_R_RESERVED);
-    keywords.set(L"goto",             Parser::_R_RESERVED);
-    keywords.set(L"graph",            Parser::_R_RESERVED);
-    keywords.set(L"bool2x2",          Parser::_R_RESERVED);
-    keywords.set(L"bool2x3",          Parser::_R_RESERVED);
-    keywords.set(L"bool2x4",          Parser::_R_RESERVED);
-    keywords.set(L"bool3x2",          Parser::_R_RESERVED);
-    keywords.set(L"bool3x3",          Parser::_R_RESERVED);
-    keywords.set(L"bool3x4",          Parser::_R_RESERVED);
-    keywords.set(L"bool4x2",          Parser::_R_RESERVED);
-    keywords.set(L"bool4x3",          Parser::_R_RESERVED);
-    keywords.set(L"bool4x4",          Parser::_R_RESERVED);
-    keywords.set(L"int2x2",           Parser::_R_RESERVED);
-    keywords.set(L"int2x3",           Parser::_R_RESERVED);
-    keywords.set(L"int2x4",           Parser::_R_RESERVED);
-    keywords.set(L"int3x2",           Parser::_R_RESERVED);
-    keywords.set(L"int3x3",           Parser::_R_RESERVED);
-    keywords.set(L"int3x4",           Parser::_R_RESERVED);
-    keywords.set(L"int4x2",           Parser::_R_RESERVED);
-    keywords.set(L"int4x3",           Parser::_R_RESERVED);
-    keywords.set(L"int4x4",           Parser::_R_RESERVED);
-    keywords.set(L"half",             Parser::_R_RESERVED);
-    keywords.set(L"half2",            Parser::_R_RESERVED);
-    keywords.set(L"half2x2",          Parser::_R_RESERVED);
-    keywords.set(L"half2x3",          Parser::_R_RESERVED);
-    keywords.set(L"half2x4",          Parser::_R_RESERVED);
-    keywords.set(L"half3",            Parser::_R_RESERVED);
-    keywords.set(L"half3x2",          Parser::_R_RESERVED);
-    keywords.set(L"half3x3",          Parser::_R_RESERVED);
-    keywords.set(L"half3x4",          Parser::_R_RESERVED);
-    keywords.set(L"half4",            Parser::_R_RESERVED);
-    keywords.set(L"half4x2",          Parser::_R_RESERVED);
-    keywords.set(L"half4x3",          Parser::_R_RESERVED);
-    keywords.set(L"half4x4",          Parser::_R_RESERVED);
-    keywords.set(L"inline",           Parser::_R_RESERVED);
-    keywords.set(L"inout",            Parser::_R_RESERVED);
-    keywords.set(L"long",             Parser::_R_RESERVED);
-    keywords.set(L"module",           Parser::_R_RESERVED);
-    keywords.set(L"mutable",          Parser::_R_RESERVED);
-    keywords.set(L"namespace",        Parser::_R_RESERVED);
-    keywords.set(L"native",           Parser::_R_RESERVED);
-    keywords.set(L"new",              Parser::_R_RESERVED);
-    keywords.set(L"operator",         Parser::_R_RESERVED);
-    keywords.set(L"out",              Parser::_R_RESERVED);
-    keywords.set(L"phenomenon",       Parser::_R_RESERVED);
-    keywords.set(L"private",          Parser::_R_RESERVED);
-    keywords.set(L"protected",        Parser::_R_RESERVED);
-    keywords.set(L"public",           Parser::_R_RESERVED);
-    keywords.set(L"reinterpret_cast", Parser::_R_RESERVED);
-    keywords.set(L"sampler",          Parser::_R_RESERVED);
-    keywords.set(L"shader",           Parser::_R_RESERVED);
-    keywords.set(L"short",            Parser::_R_RESERVED);
-    keywords.set(L"signed",           Parser::_R_RESERVED);
-    keywords.set(L"sizeof",           Parser::_R_RESERVED);
-    keywords.set(L"static",           Parser::_R_RESERVED);
-    keywords.set(L"static_cast",      Parser::_R_RESERVED);
-    keywords.set(L"technique",        Parser::_R_RESERVED);
-    keywords.set(L"template",         Parser::_R_RESERVED);
-    keywords.set(L"this",             Parser::_R_RESERVED);
-    keywords.set(L"throw",            Parser::_R_RESERVED);
-    keywords.set(L"try",              Parser::_R_RESERVED);
-    keywords.set(L"typeid",           Parser::_R_RESERVED);
-    keywords.set(L"typename",         Parser::_R_RESERVED);
-    keywords.set(L"union",            Parser::_R_RESERVED);
-    keywords.set(L"unsigned",         Parser::_R_RESERVED);
-    keywords.set(L"virtual",          Parser::_R_RESERVED);
-    keywords.set(L"void",             Parser::_R_RESERVED);
-    keywords.set(L"volatile",         Parser::_R_RESERVED);
-    keywords.set(L"wchar_t",          Parser::_R_RESERVED);
+    keywords.set(L"auto",             Parser::TOK_R_RESERVED);
+    keywords.set(L"catch",            Parser::TOK_R_RESERVED);
+    keywords.set(L"char",             Parser::TOK_R_RESERVED);
+    keywords.set(L"class",            Parser::TOK_R_RESERVED);
+    keywords.set(L"const_cast",       Parser::TOK_R_RESERVED);
+    keywords.set(L"delete",           Parser::TOK_R_RESERVED);
+    keywords.set(L"dynamic_cast",     Parser::TOK_R_RESERVED);
+    keywords.set(L"explicit",         Parser::TOK_R_RESERVED);
+    keywords.set(L"extern",           Parser::TOK_R_RESERVED);
+    keywords.set(L"foreach",          Parser::TOK_R_RESERVED);
+    keywords.set(L"friend",           Parser::TOK_R_RESERVED);
+    keywords.set(L"goto",             Parser::TOK_R_RESERVED);
+    keywords.set(L"graph",            Parser::TOK_R_RESERVED);
+    keywords.set(L"bool2x2",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool2x3",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool2x4",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool3x2",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool3x3",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool3x4",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool4x2",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool4x3",          Parser::TOK_R_RESERVED);
+    keywords.set(L"bool4x4",          Parser::TOK_R_RESERVED);
+    keywords.set(L"int2x2",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int2x3",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int2x4",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int3x2",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int3x3",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int3x4",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int4x2",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int4x3",           Parser::TOK_R_RESERVED);
+    keywords.set(L"int4x4",           Parser::TOK_R_RESERVED);
+    keywords.set(L"half",             Parser::TOK_R_RESERVED);
+    keywords.set(L"half2",            Parser::TOK_R_RESERVED);
+    keywords.set(L"half2x2",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half2x3",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half2x4",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half3",            Parser::TOK_R_RESERVED);
+    keywords.set(L"half3x2",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half3x3",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half3x4",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half4",            Parser::TOK_R_RESERVED);
+    keywords.set(L"half4x2",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half4x3",          Parser::TOK_R_RESERVED);
+    keywords.set(L"half4x4",          Parser::TOK_R_RESERVED);
+    keywords.set(L"inline",           Parser::TOK_R_RESERVED);
+    keywords.set(L"inout",            Parser::TOK_R_RESERVED);
+    keywords.set(L"long",             Parser::TOK_R_RESERVED);
+    keywords.set(L"module",           Parser::TOK_R_RESERVED);
+    keywords.set(L"mutable",          Parser::TOK_R_RESERVED);
+    keywords.set(L"namespace",        Parser::TOK_R_RESERVED);
+    keywords.set(L"native",           Parser::TOK_R_RESERVED);
+    keywords.set(L"new",              Parser::TOK_R_RESERVED);
+    keywords.set(L"operator",         Parser::TOK_R_RESERVED);
+    keywords.set(L"out",              Parser::TOK_R_RESERVED);
+    keywords.set(L"phenomenon",       Parser::TOK_R_RESERVED);
+    keywords.set(L"private",          Parser::TOK_R_RESERVED);
+    keywords.set(L"protected",        Parser::TOK_R_RESERVED);
+    keywords.set(L"public",           Parser::TOK_R_RESERVED);
+    keywords.set(L"reinterpret_cast", Parser::TOK_R_RESERVED);
+    keywords.set(L"sampler",          Parser::TOK_R_RESERVED);
+    keywords.set(L"shader",           Parser::TOK_R_RESERVED);
+    keywords.set(L"short",            Parser::TOK_R_RESERVED);
+    keywords.set(L"signed",           Parser::TOK_R_RESERVED);
+    keywords.set(L"sizeof",           Parser::TOK_R_RESERVED);
+    keywords.set(L"static",           Parser::TOK_R_RESERVED);
+    keywords.set(L"static_cast",      Parser::TOK_R_RESERVED);
+    keywords.set(L"technique",        Parser::TOK_R_RESERVED);
+    keywords.set(L"template",         Parser::TOK_R_RESERVED);
+    keywords.set(L"this",             Parser::TOK_R_RESERVED);
+    keywords.set(L"throw",            Parser::TOK_R_RESERVED);
+    keywords.set(L"try",              Parser::TOK_R_RESERVED);
+    keywords.set(L"typeid",           Parser::TOK_R_RESERVED);
+    keywords.set(L"typename",         Parser::TOK_R_RESERVED);
+    keywords.set(L"union",            Parser::TOK_R_RESERVED);
+    keywords.set(L"unsigned",         Parser::TOK_R_RESERVED);
+    keywords.set(L"virtual",          Parser::TOK_R_RESERVED);
+    keywords.set(L"void",             Parser::TOK_R_RESERVED);
+    keywords.set(L"volatile",         Parser::TOK_R_RESERVED);
+    keywords.set(L"wchar_t",          Parser::TOK_R_RESERVED);
 }
 
 void Scanner::enable_native_keyword(bool flag)
 {
-    keywords.set(L"native", flag ? Parser::_IDENT : Parser::_R_RESERVED);
+    keywords.set(L"native", flag ? Parser::TOK_IDENT : Parser::TOK_R_RESERVED);
 }
 
 void Scanner::set_mdl_version(int major, int minor)
@@ -309,23 +310,23 @@ void Scanner::set_mdl_version(int major, int minor)
 
     if (HAS_VERSION(1, 1)) {
         // enable MDL 1.1 keywords
-        keywords.set(L"bsdf_measurement", Parser::_BSDF_MEASUREMENT);
-        keywords.set(L"intensity_mode", Parser::_INTENSITY_MODE);
-        keywords.set(L"intensity_radiant_exitance", Parser::_INTENSITY_RADIANT_EXITANCE);
-        keywords.set(L"intensity_power", Parser::_INTENSITY_POWER);
+        keywords.set(L"bsdf_measurement", Parser::TOK_BSDF_MEASUREMENT);
+        keywords.set(L"intensity_mode", Parser::TOK_INTENSITY_MODE);
+        keywords.set(L"intensity_radiant_exitance", Parser::TOK_INTENSITY_RADIANT_EXITANCE);
+        keywords.set(L"intensity_power", Parser::TOK_INTENSITY_POWER);
     }
     if (HAS_VERSION(1, 3)) {
         // enable MDL 1.3 keywords
-        keywords.set(L"module", Parser::_MODULE);
+        keywords.set(L"module", Parser::TOK_MODULE);
     }
     if (HAS_VERSION(1, 5)) {
         // enable MDL 1.5 keywords
-        keywords.set(L"cast", Parser::_CAST);
-        keywords.set(L"hair_bsdf", Parser::_HAIR_BSDF);
+        keywords.set(L"cast", Parser::TOK_CAST);
+        keywords.set(L"hair_bsdf", Parser::TOK_HAIR_BSDF);
     }
     if (HAS_VERSION(1, 7)) {
         // enable  MDL 1.7 keywords
-        keywords.set(L"auto", Parser::_AUTO);
+        keywords.set(L"auto", Parser::TOK_AUTO);
     }
 }
 
@@ -457,18 +458,6 @@ MDL::MDL(IAllocator *alloc)
         register_builtin_module(math_mod);
     }
 
-    // load noise.mdl
-    {
-        mi::base::Handle<Buffer_Input_stream> s(m_builder.create<Encoded_buffer_Input_stream>(
-            m_builder.get_allocator(),
-            mdl_module_noise, sizeof(mdl_module_noise), ""));
-        Module *noise_mod = load_module(
-            NULL, ctx.get(), "::noise", s.get(), Module::MF_IS_STDLIB);
-
-        // takes ownership
-        register_builtin_module(noise_mod);
-    }
-
     // load df.mdl
     {
         mi::base::Handle<Buffer_Input_stream> s(m_builder.create<Encoded_buffer_Input_stream>(
@@ -581,8 +570,9 @@ Module *MDL::create_module(
     // Don't use number 0, this is reserved for "owner module".
     size_t id = ++m_next_module_id;
 
-    if (file_name == NULL)
+    if (file_name == NULL) {
         file_name = "";
+    }
 
     return m_builder.create<Module>(
         m_builder.get_allocator(), this, id,
@@ -607,16 +597,18 @@ Module *MDL::create_module(
 
     // copy the messages from the module to the context, so they are available over both
     // access paths
-    if (ctx != NULL)
+    if (ctx != NULL) {
         copy_message(ctx->access_messages_impl(), res);
+    }
     return res;
 }
 
 // Install a module resolver.
 void MDL::install_search_path(IMDL_search_path *search_path)
 {
-    if (search_path == NULL)
+    if (search_path == NULL) {
         search_path = m_builder.create<Empty_search_path>(get_allocator());
+    }
     m_search_path = search_path;
 }
 
@@ -1077,6 +1069,8 @@ void MDL::create_options()
 
     m_options.add_option(option_keep_original_resource_file_paths, "false",
         "Keep original resource file paths as is.");
+    m_options.add_interface_option(option_user_data,
+        "User data interface passed to callbacks.");
 
 #undef _STR
 #undef STR
@@ -1094,25 +1088,26 @@ Module *MDL::load_module(
     Thread_context *ctx = impl_cast<Thread_context>(context);
 
     // make sure there is a waiting table entry in case the module needs loading
-    if (cache) {
+    if (cache != NULL) {
         mi::base::Handle<const mi::mdl::IModule> existing_module(cache->lookup(module_name, NULL));
         if (existing_module) {
             // the module is cached and we load it anyway
-            MDL_ASSERT(!"tied to load an already cached module");
+            MDL_ASSERT(!"tried to load an already cached module");
         }
     }
 
-    Module *module =
+    Module *mod =
         create_module(module_name, s->get_filename(), IMDL::MDL_DEFAULT_VERSION, flags);
-    if (module == NULL) {
+    if (mod == NULL) {
         // cannot fail so far
         MDL_ASSERT(!"unexpected failure of create_module()");
         return NULL;
     }
-    if (msg_name != NULL)
-        module->set_msg_name(msg_name);
+    if (msg_name != NULL) {
+        mod->set_msg_name(msg_name);
+    }
 
-    Messages_impl &msgs = module->access_messages_impl();
+    Messages_impl &msgs = mod->access_messages_impl();
     Syntax_error  err(get_allocator(), msgs);
     Scanner       scanner(get_allocator(), &err, s);
     Parser        parser(&scanner, &err);
@@ -1122,7 +1117,7 @@ Module *MDL::load_module(
 
     parser.set_imdl(get_allocator(), this);
 
-    parser.set_module(module, get_compiler_bool_option(ctx, option_experimental_features, false));
+    parser.set_module(mod, get_compiler_bool_option(ctx, option_experimental_features, false));
     parser.Parse();
 
     mi::base::Handle<IArchive_input_stream> iarchvice_s(s->get_interface<IArchive_input_stream>());
@@ -1131,19 +1126,19 @@ Module *MDL::load_module(
         mi::base::Handle<IArchive_manifest const> manifest(iarchvice_s->get_manifest());
 
         if (manifest.is_valid_interface()) {
-            module->set_archive_info(manifest.get());
+            mod->set_archive_info(manifest.get());
         }
     } else {
         mi::base::Handle<IMdle_input_stream> imdle_s(s->get_interface<IMdle_input_stream>());
         if (imdle_s.is_valid_interface()) {
             // this module was loaded from an mdle, compute function hashes
-            module->m_is_hashed = true;
-            module->m_is_mdle   = true;
+            mod->m_is_hashed = true;
+            mod->m_is_mdle   = true;
         }
     }
 
-    module->analyze(cache, ctx);
-    return module;
+    mod->analyze(cache, ctx);
+    return mod;
 }
 
 // Load a module with a given name.
@@ -1222,8 +1217,9 @@ IModule const *MDL::load_module_from_stream(
     register_builtin_module_at_cache(cache);
 
     char const *fname = stream->get_filename();
-    if (fname == NULL || fname[0] == '\0')
+    if (fname == NULL || fname[0] == '\0') {
         fname =  "<string>";
+    }
 
     Module const *res = compile_module_from_stream(
         *ctx, cache, module_name, stream, fname);
@@ -1270,7 +1266,6 @@ namespace
     }
 }
 
-
 // Compile a module with a given name.
 Module const *MDL::compile_module(
     Thread_context &ctx,
@@ -1296,13 +1291,21 @@ Module const *MDL::compile_module(
 
     // resolve the module file
     mi::base::Handle<IMDL_import_result> result(resolve_import(
-        resolver, module_name, /*owner_module=*/NULL, /*pos=*/NULL));
+        resolver, module_name, /*owner_module=*/NULL, /*pos=*/NULL, &ctx));
     if (!result.is_valid_interface()) {
         // name could not be resolved
         return NULL;
     }
+    return compile_module(ctx, *result.get(), module_cache);
+}
 
-    string mname(result->get_absolute_name(), get_allocator());
+// Compile a module from an import result.
+Module const *MDL::compile_module(
+    Thread_context           &ctx,
+    IMDL_import_result const &result,
+    IModule_cache            *module_cache)
+{
+    string mname(result.get_absolute_name(), get_allocator());
     if (Module const *std_mod = find_builtin_module(mname)) {
         // it's a standard module
         std_mod->retain();
@@ -1336,7 +1339,7 @@ Module const *MDL::compile_module(
         // continue with loading the module on this context
     }
 
-    mi::base::Handle<IInput_stream> input(result->open(&ctx));
+    mi::base::Handle<IInput_stream> input(result.open(&ctx));
 
     if (!input) {
         // FIXME: add an error ??
@@ -1448,8 +1451,8 @@ Module const *MDL::compile_module_from_stream(
         return NULL;
     }
 
-    // if the module was resolved successful and there is a cache, 
-    // announce that this module is now created or wait for another thread that currently processes 
+    // if the module was resolved successful and there is a cache,
+    // announce that this module is now created or wait for another thread that currently processes
     // this module and then continue returning the cached module (processed by the other thread)
     Module_callback cb(module_cache);
 
@@ -1519,8 +1522,9 @@ IMDL_foreign_module_translator *MDL::is_foreign_module(
     {
         IMDL_foreign_module_translator *translator = it->get();
 
-        if (translator->is_foreign_module(module_name))
+        if (translator->is_foreign_module(module_name)) {
             return translator;
+        }
     }
     return NULL;
 }
@@ -1541,8 +1545,9 @@ Options &MDL::access_options()
 IDefinition::Semantics MDL::get_builtin_semantic(char const *name) const
 {
     Sema_map::const_iterator it = m_builtin_semantics.find(name);
-    if (it != m_builtin_semantics.end())
+    if (it != m_builtin_semantics.end()) {
         return it->second;
+    }
     return IDefinition::DS_UNKNOWN;
 }
 
@@ -1637,8 +1642,9 @@ Module const *MDL::deserialize_module(IDeserializer *ds)
                 get_allocator(), ds, &bin_deserializer, this);
             mod = mi::base::make_handle(Module::deserialize(mod_deserializer));
 
-            if (!include_dependencies)
+            if (!include_dependencies) {
                 break;
+            }
 
             // ensure that this module is not free'd until the loop is finished
             mod_cache.push_back(mod);
@@ -1654,8 +1660,9 @@ Module const *MDL::deserialize_module(IDeserializer *ds)
 
     // return the last one, this is the "main" module.h ensure that it is not dropped
     // when the mod_cache is deleted, so increase its refcount here
-    if (mod.is_valid_interface())
+    if (mod.is_valid_interface()) {
         mod->retain();
+    }
     return mod.get();
 }
 
@@ -1832,12 +1839,14 @@ Thread_context *MDL::create_thread_context()
 
 // Creates a new thread context from current analysis settings.
 Thread_context *MDL::create_thread_context(
-    Analysis const &ana,
-    char const    *front_path)
+    Analysis const             &ana,
+    char const                 *front_path,
+    mi::base::IInterface const *user_data)
 {
     Thread_context *ctx = m_builder.create<Thread_context>(get_allocator(), &m_options);
 
     ctx->set_front_path(front_path);
+    ctx->access_options().set_interface_option(MDL::option_user_data, user_data);
 
     ctx->access_options().set_option(
         MDL::option_strict,
@@ -1860,37 +1869,43 @@ MDL_exporter *MDL::create_exporter() const
 /// Check if the given character is a valid MDL letter.
 static bool is_mdl_letter(char c)
 {
-    if ('A' <= c && c <= 'Z')
+    if ('A' <= c && c <= 'Z') {
         return true;
-    if ('a' <= c && c <= 'z')
+    }
+    if ('a' <= c && c <= 'z') {
         return true;
+    }
     return false;
 }
 
 /// Check if the given character is a valid MDL digit.
 static bool is_mdl_digit(char c)
 {
-    if ('0' <= c && c <= '9')
+    if ('0' <= c && c <= '9') {
         return true;
+    }
     return false;
 }
 
 // Check if a given identifier is a valid MDL identifier.
 bool MDL::valid_mdl_identifier(char const *ident)
 {
-    if (ident == NULL)
+    if (ident == NULL) {
         return false;
+    }
 
     // first check general identifier rules:
     // IDENT = LETTER { LETTER | DIGIT | '_' } .
     char const *p = ident;
 
-    if (!is_mdl_letter(*p))
+    if (!is_mdl_letter(*p)) {
         return false;
+    }
 
     for (++p; *p != '\0'; ++p) {
-        if (*p == '_')
+        if (*p == '_') {
             continue;
+        }
         if (!is_mdl_letter(*p) && !is_mdl_digit(*p)) {
             return false;
         }
@@ -1965,7 +1980,7 @@ bool MDL::valid_mdl_identifier(char const *ident)
             FORBIDDEN("edf",  1);
             FORBIDDEN("else", 1);
             FORBIDDEN("enum", 1);
-           
+
         }
         break;
     case 'f':
@@ -2277,8 +2292,9 @@ bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_
             version = MDL_VERSION_1_7;
             return true;
         case 8:
-            if (!enable_experimental_features)
+            if (!enable_experimental_features) {
                 return false;
+            }
             version = MDL_VERSION_1_8;
             return true;
         }
@@ -2332,9 +2348,11 @@ IDefinition const *MDL::find_stdlib_signature(
     char const *module_name,
     char const *signature) const
 {
-    if (Module const *stdmod = find_builtin_module(string(module_name, get_allocator())))
-        if (stdmod->is_stdlib())
+    if (Module const *stdmod = find_builtin_module(string(module_name, get_allocator()))) {
+        if (stdmod->is_stdlib()) {
             return stdmod->find_signature(signature, /*only_exported=*/true);
+        }
+    }
     return NULL;
 }
 
@@ -2365,10 +2383,11 @@ static bool owner_is_in_root(char const *owner_name)
 
 // Resolve an import (module) name to the corresponding absolute module name.
 IMDL_import_result *MDL::resolve_import(
-    File_resolver  &resolver,
-    char const     *import_name,
-    Module         *owner_module,
-    Position const *pos)
+    File_resolver   &resolver,
+    char const      *import_name,
+    Module          *owner_module,
+    Position const  *pos,
+    IThread_context *ctx)
 {
     char const *owner_name     = NULL;
     char const *owner_filename = NULL;
@@ -2384,8 +2403,14 @@ IMDL_import_result *MDL::resolve_import(
         builtin_name = import_name;
     } else if (owner_is_in_root(owner_name)) {
         // fast path 2: if we are at root, every import starts also at root
-        builtin_name = "::";
-        builtin_name += import_name;
+        if (import_name[0] == '.' && import_name[1] == ':' && import_name[2] == ':') {
+            // a local import in the root package is absolute
+            builtin_name = &import_name[1];
+        } else if (import_name[0] != '.') {
+            // if doesn't not start with '..'
+            builtin_name = "::";
+            builtin_name += import_name;
+        }
     }
 
     if (!builtin_name.empty()) {
@@ -2407,7 +2432,8 @@ IMDL_import_result *MDL::resolve_import(
         *pos,
         import_name,
         owner_name,
-        owner_filename));
+        owner_filename,
+        ctx));
     if (res.is_valid_interface()) {
         // found
         res->retain();
@@ -2488,10 +2514,12 @@ bool MDL::get_compiler_bool_option(
     bool                 def_value) const
 {
     if (char const *val = get_compiler_option(ctx, name)) {
-        if (strcmp(val, "1") == 0 || strcmp(val, "true") == 0)
+        if (strcmp(val, "1") == 0 || strcmp(val, "true") == 0) {
             return true;
-        if (strcmp(val, "0") == 0 || strcmp(val, "false") == 0)
+        }
+        if (strcmp(val, "0") == 0 || strcmp(val, "false") == 0) {
             return false;
+        }
         // unknown ...
     }
     return def_value;
@@ -2507,8 +2535,9 @@ int MDL::get_compiler_int_option(
     if (char const *fv = get_compiler_option(ctx, name)) {
         char *end;
         long l = strtol(fv, &end, 10);
-        if (*end == '\0')
+        if (*end == '\0') {
             res = int(l);
+        }
     }
     return res;
 }
@@ -2523,10 +2552,12 @@ float MDL::get_compiler_float_option(
     if (char const *fv = get_compiler_option(ctx, name)) {
         char *end;
         float f = float(strtod(fv, &end));
-        if (*end == 'F' || *end == 'f')
+        if (*end == 'F' || *end == 'f') {
             ++end;
-        if (*end == '\0')
+        }
+        if (*end == '\0') {
             res = f;
+        }
     }
     return res;
 }
@@ -2541,8 +2572,9 @@ double MDL::get_compiler_double_option(
     if (char const *fv = get_compiler_option(ctx, name)) {
         char *end;
         double f = float(strtod(fv, &end));
-        if (*end == '\0')
+        if (*end == '\0') {
             res = f;
+        }
     }
     return res;
 }
@@ -2562,9 +2594,9 @@ Module const *MDL::get_builtin_module(size_t idx) const
 // Returns true if predefined types must be build, false otherwise.
 bool MDL::build_predefined_types()
 {
-    if (m_predefined_types_build)
+    if (m_predefined_types_build) {
         return false;
-    else {
+    } else {
         // Note: it is safe to run this without a lock, it runs in the
         // context of building builtin modules which is serialized.
         m_predefined_types_build = true;
@@ -2604,8 +2636,9 @@ Jitted_code *MDL::get_jitted_code()
 // Copy all messages from the given module to the compiler message list.
 void MDL::copy_message(Messages_impl &dst, Module const *mod)
 {
-    if (mod != NULL)
+    if (mod != NULL) {
         dst.copy_messages(mod->access_messages_impl());
+    }
 }
 
 // This is really ugly: We need an allocator for writing debug outputs.

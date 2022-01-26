@@ -114,9 +114,9 @@ bool Mdl_material::compile_material(const Mdl_material_description& description)
     m_compiled_db_name = base + "compiled";
 
     // get the material definition from the database
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        m_sdk->get_transaction().access<mi::neuraylib::IMaterial_definition>(
-            m_description.get_material_defintion_db_name()));
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        m_sdk->get_transaction().access<mi::neuraylib::IFunction_definition>(
+            m_description.get_material_definition_db_name()));
 
     // create a material instance with the provided parameters and store it in the database
     {
@@ -126,8 +126,8 @@ bool Mdl_material::compile_material(const Mdl_material_description& description)
             m_description.get_parameters());
 
 
-        mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-            material_definition->create_material_instance(parameter_list.get(), &ret));
+        mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+            material_definition->create_function_call(parameter_list.get(), &ret));
         if (ret != 0 || !material_instance)
         {
             log_error("Instantiating material '" + get_name() + "' failed", SRC);
@@ -144,15 +144,15 @@ bool Mdl_material::compile_material(const Mdl_material_description& description)
 
 bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* context)
 {
-    mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
-        m_sdk->get_transaction().access<const mi::neuraylib::IMaterial_instance>(
+    mi::base::Handle<const mi::neuraylib::IFunction_call> material_instance(
+        m_sdk->get_transaction().access<const mi::neuraylib::IFunction_call>(
             m_instance_db_name.c_str())); // get back after storing
 
     // is this instance still valid
     if (!material_instance->is_valid(context))
     {
-        mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance_edit(
-            m_sdk->get_transaction().edit<mi::neuraylib::IMaterial_instance>(
+        mi::base::Handle<mi::neuraylib::IFunction_call> material_instance_edit(
+            m_sdk->get_transaction().edit<mi::neuraylib::IFunction_call>(
                 m_instance_db_name.c_str())); // get back after storing
 
         // try to repair
@@ -215,8 +215,10 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
         context->set_option("fold_all_enum_parameters", mdl_options.fold_all_enum_parameters);
         context->set_option("ignore_noinline", true);
 
+        mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance2(
+            material_instance->get_interface<mi::neuraylib::IMaterial_instance>());
         mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-            material_instance->create_compiled_material(flags, context));
+            material_instance2->create_compiled_material(flags, context));
         if (!m_sdk->log_messages("Compiling material failed: " + get_name(), context, SRC) ||
             !compiled_material)
                 return false;
@@ -421,9 +423,9 @@ const std::vector<Mdl_resource_assignment>& Mdl_material::get_resources(
 
 bool Mdl_material::on_target_generated(D3DCommandList* command_list)
 {
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        m_sdk->get_transaction().access<const mi::neuraylib::IMaterial_definition>(
-            m_description.get_material_defintion_db_name()));
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        m_sdk->get_transaction().access<const mi::neuraylib::IFunction_definition>(
+            m_description.get_material_definition_db_name()));
 
     mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
         m_sdk->get_transaction().access<const mi::neuraylib::ICompiled_material>(
@@ -546,11 +548,11 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     for (auto &t : tasks)
         t.join();
 
-    // check the actual texture2D resource count (UDIMs)
+    // check the actual texture2D resource count (uv-tiles)
     size_t tex_count = 0;
     for (auto& set : m_resources[Mdl_resource_kind::Texture])
-        tex_count += set.data ? set.data->get_tile_count() : 0;
-        // check for null textures in UDIM tiles and add a default pink one
+        tex_count += set.data ? set.data->get_uvtile_count() : 0;
+        // check for null textures in uv-tiles
 
     // reserve/create resource views
     Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
@@ -622,15 +624,13 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
 
         // dense uv-tile-map, for large and sparse maps, this approach is too simple
         std::vector<Resource*> tile_map(
-            assignment.data ? assignment.data->get_tile_count() : 0, nullptr);
+            assignment.data ? assignment.data->get_uvtile_count() : 0, nullptr);
 
-        if (assignment.data && !assignment.data->is_udim_tiled)
-            tile_map[0] = assignment.data->entries[0].resource;
-        else if (assignment.data)
+        if (assignment.data)
         {
             for (size_t e = 0, n = assignment.data->entries.size(); e < n; ++e)
             {
-                size_t index = assignment.data->compute_linear_udim_index(e);
+                size_t index = assignment.data->compute_linear_uvtile_index(e);
                 tile_map[index] = assignment.data->entries[e].resource;
             }
         }
@@ -655,10 +655,13 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         Mdl_resource_info& info = info_data[assignment.runtime_resource_id - 1];
         info.gpu_resource_array_start = gpu_resource_array_offset;
         info.gpu_resource_array_size = tile_map.size();
-        info.gpu_resource_udim_u_min = assignment.data ? assignment.data->udim_u_min : 0;
-        info.gpu_resource_udim_v_min = assignment.data ? assignment.data->udim_v_min : 0;
-        info.gpu_resource_udim_width = (assignment.data && assignment.data->is_udim_tiled)
-            ? assignment.data->get_udim_width() : 0;
+        info.gpu_resource_frame_first = assignment.data ? assignment.data->frame_first : 0;
+        info.gpu_resource_uvtile_u_min = assignment.data ? assignment.data->uvtile_u_min : 0;
+        info.gpu_resource_uvtile_v_min = assignment.data ? assignment.data->uvtile_v_min : 0;
+        info.gpu_resource_uvtile_width = assignment.data ? assignment.data->get_uvtile_width() : 1;
+        info.gpu_resource_uvtile_height =
+            assignment.data ? assignment.data->get_uvtile_height() : 1;
+
         gpu_resource_array_offset += tile_map.size();
     }
 

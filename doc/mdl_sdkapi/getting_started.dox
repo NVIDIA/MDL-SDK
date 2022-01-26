@@ -61,7 +61,7 @@ for your own development.
 
 \if MDL_SOURCE_RELEASE
 
-Please refer to the file Readme.md in the toplevel directory of the \neurayAdjectiveName Source Repository for 
+Please refer to the file README.md in the toplevel directory of the \neurayAdjectiveName Source Repository for 
 instructions on how to build the \neurayAdjectiveName and the examples.
 \else
 

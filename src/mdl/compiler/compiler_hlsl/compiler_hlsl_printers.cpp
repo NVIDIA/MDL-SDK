@@ -442,8 +442,8 @@ void Printer::print_type(Type *type, Symbol *name)
 // Print a definition.
 void Printer::print(Definition const *def)
 {
-    if (Def_function const *op_def = as<Def_function>(def)) {
-        print_type(op_def->get_type(), op_def->get_symbol());
+    if (Def_function const *f_def = as<Def_function>(def)) {
+        print_type(f_def->get_type(), f_def->get_symbol());
     } else if (Def_operator const *op_def = as<Def_operator>(def)) {
         print_type(op_def->get_type(), op_def->get_symbol());
     } else {
@@ -1459,11 +1459,11 @@ void Printer::print_decl(
                 pop_color();
 
                 Array_specifiers const &as = field->get_array_specifiers();
-                for (Array_specifiers::const_iterator it(as.begin()), end(as.end());
-                     it != end;
-                     ++it)
+                for (Array_specifiers::const_iterator ait(as.begin()), aend(as.end());
+                     ait != aend;
+                     ++ait)
                 {
-                    Array_specifier const *spec = it;
+                    Array_specifier const *spec = ait;
                     print(spec);
                 }
             }
@@ -1487,8 +1487,8 @@ void Printer::print_decl(
             {
                 nl();
 
-                Declaration const *decl = it;
-                print(decl);
+                Declaration const *fdecl = it;
+                print(fdecl);
                 print(';');
             }
             --m_indent;
@@ -1899,6 +1899,30 @@ void Printer::enable_color(bool enable)
 void Printer::enable_locations(bool enable)
 {
     m_enable_loc = enable;
+}
+
+// Print a comment.
+void Printer::print_comment(char const *comment)
+{
+    push_color(C_COMMENT);
+    print("// ");
+
+    bool last_was_nl = false;
+    for (char const *p = comment; *p != '\0'; ++p) {
+        if (last_was_nl) {
+            print("// ");
+        }
+        if (p[0] == '\n') {
+            nl();
+            last_was_nl = true;
+        } else {
+            print(p[0]);
+        }
+    }
+    if (!last_was_nl) {
+        nl();
+    }
+    pop_color();
 }
 
 }  // hlsl

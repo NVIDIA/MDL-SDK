@@ -73,11 +73,15 @@ public:
 
     mi::neuraylib::IMdl_execution_context* create_execution_context() final;
 
+    mi::neuraylib::IMdl_execution_context* clone(
+        const mi::neuraylib::IMdl_execution_context* context) final;
+
     mi::neuraylib::IValue_texture* create_texture(
         mi::neuraylib::ITransaction* transaction,
         const char* file_path,
         mi::neuraylib::IType_texture::Shape shape,
         mi::Float32 gamma,
+        const char* selector,
         bool shared,
         mi::Sint32* errors) final;
 

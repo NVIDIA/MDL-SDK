@@ -119,8 +119,8 @@ bool Mdl_cache_module::update(mi::neuraylib::INeuray* neuray,
     // Iterate over all materials exported by the module.
     for (mi::Size i = 0, n = mdl_module->get_material_count(); i < n; ++i)
     {
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-            transaction->access<mi::neuraylib::IMaterial_definition>(mdl_module->get_material(i)));
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+            transaction->access<mi::neuraylib::IFunction_definition>(mdl_module->get_material(i)));
         std::string simple_name = material_definition->get_mdl_simple_name();
         std::string qualified_name = material_definition->get_mdl_name();
         const Child_map_key key{IMdl_cache_item::CK_MATERIAL, simple_name};

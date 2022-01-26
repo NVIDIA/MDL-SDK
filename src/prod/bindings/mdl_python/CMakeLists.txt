@@ -130,6 +130,11 @@ add_custom_command(
     )
 
 # run swig to generate the bindings
+if("MDL_SOURCE_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
+    set(_SWIG_MDL_SOURCE_RELEASE_OPTIONS
+        -DMDL_SOURCE_RELEASE
+    )
+endif()
 add_custom_command(
     OUTPUT
         ${_GENERATED_DIR}/mdl_python_swig.cpp
@@ -137,6 +142,7 @@ add_custom_command(
     COMMAND ${swig_PATH}
         -c++ -python -doxygen
         -DSWIGWORDSIZE64
+        ${_SWIG_MDL_SOURCE_RELEASE_OPTIONS}
         -I-
         -I${CMAKE_CURRENT_SOURCE_DIR}
         -I${_GENERATED_DIR}/processed_headers

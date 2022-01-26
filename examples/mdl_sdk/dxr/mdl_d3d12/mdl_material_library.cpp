@@ -673,15 +673,17 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
         m_sdk->get_transaction().access<mi::neuraylib::IImage>(texture->get_image()));
 
     // collect basic information about the number of tiles
-    mi::Size num_tiles = image->get_uvtile_length();
+    mi::Size num_tiles = 0;
     mi::Sint32 u_min = std::numeric_limits<mi::Sint32>::max();
     mi::Sint32 u_max = std::numeric_limits<mi::Sint32>::min();
     mi::Sint32 v_min = u_min;
     mi::Sint32 v_max = u_max;
 
-    // no tiles no texture
-    if (num_tiles == 0)
-        return nullptr;
+    mi::Size num_frames = image->get_length();
+    for (mi::Size f = 0; f < num_frames; ++f)
+    {
+        num_tiles += image->get_frame_length(f);
+    }
 
     // create empty textures for all tiles
     {
@@ -693,64 +695,75 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
         // add the created texture to the library
         m_resources[db_name] = Mdl_resource_set();
         Mdl_resource_set& set = m_resources[db_name];
-        set.is_udim_tiled = image->is_uvtile();
+        bool has_tiles_or_frames = image->is_uvtile() || image->is_animated();
 
         // create the resources
         set.entries = std::vector<Mdl_resource_set::Entry>(
             num_tiles, Mdl_resource_set::Entry());
-        for (mi::Size tile_id = 0; tile_id < num_tiles; ++tile_id)
-        {
-            mi::base::Handle<const mi::neuraylib::ICanvas> canvas(
-                image->get_canvas(0, mi::Uint32(tile_id)));
 
-            // create the d3d texture
-            switch (dimension)
+        mi::Size global_tile_id = 0;
+        for (mi::Size f = 0; f < num_frames; ++f)
+        {
+            for (mi::Size tile_id = 0; tile_id < image->get_frame_length(f); ++tile_id)
             {
+                mi::base::Handle<const mi::neuraylib::ICanvas> canvas(
+                    image->get_canvas(f, tile_id, 0));
+
+                // create the d3d texture
+                switch (dimension)
+                {
                 case Texture_dimension::Texture_2D:
-                    set.entries[tile_id].resource = Texture::create_texture_2d(
+                    set.entries[global_tile_id].resource = Texture::create_texture_2d(
                         m_app, GPU_access::shader_resource,
                         canvas->get_resolution_x(),
                         canvas->get_resolution_y(),
                         DXGI_FORMAT_R32G32B32A32_FLOAT, // TODO
-                        set.is_udim_tiled
-                            ? (db_name + "_tile_" + std::to_string(tile_id)) : db_name);
+                        has_tiles_or_frames
+                        ? (db_name + "_frame_" + std::to_string(f) +
+                            "_tile_" + std::to_string(tile_id)) : db_name);
                     break;
 
                 // TODO
                 // currently all 3D textures we have are multi-scatter lookup tables
                 // which are float32 textures. so this is hard-coded for now
                 case Texture_dimension::Texture_3D:
-                    set.entries[tile_id].resource = Texture::create_texture_3d(
+                    set.entries[global_tile_id].resource = Texture::create_texture_3d(
                         m_app, GPU_access::shader_resource,
                         canvas->get_resolution_x(),
                         canvas->get_resolution_y(),
                         canvas->get_layers_size(),
                         DXGI_FORMAT_R32_FLOAT,
-                        set.is_udim_tiled
-                            ? (db_name + "_tile_" + std::to_string(tile_id)) : db_name);
+                        has_tiles_or_frames
+                        ? (db_name + "_frame_" + std::to_string(f) +
+                            "_tile_" + std::to_string(tile_id)) : db_name);
                     break;
 
                 default:
                     log_error("Unhandled texture dimension: " + db_name, SRC);
                     continue;
+                }
+
+
+                mi::Sint32 u, v;
+                image->get_uvtile_uv(f, tile_id, u, v);
+                set.entries[global_tile_id].frame = int32_t(image->get_frame_number(f));
+                set.entries[global_tile_id].uvtile_u = u;
+                set.entries[global_tile_id].uvtile_v = v;
+                u_min = std::min(u_min, u);
+                u_max = std::max(u_max, u);
+                v_min = std::min(v_min, v);
+                v_max = std::max(v_max, v);
+                global_tile_id++;
             }
-
-
-            mi::Sint32 u, v;
-            image->get_uvtile_uv(mi::Uint32(tile_id), u, v);
-            set.entries[tile_id].udim_u = u;
-            set.entries[tile_id].udim_v = v;
-            u_min = std::min(u_min, u);
-            u_max = std::max(u_max, u);
-            v_min = std::min(v_min, v);
-            v_max = std::max(v_max, v);
         }
 
         // resource set data
-        set.udim_u_min = u_min;
-        set.udim_u_max = u_max;
-        set.udim_v_min = v_min;
-        set.udim_v_max = v_max;
+        set.frame_first = int32_t(image->get_frame_number(0));
+        set.frame_last = int32_t(image->get_frame_number(num_frames - 1));
+        set.uvtile_u_min = u_min;
+        set.uvtile_u_max = u_max;
+        set.uvtile_v_min = v_min;
+        set.uvtile_v_max = v_max;
 
         // release the lock so other threads can reference the texture even when the
         // actual data is not loaded yet. So when loading in parallel, wait if the data
@@ -762,96 +775,101 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
     Mdl_resource_set& set = m_resources[db_name];
     uint8_t* buffer = nullptr;
     size_t buffer_size = 0;
-    for (mi::Size tile_id = 0; tile_id < num_tiles; ++tile_id)
+    mi::Size global_tile_id = 0;
+    for (mi::Size f = 0; f < num_frames; ++f)
     {
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(
-            image->get_canvas(0, mi::Uint32(tile_id)));
-
-        // For simplicity, the texture access functions are only implemented for float4 and
-        // gamma is pre-applied here (all images are converted to linear space).
-        // Convert to linear color space if necessary
-        float gamma = texture->get_effective_gamma();
-        char const* image_type = image->get_type();
-        if (dimension == Texture_dimension::Texture_2D && gamma != 1.0f)
+        for (mi::Size tile_id = 0; tile_id < image->get_frame_length(f); ++tile_id)
         {
-            // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
-            mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
-                m_sdk->get_image_api().convert(canvas.get(), "Color"));
-            gamma_canvas->set_gamma(gamma);
-            m_sdk->get_image_api().adjust_gamma(gamma_canvas.get(), 1.0f);
-            canvas = gamma_canvas;
-        }
-        else if (dimension == Texture_dimension::Texture_2D &&
-            strcmp(image_type, "Color") != 0 &&
-            strcmp(image_type, "Float32<4>") != 0)
-        {
-            // Convert to expected format
-            canvas = m_sdk->get_image_api().convert(canvas.get(), "Color");
-        }
+            mi::base::Handle<const mi::neuraylib::ICanvas> canvas(
+                image->get_canvas(f, tile_id, 0));
 
-        Texture* texture_resource = static_cast<Texture*>(set.entries[tile_id].resource);
-
-        size_t tex_width = texture_resource->get_width();
-        size_t tex_height = texture_resource->get_height();
-        size_t tex_layers = texture_resource->get_depth();
-        size_t data_row_pitch = texture_resource->get_pixel_stride() * tex_width;
-        size_t gpu_row_pitch = texture_resource->get_gpu_row_pitch();
-
-        // use a temporary buffer for adding padding
-        size_t new_size = gpu_row_pitch * tex_height * tex_layers;
-        if (buffer_size < new_size)
-        {
-            if (buffer != nullptr)
-                delete[] buffer;
-
-            buffer_size = new_size;
-            buffer = new uint8_t[buffer_size];
-
-            if (gpu_row_pitch != data_row_pitch) // alignment required
-                memset(buffer, 0, buffer_size);  // pad with zeros
-        }
-
-        // get and copy data to GPU
-        for (size_t l = 0; l < tex_layers; ++l)
-        {
-            mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(l));
-            const uint8_t* tex_data = static_cast<const uint8_t*>(tile->get_data());
-
-            // copy line by line if required
-            uint8_t* buffer_layer = buffer + gpu_row_pitch * tex_height * l;
-            if (gpu_row_pitch != data_row_pitch)
+            // For simplicity, the texture access functions are only implemented for float4 and
+            // gamma is pre-applied here (all images are converted to linear space).
+            // Convert to linear color space if necessary
+            float gamma = texture->get_effective_gamma(f, tile_id);
+            char const* image_type = image->get_type(f, tile_id);
+            if (dimension == Texture_dimension::Texture_2D && gamma != 1.0f)
             {
-                for (size_t r = 0; r < tex_height; ++r)
-                    memcpy((void*) (buffer_layer + r * gpu_row_pitch),
-                    (void*) (tex_data + r * data_row_pitch),
+                // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
+                mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
+                    m_sdk->get_image_api().convert(canvas.get(), "Color"));
+                gamma_canvas->set_gamma(gamma);
+                m_sdk->get_image_api().adjust_gamma(gamma_canvas.get(), 1.0f);
+                canvas = gamma_canvas;
+            }
+            else if (dimension == Texture_dimension::Texture_2D &&
+                strcmp(image_type, "Color") != 0 &&
+                strcmp(image_type, "Float32<4>") != 0)
+            {
+                // Convert to expected format
+                canvas = m_sdk->get_image_api().convert(canvas.get(), "Color");
+            }
+
+            Texture* texture_resource = static_cast<Texture*>(set.entries[global_tile_id].resource);
+
+            size_t tex_width = texture_resource->get_width();
+            size_t tex_height = texture_resource->get_height();
+            size_t tex_layers = texture_resource->get_depth();
+            size_t data_row_pitch = texture_resource->get_pixel_stride() * tex_width;
+            size_t gpu_row_pitch = texture_resource->get_gpu_row_pitch();
+
+            // use a temporary buffer for adding padding
+            size_t new_size = gpu_row_pitch * tex_height * tex_layers;
+            if (buffer_size < new_size)
+            {
+                if (buffer != nullptr)
+                    delete[] buffer;
+
+                buffer_size = new_size;
+                buffer = new uint8_t[buffer_size];
+
+                if (gpu_row_pitch != data_row_pitch) // alignment required
+                    memset(buffer, 0, buffer_size);  // pad with zeros
+            }
+
+            // get and copy data to GPU
+            for (size_t l = 0; l < tex_layers; ++l)
+            {
+                mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(l));
+                const uint8_t* tex_data = static_cast<const uint8_t*>(tile->get_data());
+
+                // copy line by line if required
+                uint8_t* buffer_layer = buffer + gpu_row_pitch * tex_height * l;
+                if (gpu_row_pitch != data_row_pitch)
+                {
+                    for (size_t r = 0; r < tex_height; ++r)
+                        memcpy((void*)(buffer_layer + r * gpu_row_pitch),
+                            (void*)(tex_data + r * data_row_pitch),
                             data_row_pitch);
+                }
+                else // copy directly
+                {
+                    memcpy((void*)buffer_layer, (void*)tex_data, data_row_pitch * tex_height);
+                }
             }
-            else // copy directly
+
+            // copy data to the GPU
+            if (texture_resource->upload(command_list, (const uint8_t*)buffer, gpu_row_pitch))
             {
-                memcpy((void*) buffer_layer, (void*) tex_data, data_row_pitch * tex_height);
+                // .. since the compute pipeline is used for ray tracing
+                texture_resource->transition_to(
+                    command_list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             }
-        }
+            else
+                success = false;
 
-        // copy data to the GPU
-        if (texture_resource->upload(command_list, (const uint8_t*) buffer, gpu_row_pitch))
-        {
-            // .. since the compute pipeline is used for ray tracing
-            texture_resource->transition_to(
-                command_list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        }
-        else
-            success = false;
+            // free data
+            if (!success)
+            {
+                std::lock_guard<std::mutex> lock(m_resources_mtx);
+                for (auto& entry : set.entries)
+                    delete entry.resource;
 
-        // free data
-        if (!success)
-        {
-            std::lock_guard<std::mutex> lock(m_resources_mtx);
-            for (auto& entry : set.entries)
-                delete entry.resource;
-
-            m_resources.erase(db_name);
-            delete[] buffer;
-            return nullptr;
+                m_resources.erase(db_name);
+                delete[] buffer;
+                return nullptr;
+            }
+            global_tile_id++;
         }
     }
 

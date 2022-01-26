@@ -96,10 +96,21 @@ Image_file_writer_impl::~Image_file_writer_impl()
         // Export JPGs with the desired quality.
         if( m_format == FIF_JPEG)
             flags |= m_quality; // 0..100
-        // Export EXRs using full 32bit precision (default is 16bit precision), enable ZIP
-        // compression.
-        if( m_format == FIF_EXR)
-            flags |= EXR_FLOAT | EXR_ZIP;
+        // Export EXRs using full 32bit precision if quality > 50, enable ZIP compression.
+        if( m_format == FIF_EXR) {
+            flags |= EXR_ZIP;
+            if( m_quality > 50)
+                flags |= EXR_FLOAT;
+        }
+        // Save using ZLib level 9 compression flag (default value is 6)
+        if( m_format == FIF_PNG)
+            flags |= PNG_Z_BEST_COMPRESSION;
+        if( m_format == FIF_BMP)
+            flags |= BMP_SAVE_RLE;
+        if( m_format == FIF_TARGA)
+            flags |= TARGA_SAVE_RLE;
+        if( m_format == FIF_TIFF)
+            flags |= TIFF_LZW;
 
         if( !FreeImage_SaveToHandle(
             m_format, m_bitmap, &io, static_cast<fi_handle>( m_writer), flags)) {
@@ -141,20 +152,6 @@ mi::Uint32 Image_file_writer_impl::get_layers_size( mi::Uint32 level) const
     return 1;
 }
 
-mi::Uint32 Image_file_writer_impl::get_tile_resolution_x( mi::Uint32 level) const //-V524 PVS
-{
-    if( level > 0)
-        return 0;
-    return m_resolution_x;
-}
-
-mi::Uint32 Image_file_writer_impl::get_tile_resolution_y( mi::Uint32 level) const //-V524 PVS
-{
-    if( level > 0)
-        return 0;
-    return m_resolution_y;
-}
-
 mi::Uint32 Image_file_writer_impl::get_miplevels() const
 {
     return 1;
@@ -170,14 +167,14 @@ mi::Float32 Image_file_writer_impl::get_gamma() const
     return m_gamma;
 }
 
-bool Image_file_writer_impl::read(
-    mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level) const
+mi::neuraylib::ITile* Image_file_writer_impl::read(
+    mi::Uint32 z, mi::Uint32 level) const
 {
-    return false;
+    return nullptr;
 }
 
 bool Image_file_writer_impl::write(
-    const mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level)
+    const mi::neuraylib::ITile* tile, mi::Uint32 z, mi::Uint32 level)
 {
     if( z != 0 || level != 0 || !m_bitmap) {
         assert( false);
@@ -189,7 +186,7 @@ bool Image_file_writer_impl::write(
     assert( strcmp( tile_pixel_type, m_bitmap_pixel_type) == 0);
 #endif
 
-    return copy_from_tile_to_bitmap( tile, m_bitmap, x, y);
+    return copy_from_tile_to_bitmap( tile, m_bitmap);
 }
 
 } // namespace FREEIMAGE

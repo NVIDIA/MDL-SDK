@@ -38,6 +38,7 @@
 #include "i_mdl_elements_utilities.h"
 #include "i_mdl_elements_value.h"
 #include "mdl_elements_utilities.h"
+#include "mdl_elements_expression.h"
 
 #include <sstream>
 #include <mi/base/handle.h>
@@ -63,20 +64,20 @@ namespace MDL {
 using mi::mdl::as;
 
 Mdl_function_call::Mdl_function_call()
-: m_tf(get_type_factory())
-, m_vf(get_value_factory())
-, m_ef(get_expression_factory())
-, m_module_tag()
-, m_definition_tag()
-, m_definition_ident()
-, m_mdl_semantic(mi::mdl::IDefinition::DS_UNKNOWN)
-, m_definition_name()
-, m_immutable(false) // avoid ubsan warning with swap() and temporaries
-, m_is_material(false)
-, m_parameter_types()
-, m_return_type()
-, m_arguments()
-, m_enable_if_conditions()
+  : m_tf( get_type_factory()),
+    m_vf( get_value_factory()),
+    m_ef( get_expression_factory()),
+    m_module_tag(),
+    m_definition_tag(),
+    m_definition_ident(),
+    m_mdl_semantic( mi::mdl::IDefinition::DS_UNKNOWN),
+    m_definition_name(),
+    m_immutable( false), // avoid ubsan warning with swap() and temporaries
+    m_is_material( false),
+    m_parameter_types(),
+    m_return_type(),
+    m_arguments(),
+    m_enable_if_conditions()
 {
 }
 
@@ -103,48 +104,51 @@ Mdl_function_call::Mdl_function_call(
     const IType* return_type,
     bool immutable,
     const IExpression_list* enable_if_conditions)
-: m_tf(get_type_factory())
-, m_vf(get_value_factory())
-, m_ef(get_expression_factory())
-, m_module_tag(module_tag)
-, m_definition_tag(definition_tag)
-, m_definition_ident(definition_ident)
-, m_mdl_semantic(semantic)
-, m_module_db_name(check_non_null(module_db_name))
-, m_definition_name(check_non_null(definition_name))
-, m_definition_db_name(get_db_name(m_definition_name))
-, m_immutable(immutable)
-, m_is_material(is_material)
-, m_parameter_types(parameter_types, mi::base::DUP_INTERFACE)
-, m_return_type(return_type, mi::base::DUP_INTERFACE)
-, m_arguments(arguments, mi::base::DUP_INTERFACE)
-, m_enable_if_conditions(enable_if_conditions, mi::base::DUP_INTERFACE)
+  : m_tf( get_type_factory()),
+    m_vf( get_value_factory()),
+    m_ef( get_expression_factory()),
+    m_module_tag( module_tag),
+    m_definition_tag( definition_tag),
+    m_definition_ident( definition_ident),
+    m_mdl_semantic( semantic),
+    m_module_db_name( check_non_null( module_db_name)),
+    m_definition_name( check_non_null( definition_name)),
+    m_definition_db_name( get_db_name( m_definition_name)),
+    m_immutable( immutable),
+    m_is_material( is_material),
+    m_parameter_types( parameter_types, mi::base::DUP_INTERFACE),
+    m_return_type( return_type, mi::base::DUP_INTERFACE),
+    m_arguments( arguments, mi::base::DUP_INTERFACE),
+    m_enable_if_conditions( enable_if_conditions, mi::base::DUP_INTERFACE)
 {
 }
 
 Mdl_function_call::Mdl_function_call( const Mdl_function_call& other)
-: SCENE::Scene_element<Mdl_function_call, ID_MDL_FUNCTION_CALL>(other)
-, m_tf(other.m_tf)
-, m_vf(other.m_vf)
-, m_ef(other.m_ef)
-, m_module_tag(other.m_module_tag)
-, m_definition_tag(other.m_definition_tag)
-, m_definition_ident(other.m_definition_ident)
-, m_mdl_semantic(other.m_mdl_semantic)
-, m_module_db_name(other.m_module_db_name)
-, m_definition_name(other.m_definition_name)
-, m_definition_db_name(other.m_definition_db_name)
-, m_immutable(other.m_immutable)
-, m_is_material(other.m_is_material)
-, m_parameter_types(other.m_parameter_types)
-, m_return_type(other.m_return_type)
-, m_arguments(m_ef->clone(
-    other.m_arguments.get(), /*transaction*/ nullptr, /*copy_immutable_calls*/ false))
-, m_enable_if_conditions(other.m_enable_if_conditions)  // shared, no clone necessary
+  : SCENE::Scene_element<Mdl_function_call, ID_MDL_FUNCTION_CALL>( other),
+    m_tf( other.m_tf),
+    m_vf( other.m_vf),
+    m_ef( other.m_ef),
+    m_module_tag( other.m_module_tag),
+    m_definition_tag( other.m_definition_tag),
+    m_definition_ident( other.m_definition_ident),
+    m_mdl_semantic( other.m_mdl_semantic),
+    m_module_db_name( other.m_module_db_name),
+    m_definition_name( other.m_definition_name),
+    m_definition_db_name( other.m_definition_db_name),
+    m_immutable( other.m_immutable),
+    m_is_material( other.m_is_material),
+    m_parameter_types( other.m_parameter_types),
+    m_return_type( other.m_return_type),
+    m_enable_if_conditions( other.m_enable_if_conditions) // shared, no clone necessary
 {
+    // Clone only the expression list itself for performance reasons. Arguments are never modified
+    // in place, only by setting new expression.
+    const Expression_list* other_arguments_impl
+        = static_cast<const Expression_list*>( other.m_arguments.get());
+    m_arguments = new Expression_list( *other_arguments_impl);
 }
 
-DB::Tag Mdl_function_call::get_function_definition(DB::Transaction *transaction) const
+DB::Tag Mdl_function_call::get_function_definition( DB::Transaction* transaction) const
 {
     if( !is_valid_definition( transaction))
         return DB::Tag();
@@ -378,33 +382,36 @@ mi::Sint32 Mdl_function_call::repair(
 mi::Sint32 Mdl_function_call::set_arguments(
     DB::Transaction* transaction, const IExpression_list* arguments)
 {
-    if (!arguments)
+    if( !arguments)
         return -1;
     mi::Size n = arguments->get_size();
-    for (mi::Size i = 0; i < n; ++i) {
-        const char* name = arguments->get_name(i);
-        mi::base::Handle<const IExpression> argument(arguments->get_expression(name));
-        mi::Sint32 result = set_argument(transaction, name, argument.get());
-        if (result != 0)
+    for( mi::Size i = 0; i < n; ++i) {
+        const char* name = arguments->get_name( i);
+        mi::base::Handle<const IExpression> argument( arguments->get_expression(name));
+        mi::Sint32 result = set_argument( transaction, name, argument.get());
+        if( result != 0)
             return result;
     }
+
     return 0;
 }
 
 mi::Sint32 Mdl_function_call::set_argument(
     DB::Transaction* transaction, mi::Size index, const IExpression* argument)
 {
-   if (!argument)
+    if( !argument)
         return -1;
-    mi::base::Handle<const IType> expected_type(m_parameter_types->get_type( index));
-    if (!expected_type)
-        return -2;
-    mi::base::Handle<const IType> actual_type(argument->get_type());
 
-    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
+    mi::base::Handle<const IType> expected_type( m_parameter_types->get_type( index));
+    if( !expected_type)
+        return -2;
+
+    mi::base::Handle<const IType> actual_type( argument->get_type());
+
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     bool allow_cast = mdlc_module->get_implicit_cast_enabled();
     bool needs_cast = false;
-    if (!argument_type_matches_parameter_type(
+    if( !argument_type_matches_parameter_type(
         m_tf.get(),
         actual_type.get(),
         expected_type.get(),
@@ -412,25 +419,25 @@ mi::Sint32 Mdl_function_call::set_argument(
         needs_cast))
         return -3;
 
-    if (m_immutable)
+    if( m_immutable)
         return -4;
 
     bool actual_type_varying   = (actual_type->get_all_type_modifiers()   & IType::MK_VARYING) != 0;
     bool expected_type_uniform = (expected_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0;
-    if (actual_type_varying && expected_type_uniform)
+    if( actual_type_varying && expected_type_uniform)
         return -5;
 
     IExpression::Kind kind = argument->get_kind();
-    if (kind != IExpression::EK_CONSTANT && kind != IExpression::EK_CALL)
+    if( kind != IExpression::EK_CONSTANT && kind != IExpression::EK_CALL)
         return -6;
 
-    if (expected_type_uniform && return_type_is_varying(transaction, argument))
+    if( expected_type_uniform && return_type_is_varying( transaction, argument))
         return -8;
 
-    mi::base::Handle<IExpression> argument_copy(m_ef->clone(
-        argument, transaction, /*copy_immutable_calls=*/ true));
+    mi::base::Handle<IExpression> argument_copy(
+        m_ef->clone( argument, transaction, /*copy_immutable_calls=*/ true));
 
-    if (needs_cast) {
+    if( needs_cast) {
         mi::Sint32 errors = 0;
         argument_copy = m_ef->create_cast(
             transaction,
@@ -440,10 +447,10 @@ mi::Sint32 Mdl_function_call::set_argument(
             /*force_cast=*/false,
             /*direct_call=*/false,
             &errors);
-        ASSERT(M_SCENE, argument_copy); // should always succeed.
+        ASSERT( M_SCENE, argument_copy); // should always succeed.
     }
 
-    m_arguments->set_expression(index, argument_copy.get());
+    m_arguments->set_expression( index, argument_copy.get());
     return 0;
 }
 
@@ -452,11 +459,73 @@ mi::Sint32 Mdl_function_call::set_argument(
 {
     if( !name || !argument)
         return -1;
+
     mi::Size index = get_parameter_index( name);
     return set_argument( transaction, index, argument);
 }
 
-void Mdl_function_call::make_mutable(DB::Transaction* transaction)
+mi::Sint32 Mdl_function_call::reset_argument(
+    DB::Transaction* transaction, mi::Size index)
+{
+    mi::base::Handle<const IType> expected_type( m_parameter_types->get_type( index));
+    if( !expected_type)
+        return -2;
+
+    if( m_immutable)
+        return -4;
+
+    if( !is_valid_definition( transaction))
+        return -9;
+
+    DB::Access<Mdl_function_definition> definition( m_definition_tag, transaction);
+    mi::base::Handle<const IExpression_list> defaults( definition->get_defaults());
+    const char* name = get_parameter_name( index);
+
+    // consider default first
+    mi::base::Handle<const IExpression> argument( defaults->get_expression( name));
+    if( argument) {
+
+        // clone the default (also resolves parameter references)
+        std::vector<mi::base::Handle<const IExpression> > call_context;
+        for( mi::Size i = 0; i+1 < index; ++i)
+            call_context.push_back( make_handle( m_arguments->get_expression( i)));
+        argument = deep_copy( m_ef.get(), transaction, argument.get(), call_context);
+        ASSERT( M_SCENE, argument);
+
+        // check for uniform violation
+        bool expected_type_uniform
+            = (expected_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0;
+        if( expected_type_uniform && return_type_is_varying( transaction, argument.get()))
+            argument = 0;
+    }
+
+    // otherwise consider range annotations or use default-constructed value
+    if( !argument) {
+         mi::base::Handle<const IAnnotation_list> annotation_list(
+             definition->get_parameter_annotations());
+         mi::base::Handle<const IAnnotation_block>  annotation_block(
+             annotation_list->get_annotation_block( name));
+         mi::base::Handle<IValue> value(
+             m_vf->create( expected_type.get(), annotation_block.get()));
+         ASSERT( M_SCENE, value);
+         argument = m_ef->create_constant( value.get());
+    }
+
+    m_arguments->set_expression( index, argument.get());
+    return 0;
+}
+
+mi::Sint32 Mdl_function_call::reset_argument(
+    DB::Transaction* transaction, const char* name)
+{
+    if( !name)
+        return -1;
+
+    mi::Size index = get_parameter_index( name);
+    return reset_argument( transaction, index);
+}
+
+void Mdl_function_call::make_mutable( DB::Transaction* transaction)
 {
     if( !is_valid_definition( transaction))
         return;
@@ -725,10 +794,10 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
     mi::mdl::IGenerated_code_lambda_function* jitted_func;
     if( !environment_context ) {
         jitted_func = generator_jit->compile_into_switch_function(
-            lambda_func.get(), &module_cache, &resolver, 1, 0);
+            lambda_func.get(), &module_cache, &resolver, /*ctx=*/nullptr, 1, 0);
     } else {
         jitted_func = generator_jit->compile_into_environment(
-            lambda_func.get(), &module_cache, &resolver);
+            lambda_func.get(), &module_cache, &resolver, /*ctx=*/nullptr);
     }
     if( !jitted_func) {
         *errors = -4;
@@ -1008,7 +1077,7 @@ void Mdl_function_call::dump( DB::Transaction* transaction) const
     s << "Module tag: " << m_module_tag.get_uint() << std::endl;
     s << "Module DB name: \"" << m_module_db_name << "\"" << std::endl;
     s << "Function definition tag: " << m_definition_tag.get_uint() << std::endl;
-    s << "Function definition ID: " << m_definition_ident << std::endl;
+    s << "Function definition identifier: " << m_definition_ident << std::endl;
     s << "Function definition MDL name: \"" << m_definition_name << "\"" << std::endl;
     s << "Function definition DB name: \"" << m_definition_db_name << "\"" << std::endl;
     tmp = m_ef->dump( transaction, m_arguments.get(), /*name*/ nullptr);
@@ -1018,6 +1087,7 @@ void Mdl_function_call::dump( DB::Transaction* transaction) const
     tmp = m_ef->dump( transaction, m_enable_if_conditions.get(), /*name*/ nullptr);
     s << "Enable_if conditions: " << tmp->get_c_str() << std::endl;
 
+    s << std::endl;
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
 
@@ -1031,8 +1101,8 @@ size_t Mdl_function_call::get_size() const
         + dynamic_memory_consumption( m_definition_db_name)
         + dynamic_memory_consumption( m_parameter_types)
         + dynamic_memory_consumption( m_return_type)
-        + dynamic_memory_consumption( m_arguments)
-        + dynamic_memory_consumption( m_enable_if_conditions);
+        + dynamic_memory_consumption( m_arguments)             // might be shared
+        + dynamic_memory_consumption( m_enable_if_conditions); // usually shared
 }
 
 DB::Journal_type Mdl_function_call::get_journal_flags() const

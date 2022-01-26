@@ -44,40 +44,47 @@ namespace dbg {
 /// Can be controlled by the environment variable NV_MDL_DEBUG=cmds
 ///
 /// cmds : cmd { ';' cmd }.
-/// cmd  : 'capture' (NUMBER | 'all' | 'ref')
+/// cmd  : 'capture' (NUMBER | 'all' | 'ref' | 'none')
 ///      | 'depth' NUMBER
 ///      | 'skip' NUMBER
 ///      | 'bpa' NUMBER
 ///      | 'bpf' NUMBER
 ///      | 'bpi' NUMBER
 ///      | 'bpd' NUMBER
+///      | 'bpx'
 ///      | 'abort'
 ///      | 'noabort'
 ///      | 'expensive'
 ///      | 'noexpensive'
 ///      | 'size'
 ///      | 'nosize'
+///      | 'fpunwind'
+///      | 'nofpunwind'
 ///      | 'help'.
 ///
 /// Commands:
-///   capture id:  Capture stack frame for all all operations
-///                (allocation, reference count +/-) on Block id.
-///   capture all: Capture stack frame for all blocks.
-///   capture ref: Capture stack frame for reference counted objects.
-///   depth num:   Sets the depth of the captured frame, default 5.
-///   skip num:    Skip the first num frames when capturing, default 3.
-///   bpa num:     Break into debugger if block num is allocated.
-///   bpf num:     Break into debugger if block num is freed.
-///   bpi num:     Break into debugger if object id's reference count is increased.
-///   bpd num:     Break into debugger if object id's reference count is decreased.
-///   abort:       Abort after memory errors were reported (default in DEBUG mode).
-///   noabort:     Do not abort after memory errors were reported (default in RELEASE mode).
-///   expensive:   Enable expensive checks
-///   noexpensive: Disable expensive checks (default).
-///   size:        Regularly dump allocated size.
-///   nosize:      Do not dump allocated size.
-///   
-///  
+///   capture id:   Capture stack frame for all all operations
+///                 (allocation, reference count +/-) on Block id.
+///   capture all:  Capture stack frame for all blocks.
+///   capture ref:  Capture stack frame for reference counted objects.
+///   capture none: Disable capturing at all.
+///   depth num:    Sets the depth of the captured frame, default 5.
+///   skip num:     Skip the first num frames when capturing, default 3.
+///   bpa num:      Break into debugger if block num is allocated.
+///   bpf num:      Break into debugger if block num is freed.
+///   bpi num:      Break into debugger if object id's reference count is increased.
+///   bpd num:      Break into debugger if object id's reference count is decreased.
+///   bpx           Break into debugger if a wrong memory address is freed.
+///   abort:        Abort after memory errors were reported (default in DEBUG mode).
+///   noabort:      Do not abort after memory errors were reported (default in RELEASE mode).
+///   expensive:    Enable expensive checks
+///   noexpensive:  Disable expensive checks (default).
+///   size:         Regularly dump allocated size.
+///   nosize:       Do not dump allocated size.
+///   fpunwind:     Use frame pointer based unwinding if available.
+///   nofpunwind:   Do not use frame pointer based unwinding.
+///
+///
 /// At program end reports all leaked reference counted objects and memory blocks, and
 /// wrong free calls.
 /// If capture was enabled for a block, prints the captured stack frames for all
@@ -304,6 +311,9 @@ private:
 
     /// If set, regularly dump allocated sizes.
     bool m_dump_size;
+
+    /// If set, use frame pointer based unwinding if available.
+    bool m_use_fp_unwind;
 
     /// Currently allocated size.
     size_t m_allocated_size;

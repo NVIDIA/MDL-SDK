@@ -35,7 +35,7 @@
 #ifndef BASE_DATA_DBLIGHT_SCOPE_H
 #define BASE_DATA_DBLIGHT_SCOPE_H
 
-#include <mi/base/atom.h>
+#include <atomic>
 #include <base/data/db/i_db_scope.h>
 
 namespace MI {
@@ -67,14 +67,14 @@ public:
 private:
     Database_impl* m_database;
     std::string m_name;
-    mi::base::Atom32 m_refcount;
+    std::atomic_uint32_t m_refcount;
 
     // The current (or last) transaction.
     DB::Transaction* m_transaction;
 
     // Number of transactions started and not yet committed in this scope. Used to limit the number
     // of such transaction1 to 1.
-    mi::base::Atom32 m_transaction_count;
+    std::atomic_uint32_t m_transaction_count;
 };
 
 } // namespace DB

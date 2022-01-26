@@ -51,55 +51,74 @@ struct Mdl_resource_info
     // index into the tex2d, tex3d, ... buffers, depending on the type requested
     uint gpu_resource_array_start;
 
-    // number resources (e.g. UDIM tiles) that belong to this resource
+    // number resources (e.g. uv-tiles) that belong to this resource
     uint gpu_resource_array_size;
 
-    // coordinate of the left bottom most UDIM tile (also bottom left corner)
-    int2 gpu_resource_udim_min;
+    // frame number of the first texture/uv-tile
+    int gpu_resource_frame_first;
 
-    // in case of UDIM textures,  required to calculate a linear index (u + v * width
-    uint gpu_resource_udim_width;
+    // coordinate of the left bottom most uv-tile (also bottom left corner)
+    int2 gpu_resource_uvtile_min;
 
-    // return the resource view index for a given uv-tile id. (see compute_udim_and_update_uv(...))
-    // returning of -1 indicates out of bounds, 0 refers to the invalid resource.
-    int compute_udim_id(int2 uv_tile)
+    // in case of uv-tiled textures,  required to calculate a linear index (u + v * width
+    uint gpu_resource_uvtile_width;
+    uint gpu_resource_uvtile_height;
+
+    // get the last frame of an animated texture
+    int get_last_frame()
     {
-        if (gpu_resource_udim_width == 0) // means no UDIM
+        return gpu_resource_array_size / (gpu_resource_uvtile_width * gpu_resource_uvtile_height)
+            + gpu_resource_frame_first - 1;
+    }
+
+    // return the resource view index for a given uv-tile id. (see compute_uvtile_and_update_uv(...))
+    // returning of -1 indicates out of bounds, 0 refers to the invalid resource.
+    int compute_uvtile_id(float frame, int2 uv_tile)
+    {
+        if (gpu_resource_array_size == 1) // means no uv-tiles
             return int(gpu_resource_array_start);
 
-        uv_tile -= gpu_resource_udim_min;
-        const int offset = uv_tile.x + uv_tile.y * int(gpu_resource_udim_width);
-        if (offset < 0 || uv_tile.x >= int(gpu_resource_udim_width) || offset >= gpu_resource_array_size)
+        // simplest handling possible
+        int frame_number = floor(frame) - gpu_resource_frame_first;
+
+        uv_tile -= gpu_resource_uvtile_min;
+        const int offset = uv_tile.x +
+                           uv_tile.y * int(gpu_resource_uvtile_width) +
+                           frame_number * int(gpu_resource_uvtile_width) * int(gpu_resource_uvtile_height);
+        if (frame_number < 0 || uv_tile.x < 0 || uv_tile.y < 0 ||
+            uv_tile.x >= int(gpu_resource_uvtile_width) ||
+            uv_tile.y >= int(gpu_resource_uvtile_height) ||
+            offset >= gpu_resource_array_size)
             return -1; // out of bounds
 
         return int(gpu_resource_array_start) + offset;
     }
 
-    // for UDIMs, uv coordinate implicitly specifies which resource to use
-    // the index of the resource is returned while the uv mapped into the UDIM-tile
-    // if UDIMs are not used, the data is just passed through
+    // for uv-tiles, uv coordinate implicitly specifies which resource to use
+    // the index of the resource is returned while the uv mapped into the uv-tile
+    // if uv-tiles are not used, the data is just passed through
     // returning of -1 indicates out of bounds, 0 refers to the invalid resource.
-    int compute_udim_and_update_uv(inout float2 uv)
+    int compute_uvtile_and_update_uv(float frame, inout float2 uv)
     {
-        if(gpu_resource_udim_width == 0) // means no UDIM
+        if(gpu_resource_array_size == 1) // means no uv-tiles
             return int(gpu_resource_array_start);
 
         // uv-coordinate in the tile
-        const int2 uv_tile = int2(uv); // floor
+        const int2 uv_tile = int2(floor(uv)); // floor
         uv = frac(uv);
 
         // compute a linear index
-        return compute_udim_id(uv_tile);
+        return compute_uvtile_id(frame, uv_tile);
     }
 
     // for texel fetches the uv tile is given explicitly
-    int compute_udim_and_update_uv(int2 uv_tile)
+    int compute_uvtile_and_update_uv(float frame, int2 uv_tile)
     {
-        if (gpu_resource_udim_width == 0) // means no UDIM
+        if (gpu_resource_array_size == 1) // means no uv-tiles
             return int(gpu_resource_array_start);
 
         // compute a linear index
-        return compute_udim_id(uv_tile);
+        return compute_uvtile_id(frame, uv_tile);
     }
 };
 
@@ -164,7 +183,7 @@ uint mdl_read_argblock_as_uint(uint offs)
 bool mdl_read_argblock_as_bool(uint offs)
 {
     uint val = mdl_argument_block.Load(offs & ~3);
-    return (val & (0xff << (8 * (offs & 3)))) != 0;
+    return (val & (0xffU << (8 * (offs & 3)))) != 0;
 }
 
 
@@ -191,7 +210,7 @@ uint mdl_read_rodata_as_uint(uint offs)
 bool mdl_read_rodata_as_bool(uint offs)
 {
     uint val = mdl_ro_data_segment.Load(offs & ~3);
-    return (val & (0xff << (8 * (offs & 3)))) != 0;
+    return (val & (0xffU << (8 * (offs & 3)))) != 0;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -270,8 +289,8 @@ uint2 tex_res_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
     // fetch the infos about this resource
     Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
 
-    int array_index = info.compute_udim_id(uv_tile);
-    if (array_index < 0) return uint2(0, 0); // out of bounds or no UDIM tile
+    int array_index = info.compute_uvtile_id(frame, uv_tile);
+    if (array_index < 0) return uint2(0, 0); // out of bounds or no uv-tile
 
     uint2 res;
     mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
@@ -290,6 +309,26 @@ uint tex_height_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
     return tex_res_2d(RES_DATA_PARAM tex, uv_tile, frame).y;
 }
 
+// corresponds to ::tex::first__frame(uniform texture_2d)
+int tex_first_frame_2d(RES_DATA_PARAM_DECL uint tex)
+{
+    if (tex == 0) return 0; // invalid texture
+
+    // fetch the infos about this resource
+    Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
+    return info.gpu_resource_frame_first;
+}
+
+// corresponds to ::tex::last_frame(uniform texture_2d)
+int tex_last_frame_2d(RES_DATA_PARAM_DECL uint tex)
+{
+    if (tex == 0) return 0; // invalid texture
+
+    // fetch the infos about this resource
+    Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
+    return info.get_last_frame();
+}
+
 // corresponds to ::tex::lookup_float4(uniform texture_2d tex, float2 coord, ...)
 float4 tex_lookup_float4_2d(
     RES_DATA_PARAM_DECL
@@ -306,9 +345,9 @@ float4 tex_lookup_float4_2d(
     // fetch the infos about this resource
     Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
 
-    // handle UDIM and/or get texture array index
-    int array_index = info.compute_udim_and_update_uv(coord);
-    if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no UDIM tile
+    // handle uv-tiles and/or get texture array index
+    int array_index = info.compute_uvtile_and_update_uv(frame, coord);
+    if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     if (wrap_u == TEX_WRAP_CLIP && (coord.x < 0.0 || coord.x >= 1.0))
         return float4(0, 0, 0, 0);
@@ -365,9 +404,9 @@ float4 tex_lookup_deriv_float4_2d(
     // fetch the infos about this resource
     Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
 
-    // handle UDIM and/or get texture array index
-    int array_index = info.compute_udim_and_update_uv(coord.val);
-    if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no UDIM tile
+    // handle uv-tiles and/or get texture array index
+    int array_index = info.compute_uvtile_and_update_uv(frame, coord.val);
+    if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     if (wrap_u == TEX_WRAP_CLIP && (coord.val.x < 0.0 || coord.val.x >= 1.0))
         return float4(0, 0, 0, 0);
@@ -422,9 +461,9 @@ float4 tex_texel_float4_2d(
     // fetch the infos about this resource
     Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
 
-    // handle UDIM and/or get texture array index
-    int array_index = info.compute_udim_and_update_uv(uv_tile);
-    if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no UDIM tile
+    // handle uv-tiles and/or get texture array index
+    int array_index = info.compute_uvtile_and_update_uv(frame, uv_tile);
+    if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     uint2 res;
     mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
@@ -466,12 +505,32 @@ uint3 tex_res_3d(RES_DATA_PARAM_DECL uint tex, float frame)
     // fetch the infos about this resource
     Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
 
-    // no UDIM for 3D textures (shortcut the index calculation)
+    // no uv-tiles for 3D textures (shortcut the index calculation)
     int array_index = info.gpu_resource_array_start;
 
     uint3 res;
     mdl_textures_3d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y, res.z);
     return res;
+}
+
+// corresponds to ::tex::first__frame(uniform texture_3d)
+int tex_first_frame_3d(RES_DATA_PARAM_DECL uint tex)
+{
+    if (tex == 0) return 0; // invalid texture
+
+    // fetch the infos about this resource
+    Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
+    return info.gpu_resource_frame_first;
+}
+
+// corresponds to ::tex::last_frame(uniform texture_3d)
+int tex_last_frame_3d(RES_DATA_PARAM_DECL uint tex)
+{
+    if (tex == 0) return 0; // invalid texture
+
+    // fetch the infos about this resource
+    Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
+    return info.get_last_frame();
 }
 
 // corresponds to ::tex::width(uniform texture_3d tex, int2 uv_tile)
@@ -508,7 +567,7 @@ float4 tex_lookup_float4_3d(
     // fetch the infos about this resource
     Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
 
-    // no UDIM for 3D textures (shortcut the index calculation)
+    // no uv-tiles for 3D textures (shortcut the index calculation)
     int array_index = info.gpu_resource_array_start;
 
     uint width, height, depth;
@@ -556,7 +615,7 @@ float4 tex_texel_float4_3d(
     // fetch the infos about this resource
     Mdl_resource_info info = mdl_resource_infos[tex - 1]; // assuming this is in bounds
 
-    // no UDIM for 3D textures (shortcut the index calculation)
+    // no uv-tiles for 3D textures (shortcut the index calculation)
     int array_index = info.gpu_resource_array_start;
 
     uint3 res;

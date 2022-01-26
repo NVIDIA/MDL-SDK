@@ -146,9 +146,16 @@ Float32 Texture_impl::get_gamma() const
     return get_db_element()->get_gamma();
 }
 
-Float32 Texture_impl::get_effective_gamma( mi::Uint32 uvtile_id) const
+Float32 Texture_impl::get_effective_gamma( mi::Size frame_id, mi::Size uvtile_id) const
 {
-    return get_db_element()->get_effective_gamma( get_db_transaction(), uvtile_id);
+    return get_db_element()->get_effective_gamma( get_db_transaction(), frame_id, uvtile_id);
+}
+
+const char* Texture_impl::get_selector() const
+{
+    DB::Transaction* db_transaction = get_db_transaction();
+    m_cached_selector = get_db_element()->get_selector( db_transaction);
+    return !m_cached_selector.empty() ? m_cached_selector.c_str() : nullptr;
 }
 
 void Texture_impl::set_compression( mi::neuraylib::Texture_compression compression)

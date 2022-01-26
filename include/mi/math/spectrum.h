@@ -128,6 +128,11 @@ public:
 #endif
     }
 
+#if (__cplusplus >= 201103L)
+    /// Default copy constructor.
+    Spectrum( const Spectrum& s ) = default;
+#endif
+
     /// Constructor from underlying storage type.
     inline Spectrum( const Spectrum_struct& s)
     {

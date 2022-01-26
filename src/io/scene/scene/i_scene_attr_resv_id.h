@@ -251,6 +251,7 @@ enum Attr_resv_id {
     OPT_MDL_DISTILLING_TARGET,  /// < uint
     OPT_FORCE_BUILTIN_BUMP_LINEAR_GAMMA, /// < bool force linear gamma for builtin bumps
     OPT_IRAY_ALLOW_SURFACE_VOLUME_COEFFICIENTS, /// < bool allow surface-varying volume coeffs in iray
+    OPT_IRAY_SPECTRAL_OBSERVER_CUSTOM_CURVE, /// < Vector3[]  photometric spectral color response curve
                                 //------------------ obsolete options ---------
     OPT_SAMPLES_MIN,		///< scalar      raytracer: min # samples/pixel
     OPT_AO_SAMPLES_MIN,		///< scalar      unused

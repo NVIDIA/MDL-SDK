@@ -111,6 +111,26 @@ public:
     virtual const char* get_image() const = 0;
 
     //@}
+    /// \name Methods related to the referenced volume instead of an image.
+    //@{
+
+    /// Sets the referenced volume.
+    ///
+    /// \return
+    ///           -  0: Success.
+    ///           - -1: Invalid parameters (\c NULL pointer).
+    ///           - -2: There is no element with that name.
+    ///           - -3: The element can not be referenced because it is in a more private scope
+    ///                 than the texture.
+    ///           - -4: The element is not a volume.
+    virtual Sint32 set_volume( const char* name) = 0;
+
+    /// Returns the referenced volume data.
+    ///
+    /// \return   The referenced volume, or \c NULL if no volume is referenced.
+    virtual const char* get_volume() const = 0;
+
+    //@}
     /// \name Methods related to the gamma value
     //@{
 
@@ -137,19 +157,29 @@ public:
 
     /// Returns the effective gamma value.
     ///
-    /// \param uvtile_id   The uv-tile id of the texture the gamma value is requested for when no
+    /// Returns the gamma value of this texture, unless no override is set. In this case the gamma
+    /// value of the underlying image at the given frame and uvtile index is returned. If no such
+    /// image exists, 0.0 is returned.
+    ///
+    /// \param frame_id    The frame ID of the mipmap the gamma value is requested for when no
+    ///                    override is set.
+    /// \param uvtile_id   The uv-tile id of the mipmap the gamma value is requested for when no
     ///                    override is set.
     ///
-    /// Returns the gamma value of this texture, unless no override is set. In this case the
-    /// gamma value of the underlying image at the given uvtile index is returned. If no such image
-    /// exists, 0.0 is returned.
-    ///
     /// \see #set_gamma(), #get_gamma()
-    virtual Float32 get_effective_gamma( Uint32 uvtile_id = 0) const = 0;
+    virtual Float32 get_effective_gamma( Size frame_id, Size uvtile_id) const = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_12_1
+    inline  Float32 get_effective_gamma( Uint32 uvtile_id = 0) const
+    { return get_effective_gamma( 0, uvtile_id); }
+#endif // MI_NEURAYLIB_DEPRECATED_12_1
 
     //@}
     /// \name Miscellaneous methods
     //@{
+
+    /// Returns the selector (or \c NULL).
+    virtual const char* get_selector() const = 0;
 
     /// Sets the texture compression method.
     ///
@@ -168,27 +198,6 @@ public:
     ///
     /// \see #mi::neuraylib::Texture_compression
     virtual Texture_compression get_compression() const = 0;
-
-    //@}
-
-    /// \name Methods related to the referenced volume instead of an image.
-    //@{
-
-    /// Sets the referenced volume.
-    ///
-    /// \return
-    ///           -  0: Success.
-    ///           - -1: Invalid parameters (\c NULL pointer).
-    ///           - -2: There is no element with that name.
-    ///           - -3: The element can not be referenced because it is in a more private scope
-    ///                 than the texture.
-    ///           - -4: The element is not a volume.
-    virtual Sint32 set_volume( const char* name) = 0;
-
-    /// Returns the referenced volume data.
-    ///
-    /// \return   The referenced volume, or \c NULL if no volume is referenced.
-    virtual const char* get_volume() const = 0;
 
     //@}
 };

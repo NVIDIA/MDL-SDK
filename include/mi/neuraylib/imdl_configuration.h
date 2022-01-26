@@ -236,9 +236,9 @@ public:
     /// Defines whether a cast operator is automatically inserted for compatible argument types.
     ///
     /// If set to \c true, an appropriate cast operator is automatically inserted if arguments for
-    /// instances of #mi::neuraylib::IFunction_call or #mi::neuraylib::IMaterial_instance have a
-    /// different but compatible type. If set to \c false, such an assignment fails and it is
-    /// necessary to insert the cast operator explicitly. Default: \c true.
+    /// instances of #mi::neuraylib::IFunction_call have a different but compatible type. If set to
+    /// \c false, such an assignment fails and it is necessary to insert the cast operator
+    /// explicitly. Default: \c true.
     ///
     /// \see #mi::neuraylib::IExpression_factory::create_cast().
     ///
@@ -265,8 +265,7 @@ public:
     /// \note Since some optimizations are essential for inner workings of the MDL compiler, there
     //        is no guarantee that the name of a particular let expression is exposed.
     ///
-    /// \see #mi::neuraylib::IFunction_definition::get_temporary_name(),
-    ///      #mi::neuraylib::IMaterial_definition::get_temporary_name()
+    /// \see #mi::neuraylib::IFunction_definition::get_temporary_name()
     virtual Sint32 set_expose_names_of_let_expressions( bool value) = 0;
 
     /// Indicates whether an attempt is made to expose names of let expressions.
@@ -317,78 +316,12 @@ public:
 
     /// Defines whether materials are treated as functions.
     ///
-    /// From an MDL language point of view [\ref MDLLS], materials look quite similar to functions
-    /// with the \c material struct as return type. However, in the \neurayApiName separate
-    /// interfaces like #mi::neuraylib::IMaterial_definition and #mi::neuraylib::IMaterial_instance
-    /// are used for materials, in contrast to #mi::neuraylib::IFunction_definition and
-    /// #mi::neuraylib::IFunction_call for functions (although these interfaces are quite similar).
-    /// This requires that code that acts in a similar way on both, functions and materials, needs
-    /// to be written twice.
-    ///
-    /// If this feature is enabled, then materials are treated as functions, i.e., it is possible to
-    /// use #mi::neuraylib::IFunction_definition instead of #mi::neuraylib::IMaterial_definition,
-    /// and #mi::neuraylib::IFunction_call instead of #mi::neuraylib::IMaterial_instance. This allows
-    /// to write code that acts on both, functions and materials, just once. The only exception is
-    /// the method #mi::neuraylib::IMaterial_instance::create_compiled_material(), which still
-    /// requires to use the #mi::neuraylib::IMaterial_instance interface.
-    ///
-    /// Enabling this feature comes with a few API changes that need to be takes into account. Code
-    /// shared between different applications, i.e., in plugins, should be able to handle both
-    /// settings.
-    ///
-    /// - <b>Values returned by #mi::neuraylib::IScene_element::get_element_type() (and derived
-    ///   interfaces)</b> \n
-    ///   \n
-    ///   The method mi::neuraylib::IScene_element::get_element_type() returns
-    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION instead of
-    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION. The value
-    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION is only returned by
-    ///   #mi::neuraylib::IMaterial_definition::get_element_type() (for backward compatibility),
-    ///   but no longer by its base class #mi::neuraylib::IScene_element. \n
-    ///   \n
-    ///   Similarly, the method mi::neuraylib::IScene_element::get_element_type() returns
-    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL instead of
-    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE. The value
-    ///   #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE is only returned by
-    ///   #mi::neuraylib::IMaterial_instance::get_element_type() (for backward compatibility), but
-    ///   no longer by its base class #mi::neuraylib::IScene_element. \n
-    ///   \n
-    ///   As a consequence, #mi::neuraylib::Definition_wrapper::get_type() and
-    ///   #mi::neuraylib::Definition_wrapper::get_element_type() only return
-    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION. Similarly,
-    ///   #mi::neuraylib::Argument_editor::get_type() and
-    ///   #mi::neuraylib::Argument_editor::get_element_type() only return
-    ///   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL.
-    /// .
-    /// - <b>Interface queries to distinguish functions and materials</b> \n
-    ///   \n
-    ///   Interface queries like
-    ///   #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_definition>() can no longer
-    ///   be used to distinguish functions and materials. Note that such queries might occur inside
-    ///   other template inline methods, e.g., they occur as part of
-    ///   #mi::neuraylib::ITransaction::access<mi::neuraylib::IFunction_definition>(). The
-    ///   recommended way to do this is using #mi::neuraylib::IFunction_definition::is_material().
-    ///   Similarly for #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_call>() and
-    ///   #mi::neuraylib::IFunction_call::is_material().
-    /// .
-    /// - <b>Type names passed to #mi::neuraylib::ITransaction::list_elements()</b> \n
-    ///   \n
-    ///   The method #mi::neuraylib::ITransaction::list_elements() will not return any hits for
-    ///   type names \c "Material_definition" and \c "Material_instance". Use the type names
-    ///   \c "Function_definition" and \c "Function_call" instead, and, if necessary,
-    ///   #mi::neuraylib::IFunction_definition::is_material() and
-    ///   #mi::neuraylib::IFunction_call::is_material() to discriminate the results.
-    ///
-    /// This feature is disabled by default. It will be enabled by default in a future release.
-    ///
-    /// This can only be configured before \neurayProductName has been started.
-    ///
-    /// \see #get_materials_are_functions().
+    /// \see \ref mi_mdl_materials_are_functions, #get_materials_are_functions().
     virtual Sint32 set_materials_are_functions( bool value) = 0;
 
     /// Indicates whether materials are treated as functions.
     ///
-    /// \see #set_materials_are_functions().
+    /// \see \ref mi_mdl_materials_are_functions, #set_materials_are_functions().
     virtual bool get_materials_are_functions() const = 0;
 
     /// Defines whether encoded names are enabled.

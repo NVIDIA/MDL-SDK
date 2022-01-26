@@ -492,7 +492,9 @@ bool RemovePointerPHIs::runOnFunction(llvm::Function &function)
             }
 
             // not all PHI values are the same.
-            // Try to move GEP, bitcasts and loads over the PHIs
+            // Try to move GEP, bitcasts and loads over the PHIs.
+            // For calls, load the value into a new local in the predecessor blocks and use the
+            // new local as argument
             llvm::SetVector<llvm::PHINode *> worklist;
             worklist.insert(phi_classes.member_begin(I), phi_classes.member_end());
             while (!worklist.empty()) {
@@ -568,6 +570,44 @@ bool RemovePointerPHIs::runOnFunction(llvm::Function &function)
                             }
                             new_phi->addIncoming(cur_val, cur_block);
                         }
+                    } else if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(phi_user)) {
+                        // create a load in each predecessor block, a PHI in the current block
+                        // and store the PHI into a new local and use this local in the call.
+                        // for undef pointers provide an undef to the PHI instead of a load
+                        new_phi = llvm::PHINode::Create(
+                            phi->getType()->getPointerElementType(),
+                            phi->getNumIncomingValues(), "rmemload_phi",
+                            &phi->getParent()->front());
+                        for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
+                            llvm::Value *cur_ptr = phi->getIncomingValue(i);
+                            llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
+                            llvm::Value *cur_val;
+                            if (llvm::isa<llvm::UndefValue>(cur_ptr))
+                                cur_val = llvm::UndefValue::get(load->getType());
+                            else
+                                cur_val = new llvm::LoadInst(
+                                    cur_ptr, "rmemload", cur_block->getTerminator());
+                            new_phi->addIncoming(cur_val, cur_block);
+                        }
+
+                        llvm::AllocaInst* rmem_local = new llvm::AllocaInst(
+                            new_phi->getType(),
+                            function.getParent()->getDataLayout().getAllocaAddrSpace(),
+                            "rmemlocal",
+                            &*function.getEntryBlock().begin());
+
+                        llvm::BasicBlock::iterator insert_point = call->getParent()->begin();
+                        while (llvm::isa<llvm::PHINode>(insert_point))
+                            ++insert_point;
+                        new llvm::StoreInst(new_phi, rmem_local, &*insert_point);
+
+                        // replace all occurrences of the phi by the new local in the call arguments
+                        for (unsigned i = 0, n_args = call->getNumArgOperands(); i < n_args; ++i) {
+                            if (call->getArgOperand(i) == phi) {
+                                call->setArgOperand(i, rmem_local);
+                            }
+                        }
+                        continue;
                     } else
                         continue;
 

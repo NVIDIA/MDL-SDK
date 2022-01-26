@@ -503,21 +503,22 @@ void Deserializer_impl::set_error_handler(IDeserializer_error_handler<>* handler
 }
 
 template <typename S, typename>
-inline void write(S* serial, const mi::math::Color& value)
+inline void write(S* serial, const mi::math::Color_struct& value)
 {
-    serial->write(value.begin(),value.size());
+    serial->write(&value.r,4);
 }
 
 template <typename D, typename>
-inline void read(D* serial, mi::math::Color* value)
+inline void read(D* serial, mi::math::Color_struct* value)
 {
-    serial->read(value->begin(),value->size());
+    static_assert(sizeof(mi::math::Color) == sizeof(mi::math::Color_struct));
+    serial->read(&value->r,4);
 }
 
-template void write<Serializer>(Serializer*, const mi::math::Color&);
-template void write<mi::neuraylib::ISerializer>(mi::neuraylib::ISerializer*, const mi::math::Color&);
-template void read<Deserializer>(Deserializer*, mi::math::Color*);
-template void read<mi::neuraylib::IDeserializer>(mi::neuraylib::IDeserializer*, mi::math::Color*);
+template void write<Serializer>(Serializer*, const mi::math::Color_struct&);
+template void write<mi::neuraylib::ISerializer>(mi::neuraylib::ISerializer*, const mi::math::Color_struct&);
+template void read<Deserializer>(Deserializer*, mi::math::Color_struct*);
+template void read<mi::neuraylib::IDeserializer>(mi::neuraylib::IDeserializer*, mi::math::Color_struct*);
 
 
 } // namespace DB

@@ -55,36 +55,31 @@ inline bool has_dynamic_memory_consumption(mi::base::Handle<T> const &) { return
 template<typename T>
 inline size_t dynamic_memory_consumption(mi::base::Handle<T> const &) { return 0; }
 
-}  // mdl
-}  // mi
-
 #if MDL_STD_HAS_UNORDERED
-
-namespace std {
 
 template <class T1, class T2, class T3, class T4, class T5>
 inline bool has_dynamic_memory_consumption(
-    unordered_map<T1, T2, T3, T4, T5> const &)
+    std::unordered_map<T1, T2, T3, T4, T5> const &)
 {
     return true;
 }
 
 template <class T1 ,class T2, class T3, class T4, class T5>
 inline size_t dynamic_memory_consumption(
-    unordered_map<T1, T2, T3, T4, T5> const &the_map)
+    std::unordered_map<T1, T2, T3, T4, T5> const &the_map)
 {
-    typedef unordered_map<T1, T2, T3, T4, T5> Map_type;
+    typedef std::unordered_map<T1, T2, T3, T4, T5> Map_type;
 
     // bucket size is missing
     size_t total = sizeof(Map_type);
 
     // additional dynamic size of the map elements
     if (the_map.size() > 0) {
-        bool dynamic_memory_T1 = has_dynamic_memory_consumption(the_map.begin()->first);
-        bool dynamic_memory_T2 = has_dynamic_memory_consumption(the_map.begin()->second);
+        const bool dynamic_memory_T1 = has_dynamic_memory_consumption(the_map.begin()->first);
+        const bool dynamic_memory_T2 = has_dynamic_memory_consumption(the_map.begin()->second);
         if (dynamic_memory_T1 || dynamic_memory_T2) {
             typename Map_type::const_iterator it  = the_map.begin();
-            typename Map_type::const_iterator end = the_map.end();
+            const typename Map_type::const_iterator end = the_map.end();
             for (; it != end; ++it) {
                 if (dynamic_memory_T1) total += dynamic_memory_consumption(it->first);
                 if (dynamic_memory_T2) total += dynamic_memory_consumption(it->second);
@@ -94,7 +89,9 @@ inline size_t dynamic_memory_consumption(
     return total;
 }
 
-}  // MISTD
 #endif
+
+}  // mdl
+}  // mi
 
 #endif

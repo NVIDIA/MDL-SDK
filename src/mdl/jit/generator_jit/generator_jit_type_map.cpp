@@ -1593,6 +1593,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::FunctionType *tex_resolution_2d_type      = NULL;
     llvm::FunctionType *tex_resolution_3d_type      = NULL;
     llvm::FunctionType *tex_isvalid_type            = NULL;
+    llvm::FunctionType *tex_frame_type              = NULL;
 
     llvm::FunctionType *df_light_profile_power_type    = NULL;
     llvm::FunctionType *df_light_profile_maximum_type  = NULL;
@@ -1625,6 +1626,8 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::FunctionType *scene_data_lookup_deriv_float4_type = NULL;
     llvm::FunctionType *scene_data_lookup_deriv_color_type  = NULL;
 
+    llvm::FunctionType *adapt_normal_type = NULL;
+
     {
         // virtual void tex_lookup_<T>_2d(
         //     T                result,
@@ -1634,7 +1637,8 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         //     MDL_wrap_mode    wrap_u,
         //     MDL_wrap_mode    wrap_v,
         //     float const      crop_u[2],
-        //     float const      crop_v[2]) const = 0;
+        //     float const      crop_v[2],
+        //     float            frame) const = 0;
 
         llvm::Type *args[] = {
             NULL,                   // T
@@ -1646,7 +1650,8 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             int_type,
             int_type,
             arr_float_2_ptr_type,
-            arr_float_2_ptr_type
+            arr_float_2_ptr_type,
+            float_type
         };
 
         args[0] = arr_float_4_ptr_type;
@@ -1662,14 +1667,16 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         //     Core_tex_handler *self,
         //     unsigned         texture,
         //     int const        coord[2],
-        //     int const        uv_tile[2]) const = 0;
+        //     int const        uv_tile[2],
+        //     float            frame) const = 0;
 
         llvm::Type *args[] = {
             arr_float_4_ptr_type,
             self_ptr_type,
             int_type,
             arr_int_2_ptr_type,
-            arr_int_2_ptr_type
+            arr_int_2_ptr_type,
+            float_type
         };
 
         tex_texel_float4_2d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
@@ -1686,7 +1693,8 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         //     tex_wrap_mode const    wrap_w,
         //     float const            crop_u[2],
         //     float const            crop_v[2],
-        //     float const            crop_w[2]);
+        //     float const            crop_w[2],
+        //     float                  frame);
 
         llvm::Type *args[] = {
             NULL,                   // T
@@ -1698,7 +1706,8 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             int_type,
             arr_float_2_ptr_type,
             arr_float_2_ptr_type,
-            arr_float_2_ptr_type
+            arr_float_2_ptr_type,
+            float_type
         };
 
         args[0] = arr_float_4_ptr_type;
@@ -1713,13 +1722,15 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         //     float                  result[4],
         //     Core_tex_handler const *self,
         //     unsigned               texture_idx,
-        //     int const              coord[3]);
+        //     int const              coord[3],
+        //     float                  frame);
 
         llvm::Type *args[] = {
             arr_float_4_ptr_type,
             self_ptr_type,
             int_type,
-            arr_int_3_ptr_type
+            arr_int_3_ptr_type,
+            float_type
         };
 
         tex_texel_float4_3d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
@@ -1764,13 +1775,15 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         //     int              result[2],
         //     Core_tex_handler *self,
         //     unsigned         texture,
-        //     int const        uv_tile[2]);
+        //     int const        uv_tile[2],
+        //     float            frame);
 
         llvm::Type *args[] = {
             arr_int_2_ptr_type,
             self_ptr_type,
             int_type,
-            arr_int_2_ptr_type
+            arr_int_2_ptr_type,
+            float_type
         };
 
         tex_resolution_2d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
@@ -1780,12 +1793,14 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         // virtual void tex_resolution_3d(
         //     int              result[3],
         //     Core_tex_handler *self,
-        //     unsigned         texture);
+        //     unsigned         texture,
+        //     float            frame);
 
         llvm::Type *args[] = {
             arr_int_3_ptr_type,
             self_ptr_type,
-            int_type
+            int_type,
+            float_type
         };
 
         tex_resolution_3d_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
@@ -1802,6 +1817,21 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         };
 
         tex_isvalid_type = llvm::FunctionType::get(bool_type, args, /*isVarArg=*/false);
+    }
+
+    {
+        // virtual void tex_texture_frame(
+        //     int              result[2]
+        //     Core_tex_handler *self,
+        //     unsigned         texture);
+
+        llvm::Type *args[] = {
+            arr_int_2_ptr_type,
+            self_ptr_type,
+            int_type
+        };
+
+        tex_frame_type = llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
     }
 
 
@@ -2012,6 +2042,23 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     }
 
     {
+        // virtual void adapt_normal(
+        //     float                              result[3],
+        //     Core_tex_handler const            *self_base,
+        //     Shading_state_material            *state,
+        //     tct_float const                    normal[3]);
+        llvm::Type* args[] = {
+            arr_float_3_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            arr_float_3_ptr_type,
+        };
+
+        adapt_normal_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
+    {
         llvm::Type *args[] = {
             self_ptr_type,
             m_type_state_core_ptr,
@@ -2147,7 +2194,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     }
 
     // currently we support only these
-    llvm::SmallVector<llvm::Type *, 38> vtable_members;
+    llvm::SmallVector<llvm::Type *, 40> vtable_members;
     vtable_members.append({
         get_ptr(tex_lookup_float4_2d_type),
         get_ptr(tex_lookup_float3_2d_type),
@@ -2160,6 +2207,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         get_ptr(tex_resolution_2d_type),
         get_ptr(tex_resolution_3d_type),
         get_ptr(tex_isvalid_type),
+        get_ptr(tex_frame_type),
         get_ptr(df_light_profile_power_type),
         get_ptr(df_light_profile_maximum_type),
         get_ptr(df_light_profile_isvalid_type),
@@ -2172,6 +2220,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         get_ptr(df_bsdf_measurement_sample_type),
         get_ptr(df_bsdf_measurement_pdf_type),
         get_ptr(df_bsdf_measurement_albedos_type),
+        get_ptr(adapt_normal_type),
         get_ptr(scene_data_isvalid_type),
         get_ptr(scene_data_lookup_float_type),
         get_ptr(scene_data_lookup_float2_type),

@@ -79,17 +79,12 @@ public:
     mi::Float32 get_gamma() const;
 
     /// Does nothing and returns always \false.
-    bool read(
-        mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
+    mi::neuraylib::ITile* read(
         mi::Uint32 z,
         mi::Uint32 level) const;
 
     bool write(
         const mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
         mi::Uint32 z,
         mi::Uint32 level);
 

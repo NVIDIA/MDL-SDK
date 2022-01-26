@@ -3,7 +3,7 @@
 
 /*
   compat.h -- compatibility defines.
-  Copyright (C) 1999-2017 Dieter Baron and Thomas Klausner
+  Copyright (C) 1999-2021 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -36,14 +36,10 @@
 
 #include "zipconf.h"
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif
 
 /* to have *_MAX definitions for all types when compiling with g++ */
-#ifndef __STDC_LIMIT_MACROS 
 #define __STDC_LIMIT_MACROS
-#endif
 
 #ifdef _WIN32
 #ifndef ZIP_EXTERN
@@ -79,10 +75,12 @@ typedef char bool;
 #define EOVERFLOW EFBIG
 #endif
 
-#ifdef _WIN32
-#if defined(HAVE__CHMOD)
-#define chmod _chmod
+/* not supported on at least Windows */
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
 #endif
+
+#ifdef _WIN32
 #if defined(HAVE__CLOSE)
 #define close _close
 #endif
@@ -96,11 +94,7 @@ typedef char bool;
 #if !defined(HAVE_FILENO) && defined(HAVE__FILENO)
 #define fileno _fileno
 #endif
-/* Windows' open() doesn't understand Unix permissions */
-#if defined(HAVE__OPEN)
-#define open(a, b, c) _open((a), (b))
-#endif
-#if defined(HAVE__SNPRINTF)
+#if !defined(HAVE_SNPRINTF) && defined(HAVE__SNPRINTF)
 #define snprintf _snprintf
 #endif
 #if defined(HAVE__STRDUP)
@@ -118,9 +112,6 @@ typedef char bool;
 #if !defined(HAVE_STRTOULL) && defined(HAVE__STRTOUI64)
 #define strtoull _strtoui64
 #endif
-#if defined(HAVE__UMASK)
-#define umask _umask
-#endif
 #if defined(HAVE__UNLINK)
 #define unlink _unlink
 #endif
@@ -132,11 +123,6 @@ typedef char bool;
 
 #ifndef HAVE_FTELLO
 #define ftello(s) ((long)ftell((s)))
-#endif
-
-#ifndef HAVE_MKSTEMP
-int _zip_mkstemp(char *);
-#define mkstemp _zip_mkstemp
 #endif
 
 #if !defined(HAVE_STRCASECMP)
@@ -199,6 +185,10 @@ int _zip_mkstemp(char *);
 
 #ifndef S_ISDIR
 #define S_ISDIR(mode) (((mode)&S_IFMT) == S_IFDIR)
+#endif
+
+#ifndef S_ISREG
+#define S_ISREG(mode) (((mode)&S_IFMT) == S_IFREG)
 #endif
 
 #endif /* compat.h */

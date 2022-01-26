@@ -60,48 +60,60 @@ namespace mi { namespace examples { namespace mdl_d3d12
         {
             explicit Entry()
                 : resource(nullptr)
-                , udim_u(0)
-                , udim_v(0)
+                , frame(0)
+                , uvtile_u(0)
+                , uvtile_v(0)
             {}
 
             Resource* resource; // texture or buffer
-            int32_t udim_u;     // u-coordinate of the lower left corner of the tile
-            int32_t udim_v;     // v-coordinate of the lower left corner of the tile
+            int32_t frame;      // frame number
+            int32_t uvtile_u;   // u-coordinate of the lower left corner of the tile
+            int32_t uvtile_v;   // v-coordinate of the lower left corner of the tile
         };
 
         explicit Mdl_resource_set()
             : entries()
-            , is_udim_tiled(false)
-            , udim_u_min(0)
-            , udim_u_max(0)
-            , udim_v_min(0)
-            , udim_v_max(0)
+            , frame_first(0)
+            , frame_last(0)
+            , uvtile_u_min(0)
+            , uvtile_u_max(0)
+            , uvtile_v_min(0)
+            , uvtile_v_max(0)
         {
         }
 
         std::vector<Entry> entries; // tile resources
 
-        bool is_udim_tiled;         // true UDIM texture 2D, false otherwise
-        int32_t udim_u_min;         // u-coordinate of the tile most left bottom
-        int32_t udim_u_max;         // v-coordinate of the tile most right top
-        int32_t udim_v_min;         // u-coordinate of the tile most left bottom
-        int32_t udim_v_max;         // v-coordinate of the tile most right top
+        int32_t frame_first;        // first frame number
+        int32_t frame_last;         // last frame number
+        int32_t uvtile_u_min;       // u-coordinate of the tile most left bottom
+        int32_t uvtile_u_max;       // v-coordinate of the tile most right top
+        int32_t uvtile_v_min;       // u-coordinate of the tile most left bottom
+        int32_t uvtile_v_max;       // v-coordinate of the tile most right top
 
-        int32_t get_udim_width() const
+        int32_t get_uvtile_width() const
         {
-            return (udim_u_max + 1 - udim_u_min);
+            return (uvtile_u_max + 1 - uvtile_u_min);
         }
 
-        int32_t get_tile_count() const
+        int32_t get_uvtile_height() const
         {
-            return (udim_u_max + 1 - udim_u_min) * (udim_v_max + 1 - udim_v_min);
+            return (uvtile_v_max + 1 - uvtile_v_min);
         }
 
-        size_t compute_linear_udim_index(size_t entry_index)
+        int32_t get_uvtile_count() const
         {
-            int32_t u = entries[entry_index].udim_u - udim_u_min;
-            int32_t v = entries[entry_index].udim_v - udim_v_min;
-            return u + v * get_udim_width();
+            return (frame_last + 1 - frame_first) *
+                   (uvtile_u_max + 1 - uvtile_u_min) *
+                   (uvtile_v_max + 1 - uvtile_v_min);
+        }
+
+        size_t compute_linear_uvtile_index(size_t entry_index)
+        {
+            int32_t f = entries[entry_index].frame - frame_first;
+            int32_t v = entries[entry_index].uvtile_v - uvtile_v_min;
+            int32_t u = entries[entry_index].uvtile_u - uvtile_u_min;
+            return f * get_uvtile_width() * get_uvtile_height() + v * get_uvtile_width() + u;
         }
     };
 
@@ -143,15 +155,20 @@ namespace mi { namespace examples { namespace mdl_d3d12
         // index into the tex2d, tex3d, ... buffers, depending on the type requested
         uint32_t gpu_resource_array_start;
 
-        // number resources (e.g. UDIM tiles) that belong to this resource
+        // number resources (e.g. uv-tiles) that belong to this resource
         uint32_t gpu_resource_array_size;
 
-        // coordinate of the left bottom most UDIM tile (also bottom left corner)
-        int32_t gpu_resource_udim_u_min;
-        int32_t gpu_resource_udim_v_min;
+        // frame number of the first texture/uv-tile
+        int32_t gpu_resource_frame_first;
 
-        // in case of UDIM textures,  required to calculate a linear index (u + v * width
-        uint32_t gpu_resource_udim_width;
+        // coordinate of the left bottom most uv-tile (also bottom left corner)
+        int32_t gpu_resource_uvtile_u_min;
+        int32_t gpu_resource_uvtile_v_min;
+
+        // in case of uv-tiled textures,  required to calculate a linear index
+        // (u + v * width + f * width * height)
+        uint32_t gpu_resource_uvtile_width;
+        uint32_t gpu_resource_uvtile_height;
     };
 
     // --------------------------------------------------------------------------------------------

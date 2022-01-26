@@ -191,8 +191,8 @@ int MAIN_UTF8( int /*argc*/, char* /*argv*/[])
             std::cerr << "MDLE main DB name: " << main_db_name << std::endl;
 
             // get the main material
-            mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-                transaction->access<mi::neuraylib::IMaterial_definition>(main_db_name.c_str()));
+            mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+                transaction->access<mi::neuraylib::IFunction_definition>(main_db_name.c_str()));
             check_success(material_definition);
 
             // use the material ...

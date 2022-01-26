@@ -100,14 +100,15 @@ public:
     /// Returns \c true if the importer or exporter can handle the file type determined by
     /// the file name extension. The extension is defined as the part of the file name after and
     /// including the first dot, for example, \c ".mi".
-    /// \ifnot MDL_SOURCE_RELEASE
+    ///
+    /// \ifnot MDL_SDK_API
     /// \see #mi::neuraylib::IImporter::test_file_type(),
     ///      #mi::neuraylib::IExporter::test_file_type() \n
-    /// \endif
     ///      These more specific versions also pass an #mi::neuraylib::IReader or
     ///      #mi::neuraylib::IWriter as argument, which can be used to look at lookahead data for
     ///      magic file headers (readers only) or to decide if the reader or writer capabilities are
     ///      sufficient to do the import or export (for example, random access capability).
+    /// \endif
     virtual bool test_file_type( const char* extension) const = 0;
 
     /// Returns the priority of the importer or exporter.

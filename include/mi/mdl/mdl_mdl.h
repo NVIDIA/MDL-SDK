@@ -166,6 +166,9 @@ public:
     /// The value of \c state::WAVELENGTH_BASE_MAX.
     #define MDL_OPTION_STATE_WAVELENGTH_BASE_MAX "state::WAVELENGTH_BASE_MAX"
 
+    /// The name of the option that allows to pass a user defined interface to callbacks.
+    #define MDL_OPTION_USER_DATA "user_data"
+
 
     /// The name of the option to keep resource file paths as is.
     #define MDL_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS "keep_original_resource_file_paths"

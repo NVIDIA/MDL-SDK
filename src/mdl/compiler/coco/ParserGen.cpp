@@ -169,14 +169,14 @@ void ParserGen::GenErrorMsg (ErrorType errTyp, Symbol *sym) {
 	coco_string_merge(err, format);
 }
 
-int ParserGen::NewCondSet (BitArray *s) {
+int ParserGen::NewCondSet (const BitArray *s) {
 	for (int i = 1; i < symSet->Count; i++) // skip symSet[0] (reserved for union of SYNC sets)
 		if (Sets::Equals(s, (BitArray*)(*symSet)[i])) return i;
 	symSet->Add(s->Clone());
 	return symSet->Count - 1;
 }
 
-void ParserGen::GenCond (BitArray *s, Node *p) {
+void ParserGen::GenCond (const BitArray *s, Node *p) {
 	if (p->typ == Node::rslv) CopySourcePart(p->pos, 0);
 	else {
 		int n = Sets::Elements(s);
@@ -197,7 +197,7 @@ void ParserGen::GenCond (BitArray *s, Node *p) {
 	}
 }
 
-void ParserGen::PutCaseLabels (BitArray *s) {
+void ParserGen::PutCaseLabels (const BitArray *s) {
 	Symbol *sym;
 	for (int i=0; i<tab->terminals->Count; i++) {
 		sym = (Symbol*)((*(tab->terminals))[i]);
@@ -264,8 +264,7 @@ void ParserGen::GenCode (Node *p, int indent, BitArray *isChecked) {
 		case Node::sync:
 			Indent(indent);
 			GenErrorMsg(syncErr, curSy);
-			s1 = p->set->Clone();
-			fwprintf(gen, L"while (!("); GenCond(s1, p); fwprintf(gen, L")) {");
+			fwprintf(gen, L"while (!("); GenCond(p->set, p); fwprintf(gen, L")) {");
 			fwprintf(gen, L"SynErr(%d); Get();", errorNr); fwprintf(gen, L"}\n");
 			break;
 		case Node::alt:

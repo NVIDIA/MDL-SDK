@@ -1687,7 +1687,7 @@ mi::Sint32 Type_factory::compare_static(const IType_list* lhs, const IType_list*
     return 0;
 }
 
-std::string Type_factory::get_type_name(const IType* type, bool include_aliased_type)
+std::string Type_factory::get_type_name_static(const IType* type, bool include_aliased_type)
 {
     IType::Kind kind = type->get_kind();
 
@@ -1741,7 +1741,7 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
             mi::base::Handle<const IType> element_type(
                 type_vector->get_element_type());
             std::ostringstream result;
-            result << get_type_name(element_type.get());
+            result << get_type_name_static(element_type.get());
             result << type_vector->get_size();
             return result.str();
         }
@@ -1753,7 +1753,7 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
             mi::base::Handle<const IType> element_type(
                 vector_type->get_element_type());
             std::ostringstream result;
-            result << get_type_name(element_type.get());
+            result << get_type_name_static(element_type.get());
             result << type_matrix->get_size() << "x" << vector_type->get_size();
             return result.str();
         }
@@ -1773,7 +1773,7 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
             if (include_aliased_type) {
                 mi::base::Handle<const IType> aliased_type(
                     type_alias->get_aliased_type());
-                result << " " << get_type_name(aliased_type.get());
+                result << " " << get_type_name_static(aliased_type.get());
             }
             return result.str();
         }
@@ -1783,7 +1783,7 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
             mi::base::Handle<const IType> element_type(
                 type_array->get_element_type());
             std::ostringstream result;
-            result << get_type_name(element_type.get()) << "[";
+            result << get_type_name_static(element_type.get()) << "[";
             if (type_array->is_immediate_sized())
                 result << type_array->get_size();
             else
@@ -1806,6 +1806,11 @@ std::string Type_factory::get_type_name(const IType* type, bool include_aliased_
 
     ASSERT(M_SCENE, false);
     return "";
+}
+
+std::string Type_factory::get_type_name(const IType* type, bool include_aliased_type)
+{
+    return get_type_name_static( type, include_aliased_type);
 }
 
 std::string Type_factory::get_serialization_type_name( const IType* type)
@@ -1873,7 +1878,7 @@ std::string Type_factory::get_serialization_type_name( const IType* type)
             return result.str();
         }
         default: {
-            return Type_factory::get_type_name( type);
+            return get_type_name_static( type);
         }
     }
 
@@ -1989,8 +1994,9 @@ const IType* Type_factory::create_type( const char* serialization_type_name) con
     if( s == "texture_ptex")
         return create_texture( IType_texture::TS_PTEX);
     if( s == "light_profile")
-         return create_light_profile();
+        return create_light_profile();
     if( s == "bsdf_measurement")
+        return create_bsdf_measurement();
 
     // IType_df
     if( s == "bsdf")
@@ -2135,7 +2141,7 @@ void Type_factory::dump_static(
     if (!type)
         return;
 
-    std::string name = get_type_name(type);
+    std::string name = get_type_name_static(type);
     ASSERT(M_SCENE, !name.empty());
 
     IType::Kind kind = type->get_kind();
@@ -2163,7 +2169,7 @@ void Type_factory::dump_static(
     case IType::TK_ALIAS: {
             mi::base::Handle<const IType_alias> type_alias(
                 type->get_interface<IType_alias>());
-            s << get_type_name(type, false) << "\n" << get_prefix(depth + 1);
+            s << get_type_name_static(type, false) << "\n" << get_prefix(depth + 1);
             mi::base::Handle<const IType> aliased_type(
                 type_alias->get_aliased_type());
             dump_static(aliased_type.get(), depth + 1, s);

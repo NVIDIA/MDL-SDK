@@ -34,6 +34,8 @@
 
 #include <FreeImage.h>
 
+namespace mi { namespace neuraylib { class IImage_api; } }
+
 namespace MI {
 
 namespace FREEIMAGE {
@@ -42,7 +44,10 @@ class Image_file_reader_impl : public mi::base::Interface_implement<mi::neurayli
 {
 public:
     /// Constructor.
-    Image_file_reader_impl( mi::neuraylib::IReader* reader, FREE_IMAGE_FORMAT format);
+    Image_file_reader_impl(
+        mi::neuraylib::IImage_api* image_api,
+        mi::neuraylib::IReader* reader,
+        FREE_IMAGE_FORMAT format);
 
     /// Destructor.
     ~Image_file_reader_impl();
@@ -57,35 +62,29 @@ public:
 
     mi::Uint32 get_layers_size( mi::Uint32 level) const;
 
-    mi::Uint32 get_tile_resolution_x( mi::Uint32 level) const;
-
-    mi::Uint32 get_tile_resolution_y( mi::Uint32 level) const;
-
     mi::Uint32 get_miplevels() const;
 
     bool get_is_cubemap() const;
 
     mi::Float32 get_gamma() const;
 
-    bool read(
-        mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
+    mi::neuraylib::ITile* read(
         mi::Uint32 z,
         mi::Uint32 level) const;
 
     /// Does nothing and returns always \false.
     bool write(
         const mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
         mi::Uint32 z,
         mi::Uint32 level);
 
 private:
 
+    /// API component IImage_api.
+    mi::base::Handle<mi::neuraylib::IImage_api> m_image_api;
+
     /// The reader used to import the image.
-    mi::neuraylib::IReader* m_reader;
+    mi::base::Handle<mi::neuraylib::IReader> m_reader;
 
     /// Resolution of the image in x-direction.
     mi::Uint32 m_resolution_x;

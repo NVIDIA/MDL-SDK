@@ -76,9 +76,9 @@ public:
 	int GenNamespaceOpen(const wchar_t* nsName);
 	void GenNamespaceClose(int nrOfNs);
 	void GenErrorMsg(ErrorType errTyp, Symbol *sym);
-	int  NewCondSet(BitArray *s);
-	void GenCond(BitArray *s, Node *p);
-	void PutCaseLabels(BitArray *s);
+	int  NewCondSet(const BitArray *s);
+	void GenCond(const BitArray *s, Node *p);
+	void PutCaseLabels(const BitArray *s);
 	void GenCode(Node *p, int indent, BitArray *isChecked);
 	void GenTokensHeader();
 	void GenPragmas();

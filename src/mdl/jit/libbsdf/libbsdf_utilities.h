@@ -293,6 +293,95 @@ BSDF_INLINE float eval_oren_nayar(
         );
 }
 
+//
+// Eugene d'Eon: "An analytic BRDF for materials with spherical Lambertian scatterers"
+//
+BSDF_INLINE float lambert_sphere_phase_function(const float u)
+{
+    return (2.0f * (math::sqrt(1.0f - u * u) - u * math::acos(u))) * (float)(1.0 / (3.0 * M_PI * M_PI));
+}
+
+BSDF_INLINE float H0(const float u, const float c)
+{
+    const float C = math::sqrt( 1.0f - c );
+    const float a = (8.216443463470172f + 1.501116252342486f * math::pow(C, 6.054351911707695f)) / (4.175932557866179f - 1.2122216865199813f * C);
+    const float d = (7.773097842804312 - 0.5658108102188075f * math::pow(C, 0.9615460393324836f)) / (8.659120811349371f - 0.15997430541238322f * C * (1.0f - c) * (1.0f - c) * (1.0f - c));
+    return (1.0f + a * math::pow(u, d)) / (1.0f + a * math::sqrt(1.0f - 2.0f * ((89.0f * c) / 288.0f + (59.0f * c * c) / 288.0f - c * c * c / 72.0f)) * math::pow(u, d));
+}
+
+BSDF_INLINE float H1(const float u, const float c)
+{
+    return math::exp(
+        (-0.14483935877260054f * c + 0.024285125615255733 * c * c) * math::pow(u, 0.45944184025347456f - 1.0787917226917565f * u + 1.8572804924335546f * u * u - 1.1283119660147671f * u * u * u));
+}
+
+BSDF_INLINE float f0(const float ui, const float uo, const float c)
+{
+    const float tmp1 = 1.0f - c;
+    const float tmp2 = math::sqrt(tmp1);
+    const float tmp3 = tmp1 * tmp2; // math::pow(1 - c, 1.5f)
+    const float A = (69.0f * c) / 128.f;
+    const float B =
+        (-0.08446297239646791f + 0.5153566145541554f * tmp2 - 0.77757371002123f * tmp1 + 0.34668869623791543f * tmp3) /
+        (0.9648932738041012 - 0.6655015709030936f * tmp2 + 0.1826019462608555f * tmp1);
+    const float C =
+        (682.8479477533338f - 2567.7368047535556f * tmp2 + 7487.987105705168f * tmp1 - 5602.448801045478f * tmp3) /
+        (5850.602606063662f - 4008.3309624647227f * tmp2 + 1480.250743805733f * tmp1);
+    const float D =
+        (0.2855294320307508f + 160.39651500649123f * tmp2 - 327.42799697993706f * tmp1 + 166.88327184107732f * tmp3) /
+        (674.1908010450103f - 412.9837444306491 * tmp2 + 596.4232294419696 * tmp1);
+    const float E = (15.0f * tmp1 * c * (3.0f + (4.0f * c) / 3.0)) / 128.0;
+    const float F =
+        (-1.9208967199948512f - 242.16001167844007f * tmp2 - 21.914139454773085f * tmp1 + 266.06342182761813f * tmp3) /
+        (1499.904420175135f + 457.4200839912641f * tmp2 + 215.77342164754094f * tmp1);
+
+    
+    return
+        (float)(0.5 / M_PI) * H0(ui, c) * H0(uo, c) / ( ui + uo ) *
+        (A + C * ui * uo + E * ui * ui * uo * uo + B * (ui + uo) + D * ui * uo * (ui + uo) + F * (ui * ui + uo * uo));
+}
+
+BSDF_INLINE float f1m(const float ui, const float uo, const float c)
+{
+    const float l = -0.05890107167021953f * c - 0.004740543453386809 * c * c;
+
+    return (float)(2.0 / M_PI) *
+        (-(((c*(64.0f + 45.0f * ui * uo)) / 48.0f - (15.0f * (1.0f + 0.44f * c) * c * ui * uo * H1(ui, c) *H1(uo, c)) / 16.0f - (4.0f * c * (1.0f + l * ui) * (1.0f + l * uo) * H1(ui, c) *H1(uo, c)) /3.0f)) / (8.0f * (ui + uo)));
+}
+
+BSDF_INLINE float3 lambert_sphere_brdf(
+    const float3 &k1,
+    const float3 &k2,
+    const float nk1,
+    const float nk2,
+    const float3 &albedo)
+{
+    const float3 c = make_float3(
+        (1.0f - math::pow(1.0f - albedo.x, 2.73556f)) / (1.0f - 0.184096f * math::pow(1.f - albedo.x, 2.48423f)),
+        (1.0f - math::pow(1.0f - albedo.y, 2.73556f)) / (1.0f - 0.184096f * math::pow(1.f - albedo.y, 2.48423f)),
+        (1.0f - math::pow(1.0f - albedo.z, 2.73556f)) / (1.0f - 0.184096f * math::pow(1.f - albedo.z, 2.48423f)));
+
+    const float k1k2 = math::dot(k1, k2);
+    const float cosphisinisino = (k1k2 - nk1 * nk2); // cos(phi) * sin(theta_i) * sin(theta_o)
+
+    const float f_single = lambert_sphere_phase_function(-k1k2) / (nk1 + nk2);
+    const float F0_single = (float)(1.0 / M_PI) *
+        (207.0f + 256.0f * nk1 * nk2 - 45.0f * nk1 * nk1 + 45.0f * nk2 * nk2 * (-1.0f + 3.0f * nk1 * nk1)) / (768.0 * (nk1 + nk2));
+    
+    float3 brdf = c * (f_single - F0_single);
+    brdf += make_float3( // F0
+        f0(nk2, nk1, c.x),
+        f0(nk2, nk1, c.y),
+        f0(nk2, nk1, c.z));
+    brdf += make_float3( // F1m
+        f1m(nk2, nk1, c.x) * cosphisinisino,
+        f1m(nk2, nk1, c.y) * cosphisinisino,
+        f1m(nk2, nk1, c.z) * cosphisinisino);
+
+    return math::max(brdf, make_float3(0.0f, 0.0f, 0.0f));
+}
+
+
 // Fresnel equation for an equal mix of polarization
 BSDF_INLINE float ior_fresnel(
     const float eta,	// refracted / reflected ior
@@ -329,7 +418,7 @@ BSDF_INLINE float complex_ior_fresnel(
     const float t0 = eta2 - eta_k2 - sintheta2;
     const float a2plusb2 = math::sqrt(t0 * t0 + 4.0f * eta2 * eta_k2);
     const float t1 = a2plusb2 + costheta2;
-    const float a = math::sqrt(0.5f * (a2plusb2 + t0));
+    const float a = math::sqrt(math::max(0.5f * (a2plusb2 + t0), 0.0f));
     const float t2 = 2.0f * a * costheta;
     const float rs = (t1 - t2) / (t1 + t2);
 
@@ -427,8 +516,9 @@ BSDF_INLINE void get_oriented_normals(
     const float3 &geometry_normal0,
     const float3 &k1)
 {
-    geometry_normal = geometry_normal0 * copysignf(1.0f, math::dot(k1, geometry_normal0));
-    shading_normal = shading_normal0 * copysignf(1.0f, math::dot(shading_normal0, geometry_normal));
+    const float flipsign = copysignf(1.0f, math::dot(k1, geometry_normal0));
+    geometry_normal = geometry_normal0 * flipsign;
+    shading_normal = shading_normal0 * flipsign;
 }
 
 struct Normals {

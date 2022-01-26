@@ -177,6 +177,11 @@ inline Type_factory *impl_cast(IType_factory *t) {
     return static_cast<Type_factory *>(t);
 }
 
+template<>
+inline Options_impl &impl_cast(Options &o) {
+    return static_cast<Options_impl &>(o);
+}
+
 /// A static_cast with check in debug mode
 template <typename T, typename F>
 inline T *cast(F *arg) {

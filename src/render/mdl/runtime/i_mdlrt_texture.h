@@ -36,8 +36,11 @@
 #include <mi/mdl/mdl_stdlib_types.h>
 
 #include <io/scene/texture/i_texture.h>
+#include <io/scene/dbimage/i_dbimage.h>
 #include <io/image/image/i_image_access_canvas.h>
 
+#include <map>
+#include <vector>
 
 namespace MI {
 namespace MDLRT {
@@ -46,276 +49,230 @@ class Texture
 {
 public:
     typedef mi::mdl::stdlib::Tex_wrap_mode  Wrap_mode;
-    typedef mi::mdl::stdlib::Tex_gamma_mode Gamma_mode;
-
-    Texture(Gamma_mode);
-
-    int get_width() const { return(int) m_resolution.x; }
-
-
-    int get_height() const { return (int)m_resolution.y; }
-
-
-    int get_depth() const { return (int)m_resolution.z; }
 
     bool is_valid() const { return m_is_valid; }
 
-    Gamma_mode get_mdl_gamma() const { return m_mdl_gamma_mode; }
+    mi::Uint32_2 get_first_last_frame() const { return m_first_last_frame; }
 
 protected:
-    mi::Uint32_3 m_resolution;
-    bool         m_is_valid;
-    Gamma_mode   m_mdl_gamma_mode;
+    // Returns the frame ID for the \p frame parameter.
+    //
+    // No interpolation. Checks whether there is a frame with frame number 'floor(frame)' and
+    // returns its index. Otherwise returns -1.
+    mi::Size get_frame_id(mi::Float32 frame) const;
+
+    bool m_is_valid = false;
+    bool m_is_animated = false;
+
+    mi::Uint32_2 m_first_last_frame{0, 0};
+
+    // Maps frame numbers to frame IDs.
+    std::map<mi::Size, mi::Size> m_frame_number_to_id;
 };
 
-    
 class Texture_2d : public Texture
 {
 public:
-    Texture_2d();
-    ~Texture_2d();
+    Texture_2d(
+        const DB::Typed_tag<TEXTURE::Texture>& tag,
+        bool use_derivatives,
+        DB::Transaction* transaction);
 
-
-    Texture_2d(const DB::Typed_tag<TEXTURE::Texture>&, Gamma_mode, bool, DB::Transaction*);
-
-    mi::Sint32_2 get_resolution(const mi::Sint32_2& uv_tile) const;
+    mi::Uint32_2 get_resolution(const mi::Sint32_2& uv_tile, mi::Float32 frame) const;
 
     float lookup_float(
-            const mi::Float32_2& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v
-            ) const;
-
+        const mi::Float32_2& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        mi::Float32 frame) const;
 
     mi::Float32_2 lookup_float2(
-            const mi::Float32_2& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v
-            ) const;
-
+        const mi::Float32_2& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        mi::Float32 frame) const;
 
     mi::Float32_3 lookup_float3(
-            const mi::Float32_2& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v
-            ) const;
-
+        const mi::Float32_2& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        mi::Float32 frame) const;
 
     mi::Float32_4 lookup_float4(
-            const mi::Float32_2& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v
-            ) const;
-
+        const mi::Float32_2& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        mi::Float32 frame) const;
 
     mi::Float32_4 lookup_deriv_float4(
-            const mi::Float32_2& coord_val,
-            const mi::Float32_2& coord_dx,
-            const mi::Float32_2& coord_dy,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v
-            ) const;
-
+        const mi::Float32_2& coord_val,
+        const mi::Float32_2& coord_dx,
+        const mi::Float32_2& coord_dy,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        mi::Float32 frame) const;
 
     mi::Spectrum lookup_color(
-            const mi::Float32_2& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v
-            ) const;
+        const mi::Float32_2& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        mi::Float32 frame) const;
 
-
-    float texel_float(const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile) const;
-
-
-    mi::Float32_2 texel_float2(const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile) const;
-
-
-    mi::Float32_3 texel_float3(const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile) const;
-
-
-    mi::Float32_4 texel_float4(const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile) const;
-
-
-    mi::Spectrum texel_color(const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile) const;
+    float texel_float(
+        const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile, mi::Float32 frame) const;
+    mi::Float32_2 texel_float2(
+        const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile, mi::Float32 frame) const;
+    mi::Float32_3 texel_float3(
+        const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile, mi::Float32 frame) const;
+    mi::Float32_4 texel_float4(
+        const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile, mi::Float32 frame) const;
+    mi::Spectrum texel_color(
+        const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile, mi::Float32 frame) const;
 
 private:
-    unsigned int get_tile_id(int tile_u, int tile_v) const {
-        if (!m_is_udim)
-            return 0;
-        tile_u += m_udim_offset_u;
-        tile_v += m_udim_offset_v;
-        if ((unsigned int)tile_u >= m_udim_num_u ||
-            (unsigned int)tile_v >= m_udim_num_v)
-            return ~0u;
-        else
-            return m_udim_mapping[tile_v * m_udim_num_u + tile_u];
-    }
+    bool m_use_derivatives;
+    bool m_is_uvtile;
 
-    std::vector< std::vector<mi::Uint32_3> >          m_tile_resolutions;
-    std::vector< std::vector<IMAGE::Access_canvas> >  m_canvases;
-    std::vector<float>                                  m_gamma;
-    std::vector<unsigned int>                           m_udim_mapping;
-    bool m_is_udim;
-    unsigned int  m_udim_num_u;
-    unsigned int  m_udim_num_v;
-    int m_udim_offset_u;
-    int m_udim_offset_v;                
+    struct Uvtile {
+        // Vector of mipmap levels. Only one element if \c m_use_derivatives is \c false.
+        std::vector<IMAGE::Access_canvas> m_canvas;
+        std::vector<mi::Uint32_3> m_resolution;
+        float m_gamma;
+    };
+
+    struct Frame {
+        std::vector<Uvtile> m_uvtiles;
+        DBIMAGE::Uv_to_id m_uv_to_id;
+    };
+
+    std::vector<Frame> m_frames;
 };
 
-
+// Textures with uvtiles are treated as invalid textures.
 class Texture_3d : public Texture
 {
 public:
-    Texture_3d();
-    ~Texture_3d();
+    Texture_3d(
+        const DB::Typed_tag<TEXTURE::Texture>& tag,
+        DB::Transaction* transaction);
 
-
-    Texture_3d(const DB::Typed_tag<TEXTURE::Texture>&, Gamma_mode, DB::Transaction*);
-
+    mi::Uint32_3 get_resolution(mi::Float32 frame) const;
 
     float lookup_float(
-            const mi::Float32_3& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            Wrap_mode wrap_w,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v,
-            const mi::Float32_2& crop_w
-            ) const;
-
+        const mi::Float32_3& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        Wrap_mode wrap_w,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        const mi::Float32_2& crop_w,
+        mi::Float32 frame) const;
 
     mi::Float32_2 lookup_float2(
-            const mi::Float32_3& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            Wrap_mode wrap_w,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v,
-            const mi::Float32_2& crop_w
-            ) const;
-
+        const mi::Float32_3& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        Wrap_mode wrap_w,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        const mi::Float32_2& crop_w,
+        mi::Float32 frame) const;
 
     mi::Float32_3 lookup_float3(
-            const mi::Float32_3& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            Wrap_mode wrap_w,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v,
-            const mi::Float32_2& crop_w
-            ) const;
-
+        const mi::Float32_3& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        Wrap_mode wrap_w,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        const mi::Float32_2& crop_w,
+        mi::Float32 frame) const;
 
     mi::Float32_4 lookup_float4(
-            const mi::Float32_3& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            Wrap_mode wrap_w,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v,
-            const mi::Float32_2& crop_w
-            ) const;
-
+        const mi::Float32_3& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        Wrap_mode wrap_w,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        const mi::Float32_2& crop_w,
+        mi::Float32 frame) const;
 
     mi::Spectrum lookup_color(
-            const mi::Float32_3& coord,
-            Wrap_mode wrap_u,
-            Wrap_mode wrap_v,
-            Wrap_mode wrap_w,
-            const mi::Float32_2& crop_u,
-            const mi::Float32_2& crop_v,
-            const mi::Float32_2& crop_w
-            ) const;
+        const mi::Float32_3& coord,
+        Wrap_mode wrap_u,
+        Wrap_mode wrap_v,
+        Wrap_mode wrap_w,
+        const mi::Float32_2& crop_u,
+        const mi::Float32_2& crop_v,
+        const mi::Float32_2& crop_w,
+        mi::Float32 frame) const;
 
-    float texel_float(const mi::Sint32_3& coord) const;
-
-
-    mi::Float32_2 texel_float2(const mi::Sint32_3& coord) const;
-
-
-    mi::Float32_3 texel_float3(const mi::Sint32_3& coord) const;
-
-
-    mi::Float32_4 texel_float4(const mi::Sint32_3& coord) const;
-
-
-    mi::Spectrum texel_color(const mi::Sint32_3& coord) const;
+    float texel_float(const mi::Sint32_3& coord, mi::Float32 frame) const;
+    mi::Float32_2 texel_float2(const mi::Sint32_3& coord, mi::Float32 frame) const;
+    mi::Float32_3 texel_float3(const mi::Sint32_3& coord, mi::Float32 frame) const;
+    mi::Float32_4 texel_float4(const mi::Sint32_3& coord, mi::Float32 frame) const;
+    mi::Spectrum texel_color(const mi::Sint32_3& coord, mi::Float32 frame) const;
 
 private:
-    IMAGE::Access_canvas        m_canvas;
-    float                       m_gamma;
+    struct Frame {
+        IMAGE::Access_canvas m_canvas;
+        mi::Uint32_3 m_resolution;
+        float m_gamma;
+    };
 
+    std::vector<Frame> m_frames;
 };
 
-
-
+// Animated textures, textures with uvtiles, and canvases with not exactly 6 layers are treated
+// as invalid textures.
 class Texture_cube : public Texture
 {
 public:
-    Texture_cube();
-
-
-    Texture_cube(const DB::Typed_tag<TEXTURE::Texture>&, Gamma_mode, DB::Transaction*);
-
+    Texture_cube(
+        const DB::Typed_tag<TEXTURE::Texture>& tag,
+        DB::Transaction* transaction);
 
     float lookup_float(const mi::Float32_3& coord) const;
-
-
     mi::Float32_2 lookup_float2(const mi::Float32_3& coord) const;
-
-
     mi::Float32_3 lookup_float3(const mi::Float32_3& coord) const;
-
-
     mi::Float32_4 lookup_float4(const mi::Float32_3& coord) const;
-
-
     mi::Spectrum lookup_color(const mi::Float32_3& coord) const;
 
 private:
-    IMAGE::Access_canvas        m_canvas;
-    float                       m_gamma;
+    IMAGE::Access_canvas m_canvas;
+    mi::Uint32_3 m_resolution;
+    float m_gamma;
 };
 
-
-
+// Not implemented, lookup functions return zero.
 class Texture_ptex : public Texture
 {
 public:
-    Texture_ptex();
-
-
-    Texture_ptex(const DB::Typed_tag<TEXTURE::Texture>&, Gamma_mode, DB::Transaction*);
-
+    Texture_ptex(
+        const DB::Typed_tag<TEXTURE::Texture>& tag,
+        DB::Transaction* transaction);
 
     float lookup_float(int channel) const;
-
-
     mi::Float32_2 lookup_float2(int channel) const;
-
-
     mi::Float32_3 lookup_float3(int channel) const;
-
-
     mi::Float32_4 lookup_float4(int channel) const;
-
-
     mi::Spectrum lookup_color(int channel) const;
 };
 
-
-}}
+}
+}
 
 #endif //RENDER_MDL_RUNTIME_I_MDLRT_TEXTURE_H

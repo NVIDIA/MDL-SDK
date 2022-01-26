@@ -61,21 +61,21 @@ struct Static_module
 {
     // The constructor puts the name of the module in the static array.
     Static_module(
-	Module_id id,		// the id of the module
-	const char *name)	// the name of the module
+        Module_id id,           // the id of the module
+        const char *name)       // the name of the module
     : m_id(id)
     {
-	ASSERT(M_MAIN, id >= 0 && id < NUM_OF_MODULES);
-	g_module_names[id] = name;
+        ASSERT(M_MAIN, id >= 0 && id < NUM_OF_MODULES);
+        g_module_names[id] = name;
     }
 
     // The destructor removes the name of the module from the static array.
     ~Static_module()
     {
-	g_module_names[m_id] = NULL;
+        g_module_names[m_id] = NULL;
     }
 
-    const Module_id m_id;		// for the destructor
+    const Module_id m_id;               // for the destructor
 };
 
 
@@ -91,62 +91,63 @@ struct Static_module
 //
 
 // start of modules without own module class
-STATIC_MODULE(M_BACKENDS,	"BAKEND");
-STATIC_MODULE(M_BRDF, 		"BRDF"  );
+STATIC_MODULE(M_BACKENDS,       "BAKEND");
+STATIC_MODULE(M_BRDF,           "BRDF"  );
 STATIC_MODULE(M_BSDF_MEASUREMENT, "BSDFM" );
 STATIC_MODULE(M_BVH,            "BVH"   );
 STATIC_MODULE(M_CACHEOPT,       "COPT"  );
 STATIC_MODULE(M_CACHE_MANAGER,  "CACMGR");
-STATIC_MODULE(M_CAMERA,		"CAMERA");
-STATIC_MODULE(M_COLOR, 		"COLOR" );
-STATIC_MODULE(M_CONT,		"CONT"  );
-STATIC_MODULE(M_DB,		"DB"    );
-STATIC_MODULE(M_DBIMAGE,	"DBIMAG");
-STATIC_MODULE(M_DIFFEQ,		"DIFFEQ");
-STATIC_MODULE(M_DISK,		"DISK"  );
+STATIC_MODULE(M_CAMERA,         "CAMERA");
+STATIC_MODULE(M_COLOR,          "COLOR" );
+STATIC_MODULE(M_CONT,           "CONT"  );
+STATIC_MODULE(M_DB,             "DB"    );
+STATIC_MODULE(M_DBIMAGE,        "DBIMAG");
+STATIC_MODULE(M_DIFFEQ,         "DIFFEQ");
+STATIC_MODULE(M_DISK,           "DISK"  );
 STATIC_MODULE(M_DISK_CACHE,     "DISKCA");
-STATIC_MODULE(M_DISPLACE, 	"DISPLA");
-STATIC_MODULE(M_ENTY, 		"ENTY"  );
-STATIC_MODULE(M_FFS, 		"FFS"   );
-STATIC_MODULE(M_FRAMEBUFFER, 	"FBFR"  );
-STATIC_MODULE(M_GCMP, 		"GCMP"  );
+STATIC_MODULE(M_DISPLACE,       "DISPLA");
+STATIC_MODULE(M_ENTY,           "ENTY"  );
+STATIC_MODULE(M_FFS,            "FFS"   );
+STATIC_MODULE(M_FRAMEBUFFER,    "FBFR"  );
+STATIC_MODULE(M_GCMP,           "GCMP"  );
 STATIC_MODULE(M_GDIFF,          "GDIFF" );
-STATIC_MODULE(M_GPRIM, 		"GPRIM" );
-STATIC_MODULE(M_GROUP,		"GROUP" );
-STATIC_MODULE(M_PROXY,		"PROXY" );
-STATIC_MODULE(M_HAL,		"HAL"   );
-STATIC_MODULE(M_INSTANCE,	"INSTAN");
-STATIC_MODULE(M_KDTREE,		"KDTREE");
-STATIC_MODULE(M_LALG,		"LALG"  );
-STATIC_MODULE(M_LIGHT,		"LIGHT" );
-STATIC_MODULE(M_LIGHTPROFILE,	"LIGPRF");
+STATIC_MODULE(M_GPRIM,          "GPRIM" );
+STATIC_MODULE(M_GROUP,          "GROUP" );
+STATIC_MODULE(M_PROXY,          "PROXY" );
+STATIC_MODULE(M_HAL,            "HAL"   );
+STATIC_MODULE(M_INSTANCE,       "INSTAN");
+STATIC_MODULE(M_KDTREE,         "KDTREE");
+STATIC_MODULE(M_LALG,           "LALG"  );
+STATIC_MODULE(M_LIGHT,          "LIGHT" );
+STATIC_MODULE(M_LIGHTPROFILE,   "LIGPRF");
 STATIC_MODULE(M_LPEXPR,         "LPEXPR");
-STATIC_MODULE(M_MAIN, 		"MAIN"  );
-STATIC_MODULE(M_MESH,		"MESH"  );
-STATIC_MODULE(M_NEURAY_API,	"API"   );
-STATIC_MODULE(M_OPTIONS,	"OPTION");
-STATIC_MODULE(M_PAGER, 		"PAGE"  );
-STATIC_MODULE(M_PHT, 		"PHT"   );
-STATIC_MODULE(M_RAL,		"RAL"   );
-STATIC_MODULE(M_RDMA,		"RDMA"  );
-STATIC_MODULE(M_SCH,		"SCH"   );
-STATIC_MODULE(M_SIMP,		"SIMP"  );
-STATIC_MODULE(M_STREAM,		"STREAM");
-STATIC_MODULE(M_STREAMS,	"STREAMS");
-STATIC_MODULE(M_STRING,		"STRING");
+STATIC_MODULE(M_MAIN,           "MAIN"  );
+STATIC_MODULE(M_MESH,           "MESH"  );
+STATIC_MODULE(M_NEURAY_API,     "API"   );
+STATIC_MODULE(M_OPTIONS,        "OPTION");
+STATIC_MODULE(M_PAGER,          "PAGE"  );
+STATIC_MODULE(M_PHT,            "PHT"   );
+STATIC_MODULE(M_RAL,            "RAL"   );
+STATIC_MODULE(M_RDMA,           "RDMA"  );
+STATIC_MODULE(M_SCH,            "SCH"   );
+STATIC_MODULE(M_SIMP,           "SIMP"  );
+STATIC_MODULE(M_STREAM,         "STREAM");
+STATIC_MODULE(M_STREAMS,        "STREAMS");
+STATIC_MODULE(M_STRING,         "STRING");
 STATIC_MODULE(M_SWRCLIB,        "BAKE"  );
-STATIC_MODULE(M_TEXTURE,	"TEXTUR");
-STATIC_MODULE(M_TCPNET,		"TCPNET");
-STATIC_MODULE(M_THREAD,		"THREAD");
-STATIC_MODULE(M_THREAD_POOL,	"THRDPL");
-STATIC_MODULE(M_TIME,		"TIME"  );
-STATIC_MODULE(M_TRAVERSE_API,	"RNDAPI");
-STATIC_MODULE(M_WELD,		"WELD"  );
-STATIC_MODULE(M_XML, 		"XML"   );
-STATIC_MODULE(M_ZLIB,		"ZLIB"  );
-STATIC_MODULE(M_DIST,		"DIST"  );
-STATIC_MODULE(M_BAKER,		"BAKER" );
-STATIC_MODULE(M_POSTPROCESSING,	"POST"  );
+STATIC_MODULE(M_TEXTURE,        "TEXTUR");
+STATIC_MODULE(M_TCPNET,         "TCPNET");
+STATIC_MODULE(M_THREAD,         "THREAD");
+STATIC_MODULE(M_THREAD_POOL,    "THRDPL");
+STATIC_MODULE(M_TIME,           "TIME"  );
+STATIC_MODULE(M_TRAVERSE_API,   "RNDAPI");
+STATIC_MODULE(M_WELD,           "WELD"  );
+STATIC_MODULE(M_XML,            "XML"   );
+STATIC_MODULE(M_ZLIB,           "ZLIB"  );
+STATIC_MODULE(M_DIST,           "DIST"  );
+STATIC_MODULE(M_BAKER,          "BAKER" );
+STATIC_MODULE(M_POSTPROCESSING, "POST"  );
+STATIC_MODULE(M_OPTIX,          "OPTX"  );
 
 // end of modules without own module class
 
@@ -156,8 +157,8 @@ STATIC_MODULE(M_POSTPROCESSING,	"POST"  );
 //
 
 void Module::register_module(
-    Module_id	mod,			// module ID, one of M_*
-    const char	*name) 			// module name, up to four characters
+    Module_id   mod,                    // module ID, one of M_*
+    const char  *name)                  // module name, up to four characters
 {
     ASSERT(M_MAIN, name);
     ASSERT(M_MAIN, name && strlen(name) <= 6);
@@ -170,7 +171,7 @@ void Module::register_module(
 //
 
 void Module::unregister_module(
-    Module_id	mod)			// module ID, one of M_*
+    Module_id   mod)                    // module ID, one of M_*
 {
     g_module_names[mod] = NULL;
 }
@@ -190,16 +191,16 @@ Module_status Module::get_status() const
 
 
 Module_status Module::get_status(
-    Module_id		 mod)		// return status of this module
+    Module_id            mod)           // return status of this module
 {
     ASSERT(M_MAIN, mod >= 0 && mod < NUM_OF_MODULES);
     if (modules[mod] != NULL)
-	return modules[mod]->get_status();
+        return modules[mod]->get_status();
 
     // check for modules which have no module structure but a name
     if (g_module_names[mod] != NULL)
-	// this is one such module. This is okay by definition.
-	return ST_OK;
+        // this is one such module. This is okay by definition.
+        return ST_OK;
 
     return ST_NOTINIT;
 }
@@ -220,7 +221,7 @@ const char *Module::get_name() const
 
 
 const char *Module::id_to_name(
-    Module_id		 mod)		// convert M_X to "X"
+    Module_id            mod)           // convert M_X to "X"
 {
     ASSERT(M_MAIN, mod >= 0 && mod < NUM_OF_MODULES);
     const char *res = modules[mod] ? modules[mod]->get_name() : g_module_names[mod];
@@ -229,13 +230,13 @@ const char *Module::id_to_name(
 
 
 Module_id Module::name_to_id(
-    const char		*name)		// convert "X" to M_X
+    const char          *name)          // convert "X" to M_X
 {
-    int			mod;		// for iterating over modules
+    int                 mod;            // for iterating over modules
 
     for (mod=1; mod < NUM_OF_MODULES; mod++)
-	if (!STRING::compare_case_insensitive(name, id_to_name((Module_id)mod), 4))
-	    break;
+        if (!STRING::compare_case_insensitive(name, id_to_name((Module_id)mod), 4))
+            break;
     ASSERT(M_MAIN, mod != NUM_OF_MODULES);
     return (Module_id)mod;
 }
@@ -249,16 +250,16 @@ Module_id Module::name_to_id(
 //
 
 Module::Module(
-    Module_id		mod,		// module ID, one of M_*
-    const char		*name)		// module name, up to four characters
+    Module_id           mod,            // module ID, one of M_*
+    const char          *name)          // module name, up to four characters
 {
 #ifdef DEBUG
     ASSERT(M_MAIN, mod >= 0 && mod < NUM_OF_MODULES);
-    ASSERT(M_MAIN, !modules[mod]);		// no double inits
+    ASSERT(M_MAIN, !modules[mod]);              // no double inits
     int namelen;
     for (namelen=0; namelen < 5 && name[namelen]; namelen++)
-	ASSERT(M_MAIN, (name[namelen] >= 'A' && name[namelen] <= 'Z') ||
-		       (name[namelen] >= '0' && name[namelen] <= '9'));
+        ASSERT(M_MAIN, (name[namelen] >= 'A' && name[namelen] <= 'Z') ||
+                       (name[namelen] >= '0' && name[namelen] <= '9'));
     ASSERT(M_MAIN, namelen > 0 && namelen < 5);
 #endif
     m_status = ST_NOTINIT;

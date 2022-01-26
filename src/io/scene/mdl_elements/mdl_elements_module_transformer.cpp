@@ -1539,6 +1539,8 @@ mi::Sint32 Mdl_module_transformer::inline_imported_modules(
 
 void Mdl_module_transformer::analyze_module( MDL::Execution_context* context)
 {
+    // Note that the AST dump is not guaranteed to be valid MDL (even for valid modules), e.g., it
+    // generates empty selector strings for MDL < 1.7.
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
     const CONFIG::Config_registry& registry = config_module->get_configuration();
     bool dump_ast = false;

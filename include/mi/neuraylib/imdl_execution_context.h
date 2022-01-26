@@ -101,7 +101,7 @@ public:
 ///
 /// Options for module loading
 /// - \c std::string "warning": Silence compiler warnings or promote them to errors.
-///   Format: options = (option ',')* option. option = 'err' | number '=' ('on' | 'off' | err').
+///   Format: options = (option ',')* option. option = 'err' | number '=' ('on' | 'off' | 'err').
 ///   A single 'err' promotes all compiler warnings to errors.
 ///   Otherwise, warning number is either enabled ('on'), disabled ('off'), or promoted
 ///   to an error ('err').
@@ -119,7 +119,7 @@ public:
 ///   \c false.
 ///
 /// Options for material compilation
-/// - \c bool "fold_meters_per_scene_unit": If true, occurrences of the functions
+/// - \c bool "fold_meters_per_scene_unit": If \c true, occurrences of the functions
 ///   state::meters_per_scene_unit() and state::scene_units_per_meter() will be folded
 ///   using the \c meters_per_scene_unit option. Default: \c true
 /// - #mi::Float32 "meters_per_scene_unit": The conversion ratio between meters and scene units for
@@ -128,19 +128,19 @@ public:
 /// - #mi::Float32 "wavelength_max": The largest supported wavelength. Default: 780.0f.
 /// - #mi::Float32 "fold_ternary_on_df": Fold all ternary operators of *df types, even in class
 ///   compilation mode. Default: \c false.
-/// - \c bool "ignore_noinline": If true, anno::noinline() annotations are ignored during material
-///   compilation. Default: \c false.
+/// - \c bool "ignore_noinline": If \c true, anno::noinline() annotations are ignored during
+///   material compilation. Default: \c false.
 ///
 /// Options for code generation
-/// - \c bool "fold_meters_per_scene_unit": If true, occurrences of the functions
+/// - \c bool "fold_meters_per_scene_unit": If \c true, occurrences of the functions
 ///   state::meters_per_scene_unit() and state::scene_units_per_meter() will be folded
 ///   using the \c meters_per_scene_unit option. Default: \c true
 /// - #mi::Float32 "meters_per_scene_unit": The conversion ratio between meters and scene units for
 ///   this material. Only used if folding is enabled. Default: 1.0f.
 /// - #mi::Float32 "wavelength_min": The smallest supported wavelength. Default: 380.0f.
 /// - #mi::Float32 "wavelength_max": The largest supported wavelength. Default: 780.0f.
-/// - \c bool "include_geometry_normal": If true, the \c "geometry.normal" field will be applied to
-///   the MDL state prior to evaluation of the given DF. Default: \c true.
+/// - \c bool "include_geometry_normal": If \c true, the \c "geometry.normal" field will be applied
+///   to the MDL state prior to evaluation of the given DF. Default: \c true.
 class IMdl_execution_context: public
     base::Interface_declare<0x28eb1f99,0x138f,0x4fa2,0xb5,0x39,0x17,0xb4,0xae,0xfb,0x1b,0xca>
 {
@@ -245,16 +245,16 @@ public:
     template<typename T>
     const T* get_option( const char* name, Sint32& return_code)
     {
-        const base::IInterface* pointer;
+        const base::IInterface* pointer = 0;
         return_code = get_option( name, &pointer);
-        if( !pointer)
-            return NULL;
+        if( return_code != 0 || !pointer)
+            return 0;
 
         base::Handle<const base::IInterface> handle( pointer);
         const T* pointer_T = pointer->get_interface<T>();
         if( !pointer_T) {
             return_code = -2;
-            return NULL;
+            return 0;
         }
 
         return pointer_T;

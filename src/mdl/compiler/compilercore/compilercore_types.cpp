@@ -59,7 +59,7 @@ public:
     IType::Modifiers get_type_modifiers() const MDL_OVERRIDE {
         IType::Modifiers mod = IType::MK_NONE;
         IType const *tp = this;
-        while (const IType_alias *alias = as<IType_alias>(tp)) {
+        while (IType_alias const *alias = as<IType_alias>(tp)) {
             mod |= alias->get_type_modifiers();
             tp = alias;
         }
@@ -473,8 +473,9 @@ public:
 
     /// Get the compound type at index i.
     IType const *get_compound_type(int index) const MDL_FINAL {
-        if (0 <= index && index < m_size)
+        if (0 <= index && index < m_size) {
             return m_element_type;
+        }
         return NULL;
     }
 
@@ -513,8 +514,9 @@ public:
 
     /// Get the compound type at index i.
     IType const *get_compound_type(int index) const MDL_FINAL {
-        if (0 <= index && index < m_columns)
+        if (0 <= index && index < m_columns) {
             return m_element_type;
+        }
         return NULL;
     }
 
@@ -596,8 +598,9 @@ public:
 
     /// Get the compound type at index i.
     IType const *get_compound_type(int index) const MDL_FINAL {
-        if (0 <= index && index < m_size)
+        if (0 <= index && index < m_size) {
             return m_element_type;
+        }
         return NULL;
     }
 
@@ -834,8 +837,9 @@ public:
     int find_field(ISymbol const *symbol) const MDL_FINAL {
         for (size_t idx = 0, end = Base::argument_count(); idx < end; ++idx) {
             Struct_member const &field = Base::argument_at(idx);
-            if (symbol == field.get_symbol())
+            if (symbol == field.get_symbol()) {
                 return int(idx);
+            }
         }
         return -1;
     }
@@ -845,8 +849,9 @@ public:
     int find_field(char const *name) const MDL_FINAL {
         for (size_t idx = 0, end = Base::argument_count(); idx < end; ++idx) {
             Struct_member const &field = Base::argument_at(idx);
-            if (strcmp(field.get_symbol()->get_name(), name) == 0)
+            if (strcmp(field.get_symbol()->get_name(), name) == 0) {
                 return int(idx);
+            }
         }
         return -1;
     }
@@ -857,8 +862,9 @@ public:
     {
         for (size_t idx = 0, end = m_methods.size(); idx < end; ++idx) {
             Struct_member const &field = m_methods.at(idx);
-            if (symbol == field.get_symbol())
+            if (symbol == field.get_symbol()) {
                 return int(idx);
+            }
         }
         return -1;
 
@@ -1080,19 +1086,22 @@ IType const *Type_factory::create_alias(
     IType::Modifiers modifiers)
 {
     // only allowed on the module factories
-    if (! m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     // an alias of the error type is still the error type
-    if (is<IType_error>(type))
+    if (is<IType_error>(type)) {
         return type;
+    }
 
     if (name != NULL) {
         // import the name into our symbol table
         name = m_symtab->get_symbol(name->get_name());
     } else {
-        if (modifiers == IType::MK_NONE)
+        if (modifiers == IType::MK_NONE) {
             return type;
+        }
     }
 
     Type_cache_key key(type, name, modifiers);
@@ -1109,32 +1118,24 @@ IType const *Type_factory::create_alias(
 // Create a new type error instance.
 IType_error const *Type_factory::create_error()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_error();
     return &the_error_type;
 }
 
 // Create a new type auto (non-deduced incomplete type) instance.
 IType_auto const *Type_factory::create_auto()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_auto();
     return &the_auto_type;
 }
 
 // Create a new type bool instance.
 IType_bool const *Type_factory::create_bool()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_bool();
     return &the_bool_type;
 }
 
 /// Create a new type int instance.
 const IType_int *Type_factory::create_int()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_int();
     return &the_int_type;
 }
 
@@ -1142,8 +1143,9 @@ const IType_int *Type_factory::create_int()
 IType_enum *Type_factory::create_enum(ISymbol const *name)
 {
     // only allowed on the module factories
-    if (!m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     // import the name
     name = m_symtab->get_user_type_symbol(name->get_name());
@@ -1159,11 +1161,14 @@ IType_enum *Type_factory::create_enum(ISymbol const *name)
 IType_enum const *Type_factory::lookup_enum(char const *name) const
 {
     // only allowed on the module factories
-    if (!m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     Type_import_map::const_iterator it = m_imported_types_cache.find(name);
-    if (it == m_imported_types_cache.end()) return NULL;
+    if (it == m_imported_types_cache.end()) {
+        return NULL;
+    }
 
     // cast to enum type or NULL, if it's not an enum type
     IType_enum const *enum_type = as<IType_enum>(it->second);
@@ -1173,74 +1178,56 @@ IType_enum const *Type_factory::lookup_enum(char const *name) const
 // Create a new type float instance.
 IType_float const *Type_factory::create_float()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_float();
     return &the_float_type;
 }
 
 // Create a new type double instance.
 IType_double const *Type_factory::create_double()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_double();
     return &the_double_type;
 }
 
 // Create a new type string instance.
 IType_string const *Type_factory::create_string()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_string();
     return &the_string_type;
 }
 
 // Create the type bsdf instance.
 IType_bsdf const *Type_factory::create_bsdf()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_bsdf();
     return &the_bsdf_type;
 }
 
 // Create a new type hair_bsdf instance.
 IType_hair_bsdf const *Type_factory::create_hair_bsdf()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_hair_bsdf();
     return &the_hair_bsdf_type;
 }
 
 // Create a new type edf instance.
 IType_edf const *Type_factory::create_edf()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_edf();
     return &the_edf_type;
 }
 
 // Create a new type vdf instance.
 IType_vdf const *Type_factory::create_vdf()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_vdf();
     return &the_vdf_type;
 }
 
 // Create a new type light profile instance.
 IType_light_profile const *Type_factory::create_light_profile()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_light_profile();
     return &the_light_profile_type;
 }
 
 // Create a new type vector instance.
 IType_vector const *Type_factory::create_vector(
     IType_atomic const *element_type,
-    int size)
+    int                size)
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_vector(element_type, size);
     switch (size) {
     case 2:
         switch (element_type->get_kind()) {
@@ -1292,77 +1279,83 @@ IType_vector const *Type_factory::create_vector(
 // Create a new type matrix instance.
 IType_matrix const *Type_factory::create_matrix(
     IType_vector const *element_type,
-    int columns)
+    int                columns)
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_matrix(element_type, columns);
-
     IType::Kind kind = element_type->get_element_type()->get_kind();
 
     switch (columns) {
     case 2:
         switch (element_type->get_size()) {
         case 2:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float2x2_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double2x2_type;
+            }
             break;
         case 3:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float3x2_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double3x2_type;
+            }
             break;
         case 4:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float4x2_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double4x2_type;
+            }
             break;
         }
         break;
     case 3:
         switch (element_type->get_size()) {
         case 2:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float2x3_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double2x3_type;
+            }
             break;
         case 3:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float3x3_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double3x3_type;
+            }
             break;
         case 4:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float4x3_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double4x3_type;
+            }
             break;
         }
         break;
     case 4:
         switch (element_type->get_size()) {
         case 2:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float2x4_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double2x4_type;
+            }
             break;
         case 3:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float3x4_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double3x4_type;
+            }
             break;
         case 4:
-            if (kind == IType::TK_FLOAT)
+            if (kind == IType::TK_FLOAT) {
                 return &the_float4x4_type;
-            else if (kind == IType::TK_DOUBLE)
+            } else if (kind == IType::TK_DOUBLE) {
                 return &the_double4x4_type;
+            }
             break;
         }
         break;
@@ -1375,8 +1368,9 @@ IType_matrix const *Type_factory::create_matrix(
 IType const *Type_factory::find_array(IType const *element_type, int size) const
 {
     // only allowed on the module factories
-    if (! m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     Type_cache_key key(size, element_type);
 
@@ -1391,8 +1385,9 @@ IType const *Type_factory::find_array(IType const *element_type, int size) const
 IType const *Type_factory::find_any_deferred_array(IType const *element_type) const
 {
     // only allowed on the module factories
-    if (m_compiler_factory == NULL)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     // skip any aliases
     element_type = element_type->skip_type_alias();
@@ -1421,8 +1416,9 @@ IType const *Type_factory::create_array(
     size_t      size)
 {
     // only allowed on the module factories
-    if (! m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     if (is<IType_error>(element_type)) {
         // cannot create an array of error type
@@ -1443,8 +1439,6 @@ IType const *Type_factory::create_array(
 // Create a new type color instance.
 IType_color const *Type_factory::create_color()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_color();
     return &the_color_type;
 }
 
@@ -1455,8 +1449,9 @@ IType_function const *Type_factory::create_function(
     size_t                           n_parameters)
 {
     // only allowed on the module factories
-    if (! m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     Type_cache_key key(return_type, parameters, n_parameters);
 
@@ -1474,8 +1469,9 @@ IType_function const *Type_factory::create_function(
 IType_struct *Type_factory::create_struct(ISymbol const *name)
 {
     // only allowed on the module factories
-    if (!m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     // import the name
     name = m_symtab->get_user_type_symbol(name->get_name());
@@ -1490,11 +1486,14 @@ IType_struct *Type_factory::create_struct(ISymbol const *name)
 IType_struct const *Type_factory::lookup_struct(char const *name) const
 {
     // only allowed on the module factories
-    if (!m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     Type_import_map::const_iterator it = m_imported_types_cache.find(name);
-    if (it == m_imported_types_cache.end()) return NULL;
+    if (it == m_imported_types_cache.end()) {
+        return NULL;
+    }
 
     // cast to struct type or NULL, if it's not a struct type
     IType_struct const *struct_type = as<IType_struct>(it->second);
@@ -1505,9 +1504,6 @@ IType_struct const *Type_factory::lookup_struct(char const *name) const
 IType_texture const *Type_factory::create_texture(
     IType_texture::Shape const shape)
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_texture(shape);
-
     switch (shape) {
     case IType_texture::TS_2D:        return &the_texture_2d_type;
     case IType_texture::TS_3D:        return &the_texture_3d_type;
@@ -1522,8 +1518,6 @@ IType_texture const *Type_factory::create_texture(
 // Create a new type bsdf_measurement instance.
 IType_bsdf_measurement const *Type_factory::create_bsdf_measurement()
 {
-    if (m_compiler_factory)
-        return m_compiler_factory->create_bsdf_measurement();
     return &the_bsdf_measurement_type;
 }
 
@@ -1565,8 +1559,9 @@ IType const *Type_factory::import(IType const *type)
                 // We have this name;
                 IType const *n_type = it->second;
 
-                if (is<IType_enum>(n_type))
+                if (is<IType_enum>(n_type)) {
                     return n_type;
+                }
                 // The names of user defined types must be unique, so this should not happen ...
                 // Except something really bad happens.
             }
@@ -1625,8 +1620,9 @@ IType const *Type_factory::import(IType const *type)
 
             e_type = import(e_type);
 
-            if (a_type->is_immediate_sized())
+            if (a_type->is_immediate_sized()) {
                 return create_array(e_type, a_type->get_size());
+            }
 
             Type_array_size const *a_size =
                 impl_cast<Type_array_size>(a_type->get_deferred_size());
@@ -1658,8 +1654,9 @@ IType const *Type_factory::import(IType const *type)
             IType const *ret_tp = f_type->get_return_type();
 
             // annotations have NO return type
-            if (ret_tp != NULL)
+            if (ret_tp != NULL) {
                 ret_tp = import(f_type->get_return_type());
+            }
 
             return create_function(ret_tp, params.data(), n_params);
         }
@@ -1679,8 +1676,9 @@ IType const *Type_factory::import(IType const *type)
             if (it != m_imported_types_cache.end()) {
                 // We have this name;
                 IType const *n_type = it->second;
-                if (is<IType_struct>(n_type))
+                if (is<IType_struct>(n_type)) {
                     return n_type;
+                }
                 // The names of user defined types must be unique, so this should not happen ...
                 // Except something really bad happens.
             }
@@ -1724,8 +1722,9 @@ IType const *Type_factory::create_array(
     ISymbol const *sym)
 {
     // only allowed on the module factories
-    if (! m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     if (is<IType_error>(element_type)) {
         // cannot create an array of error type
@@ -1748,26 +1747,30 @@ IType const *Type_factory::create_array(
 // Return a predefined struct.
 IType_struct *Type_factory::get_predefined_struct(IType_struct::Predefined_id part)
 {
-    if (m_compiler_factory) {
+    if (m_compiler_factory != NULL) {
         // this cast IS ugly, but we know that the top level type factory
         // is of type Type_factory (and not a proxy), so it's ok
         return static_cast<Type_factory *>(m_compiler_factory)->get_predefined_struct(part);
     }
-    if (0 <= part && part <= IType_struct::SID_LAST)
+    if (0 <= part && part <= IType_struct::SID_LAST) {
+        // get those from the compiler factory
         return m_predefined_structs[part];
+    }
     return NULL;
 }
 
 // Return a predefined enum.
 IType_enum *Type_factory::get_predefined_enum(IType_enum::Predefined_id part)
 {
-    if (m_compiler_factory) {
+    if (m_compiler_factory != NULL) {
         // this cast IS ugly, but we know that the top level type factory
         // is of type Type_factory (and not a proxy), so it's ok
         return static_cast<Type_factory *>(m_compiler_factory)->get_predefined_enum(part);
     }
-    if (0 <= part && part <= IType_enum::EID_LAST)
+    if (0 <= part && part <= IType_enum::EID_LAST) {
+        // get those from the compiler factory
         return m_predefined_enums[part];
+    }
     return NULL;
 }
 
@@ -1821,8 +1824,9 @@ IType const *Type_factory::get_equal(IType const *type) const
                 // We have this name;
                 IType const *n_type = it->second;
 
-                if (is<IType_enum>(n_type))
+                if (is<IType_enum>(n_type)) {
                     return n_type;
+                }
                 // The names of user defined types must be unique, so this should not happen ...
                 // Except something really bad happens.
             }
@@ -1866,15 +1870,17 @@ IType const *Type_factory::get_equal(IType const *type) const
             IType const       *e_type = a_type->get_element_type();
 
             e_type = get_equal(e_type);
-            if (e_type == NULL)
+            if (e_type == NULL) {
                 return NULL;
+            }
 
             if (a_type->is_immediate_sized()) {
                 Type_cache_key key(a_type->get_size(), e_type);
 
                 Type_cache::const_iterator it = m_type_cache.find(key);
-                if (it != m_type_cache.end())
+                if (it != m_type_cache.end()) {
                     return it->second;
+                }
                 return NULL;
             }
             // abstract array not supported
@@ -1901,8 +1907,9 @@ IType const *Type_factory::get_equal(IType const *type) const
             if (it != m_imported_types_cache.end()) {
                 // We have this name;
                 IType const *n_type = it->second;
-                if (is<IType_struct>(n_type))
+                if (is<IType_struct>(n_type)) {
                     return n_type;
+                }
                 // The names of user defined types must be unique, so this should not happen ...
                 // Except something really bad happens.
             }
@@ -1939,8 +1946,9 @@ IType_array_size const *Type_factory::get_array_size(
     if (a_it == m_array_size_cache.end()) {
         array_size = m_builder.create<Type_array_size>(sym, abs_name);
         m_array_size_cache.insert(Array_size_cache::value_type(abs_name, array_size));
-    } else
+    } else {
         array_size = a_it->second;
+    }
     return array_size;
 }
 
@@ -1950,8 +1958,9 @@ IType const *Type_factory::create_array(
     IType_array_size const *iarray_size)
 {
     // only allowed on the module factories
-    if (!m_compiler_factory)
+    if (m_compiler_factory == NULL) {
         return NULL;
+    }
 
     if (is<IType_error>(element_type)) {
         // cannot create an array of error type
@@ -2227,8 +2236,9 @@ bool Type_factory::is_owned(
     // can be only checked for user types
     size_t owner_id = get_owner_id(type);
 
-    if (owner_id != 0)
+    if (owner_id != 0) {
         return owner == owner_id;
+    }
     return true;
 }
 
@@ -2245,8 +2255,9 @@ size_t Type_factory::get_owner_id(IType const *type)
     case IType::TK_ENUM:
         {
             Type_enum const *e_tp = static_cast<Type_enum const *>(type);
-            if (e_tp->get_predefined_id() != IType_enum::EID_USER)
+            if (e_tp->get_predefined_id() != IType_enum::EID_USER) {
                 return 0;
+            }
             return e_tp->get_owner_id();
         }
         break;
@@ -2265,8 +2276,9 @@ size_t Type_factory::get_owner_id(IType const *type)
     case IType::TK_STRUCT:
         {
             Type_struct const *s_tp = static_cast<Type_struct const *>(type);
-            if (s_tp->get_predefined_id() != IType_struct::SID_USER)
+            if (s_tp->get_predefined_id() != IType_struct::SID_USER) {
                 return 0;
+            }
             return s_tp->get_owner_id();
         }
         break;
@@ -2280,8 +2292,9 @@ size_t Type_factory::get_owner_id(IType const *type)
 bool Type_factory::is_owner(IType const *type) const
 {
     size_t id = get_owner_id(type);
-    if (id == m_id)
+    if (id == m_id) {
         return true;
+    }
 
     if (m_compiler_factory != NULL) {
         if (impl_cast<Type_factory>(m_compiler_factory)->is_owner(type)) {

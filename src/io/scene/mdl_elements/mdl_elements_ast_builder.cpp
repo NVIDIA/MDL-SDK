@@ -1264,12 +1264,14 @@ const mi::mdl::IExpression* Mdl_ast_builder::transform_expr( const IExpression* 
 }
 
 /// Get the texture resource name of a tag.
-static std::string get_texture_resource_name_and_gamma(
+static std::string get_texture_resource_name_gamma_selector(
     DB::Transaction* trans,
     DB::Tag tag,
-    mi::mdl::IValue_texture::gamma_mode &gamma_mode)
+    mi::mdl::IValue_texture::gamma_mode &gamma_mode,
+    std::string& selector)
 {
     gamma_mode = mi::mdl::IValue_texture::gamma_default;
+    selector = "";
 
     SERIAL::Class_id class_id = trans->get_class_id( tag);
     if( class_id != TEXTURE::Texture::id) {
@@ -1291,22 +1293,19 @@ static std::string get_texture_resource_name_and_gamma(
             return std::string();
         }
 
-        // try to convert gamma value into the MDL constant
-        mi::Float32 gamma_override = texture->get_gamma();
-        if( gamma_override == 1.0f)
-            gamma_mode = mi::mdl::IValue_texture::gamma_linear;
-        else if( gamma_override == 2.2f)
-            gamma_mode = mi::mdl::IValue_texture::gamma_srgb;
-        else
-            gamma_mode = mi::mdl::IValue_texture::gamma_default;
-
         DB::Access<DBIMAGE::Image> image( image_tag, trans);
+
+        // try to convert gamma value into the MDL enum
+        gamma_mode = convert_gamma_float_to_enum( texture->get_gamma());
+        selector = image->get_selector();
+
         const std::string& s1 = image->get_mdl_file_path();
         if( !s1.empty())
             return s1;
-        const std::string& s2 = image->get_filename();
-        // Do not use the filename for uvtiles since it only identifies the first one.
-        if( !s2.empty() && !image->is_uvtile())
+        const std::string& s2 = image->get_filename( 0, 0);
+        // Do not use the filename for animated textures/uvtiles since it only identifies the first
+        // frame/uvtile.
+        if( !s2.empty() && (image->get_length() == 0) && !image->is_uvtile())
             return get_file_path( s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
         return std::string();
     }
@@ -1514,18 +1513,19 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
             }
 
             mi::mdl::IValue_texture::gamma_mode gamma = mi::mdl::IValue_texture::gamma_default;
-            std::string url( get_texture_resource_name_and_gamma(m_trans, tag, gamma));
+            std::string selector;
+            std::string url = get_texture_resource_name_gamma_selector(m_trans, tag, gamma, selector);
             if (m_avoid_resource_urls || url.empty()) {
                 // map to IValue with tag
                 DB::Access<TEXTURE::Texture> texture(tag, m_trans);
-                DB::Tag tex_data_tag(texture->get_image() ? texture->get_image() : texture->get_volume_data());
-                DB::Tag_version tex_data_tag_version = m_trans->get_tag_version(tex_data_tag);
+                DB::Tag image_volume_tag(texture->get_image() ? texture->get_image() : texture->get_volume_data());
+                DB::Tag_version image_volume_tag_version = m_trans->get_tag_version(image_volume_tag);
                 mi::mdl::IType_texture const *t_tp =
                     cast<mi::mdl::IType_texture>(transform_type(type.get()));
                 DB::Tag_version tag_version = m_trans->get_tag_version(tag);
                 mi::mdl::IValue_texture const *vv = m_vf.create_texture(
-                    t_tp, "", gamma, "", tag.get_uint(),
-                    get_hash(/*mdl_file_path*/ nullptr, 0.0f, tag_version, tex_data_tag_version));
+                    t_tp, "", gamma, selector.c_str(), tag.get_uint(),
+                    get_hash(/*mdl_file_path*/ nullptr, 0.0f, tag_version, image_volume_tag_version));
                 return m_ef.create_literal(vv);
             }
 
@@ -1572,6 +1572,14 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_value( const IValue* valu
                 mi::mdl::IExpression_reference *ref  = to_reference(qname, e_tp);
 
                 call->add_argument(m_ef.create_positional_argument(ref));
+            }
+
+            // optionally create arg2: selector
+            if( !selector.empty()) {
+                mi::mdl::IValue const *s   = m_vf.create_string(selector.c_str());
+                mi::mdl::IExpression  *lit = m_ef.create_literal(s);
+
+                call->add_argument(m_ef.create_positional_argument(lit));
             }
 
             return call;

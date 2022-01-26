@@ -74,17 +74,13 @@ enum Element_type
     ELEMENT_TYPE_VOLUME_DATA                     = 27, ///< #mi::neuraylib::IVolume_data
 #endif // MI_SKIP_WITH_MDL_SDK_DOXYGEN
     ELEMENT_TYPE_MODULE                          = 29, ///< #mi::neuraylib::IModule
-    /// #mi::neuraylib::IFunction_definition
-    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
-    ELEMENT_TYPE_FUNCTION_DEFINITION             = 30,
-    /// #mi::neuraylib::IFunction_call
-    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
-    ELEMENT_TYPE_FUNCTION_CALL                   = 31,
+    ELEMENT_TYPE_FUNCTION_DEFINITION             = 30, ///< #mi::neuraylib::IFunction_definition
+    ELEMENT_TYPE_FUNCTION_CALL                   = 31, ///< #mi::neuraylib::IFunction_call
     /// #mi::neuraylib::IMaterial_definition
-    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
+    /// \see mi_mdl_materials_are_functions
     ELEMENT_TYPE_MATERIAL_DEFINITION             = 32,
     /// #mi::neuraylib::IMaterial_instance
-    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions()
+    /// \see mi_mdl_materials_are_functions
     ELEMENT_TYPE_MATERIAL_INSTANCE               = 33,
     ELEMENT_TYPE_COMPILED_MATERIAL               = 34, ///< #mi::neuraylib::ICompiled_material
     ELEMENT_TYPE_BSDF_MEASUREMENT                = 35, ///< #mi::neuraylib::IBsdf_measurement

@@ -776,7 +776,6 @@ public:
     {
         typedef Allocator_interface_implement<IMaterial_instance> Base;
         friend class Allocator_builder;
-        friend class Rule_engine;
         friend class Distiller_plugin_api_impl;
         friend class Instance_cloner;
         friend class MI::MDL::Mdl_material_instance_builder;

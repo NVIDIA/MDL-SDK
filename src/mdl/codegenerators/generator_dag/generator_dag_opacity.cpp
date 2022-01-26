@@ -359,7 +359,6 @@ private:
         case IDefinition::DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER:
         case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
-            return analyze_bsdf_layerer(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_TINT:
         case IDefinition::DS_INTRINSIC_DF_THIN_FILM:

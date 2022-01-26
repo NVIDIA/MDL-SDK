@@ -39,7 +39,7 @@
 
 #include <string>
 #include <map>
-#include <mi/base/atom.h>
+#include <atomic>
 #include <mi/base/lock.h>
 
 namespace MI {
@@ -160,9 +160,9 @@ public:
 
 private:
     /// This is used for allocating tags
-    mi::base::Atom32 m_next_tag;
+    std::atomic_uint32_t m_next_tag;
     /// This is used for allocating transaction ids
-    mi::base::Atom32 m_next_transaction_id;
+    std::atomic_uint32_t m_next_transaction_id;
 
 public:
     /// The lock for the six containers below.

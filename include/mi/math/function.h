@@ -692,7 +692,7 @@ inline Uint32 leading_zeros(Uint64 v) {
 #elif defined(MI_COMPILER_ICC) || defined(MI_COMPILER_GCC)
     return (v != 0) ? __builtin_clzll(v) : 64;
 #else
-    // use fallback, e.g. on Solaris
+    // use fallback
     if (v == 0) return 64;
     Uint32 n = 1;
     if ((v >> 32) == 0) { n += 32; v <<= 32; };

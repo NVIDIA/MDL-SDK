@@ -117,6 +117,10 @@ public:
     mi::Sint32 set_argument(
         DB::Transaction* transaction, const char* name, const IExpression* argument);
 
+    mi::Sint32 reset_argument( DB::Transaction* transaction, mi::Size index);
+
+    mi::Sint32 reset_argument( DB::Transaction* transaction, const char* name);
+
     const IExpression_list* get_enable_if_conditions() const;
 
     Mdl_compiled_material* create_compiled_material(

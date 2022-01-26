@@ -392,9 +392,10 @@ int Buffer::GetPos() {
 }
 
 void Buffer::SetPos(int value) {
-	if ((value < 0) || (value > fileLen)) {
-		wprintf(L"--- buffer out of bounds access, position: %d\n", value);
-		exit(1);
+	if (value < 0) {
+		value = 0;
+	} else if (value > fileLen) {
+		value = fileLen;
 	}
 
 	if ((value >= bufStart) && (value < (bufStart + bufLen))) { // already in buffer

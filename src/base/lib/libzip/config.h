@@ -63,6 +63,13 @@
 /* Define to 1 if you have the `z' library (-lz). */
 #define HAVE_LIBZ 1
 
+/* #undef HAVE_GNUTLS */
+/* #undef HAVE_LIBBZ2 */
+/* #undef HAVE_LIBLZMA */
+/* #undef HAVE_LIBZSTD */
+/* #undef HAVE_OPENSSL */
+/* #undef HAVE_WINDOWS_CRYPTO */
+
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
 
@@ -197,23 +204,8 @@
 /* Name of package */
 #define PACKAGE "libzip"
 
-/* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT "libzip@nih.at"
-
-/* Define to the full name of this package. */
-#define PACKAGE_NAME "libzip"
-
-/* Define to the full name and version of this package. */
-#define PACKAGE_STRING "libzip 1.1"
-
-/* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "libzip"
-
-/* Define to the home page for this package. */
-#define PACKAGE_URL ""
-
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.1"
+#define VERSION "1.8.0"
 
 /* The size of `int', as computed by sizeof. */
 #define SIZEOF_INT 4
@@ -239,9 +231,6 @@
 /* Define to 1 if your <sys/time.h> declares `struct tm'. */
 /* #undef TM_IN_SYS_TIME */
 
-/* Version number of package */
-#define VERSION "1.1"
-
 /* Enable large inode numbers on Mac OS X 10.5.  */
 #ifndef _DARWIN_USE_64_BIT_INODE
 # define _DARWIN_USE_64_BIT_INODE 1
@@ -252,7 +241,6 @@
 
 /* Define for large files, on AIX-style hosts. */
 /* #undef _LARGE_FILES */
-
 
 #ifndef HAVE_SSIZE_T
 #  if SIZEOF_SIZE_T == SIZEOF_INT

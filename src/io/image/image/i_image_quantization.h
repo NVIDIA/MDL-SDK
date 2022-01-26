@@ -38,7 +38,7 @@
 #ifndef __CUDA_ARCH__
 #include <base/system/main/platform.h>
 #include <base/system/main/i_assert.h>
-#include <base/system/stlext/i_stlext_binary_cast.h>
+#include <mi/base/types.h>
 #include <algorithm>
 #include <cmath>
 #endif
@@ -76,7 +76,7 @@ MI_HOST_DEVICE_INLINE unsigned quantize_unsigned(const float x)
 #ifdef __CUDA_ARCH__
     return (unsigned)(fminf(x, uint_as_float(0x3f800000u-1)) * (float)Np1);
 #else
-    return (unsigned)(min(x, MI::STLEXT::binary_cast<float>(0x3f800000u-1)) * (float)Np1);
+    return (unsigned)(min(x, mi::base::binary_cast<float>(0x3f800000u-1)) * (float)Np1);
 #endif
 }
 

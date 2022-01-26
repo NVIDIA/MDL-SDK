@@ -1,6 +1,9 @@
+#ifndef _HAD_ZIP_SOURCE_FILE_STDIO_H
+#define _HAD_ZIP_SOURCE_FILE_STDIO_H
+
 /*
-  zip_source_get_compression_flags.c -- get compression flags for entry
-  Copyright (C) 2017 Dieter Baron and Thomas Klausner
+  zip_source_file_stdio.h -- common header for stdio file implementation
+  Copyright (C) 2020 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -31,27 +34,14 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <stdio.h>
 
-#include "zipint.h"
+void _zip_stdio_op_close(zip_source_file_context_t *ctx);
+zip_int64_t _zip_stdio_op_read(zip_source_file_context_t *ctx, void *buf, zip_uint64_t len);
+bool _zip_stdio_op_seek(zip_source_file_context_t *ctx, void *f, zip_int64_t offset, int whence);
+bool _zip_stdio_op_stat(zip_source_file_context_t *ctx, zip_source_file_stat_t *st);
+zip_int64_t _zip_stdio_op_tell(zip_source_file_context_t *ctx, void *f);
 
-#define ZIP_COMPRESSION_BITFLAG_MAX 3
+FILE *_zip_fopen_close_on_exec(const char *name, bool writeable);
 
-zip_int8_t
-zip_source_get_compression_flags(zip_source_t *src) {
-    while (src) {
-	if ((src->supports & ZIP_SOURCE_MAKE_COMMAND_BITMASK(ZIP_SOURCE_GET_COMPRESSION_FLAGS))) {
-	    zip_int64_t ret = _zip_source_call(src, NULL, 0, ZIP_SOURCE_GET_COMPRESSION_FLAGS);
-	    if (ret < 0) {
-		return -1;
-	    }
-	    if (ret > ZIP_COMPRESSION_BITFLAG_MAX) {
-		zip_error_set(&src->error, ZIP_ER_INTERNAL, 0);
-		return -1;
-	    }
-	    return (zip_int8_t)ret;
-	}
-	src = src->src;
-    }
-
-    return 0;
-}
+#endif /* _HAD_ZIP_SOURCE_FILE_STDIO_H */

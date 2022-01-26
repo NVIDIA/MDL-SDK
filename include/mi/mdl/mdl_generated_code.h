@@ -42,7 +42,7 @@ namespace mdl {
 class IType;
 class Messages;
 
-/// A pair of ((resource_kind, resource_url), (resource_tag, resource_version)).
+/// A pair of ((resource_kind, resource_url, resource_selector), resource_tag).
 /// Used to map accessible resources to (tag, version) pair and as a key into resource
 /// attribute maps.
 struct Resource_tag_tuple {
@@ -67,25 +67,29 @@ struct Resource_tag_tuple {
         RK_SHEEN_MULTISCATTER,
     };
 
-    Kind        m_kind;    ///< The resource kind.
-    int         m_tag;     ///< The assigned tag.
-    char const  *m_url;    ///< The resource URL, NULL mapped to "".
+    Kind        m_kind;       ///< The resource kind.
+    int         m_tag;        ///< The assigned tag.
+    char const  *m_url;       ///< The resource URL, NULL mapped to "".
+    char const  *m_selector;  ///< The selector if any, NULL mapped to "".
 
     /// Default constructor.
     Resource_tag_tuple()
     : m_kind(RK_BAD)
     , m_tag(0)
     , m_url("")
+    , m_selector("")
     {}
 
     /// Constructor.
     Resource_tag_tuple(
         Kind        kind,
         char const  *url,
+        char const *selector,
         int         tag)
     : m_kind(kind)
     , m_tag(tag)
     , m_url(url == NULL ? "" : url)
+    , m_selector(selector == NULL ? "" : selector)
     {
     }
 };

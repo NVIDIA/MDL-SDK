@@ -36,13 +36,13 @@
 
 #include <base/data/db/i_db_journal_type.h>
 #include <base/system/stlext/i_stlext_any.h>
-#include <base/system/stlext/i_stlext_atomic_counter.h>
 
 #include <cstddef>
 #include <map>
 #include <set>
 #include <string>
 #include <utility>
+#include <atomic>
 
 namespace MI {
 namespace ATTR {
@@ -150,7 +150,7 @@ class Attribute_registry
   private:
     std::set<Attribute_spec> m_registry;		///< the actual collection
     std::map<std::string, Uint> m_name_mapping;	///< mapping name to id
-    STLEXT::Atomic_counter m_counter;
+    std::atomic<int32_t> m_counter;
 
     /// Find a new unique id for a new registry entry.
     /// \return the id of the \c Attribute or null_index else

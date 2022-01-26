@@ -120,6 +120,10 @@ public:
         const char* name,
         const mi::neuraylib::IExpression* argument) final;
 
+    mi::Sint32 reset_argument( mi::Size index) final;
+
+    mi::Sint32 reset_argument( const char* name) final;
+
     bool is_default() const final;
 
     bool is_valid( mi::neuraylib::IMdl_execution_context* context) const final;

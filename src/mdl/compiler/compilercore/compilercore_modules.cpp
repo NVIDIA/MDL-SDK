@@ -712,7 +712,7 @@ IDefinition const *Module::get_type_constructor(IType const *type, int index) co
 {
     if (index < 0)
         return NULL;
-    
+
     Definition const *def = get_first_constructor(type);
     for (; index > 0 && def != NULL; def = get_next_constructor(def)) {
         --index;
@@ -1776,7 +1776,7 @@ IAnnotation_block *Module::clone_annotation_block(
     if (!anno_block) return NULL;
 
     IAnnotation_block *new_block = m_anno_factory.create_annotation_block();
-    for (int i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
+    for (size_t i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
 
         IAnnotation const *anno = anno_block->get_annotation(i);
         IDefinition const *def = anno->get_name()->get_definition();
@@ -2298,7 +2298,7 @@ restart:
 
                 if (is<IValue_bad>(pval))
                     return pval;
-                
+
                 values[i] = pval;
             }
             return factory->create_compound(cast<IType_compound>(type), values.data(), param_count);
@@ -4165,10 +4165,19 @@ int Module::promote_call_arguments(
     if (rules & PR_SHEEN_ADD_MULTISCATTER) {
         if (param_index == 2) {
             // MDL 1.6 -> 1.7: Add diffuse_reflection_bsdf() as 4. parameter
-            ISymbol const *s = m_name_factory.create_symbol("diffuse_reflection_bsdf");
-            ISimple_name const *sn = m_name_factory.create_simple_name(s);
             IQualified_name *qn = m_name_factory.create_qualified_name();
-            qn->add_component(sn);
+
+            {
+                ISymbol const      *s  = m_name_factory.create_symbol("df");
+                ISimple_name const *sn = m_name_factory.create_simple_name(s);
+                qn->add_component(sn);
+            }
+            {
+                ISymbol const      *s = m_name_factory.create_symbol("diffuse_reflection_bsdf");
+                ISimple_name const *sn = m_name_factory.create_simple_name(s);
+                qn->add_component(sn);
+            }
+
             IType_name *tn = m_name_factory.create_type_name(qn);
             IExpression_reference *bsdf_ref = m_expr_factory.create_reference(tn);
             IExpression_call *bsdf_call = m_expr_factory.create_call(bsdf_ref);
@@ -4300,32 +4309,37 @@ private:
     {
         IAllocator *alloc = m_module->get_allocator();
 
-        mi::base::Handle<IMDL_resource_set> result(m_resolver.resolve_resource(
+        mi::base::Handle<IMDL_resource_set const> result(m_resolver.resolve_resource(
             pos,
             url,
             m_module->get_name(),
-            m_module->get_filename()));
+            m_module->get_filename(),
+            &m_ana.get_thread_context()));
 
         if (result.is_valid_interface()) {
-            for (size_t i = 0, n = result->get_count(); i < n; ++i) {
-                IResource_restriction_handler::Resource_restriction rr =
-                    m_rrh.process(m_module, result->get_filename(i));
+            for (size_t e_idx = 0, n_elems = result->get_count(); e_idx < n_elems; ++e_idx) {
+                mi::base::Handle<IMDL_resource_element const> elem(result->get_element(e_idx));
 
-                switch (rr) {
-                case IResource_restriction_handler::RR_OK:
-                    break;
-                case IResource_restriction_handler::RR_NOT_EXISTANT:
-                    m_ana.warning(
-                        MISSING_RESOURCE,
-                        pos,
-                        Error_params(alloc).add(url));
-                    break;
-                case IResource_restriction_handler::RR_OUTSIDE_ARCHIVE:
-                    m_ana.warning(
-                        RESOURCE_OUTSIDE_ARCHIVE,
-                        pos,
-                        Error_params(alloc).add(url));
-                    break;
+                for (size_t i = 0, n = elem->get_count(); i < n; ++i) {
+                    IResource_restriction_handler::Resource_restriction rr =
+                        m_rrh.process(m_module, elem->get_filename(i));
+
+                    switch (rr) {
+                    case IResource_restriction_handler::RR_OK:
+                        break;
+                    case IResource_restriction_handler::RR_NOT_EXISTANT:
+                        m_ana.warning(
+                            MISSING_RESOURCE,
+                            pos,
+                            Error_params(alloc).add(url));
+                        break;
+                    case IResource_restriction_handler::RR_OUTSIDE_ARCHIVE:
+                        m_ana.warning(
+                            RESOURCE_OUTSIDE_ARCHIVE,
+                            pos,
+                            Error_params(alloc).add(url));
+                        break;
+                    }
                 }
             }
         } else {

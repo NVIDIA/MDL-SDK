@@ -31,10 +31,10 @@
 #include <mi/math/function.h>
 #include <mi/base/handle.h>
 #include "mdl/compiler/compilercore/compilercore_streams.h"
+#include "mdl/compiler/compilercore/compilercore_half.h"
 #include "mdl/compiler/compilercore/compilercore_tools.h"
 
 #include "compiler_hlsl_assert.h"
-#include "compiler_hlsl_half.h"
 #include "compiler_hlsl_values.h"
 #include "compiler_hlsl_symbols.h"
 
@@ -1242,8 +1242,8 @@ Value *Value_half::convert(Value_factory &factory, Type *dst_tp)
             Type_scalar *a_type = v_type->get_element_type();
 
             if (a_type == this->m_type) {
-                // convert a float into a diagonal float matrix
-                Value_scalar *zero = factory.get_float(0.0f);
+                // convert a half into a diagonal half matrix
+                Value_scalar *zero = factory.get_half(0.0f);
 
                 Value_vector *column_vals[4];
                 size_t n_cols = x_type->get_columns();
@@ -2463,9 +2463,9 @@ Value *Value_matrix::multiply(Value_factory &factory, Value *rhs)
         size_t n_cols = lhs_type->get_columns();
 
         if (v_type->get_size() == n_cols) {
-            Type_vector  *v_type = lhs_type->get_element_type();
-            size_t       n_rows  = v_type->get_size();
-            Value_vector *o      = cast<Value_vector>(rhs);
+            Type_vector  *col_type = lhs_type->get_element_type();
+            size_t       n_rows    = col_type->get_size();
+            Value_vector *o        = cast<Value_vector>(rhs);
 
             Value_scalar *values[4];
             for (size_t row = 0; row < n_rows; ++row) {
@@ -3177,11 +3177,11 @@ size_t Value_factory::Value_hash::operator() (Value *value) const
     case Value::VK_STRUCT:
         {
             Value_compound *c = cast<Value_compound>(value);
-            size_t h = 0;
+            size_t ch = 0;
             for (size_t i = 0, size = c->get_component_count(); i < size; ++i) {
-                h = h * 5 + operator()(c->get_value(i));
+                ch = ch * 5 + operator()(c->get_value(i));
             }
-            return h;
+            return ch ^ h;
         }
     }
     return 0;

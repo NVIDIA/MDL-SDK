@@ -38,6 +38,8 @@
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
 
+#include <string>
+
 namespace MI {
 
 namespace TEXTURE { class Texture; }
@@ -75,13 +77,19 @@ public:
 
     Float32 get_gamma() const;
 
-    Float32 get_effective_gamma( mi::Uint32 uvtile_id = 0) const;
+    Float32 get_effective_gamma( mi::Size frame_id, mi::Size uvtile_id) const;
+
+    const char* get_selector() const;
 
     void set_compression( mi::neuraylib::Texture_compression compression);
 
     mi::neuraylib::Texture_compression get_compression() const;
 
     // internal methods
+
+private:
+
+    mutable std::string m_cached_selector;
 
 };
 

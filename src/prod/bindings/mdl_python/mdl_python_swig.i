@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2021 NVIDIA Corporation. All rights reserved.
+ * Copyright 2022 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 /* File : example.i */
@@ -35,10 +35,6 @@
 %feature("doxygen:alias:neurayAdjectiveName") "MDL SDK"
 // %feature("doxygen:alias:MiProductVersion") "$(MI_PRODUCT_VERSION)"
 
-
-// Limiting the python binding to the source release feature set
-#define MDL_SOURCE_RELEASE 1
-
 // When enabled, the python binding will be able to load neuray or the MDL SDK.
 // Otherwise, only existing neuray instance pointers can be attached from a running process.
 #ifndef ADD_STANDALONE_SUPPORT
@@ -47,7 +43,7 @@
 
 %{
 /***************************************************************************************************
- * Copyright 2021 NVIDIA Corporation. All rights reserved.
+ * Copyright 2022 NVIDIA Corporation. All rights reserved.
  **************************************************************************************************/
 
 #ifdef IRAY_SDK
@@ -362,6 +358,21 @@ struct Uuid
 } // namespace
 } // namespace
 
+namespace mi {
+namespace math {
+struct Color_struct
+{
+    /// Red color component
+    Float32 r;
+    /// Green color component
+    Float32 g;
+    /// Blue color component
+    Float32 b;
+    /// Alpha value, 0.0 is fully transparent and 1.0 is opaque; value can lie outside that range.
+    Float32 a;
+};
+} // namespace
+} // namespace
 
 #define mi_static_assert(ignored)
 
@@ -385,28 +396,123 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::base, IInterface)
 
 
 DICE_INTERFACE_MI(IArray);
+DICE_INTERFACE_MI(ICompound);
+DICE_INTERFACE_MI(IBoolean);
+DICE_INTERFACE_MI(IBoolean_2);
+DICE_INTERFACE_MI(IBoolean_3);
+DICE_INTERFACE_MI(IBoolean_4);
+DICE_INTERFACE_MI(ISint32_2);
+DICE_INTERFACE_MI(ISint32_3);
+DICE_INTERFACE_MI(ISint32_4);
+DICE_INTERFACE_MI(IUint32_2);
+DICE_INTERFACE_MI(IUint32_3);
+DICE_INTERFACE_MI(IUint32_4);
+DICE_INTERFACE_MI(IFloat32_2);
+DICE_INTERFACE_MI(IFloat32_3);
+DICE_INTERFACE_MI(IFloat32_4);
+DICE_INTERFACE_MI(IFloat64_2);
+DICE_INTERFACE_MI(IFloat64_3);
+DICE_INTERFACE_MI(IFloat64_4);
+DICE_INTERFACE_MI(IDifference);
 DICE_INTERFACE_MI(IString);
 DICE_INTERFACE_MI(IData);
 DICE_INTERFACE_MI(IData_simple);
 DICE_INTERFACE_MI(IData_collection);
+DICE_INTERFACE_MI(IFloat32);
+DICE_INTERFACE_MI(IFloat64);
+DICE_INTERFACE_MI(INumber);
+DICE_INTERFACE_MI(ISint8);
+DICE_INTERFACE_MI(ISint16);
+DICE_INTERFACE_MI(ISint32);
+DICE_INTERFACE_MI(ISint64);
+DICE_INTERFACE_MI(ISize);
+DICE_INTERFACE_MI(IUint8);
+DICE_INTERFACE_MI(IUint16);
+DICE_INTERFACE_MI(IUint32);
+DICE_INTERFACE_MI(IUint64);
 DICE_INTERFACE_MI(IVoid);
 
+%include "mi/neuraylib/vector_typedefs.h"
 %include "mi/neuraylib/idata.h"
 %include "mi/neuraylib/istring.h"
 %include "mi/neuraylib/iarray.h"
+%include "mi/neuraylib/inumber.h"
+%include "mi/neuraylib/icompound.h"
+%include "mi/neuraylib/ivector.h"
 
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IArray)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ICompound);
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IDifference)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IString)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData_simple)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IString)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData_collection)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::INumber)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint8)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint16)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint64)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISize)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint8)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint16)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint64)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IVoid)
 
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IArray)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ICompound)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IDifference)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IString)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData_simple)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData_collection)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, INumber)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint8)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint16)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint64)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISize)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint8)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint16)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint64)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IVoid)
 
 // ----------------------------------------------------------------------------
@@ -417,17 +523,23 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IVoid)
 
 DICE_INTERFACE(IAttribute_set);
 DICE_INTERFACE(IBsdf_measurement)
+DICE_INTERFACE(ICanvas)
+DICE_INTERFACE(ICanvas_base)
+DICE_INTERFACE(ICompiled_material)
 DICE_INTERFACE(IDatabase);
 DICE_INTERFACE(IDeserialized_function_name);
 DICE_INTERFACE(IDeserialized_module_name);
+DICE_INTERFACE(IImage_api);
 DICE_INTERFACE(IMdl_configuration);
 DICE_INTERFACE(IMessage);
 DICE_INTERFACE(IMdl_execution_context);
 DICE_INTERFACE(IMdl_factory);
 DICE_INTERFACE(IMdl_impexp_api);
+DICE_INTERFACE(IMdl_module_builder)
 DICE_INTERFACE(IMdle_deserialization_callback)
 DICE_INTERFACE(IMdle_serialization_callback)
 DICE_INTERFACE(INeuray);
+DICE_INTERFACE(IPlugin_configuration)
 DICE_INTERFACE(IScene_element);
 DICE_INTERFACE(IScope);
 DICE_INTERFACE(ISerialized_function_name);
@@ -452,6 +564,7 @@ DICE_INTERFACE(IMaterial_definition)
 DICE_INTERFACE(IMaterial_instance)
 DICE_INTERFACE(IModule)
 DICE_INTERFACE(ITexture)
+DICE_INTERFACE(ITile)
 DICE_INTERFACE(IType)
 DICE_INTERFACE(IType_alias)
 DICE_INTERFACE(IType_array)
@@ -502,7 +615,36 @@ DICE_INTERFACE(IValue_struct)
 DICE_INTERFACE(IValue_texture)
 DICE_INTERFACE(IValue_vector)
 
+%extend mi::neuraylib::ITile {
 
+        mi::math::Color_struct get_pixel(
+            Uint32 x_offset,
+            Uint32 y_offset
+            ) const
+        {
+            mi::math::Color_struct color;
+            $self->get_pixel(x_offset, y_offset, (mi::Float32*)(& color.r));
+            return color;
+        }
+
+        void set_pixel(
+            Uint32 x_offset,
+            Uint32 y_offset,
+            const mi::math::Color_struct* color)
+        {
+            $self->set_pixel(x_offset, y_offset, (mi::Float32*)(& color->r));
+        }
+
+ }
+
+ %extend mi::IFloat32 {
+        float get_value() const
+        {
+            float v;
+            $self->get_value(v);
+            return v;
+        }
+}
 
 // special handling for: mi::neuraylib::INeuray
 // ----------------------------------------------------------------------------
@@ -592,9 +734,13 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IExpression_list, get_expression
 
 // special handling for: mi::neuraylib::IMdl_factory
 // ----------------------------------------------------------------------------
-%rename(create_texture_with_ret) mi::neuraylib::IMdl_factory::create_texture(ITransaction*, char const*, IType_texture::Shape, Float32, bool, Sint32*);
+%rename(create_texture_with_ret) mi::neuraylib::IMdl_factory::create_texture(ITransaction*, char const*, IType_texture::Shape, Float32, char const*, bool, Sint32*);
 %rename(create_light_profile_with_ret) mi::neuraylib::IMdl_factory::create_light_profile(ITransaction*, char const*, bool, Sint32*);
 %rename(create_bsdf_measurement_with_ret) mi::neuraylib::IMdl_factory::create_bsdf_measurement(ITransaction*, char const*, bool, Sint32*);
+
+// special handling for: mi::neuraylib::ICompiled_material
+// ----------------------------------------------------------------------------
+%rename(get_connected_function_db_name_with_ret) mi::neuraylib::ICompiled_material::get_connected_function_db_name(char const*, Size, Sint32*) const;
 
 // special handling for: mi::neuraylib::IType
 // ----------------------------------------------------------------------------
@@ -740,31 +886,43 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 %include "mi/neuraylib/iimage.h"
 %include "mi/neuraylib/imaterial_definition.h"
 %include "mi/neuraylib/imaterial_instance.h"
+%include "mi/neuraylib/iimage_api.h"
 %include "mi/neuraylib/imdl_configuration.h"
 %include "mi/neuraylib/imdl_execution_context.h"
 %include "mi/neuraylib/imdl_factory.h"
 %include "mi/neuraylib/imdl_impexp_api.h"
+%include "mi/neuraylib/imdl_module_builder.h"
 %include "mi/neuraylib/imodule.h"
 %include "mi/neuraylib/ineuray.h"
+%include "mi/neuraylib/iplugin_configuration.h"
 %include "mi/neuraylib/iscope.h"
 %include "mi/neuraylib/itexture.h"
+%include "mi/neuraylib/itile.h"
 %include "mi/neuraylib/ibsdf_measurement.h"
+%include "mi/neuraylib/icanvas.h"
+%include "mi/neuraylib/icompiled_material.h"
 %include "mi/neuraylib/ilightprofile.h"
 %include "mi/neuraylib/itransaction.h"
 
 
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IAttribute_set)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBsdf_measurement)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICanvas)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICanvas_base)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICompiled_material)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IDatabase)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IDeserialized_function_name)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IDeserialized_module_name)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IImage_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_configuration)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_execution_context)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_factory)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_impexp_api)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_module_builder)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdle_deserialization_callback)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdle_serialization_callback)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::INeuray)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IPlugin_configuration)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IScene_element)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IScope)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ISerialized_function_name)
@@ -790,6 +948,7 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMaterial_instance)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMessage)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IModule)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ITexture)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ITile)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IType)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IType_alias)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IType_array)
@@ -843,18 +1002,24 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IValue_vector)
 
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IAttribute_set)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBsdf_measurement)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICanvas)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICanvas_base)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICompiled_material)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IDatabase)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IDeserialized_function_name)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IDeserialized_module_name)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IImage_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_configuration)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_execution_context)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_deserialization_callback)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_serialization_callback)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_factory)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_impexp_api)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_module_builder)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMessage)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IModule)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, INeuray)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IPlugin_configuration)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IScene_element)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IScope)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ISerialized_function_name)
@@ -878,6 +1043,7 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ILightprofile)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMaterial_definition)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMaterial_instance)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ITexture)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ITile)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IType)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IType_alias)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IType_array)
@@ -959,3 +1125,4 @@ extern mi::neuraylib::INeuray* load_and_get_ineuray(const char*);
 extern bool load_plugin(mi::neuraylib::INeuray*, const char*);
 extern int unload();
 #endif
+

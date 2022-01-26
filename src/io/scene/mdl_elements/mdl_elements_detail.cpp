@@ -35,6 +35,11 @@
 #include "i_mdl_elements_utilities.h"
 #include "mdl_elements_utilities.h"
 
+#include <atomic>
+
+#include <boost/algorithm/string/replace.hpp>
+#include <boost/core/ignore_unused.hpp>
+
 #include <mi/base/config.h>
 #include <mi/base/atom.h>
 #include <mi/mdl/mdl_archiver.h>
@@ -42,8 +47,11 @@
 #include <mi/mdl/mdl_entity_resolver.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_streams.h>
+#include <mi/neuraylib/imdl_entity_resolver.h>
+
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/core/ignore_unused.hpp>
+
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk.h>
 #include <base/hal/hal/i_hal_ospath.h>
@@ -84,12 +92,14 @@ std::string convert_os_separators_to_slashes( const std::string& s)
 
 /// Calls the MDL entity resolver with the given arguments and returns the file name set, or
 /// \c NULL in case of failure. The flag \c log_messages indicates whether error messages should be
-/// logged. This method supports all three kinds of resources, including UDIM for textures.
+/// logged. This method supports all three kinds of resources, including animated and/or uvtile
+/// textures.
 mi::mdl::IMDL_resource_set* get_resource_set(
     const char* file_path,
     const char* module_file_system_path,
     const char* module_name,
-    bool log_messages)
+    bool log_messages,
+    Execution_context* context)
 {
     ASSERT( M_SCENE, file_path);
 
@@ -97,22 +107,26 @@ mi::mdl::IMDL_resource_set* get_resource_set(
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEntity_resolver> resolver(
         mdl->get_entity_resolver( /*module_cache*/ nullptr));
+    mi::base::Handle<mi::mdl::IThread_context> ctx( create_thread_context( mdl.get(), context));
+
     mi::mdl::IMDL_resource_set* res_set = resolver->resolve_resource_file_name(
-        file_path, module_file_system_path, module_name, /*pos*/ nullptr);
+        file_path, module_file_system_path, module_name, /*pos*/ nullptr, ctx.get());
+
     if( log_messages)
         convert_and_log_messages( resolver->access_messages(), /*out_messages*/ nullptr);
     return res_set;
 }
 
-/// Calls the MDL entity resolver with the given arguments and returns the resulting reader, or
-/// \c NULL in case of failure. The flag \c log_messages indicates whether error messages should be
-/// logged. This method does not support UDIM for textures. It should only be used for light
-/// profiles and BSDF measurements.
+/// Calls the MDL entity resolver with the given arguments and returns the resulting reader, or \c
+/// NULL in case of failure. The flag \c log_messages indicates whether error messages should be
+/// logged. This method does not support animated nor uvtile textures. It should only be used for
+/// light profiles and BSDF measurements.
 mi::mdl::IMDL_resource_reader* get_reader(
     const char* file_path,
     const char* module_file_system_path,
     const char* module_name,
-    bool log_messages)
+    bool log_messages,
+    Execution_context* context)
 {
     ASSERT( M_SCENE, file_path);
 
@@ -120,15 +134,19 @@ mi::mdl::IMDL_resource_reader* get_reader(
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEntity_resolver> resolver(
         mdl->get_entity_resolver( /*module_cache*/ nullptr));
+    mi::base::Handle<mi::mdl::IThread_context> ctx( create_thread_context( mdl.get(), context));
+
     mi::base::Handle<mi::mdl::IMDL_resource_set> res_set( resolver->resolve_resource_file_name(
-        file_path, module_file_system_path, module_name, /*pos*/ nullptr));
+        file_path, module_file_system_path, module_name, /*pos*/ nullptr, ctx.get()));
+
     if( log_messages)
         convert_and_log_messages( resolver->access_messages(), /*out_messages*/ nullptr);
     if( !res_set)
         return nullptr;
     if( res_set->get_count() != 1 || res_set->get_udim_mode() != mi::mdl::NO_UDIM)
         return nullptr;
-    return res_set->open_reader( 0);
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( res_set->get_element( 0));
+    return elem->open_reader( 0);
 }
 
 /// Calls the MDL entity resolver with the given arguments and returns the result of
@@ -137,14 +155,18 @@ std::string resolve_resource_filename(
     const char* file_path,
     const char* module_file_system_path,
     const char* module_name,
-    bool log_messages = false)
+    bool log_messages,
+    Execution_context* context)
 {
     mi::base::Handle<mi::mdl::IMDL_resource_set> name_set( get_resource_set(
-        file_path, module_file_system_path, module_name, log_messages));
+        file_path, module_file_system_path, module_name, log_messages, context));
     if( !name_set)
         return "";
 
-    const char* resolved_filename = name_set->get_filename( 0);
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(name_set->get_element(0));
+    if (!elem)
+        return "";
+    const char* resolved_filename = elem->get_filename( 0);
     return std::string( resolved_filename ? resolved_filename : "");
 }
 
@@ -182,7 +204,10 @@ void decompose_resolved_filename(
 }
 
 std::string unresolve_resource_filename(
-    const char* filename, const char* module_filename, const char* module_name)
+    const char* filename,
+    const char* module_filename,
+    const char* module_name,
+    Execution_context* context)
 {
     ASSERT( M_SCENE, !module_filename || DISK::is_path_absolute( module_filename));
 
@@ -216,7 +241,7 @@ std::string unresolve_resource_filename(
 
     // return failure if re-resolving of file path yields a different filename
     std::string resolved_filename = resolve_resource_filename(
-        file_path.c_str(), module_filename, module_name);
+        file_path.c_str(), module_filename, module_name, /*log_messages*/ false, context);
     resolved_filename = HAL::Ospath::normpath_v2( resolved_filename);
     if( is_container_member( resolved_filename.c_str()))
         return "";
@@ -232,7 +257,8 @@ std::string unresolve_resource_filename(
     const char* container_filename,
     const char* container_membername,
     const char* module_filename,
-    const char* module_name)
+    const char* module_name,
+    Execution_context* context)
 {
     ASSERT( M_SCENE, !module_filename || DISK::is_path_absolute( module_filename));
 
@@ -266,7 +292,7 @@ std::string unresolve_resource_filename(
 
     // return failure if re-resolving of file path yields a different filename
     std::string resolved_filename = resolve_resource_filename(
-        file_path.c_str(), module_filename, module_name);
+        file_path.c_str(), module_filename, module_name, /*log_messages*/ false, context);
     resolved_filename = HAL::Ospath::normpath_v2( resolved_filename);
     if( !is_container_member( resolved_filename.c_str()))
         return "";
@@ -284,25 +310,39 @@ DB::Tag mdl_resource_to_tag(
     const mi::mdl::IValue_resource* value,
     const char* module_filename,
     const char* module_name,
-    bool callbacks_under_mutex)
+    Execution_context* context)
 {
     switch( value->get_kind()) {
 
         case mi::mdl::IValue::VK_TEXTURE: {
             const mi::mdl::IValue_texture* texture = cast<mi::mdl::IValue_texture>( value);
             return mdl_texture_to_tag(
-                transaction, texture, module_filename, module_name, callbacks_under_mutex);
+                transaction,
+                texture,
+                module_filename,
+                module_name,
+                context);
         }
 
         case mi::mdl::IValue::VK_LIGHT_PROFILE: {
             const mi::mdl::IValue_light_profile* lp = cast<mi::mdl::IValue_light_profile>( value);
-            return mdl_light_profile_to_tag( transaction, lp, module_filename, module_name);
+            return mdl_light_profile_to_tag(
+                transaction,
+                lp,
+                module_filename,
+                module_name,
+                context);
         }
 
         case mi::mdl::IValue::VK_BSDF_MEASUREMENT: {
             const mi::mdl::IValue_bsdf_measurement* bsdfm
                 = cast<mi::mdl::IValue_bsdf_measurement>( value);
-            return mdl_bsdf_measurement_to_tag( transaction, bsdfm, module_filename, module_name);
+            return mdl_bsdf_measurement_to_tag(
+                transaction,
+                bsdfm,
+                module_filename,
+                module_name,
+                context);
         }
 
         default:
@@ -327,7 +367,7 @@ DB::Tag mdl_texture_to_tag(
     const mi::mdl::IValue_texture* value,
     const char* module_filename,
     const char* module_name,
-    bool callbacks_under_mutex)
+    Execution_context* context)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
 
@@ -344,15 +384,19 @@ DB::Tag mdl_texture_to_tag(
     const mi::mdl::IType_texture* tex_type = value->get_type();
     if( tex_type->get_shape() == mi::mdl::IType_texture::TS_3D && is_volume_file( file_path)) {
         return mdl_volume_texture_to_tag(
-            transaction, file_path, module_filename, module_name, value->get_selector(), /*shared*/ true);
+            transaction,
+            file_path,
+            module_filename,
+            module_name,
+            value->get_selector(),
+            /*shared*/ true,
+            context);
     }
 
-    mi::Float32 gamma = 0.0f;
-    switch( value->get_gamma_mode()) {
-        case mi::mdl::IValue_texture::gamma_default: gamma = 0.0f; break; // encode as 0.0
-        case mi::mdl::IValue_texture::gamma_linear:  gamma = 1.0f; break;
-        case mi::mdl::IValue_texture::gamma_srgb:    gamma = 2.2f; break;
-    }
+    mi::Float32 gamma = convert_gamma_enum_to_float( value->get_gamma_mode());
+    const char* selector = value->get_selector();
+    if( selector && !selector[0])
+        selector = nullptr;
 
     // Convert string value into tag value.
     return mdl_texture_to_tag(
@@ -360,9 +404,10 @@ DB::Tag mdl_texture_to_tag(
         file_path,
         module_filename,
         module_name,
-        callbacks_under_mutex,
+        gamma,
+        selector,
         /*shared*/ true,
-        gamma);
+        context);
 }
 
 DB::Tag mdl_texture_to_tag(
@@ -370,14 +415,17 @@ DB::Tag mdl_texture_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
-    bool callbacks_under_mutex,
+    mi::Float32 gamma,
+    const char* selector,
     bool shared,
-    mi::Float32 gamma)
+    Execution_context* context)
 {
     // we might have UDIM textures here, so load a whole set
     mi::base::Handle<mi::mdl::IMDL_resource_set> resource_set( get_resource_set(
-        file_path, module_filename, module_name, /*log_messages*/ true));
-    if( !resource_set) {
+        file_path, module_filename, module_name, /*log_messages*/ true, context));
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(
+        resource_set ? resource_set->get_element(0) : nullptr);
+    if( !elem) {
         std::string decoded_mdl_module_name
             = module_name ? decode_for_error_msg( module_name) : "(no module name)";
         LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO,
@@ -385,7 +433,7 @@ DB::Tag mdl_texture_to_tag(
         return DB::Tag( 0);
     }
 
-    const char* first_filename = resource_set->get_filename( 0);
+    const char* first_filename = elem->get_filename( 0);
     if( !first_filename)
         first_filename = "(no filename)";
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
@@ -395,11 +443,16 @@ DB::Tag mdl_texture_to_tag(
         first_filename,
         resource_set->get_count() > 1 ? " ... " : "");
 
-    if( !callbacks_under_mutex)
+    // Consider the presence of a custom loading wait handle factory as a sign that the
+    // application does not support callbacks under a mutex.
+    bool no_callbacks_under_mutex = context && make_handle(
+        context->get_interface_option<const mi::base::IInterface>(
+            MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY));
+    if( no_callbacks_under_mutex)
         resource_set = new Local_mdl_resource_set( resource_set.get());
 
     DB::Tag tag;
-    Mdl_image_set image_set( resource_set.get(), file_path);
+    Mdl_image_set image_set( resource_set.get(), file_path, selector);
     mi::base::Uuid hash = get_hash( resource_set.get());
 
     std::unique_lock<std::mutex> lock( g_transaction_mutex);
@@ -419,7 +472,8 @@ DB::Tag mdl_volume_texture_to_tag(
     const char* module_filename,
     const char* module_name,
     const char* selector,
-    bool shared)
+    bool shared,
+    Execution_context* context)
 {
     return DB::Tag();
 }
@@ -428,7 +482,8 @@ DB::Tag mdl_light_profile_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_light_profile* value,
     const char* module_filename,
-    const char* module_name)
+    const char* module_name,
+    Execution_context* context)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
 
@@ -445,7 +500,7 @@ DB::Tag mdl_light_profile_to_tag(
 
     // Convert string value into tag value.
     return mdl_light_profile_to_tag(
-        transaction, file_path, module_filename, module_name, /*shared*/ true);
+        transaction, file_path, module_filename, module_name, /*shared*/ true, context);
 }
 
 DB::Tag mdl_light_profile_to_tag(
@@ -453,10 +508,11 @@ DB::Tag mdl_light_profile_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
-    bool shared)
+    bool shared,
+    Execution_context* context)
 {
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
-        get_reader( file_path, module_filename, module_name, /*log_messages*/ true));
+        get_reader( file_path, module_filename, module_name, /*log_messages*/ true, context));
     if( !reader) {
         std::string decoded_mdl_module_name
             = module_name ? decode_for_error_msg( module_name) : "(no module name)";
@@ -503,7 +559,8 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_bsdf_measurement* value,
     const char* module_filename,
-    const char* module_name)
+    const char* module_name,
+    Execution_context* context)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
 
@@ -520,7 +577,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
 
     // Convert string value into tag value.
     return mdl_bsdf_measurement_to_tag(
-        transaction, file_path, module_filename, module_name, /*shared*/ true);
+        transaction, file_path, module_filename, module_name, /*shared*/ true, context);
 }
 
 DB::Tag mdl_bsdf_measurement_to_tag(
@@ -528,10 +585,11 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
-    bool shared)
+    bool shared,
+    Execution_context* context)
 {
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
-        get_reader( file_path, module_filename, module_name, /*log_messages*/ true));
+        get_reader( file_path, module_filename, module_name, /*log_messages*/ true, context));
     if( !reader) {
         std::string decoded_mdl_module_name
             = module_name ? decode_for_error_msg( module_name) : "(no module name)";
@@ -574,7 +632,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     return tag;
 }
 
-static mi::base::Atom32 uniq_id_for_generate_suffix;
+static std::atomic_uint32_t uniq_id_for_generate_suffix = 0;
 
 std::string generate_suffix()
 {
@@ -895,11 +953,14 @@ mi::neuraylib::IReader* Mdl_container_callback::get_reader(
     return new Resource_reader_impl( file_random_access.get());
 }
 
-Mdl_image_set::Mdl_image_set( mi::mdl::IMDL_resource_set* set, const std::string& file_path)
+Mdl_image_set::Mdl_image_set(
+    mi::mdl::IMDL_resource_set* set, const std::string& file_path, const char* selector)
   : m_resource_set( set, mi::base::DUP_INTERFACE),
+    m_selector( selector ? selector : ""),
     m_is_container( false)
 {
-    const char* first_filename = set->get_filename( 0);
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(set->get_element(0));
+    const char* first_filename = elem ? elem->get_filename(0) : nullptr;
     if( first_filename) {
         m_container_filename = MDL::get_container_filename( first_filename);
         m_is_container = !m_container_filename.empty();
@@ -913,27 +974,9 @@ Mdl_image_set::Mdl_image_set( mi::mdl::IMDL_resource_set* set, const std::string
         m_file_format = m_file_format.substr( 1);
 }
 
-mi::Size Mdl_image_set::get_length() const
-{
-     mi::Size result = m_resource_set->get_count();
-     ASSERT( M_SCENE, result > 0);
-     return result;
-}
-
-bool Mdl_image_set::is_uvtile() const
-{
-    int u, v;
-    return m_resource_set->get_udim_mapping( 0, u, v);
-}
-
 bool Mdl_image_set::is_mdl_container() const
 {
     return m_is_container;
-}
-
-void Mdl_image_set::get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
-{
-    m_resource_set->get_udim_mapping( i, u, v);
 }
 
 const char* Mdl_image_set::get_original_filename() const
@@ -951,42 +994,102 @@ const char* Mdl_image_set::get_mdl_file_path() const
     return m_mdl_file_path.c_str();
 }
 
-const char* Mdl_image_set::get_resolved_filename( mi::Size i) const
+const char* Mdl_image_set::get_selector() const
 {
-    if( m_is_container)
-        return "";
-
-    const char* s = m_resource_set->get_filename( i);
-    return s ? s : "";
-}
-
-const char* Mdl_image_set::get_container_membername( mi::Size i) const
-{
-    if( !m_is_container)
-        return "";
-
-    const char* filename = m_resource_set->get_filename( i);
-    const char* membername = MDL::get_container_membername( filename);
-    ASSERT( M_SCENE, membername[0] != '\0');
-    return membername;
-}
-
-mi::neuraylib::IReader* Mdl_image_set::open_reader( mi::Size i) const
-{
-    mi::base::Handle<mi::mdl::IMDL_resource_reader> reader( m_resource_set->open_reader( i));
-    if( !reader)
-        return nullptr;
-    return new Resource_reader_impl( reader.get());
-}
-
-mi::neuraylib::ICanvas* Mdl_image_set::get_canvas( mi::Size i) const
-{
-    return nullptr;
+    return !m_selector.empty() ? m_selector.c_str() : nullptr;
 }
 
 const char* Mdl_image_set::get_image_format() const
 {
     return m_file_format.c_str();
+}
+
+bool Mdl_image_set::is_uvtile() const
+{
+    return m_resource_set->get_udim_mode() != mi::mdl::NO_UDIM;
+}
+
+bool Mdl_image_set::is_animated() const
+{
+    return m_resource_set->has_sequence_marker();
+}
+
+mi::Size Mdl_image_set::get_length() const
+{
+    return m_resource_set->get_count();
+}
+
+mi::Size Mdl_image_set::get_frame_number( mi::Size f) const
+{
+    ASSERT( M_SCENE, f < get_length());
+
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( m_resource_set->get_element( f));
+    return elem->get_frame_number();
+}
+
+mi::Size Mdl_image_set::get_frame_length( mi::Size f) const
+{
+    ASSERT( M_SCENE, f < get_length());
+
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( m_resource_set->get_element( f));
+    return elem->get_count();
+}
+
+void Mdl_image_set::get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
+{
+    ASSERT( M_SCENE, f < get_length());
+    ASSERT( M_SCENE, i < get_frame_length( f));
+
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( m_resource_set->get_element( f));
+    if( m_resource_set->get_udim_mode() == mi::mdl::NO_UDIM) {
+        u = 0;
+        v = 0;
+    } else {
+        elem->get_udim_mapping( i, u, v);
+    }
+}
+
+const char* Mdl_image_set::get_resolved_filename( mi::Size f, mi::Size i) const
+{
+    ASSERT( M_SCENE, f < get_length());
+    ASSERT( M_SCENE, i < get_frame_length( f));
+
+    if( m_is_container)
+        return "";
+
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( m_resource_set->get_element( f));
+    const char* s = elem->get_filename( i);
+    return s ? s : "";
+}
+
+const char* Mdl_image_set::get_container_membername( mi::Size f, mi::Size i) const
+{
+    ASSERT( M_SCENE, f < get_length());
+    ASSERT( M_SCENE, i < get_frame_length( f));
+
+    if( !m_is_container)
+        return "";
+
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( m_resource_set->get_element( f));
+    const char* filename = elem->get_filename( i);
+    const char* membername = MDL::get_container_membername( filename);
+    ASSERT( M_SCENE, membername[0] != '\0');
+    return membername;
+}
+
+mi::neuraylib::IReader* Mdl_image_set::open_reader( mi::Size f, mi::Size i) const
+{
+    ASSERT( M_SCENE, f < get_length());
+    ASSERT( M_SCENE, i < get_frame_length( i));
+
+    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( m_resource_set->get_element( f));
+    mi::base::Handle<mi::mdl::IMDL_resource_reader> reader( elem->open_reader( i));
+    return reader ? new Resource_reader_impl( reader.get()) : nullptr;
+}
+
+mi::neuraylib::ICanvas* Mdl_image_set::get_canvas( mi::Size f, mi::Size i) const
+{
+    return nullptr;
 }
 
 std::string lookup_thumbnail(
@@ -1018,8 +1121,9 @@ std::string lookup_thumbnail(
          ASSERT( M_SCENE, vstr.is_valid_interface());
 
          // lookup file
+        Execution_context context;
          std::string file = resolve_resource_filename(
-             vstr->get_value(), module_filename.c_str(), module_name.c_str(), /*log_messages*/ true);
+             vstr->get_value(), module_filename.c_str(), module_name.c_str(), /*log_messages*/ true, &context);
          if( !file.empty())
              return file;
          break;
@@ -1073,7 +1177,106 @@ std::string lookup_thumbnail(
     return "";
 }
 
+Local_mdl_resource_element::Local_mdl_resource_element( const mi::mdl::IMDL_resource_element* other)
+  : m_frame( other->get_frame_number()),
+    m_entries()
+{
+    size_t count = other->get_count();
+    m_entries.reserve(count);
+
+    for( size_t i = 0; i < count; ++i) {
+        const char *mdl_url = other->get_mdl_url(i);
+        const char *filename = other->get_filename(i);
+
+        Resource_element_entry e;
+        if (mdl_url)
+            e.m_mdl_url = mdl_url;
+        if (filename)
+            e.m_filename = filename;
+        other->get_udim_mapping(i, e.m_u, e.m_v);
+        mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(other->open_reader(i));
+        e.m_reader = new Local_mdl_resource_reader(reader.get());
+        e.m_hash_valid = other->get_resource_hash(i, e.m_hash);
+
+        m_entries.push_back(e);
+    }
+}
+
+size_t Local_mdl_resource_element::get_frame_number() const
+{
+    return m_frame;
+}
+
+size_t Local_mdl_resource_element::get_count() const
+{
+    return m_entries.size();
+}
+
+const char* Local_mdl_resource_element::get_mdl_url( size_t i) const
+{
+    if( i >= m_entries.size())
+        return nullptr;
+
+    const Resource_element_entry &elem = m_entries[i];
+    return !elem.m_mdl_url.empty() ? elem.m_mdl_url.c_str() : nullptr;
+}
+
+const char* Local_mdl_resource_element::get_filename( size_t i) const
+{
+    if( i >= m_entries.size())
+        return nullptr;
+
+    const Resource_element_entry &elem = m_entries[i];
+    return !elem.m_filename.empty() ? elem.m_filename.c_str() : nullptr;
+}
+
+bool Local_mdl_resource_element::get_udim_mapping( size_t i, int &u, int &v) const
+{
+    if( i >= m_entries.size())
+        return false;
+
+    const Resource_element_entry &elem = m_entries[i];
+    u = elem.m_u;
+    v = elem.m_v;
+    return true;
+}
+
+mi::mdl::IMDL_resource_reader* Local_mdl_resource_element::open_reader( size_t i) const
+{
+    if( i >= m_entries.size())
+        return nullptr;
+
+    const Resource_element_entry &elem = m_entries[i];
+    if( !elem.m_reader)
+        return nullptr;
+
+    elem.m_reader->retain();
+    return elem.m_reader.get();
+}
+
+bool Local_mdl_resource_element::get_resource_hash( size_t i, unsigned char hash[16]) const
+{
+    if( i >= m_entries.size())
+        return false;
+
+    const Resource_element_entry &elem = m_entries[i];
+    if( !elem.m_hash_valid)
+        return false;
+
+    const auto &h = elem.m_hash;
+    memcpy( hash, h, 16);
+    return true;
+}
+
 Local_mdl_resource_set::Local_mdl_resource_set( mi::mdl::IMDL_resource_set* other)
+  : m_first_frame( other->get_first_frame()),
+    m_last_frame( other->get_last_frame()),
+    m_mdl_url_mask(),
+    m_filename_mask(),
+    m_has_sequence_marker( other->has_sequence_marker()),
+    m_udim_mode( other->get_udim_mode()),
+    m_elements(),
+    m_element_idx()
 {
     const char* mdl_url_mask  = other->get_mdl_url_mask();
     const char* filename_mask = other->get_filename_mask();
@@ -1082,26 +1285,18 @@ Local_mdl_resource_set::Local_mdl_resource_set( mi::mdl::IMDL_resource_set* othe
         m_mdl_url_mask  = mdl_url_mask;
     if( filename_mask)
         m_filename_mask = filename_mask;
-    m_udim_mode         = other->get_udim_mode();
 
     size_t count = other->get_count();
+    m_elements.reserve( count);
+
+    m_element_idx.resize( m_last_frame - m_first_frame + (count > 0 ? 1 : 0), ~size_t(0));
 
     for( size_t i = 0; i < count; ++i) {
-
-         const char* mdl_url  = other->get_mdl_url( i);
-         const char* filename = other->get_filename( i);
-
-         Uv_tile t;
-         if( mdl_url)
-             t.m_mdl_url  = mdl_url;
-         if( filename)
-             t.m_filename = filename;
-         t.m_uv_success   = other->get_udim_mapping( i, t.m_u, t.m_v);
-         mi::base::Handle<mi::mdl::IMDL_resource_reader> reader( other->open_reader( i));
-         t.m_reader       = new Local_mdl_resource_reader( reader.get());
-         t.m_hash_valid   = other->get_resource_hash( i, t.m_hash);
-
-         m_uv_tiles.push_back( t);
+         mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( other->get_element( i));
+         size_t idx = m_elements.size();
+         size_t frame = elem->get_frame_number();
+         m_elements.push_back( mi::base::make_handle( new Local_mdl_resource_element( elem.get())));
+         m_element_idx[frame - m_first_frame] = idx;
     }
 }
 
@@ -1115,63 +1310,51 @@ const char* Local_mdl_resource_set::get_filename_mask() const
     return !m_filename_mask.empty() ? m_filename_mask.c_str() : nullptr;
 }
 
-const char* Local_mdl_resource_set::get_mdl_url( size_t i) const
+size_t Local_mdl_resource_set::get_count() const
 {
-    if( i >= m_uv_tiles.size())
-        return nullptr;
-
-    const Uv_tile& uv_tile = m_uv_tiles[i];
-    return !uv_tile.m_mdl_url.empty() ? uv_tile.m_mdl_url.c_str() : nullptr;
+    return m_elements.size();
 }
 
-const char* Local_mdl_resource_set::get_filename( size_t i) const
+bool Local_mdl_resource_set::has_sequence_marker() const
 {
-    if( i >= m_uv_tiles.size())
-        return nullptr;
+    return m_has_sequence_marker;
+};
 
-    const Uv_tile& uv_tile = m_uv_tiles[i];
-    return !uv_tile.m_filename.empty() ? uv_tile.m_filename.c_str() : nullptr;
+mi::mdl::UDIM_mode Local_mdl_resource_set::get_udim_mode() const
+{
+    return m_udim_mode;
+};
+
+const mi::mdl::IMDL_resource_element* Local_mdl_resource_set::get_element( size_t i) const
+{
+    if( i >= m_elements.size())
+        return nullptr;
+    const mi::mdl::IMDL_resource_element* elem = m_elements[i].get();
+    elem->retain();
+    return elem;
 }
 
-bool Local_mdl_resource_set::get_udim_mapping( size_t i, int& u, int& v) const
+size_t Local_mdl_resource_set::get_first_frame() const
 {
-    if( i >= m_uv_tiles.size())
-        return false;
-
-    const Uv_tile& uv_tile = m_uv_tiles[i];
-    if( !uv_tile.m_uv_success)
-        return false;
-
-    u = uv_tile.m_u;
-    v = uv_tile.m_v;
-    return true;
+    return m_first_frame;
 }
 
-mi::mdl::IMDL_resource_reader* Local_mdl_resource_set::open_reader( size_t i) const
+size_t Local_mdl_resource_set::get_last_frame() const
 {
-    if( i >= m_uv_tiles.size())
-        return nullptr;
-
-    const Uv_tile& uv_tile = m_uv_tiles[i];
-    if( !uv_tile.m_reader)
-        return nullptr;
-
-    uv_tile.m_reader->retain();
-    return uv_tile.m_reader.get();
+    return m_last_frame;
 }
 
-bool Local_mdl_resource_set::get_resource_hash( size_t i, unsigned char hash[16]) const
+const mi::mdl::IMDL_resource_element* Local_mdl_resource_set::get_frame( size_t frame) const
 {
-    if( i >= m_uv_tiles.size())
-        return false;
-
-    const Uv_tile& uv_tile = m_uv_tiles[i];
-    if( !uv_tile.m_hash_valid)
-        return false;
-
-    const auto& h = uv_tile.m_hash;
-    memcpy( hash, h, 16);
-    return true;
+    if( m_first_frame <= frame && frame <= m_last_frame) {
+        size_t idx = m_element_idx[frame - m_first_frame];
+        if( idx != ~size_t(0)) {
+            mi::mdl::IMDL_resource_element const* elem = m_elements[idx].get();
+            elem->retain();
+            return elem;
+        }
+    }
+    return nullptr;
 }
 
 Local_mdl_resource_reader::Local_mdl_resource_reader( mi::mdl::IMDL_resource_reader* other)

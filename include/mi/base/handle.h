@@ -35,6 +35,11 @@
 #include <mi/base/config.h> // for MI_CXX_FEATURE_RVALUE_REFERENCES
 #include <mi/base/iinterface.h>
 
+#ifdef __cpp_variadic_templates
+#include <utility>
+#endif
+
+
 namespace mi {
 namespace base {
 
@@ -152,6 +157,8 @@ public:
     typedef Interface& reference;
 
 private:
+    template <typename I2> friend class Handle;
+
     // Pointer to underlying interface, can be \c NULL
     Interface* m_iptr;
 
@@ -209,6 +216,14 @@ public:
     {
         other.m_iptr = 0;
     }
+
+    /// Converting move constructor.
+    template <class Interface2>
+    Handle( Handle<Interface2>&& other)
+      : m_iptr( other.m_iptr)
+    {
+        other.m_iptr = 0;
+    }
 #endif
 
     /// Swap two interfaces.
@@ -251,6 +266,18 @@ public:
             m_iptr = other.m_iptr;
             other.m_iptr = 0;
         }
+        return *this;
+    }
+
+    /// Converting move assignment operator, releases old interface.
+    template <class Interface2>
+    Self& operator=( Handle<Interface2>&& other)
+    {
+        if( m_iptr)
+            m_iptr->release();
+        m_iptr = other.m_iptr;
+        other.m_iptr = 0;
+
         return *this;
     }
 #endif
@@ -299,6 +326,28 @@ public:
         m_iptr = 0;
         return ptr;
     }
+
+#ifdef __cpp_variadic_templates
+    /// Invokes the overload with this handle's interface type.
+    template <typename... T>
+    Self& emplace(T&&... args)
+    {
+        return emplace<Interface>(std::forward<T>(args)...);
+    }
+
+    /// Resets this handle to a new implementation instance.
+    ///
+    /// This function first releases the previous instance (if any) and then
+    /// allocates a new instance of \p Impl by invoking the constructor with
+    /// the provided arguments.
+    template <typename Impl, typename... T>
+    Self& emplace(T&&... args)
+    {
+        reset();
+        m_iptr = new Impl(std::forward<T>(args)...);
+        return *this;
+    }
+#endif
 
     /// The dereference operator accesses the interface.
     ///
@@ -414,6 +463,20 @@ inline Handle<Interface> make_handle_dup( Interface* iptr)
 {
     return Handle<Interface>( iptr, DUP_INTERFACE);
 }
+
+#ifdef __cpp_variadic_templates
+/// Allocates a new instance of \p Impl and wraps it in a handle.
+///
+/// This function allocates a new instance of \p Impl by invoking its constructor with
+/// the provided arguments. The resulting pointer is wrapped in a handle.
+template <typename Impl, typename... T>
+inline Handle<Impl> construct_handle(T&&... args)
+{
+    return Handle<Impl>{new Impl(std::forward<T>(args)...)};
+}
+
+#endif
+
 
 /*@}*/ // end group mi_base_iinterface
 

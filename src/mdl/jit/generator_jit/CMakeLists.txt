@@ -184,7 +184,6 @@ set(_STANDARD_MDL
     ${_STANDARD_MDL_DIR}/state.mdl
     ${_STANDARD_MDL_DIR}/math.mdl
     ${_STANDARD_MDL_DIR}/tex.mdl
-    ${_STANDARD_MDL_DIR}/noise.mdl
     ${_STANDARD_MDL_DIR}/df.mdl
     ${_STANDARD_MDL_DIR}/builtins.mdl
     )

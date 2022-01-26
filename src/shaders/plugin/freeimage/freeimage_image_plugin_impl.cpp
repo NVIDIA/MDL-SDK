@@ -28,7 +28,10 @@
 
 #include "pch.h"
 
+#include <atomic>
+
 #include <mi/base.h>
+#include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/ilogging_configuration.h>
 #include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/iplugin_api.h>
@@ -47,7 +50,7 @@ namespace MI {
 
 namespace FREEIMAGE {
 
-static mi::base::Atom32 g_freeimage_libray_initialization_counter = 0;
+static std::atomic_uint32_t g_freeimage_libray_initialization_counter = 0;
 
 Image_plugin_impl::Image_plugin_impl( const char* name, FREE_IMAGE_FORMAT format)
   : m_name( name), m_format( format)
@@ -56,17 +59,17 @@ Image_plugin_impl::Image_plugin_impl( const char* name, FREE_IMAGE_FORMAT format
 
 bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
 {
-    if( plugin_api) {
-        mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
-            plugin_api->get_api_component<mi::neuraylib::ILogging_configuration>());
-        if( logging_configuration)
-            g_logger = logging_configuration->get_forwarding_logger();
-        else {
-            mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
-                plugin_api->get_api_component<mi::neuraylib::IMdl_configuration>());
-            if( mdl_configuration)
-                g_logger = mdl_configuration->get_logger();
-        }
+    assert( plugin_api);
+
+    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
+        plugin_api->get_api_component<mi::neuraylib::ILogging_configuration>());
+    if( logging_configuration)
+        g_logger = logging_configuration->get_forwarding_logger();
+    else {
+        mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
+            plugin_api->get_api_component<mi::neuraylib::IMdl_configuration>());
+        if( mdl_configuration)
+            g_logger = mdl_configuration->get_logger();
     }
 
     std::string message = "Plugin \"";
@@ -109,18 +112,19 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
     // Disable export for "jp2" (does not work for unknown reasons, see bug 12505).
     if( m_format == FIF_JP2)
         m_supported_types.clear();
-
-    // Disable export for "jxr" (apparently only available on Windows, re-import fails (at least on
-    // Linux), import with Gimp 2.10.8 fails). See https://sourceforge.net/p/freeimage/bugs/294/ .
-    if( m_format == FIF_JXR)
+    // Disable export for "webp" (memory access errors reported by valgrind).
+    if( m_format == FIF_WEBP)
         m_supported_types.clear();
-    
+
+    m_image_api = plugin_api->get_api_component<mi::neuraylib::IImage_api>();
 
     return true;
 }
 
 bool Image_plugin_impl::exit( mi::neuraylib::IPlugin_api* plugin_api)
 {
+    m_image_api = 0;
+
     if( --g_freeimage_libray_initialization_counter == 0)
         FreeImage_DeInitialise();
 
@@ -145,11 +149,6 @@ const char* Image_plugin_impl::get_file_extension( mi::Uint32 index) const
             if( index == 1) return "jpeg";
             if( index == 2) return "jpg";
             if( index == 3) return "jif";
-            return 0;
-        case FIF_JXR:
-            if( index == 0) return "jxr";
-            if( index == 1) return "wdp";
-            if( index == 2) return "htp";
             return 0;
         case FIF_PICT:
             if( index == 0) return "pct";
@@ -248,7 +247,7 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
     if( !reader->supports_absolute_access())
         return 0;
 
-    return new Image_file_reader_impl( reader, m_format);
+    return new Image_file_reader_impl( m_image_api.get(), reader, m_format);
 }
 
 bool Image_plugin_impl::supports_export() const
@@ -287,7 +286,7 @@ Plugin_description g_plugin_list[] = {
         Plugin_description( "fi_jng"   , FIF_JNG   ),
         Plugin_description( "fi_jp2"   , FIF_JP2   ),
         Plugin_description( "fi_jpg"   , FIF_JPEG  ),
-        Plugin_description( "fi_jxr"   , FIF_JXR   ),
+//      Plugin_description( "fi_jxr"   , FIF_JXR   ), JXR support in FreeImage causes linker warning
         Plugin_description( "fi_koala" , FIF_KOALA ),
         Plugin_description( "fi_lbm"   , FIF_LBM   ),
 //      Plugin_description( "fi_mng"   , FIF_MNG   ),

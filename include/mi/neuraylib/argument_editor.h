@@ -54,25 +54,21 @@ class IMdl_execution_context;
 @{
 */
 
-/// A wrapper around the interfaces for MDL material instances and function calls.
+/// A wrapper around the interface for MDL material instances and function calls.
 ///
 /// The purpose of the MDL argument editor is to simplify working with MDL material instances and
-/// function calls. There are two key benefits: unified treatment of material instance and function
-/// calls, and wrapping of API call sequences occurring in typical tasks into one single method
-/// call.
+/// function calls. The key benefit is that it wraps API call sequences occurring in typical tasks
+/// into one single method call, e.g., changing arguments (as long as their type is not too
+/// complex): Typically this requires at least seven API calls (even more in case of arrays or if
+/// you do not use #mi::neuraylib::set_value()). The argument editor offers a single method to
+/// support this task.
 ///
-/// Unified treatment of material instances and function calls avoids duplication of code. For
-/// example, a GUI editor for the arguments can be essentially identical for materials and
-/// functions.
+/// \note The argument editor does not expose the full functionality of the underlying interface,
+/// but provides access to it via #get_scene_element().
 ///
-/// Furthermore, the argument editor wraps several API calls needed in typical tasks into one single
-/// method call. For example, changing the value of an argument typically needs at least seven API
-/// calls (even more in case of arrays or if you do not use #mi::neuraylib::set_value()). The
-/// argument editor offers a single method to support this task.
-///
-/// See #mi::neuraylib::IMaterial_instance and #mi::neuraylib::IFunction_call for the
-/// underlying interfaces. See also #mi::neuraylib::Definition_wrapper for a similar wrapper for
-/// MDL material and function definitions.
+/// See #mi::neuraylib::IFunction_call for the underlying interface. See also
+/// #mi::neuraylib::Definition_wrapper for a similar wrapper for MDL material and function
+/// definitions.
 class Argument_editor
 {
 public:
@@ -82,11 +78,23 @@ public:
 
     /// Constructs an MDL argument editor for a fixed material instance or function call.
     ///
-    /// \param transaction   The transaction to be used.
-    /// \param name          The name of the wrapped material instance or function call.
-    /// \param mdl_factory   A pointer to the API component #mi::neuraylib::IMdl_factory. Needed by
-    ///                      all mutable methods, can be \c NULL if only const methods are used.
-    Argument_editor( ITransaction* transaction, const char* name, IMdl_factory* mdl_factory);
+    /// \param transaction       The transaction to be used.
+    /// \param name              The name of the wrapped material instance or function call.
+    /// \param mdl_factory       A pointer to the API component #mi::neuraylib::IMdl_factory.
+    ///                          Needed by all mutable methods, can be \c NULL if only const
+    ///                          methods are used.
+    /// \param intent_to_edit    For best performance, the parameter should be set to \c true iff
+    ///                          the intention is to edit the material instance or function call.
+    ///                          This parameter is for performance optimizations only; the argument
+    ///                          editor will work correctly independently of the value used. The
+    ///                          performance penalty for setting it incorrectly to \c true is
+    ///                          usually higher than setting it incorrectly to \c false. If in
+    ///                          doubt, use the default of \c false.
+    Argument_editor(
+        ITransaction* transaction,
+        const char* name,
+        IMdl_factory* mdl_factory,
+        bool intent_to_edit = false);
 
     /// Indicates whether the argument editor is in a valid state.
     ///
@@ -103,7 +111,7 @@ public:
     ///                 after the operation has finished. Can be \c NULL.
     ///
     /// \return \c True, if the instance is valid, \c false otherwise.
-    bool is_valid_instance(IMdl_execution_context* context) const;
+    bool is_valid_instance( IMdl_execution_context* context) const;
 
     /// Attempts to repair an invalid material instance or function call.
     ///
@@ -117,9 +125,11 @@ public:
 
     /// Indicates whether the argument editor acts on a material instance or on a function call.
     ///
-    /// \return    Either #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE, or
-    ///            #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL, or undefined if #is_valid()
-    ///            return \c false.
+    /// \return    If \ref mi_mdl_materials_are_functions is enabled:
+    ///            #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
+    ///            returns \c false. Otherwise: #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION,
+    ///            or #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
+    ///            returns \c false.
     Element_type get_type() const;
 
     /// Returns the DB name of the corresponding material or function definition.
@@ -138,8 +148,6 @@ public:
     bool is_material() const;
 
     /// Returns the return type.
-    ///
-    /// \return         The return type in case of function calls, otherwise \c NULL.
     const IType* get_return_type() const;
 
     /// Returns the number of parameters.
@@ -184,6 +192,45 @@ public:
     /// #mi::neuraylib::Argument_editor::get_value() or #mi::neuraylib::Argument_editor::get_call()
     /// should be used for reading an argument.
     IExpression::Kind get_argument_kind( const char* parameter_name) const;
+
+    //@}
+    /// \name Methods related to resetting of arguments
+    //@{
+
+    /// Resets the argument at \p index.
+    ///
+    /// If the definition has a default for this parameter (and it does not violate a
+    /// potential uniform requirement), then a clone of it is used as new argument. Otherwise, a
+    /// constant expression is created, observing range annotations if present (see the overload of
+    /// #mi::neuraylib::IValue_factory::create() with two arguments).
+    ///
+    /// \param index        The index of the argument.
+    /// \return
+    ///                     -   0: Success.
+    ///                     -  -2: Parameter \p index does not exist.
+    ///                     -  -4: The function call or material instance is immutable (because it
+    ///                            appears in a default of a function or material definition).
+    ///                     -  -9: The function call or material instance is not valid (see
+    ///                            #is_valid()).
+    Sint32 reset_argument( Size index);
+
+    /// Sets an argument identified by name to its default.
+    ///
+    /// If the definition has a default for this parameter (and it does not violate a
+    /// potential uniform requirement), then a clone of it is used as new argument. Otherwise, a
+    /// constant expression is created, observing range annotations if present (see the overload of
+    /// #mi::neuraylib::IValue_factory::create() with two arguments).
+    ///
+    /// \param name         The name of the parameter.
+    /// \return
+    ///                     -   0: Success.
+    ///                     -  -1: Invalid parameters (\c NULL pointer).
+    ///                     -  -2: Parameter \p name does not exist.
+    ///                     -  -4: The function call or material instance is immutable (because it
+    ///                            appears in a default of a function or material definition).
+    ///                     -  -9: The function call or material instance is not valid (see
+    ///                            #is_valid()).
+    Sint32 reset_argument( const char* name);
 
     //@}
     /// \name Methods related to constant expressions for arguments
@@ -297,6 +344,7 @@ public:
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_index is out of range.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The type of the argument does not match \p T.
     template<class T>
     Sint32 set_value( Size parameter_index, const T& value);
@@ -311,6 +359,7 @@ public:
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_name is invalid.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The type of the argument does not match \p T.
     template <class T>
     Sint32 set_value( const char* parameter_name, const T& value);
@@ -333,6 +382,7 @@ public:
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_index is out of range.
     ///                         - -3: \p component_index is out of range.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The type of the argument does not match \p T.
     template<class T>
     Sint32 set_value( Size parameter_index, Size component_index, const T& value);
@@ -352,6 +402,7 @@ public:
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_name is invalid.
     ///                         - -3: \p component_index is out of range.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The type of the argument does not match \p T.
     template <class T>
     Sint32 set_value( const char* parameter_name, Size component_index, const T& value);
@@ -371,6 +422,7 @@ public:
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_index is out of range.
     ///                         - -3: \p field_name is invalid.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The type of the argument does not match \p T.
     template<class T>
     Sint32 set_value( Size parameter_index, const char* field_name, const T& value);
@@ -387,6 +439,7 @@ public:
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_name is invalid.
     ///                         - -3: \p field_name is invalid.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The type of the argument does not match \p T.
     template <class T>
     Sint32 set_value( const char* parameter_name, const char* field_name, const T& value);
@@ -431,6 +484,7 @@ public:
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_index is out of range.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The argument is not a dynamic array.
     Sint32 set_array_size( Uint32 parameter_index, Size size);
 
@@ -444,6 +498,7 @@ public:
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.
     ///                         - -2: \p parameter_name is invalid.
+    ///                         - -4: The material instance or function call is immutable.
     ///                         - -5: The argument is not a dynamic array.
     Sint32 set_array_size( const char* parameter_name, Size size);
 
@@ -487,7 +542,7 @@ public:
     ///                         - -6: \p call_name is invalid.
     Sint32 set_call( Size parameter_index, const char* call_name);
 
-    /// Sets the call of an argument.
+    /// Sets an argument (call expressions only).
     ///
     /// \param parameter_name   The name of the argument in question.
     /// \param call_name        The name of the call to set.
@@ -550,7 +605,7 @@ private:
 /*@}*/ // end group mi_neuray_mdl_elements
 
 inline Argument_editor::Argument_editor(
-    ITransaction* transaction, const char* name, IMdl_factory* mdl_factory)
+    ITransaction* transaction, const char* name, IMdl_factory* mdl_factory, bool intent_to_edit)
 {
     mi_neuray_assert( transaction);
     mi_neuray_assert( name);
@@ -562,8 +617,16 @@ inline Argument_editor::Argument_editor(
         = m_mdl_factory ? m_mdl_factory->create_value_factory( m_transaction.get()) : 0;
     m_expression_factory
         = m_mdl_factory ? m_mdl_factory->create_expression_factory( m_transaction.get()) : 0;
-    m_access = transaction->access<IScene_element>( name);
-    m_type = m_access ? m_access->get_element_type() : static_cast<Element_type>( 0);
+
+    if( intent_to_edit) {
+        m_edit = transaction->edit<IScene_element>( name);
+        m_access = m_edit;
+        m_old_access = m_edit;
+        m_type = m_access ? m_access->get_element_type() : static_cast<Element_type>( 0);
+    } else {
+        m_access = transaction->access<IScene_element>( name);
+        m_type = m_access ? m_access->get_element_type() : static_cast<Element_type>( 0);
+    }
 }
 
 inline bool Argument_editor::is_valid() const
@@ -769,6 +832,42 @@ inline bool Argument_editor::is_parameter_enabled( Size index, IMdl_evaluator_ap
 
     } else
         return true;
+}
+
+inline Sint32 Argument_editor::reset_argument( Size index)
+{
+    promote_to_edit_if_needed();
+
+    if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
+
+        base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        return mi->reset_argument( index);
+
+    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+
+        base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        return fc->reset_argument( index);
+
+    } else
+        return -1;
+}
+
+inline Sint32 Argument_editor::reset_argument( const char* name)
+{
+    promote_to_edit_if_needed();
+
+    if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
+
+        base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        return mi->reset_argument( name);
+
+    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+
+        base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        return fc->reset_argument( name);
+
+    } else
+        return -1;
 }
 
 
@@ -1061,6 +1160,8 @@ Sint32 Argument_editor::set_value( Size parameter_index, const T& value)
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1074,11 +1175,13 @@ Sint32 Argument_editor::set_value( Size parameter_index, const T& value)
             m_expression_factory->create_constant( new_value.get()));
         result = mi->set_argument( parameter_index, new_expression.get());
         mi_neuray_assert( result == 0);
-        return 0;
+        return result;
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1092,7 +1195,7 @@ Sint32 Argument_editor::set_value( Size parameter_index, const T& value)
             m_expression_factory->create_constant( new_value.get()));
         result = fc->set_argument( parameter_index, new_expression.get());
         mi_neuray_assert( result == 0);
-        return 0;
+        return result;
 
     } else
         return -1;
@@ -1106,6 +1209,8 @@ Sint32 Argument_editor::set_value( const char* parameter_name, const T& value)
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1119,11 +1224,13 @@ Sint32 Argument_editor::set_value( const char* parameter_name, const T& value)
             m_expression_factory->create_constant( new_value.get()));
         result = mi->set_argument( parameter_name, new_expression.get());
         mi_neuray_assert( result == 0);
-        return 0;
+        return result;
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1137,7 +1244,7 @@ Sint32 Argument_editor::set_value( const char* parameter_name, const T& value)
             m_expression_factory->create_constant( new_value.get()));
         result = fc->set_argument( parameter_name, new_expression.get());
         mi_neuray_assert( result == 0);
-        return 0;
+        return result;
 
     } else
         return -1;
@@ -1151,6 +1258,8 @@ Sint32 Argument_editor::set_value( Size parameter_index, Size component_index, c
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1166,7 +1275,7 @@ Sint32 Argument_editor::set_value( Size parameter_index, Size component_index, c
                 return result == -3 ? -3 : -5;
             result = mi->set_argument( parameter_index, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1178,12 +1287,14 @@ Sint32 Argument_editor::set_value( Size parameter_index, Size component_index, c
                 m_expression_factory->create_constant( new_value.get()));
             result = mi->set_argument( parameter_index, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1199,7 +1310,7 @@ Sint32 Argument_editor::set_value( Size parameter_index, Size component_index, c
                 return result == -3 ? -3 : -5;
             result = fc->set_argument( parameter_index, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1211,7 +1322,7 @@ Sint32 Argument_editor::set_value( Size parameter_index, Size component_index, c
                 m_expression_factory->create_constant( new_value.get()));
             result = fc->set_argument( parameter_index, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else
@@ -1226,6 +1337,8 @@ Sint32 Argument_editor::set_value( const char* parameter_name, Size component_in
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1241,7 +1354,7 @@ Sint32 Argument_editor::set_value( const char* parameter_name, Size component_in
                 return result == -3 ? -3 : -5;
             result = mi->set_argument( parameter_name, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1253,12 +1366,14 @@ Sint32 Argument_editor::set_value( const char* parameter_name, Size component_in
                 m_expression_factory->create_constant( new_value.get()));
             result = mi->set_argument( parameter_name, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1274,7 +1389,7 @@ Sint32 Argument_editor::set_value( const char* parameter_name, Size component_in
                 return result == -3 ? -3 : -5;
             result = fc->set_argument( parameter_name, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1286,7 +1401,7 @@ Sint32 Argument_editor::set_value( const char* parameter_name, Size component_in
                 m_expression_factory->create_constant( new_value.get()));
             result = fc->set_argument( parameter_name, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else
@@ -1302,6 +1417,8 @@ Sint32 Argument_editor::set_value(
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1317,7 +1434,7 @@ Sint32 Argument_editor::set_value(
                 return result == -3 ? -3 : -5;
             result = mi->set_argument( parameter_index, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1329,12 +1446,14 @@ Sint32 Argument_editor::set_value(
                 m_expression_factory->create_constant( new_value.get()));
             result = mi->set_argument( parameter_index, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1350,7 +1469,7 @@ Sint32 Argument_editor::set_value(
                 return result == -3 ? -3 : -5;
             result = fc->set_argument( parameter_index, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1362,7 +1481,7 @@ Sint32 Argument_editor::set_value(
                 m_expression_factory->create_constant( new_value.get()));
             result = fc->set_argument( parameter_index, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else
@@ -1378,6 +1497,8 @@ Sint32 Argument_editor::set_value(
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1393,7 +1514,7 @@ Sint32 Argument_editor::set_value(
                 return result == -3 ? -3 : -5;
             result = mi->set_argument( parameter_name, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1405,12 +1526,14 @@ Sint32 Argument_editor::set_value(
                 m_expression_factory->create_constant( new_value.get()));
             result = mi->set_argument( parameter_name, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1426,7 +1549,7 @@ Sint32 Argument_editor::set_value(
                 return result == -3 ? -3 : -5;
             result = fc->set_argument( parameter_name, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1438,7 +1561,7 @@ Sint32 Argument_editor::set_value(
                 m_expression_factory->create_constant( new_value.get()));
             result = fc->set_argument( parameter_name, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else
@@ -1532,6 +1655,8 @@ inline Sint32 Argument_editor::set_array_size( Uint32 parameter_index, Size size
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1550,7 +1675,7 @@ inline Sint32 Argument_editor::set_array_size( Uint32 parameter_index, Size size
                 return -5;
             result = mi->set_argument( parameter_index, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1565,12 +1690,14 @@ inline Sint32 Argument_editor::set_array_size( Uint32 parameter_index, Size size
                 m_expression_factory->create_constant( new_value.get()));
             result = mi->set_argument( parameter_index, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         if( !argument)
@@ -1589,7 +1716,7 @@ inline Sint32 Argument_editor::set_array_size( Uint32 parameter_index, Size size
                 return -5;
             result = fc->set_argument( parameter_index, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1604,7 +1731,7 @@ inline Sint32 Argument_editor::set_array_size( Uint32 parameter_index, Size size
                 m_expression_factory->create_constant( new_value.get()));
             result = fc->set_argument( parameter_index, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else
@@ -1618,6 +1745,8 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        if( mi->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( mi->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1636,7 +1765,7 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
                 return -5;
             result = mi->set_argument( parameter_name, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1651,12 +1780,14 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
                 m_expression_factory->create_constant( new_value.get()));
             result = mi->set_argument( parameter_name, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        if( fc->is_default())
+            return -4;
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         if( !argument)
@@ -1675,7 +1806,7 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
                 return -5;
             result = fc->set_argument( parameter_name, new_argument.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         } else {
             // create new constant expression
             base::Handle<const IType> type( argument->get_type());
@@ -1690,7 +1821,7 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
                 m_expression_factory->create_constant( new_value.get()));
             result = fc->set_argument( parameter_name, new_expression.get());
             mi_neuray_assert( result == 0);
-            return 0;
+            return result;
         }
 
     } else

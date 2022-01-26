@@ -31,19 +31,24 @@
 #ifndef IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_UTILITIES_H
 #define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_UTILITIES_H
 
-#include <string>
+#include <atomic>
+#include <condition_variable>
 #include <map>
-#include <vector>
+#include <mutex>
 #include <set>
+#include <string>
 #include <thread>
 #include <unordered_map>
-#include <mutex>
+#include <vector>
 
 #include <boost/any.hpp>
 
 #include <mi/base/ilogger.h>
+#include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_code_generators.h>
+#include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_messages.h>
+#include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/typedefs.h>
 #include <mi/neuraylib/ifunction_definition.h>
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
@@ -61,14 +66,17 @@ class ISerialized_function_name;
 } }
 
 namespace mi { namespace mdl {
-    class IGenerated_code_dag;
-    class IInput_stream;
-    class IMDL_resource_reader;
-    class IMdle_input_stream;
-    class IModule;
-    class IModule_cache;
-    class IModule_cache_wait_handle;
-    class Messages_impl;
+class IGenerated_code_dag;
+class IInput_stream;
+class IMDL;
+class IMDL_resource_reader;
+class IMDL_resource_set;
+class IMdle_input_stream;
+class IModule;
+class IModule_cache;
+class IModule_cache_wait_handle;
+class IThread_context;
+class Messages_impl;
 } }
 
 namespace MI {
@@ -597,7 +605,7 @@ private:
 
 // When adding new options
 // - adapt the Execution_context constructor to register the default and its type
-// - adapt create_thread_context() if necessary
+// - adapt create_thread_context() and create_execution_context if necessary
 
 #define MDL_CTX_OPTION_WARNING                            "warning"
 #define MDL_CTX_OPTION_OPTIMIZATION_LEVEL                 "optimization_level"
@@ -622,6 +630,7 @@ private:
 #define MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY        "loading_wait_handle_factory"
 #define MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING        "replace_existing"
 #define MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE         "target_material_model_mode"
+#define MDL_CTX_OPTION_USER_DATA                          "user_data"
 // Not documented in the API (used by the module transformer, but not for general use).
 #define MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS  "keep_original_resource_file_paths"
 
@@ -759,6 +768,42 @@ void add_warning_message( Execution_context* context, const std::string& message
 /// Does nothing if \p context is \c NULL. Returns \p result.
 void add_info_message( Execution_context* context, const std::string& message);
 
+/// Creates a thread context.
+///
+/// If \p context is not \c NULL, its relevant options are copied to the thread context. (Not all
+/// API context options are passed to the core compiler via the thread context, hence, only a
+/// subset, the relevant ones, are copied by this method.)
+mi::mdl::IThread_context* create_thread_context( mi::mdl::IMDL* mdl, Execution_context* context);
+
+/// Creates a thread context.
+///
+/// If \p context is not \c NULL, its relevant options are copied to the thread context. (Not all
+/// API context options are passed to the core compiler via the thread context, hence, only a
+/// subset, the relevant ones, are copied by this method.)
+///
+/// Convenience wrapper for the method above. Obtains the mi::mdl::IMDL instance from
+/// Access_module<MDLC::Mdlc_module>.
+mi::mdl::IThread_context* create_thread_context( Execution_context* context);
+
+/// Creates an execution context.
+///
+/// If \p ctx is not \c NULL, its relevant options are copied to the execution context. (Not all
+/// API context options are passed to the core compiler via the thread context, hence, only a
+/// subset, the relevant ones, are copied by this method.)
+Execution_context* create_execution_context( mi::mdl::IThread_context* ctx);
+
+/// Adds an error message to the given execution context
+/// \param context  the execution context.
+/// \param message  the message string.
+/// \param result   an error code which will be set as the current context result.
+mi::Sint32 add_context_error(
+    MDL::Execution_context* context,
+    const std::string& message,
+    mi::Sint32 result);
+
+
+// **********  Readers & streams *******************************************************************
+
 /// Wraps an MDL input stream as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IInput_stream* stream);
 
@@ -792,25 +837,45 @@ IMAGE::IMdl_container_callback* create_mdl_container_callback();
 
 // **********  Resource-related attributes *********************************************************
 
-/// Retrieve the attributes of a texture resource.
+/// Retrieve the attributes of a texture resource (general).
 ///
-/// \param transaction      The DB transaction to use.
-/// \param tex_tag          A texture tag.
-/// \param uvtile_x         The x-coordinate of the uvtile (or 0 for non-uvtiles).
-/// \param uvtile_y         The y-coordinate of the uvtile (or 0 for non-uvtiles).
-/// \param[out] valid       The result of texture_isvalid().
-/// \param[out] width       The width of \p texture.
-/// \param[out] height      The height of \p texture.
-/// \param[out] depth       The depth of \p texture.
+/// \param transaction        The DB transaction to use.
+/// \param tex_tag            A texture tag.
+/// \param[out] valid         The result of texture_isvalid().
+/// \param[out] first_frame   The first frame of of the texture.
+/// \param[out] first_frame   The last frame of of the texture.
 void get_texture_attributes(
     DB::Transaction* transaction,
     DB::Tag tex_tag,
-    mi::Sint32 uvtile_x,
-    mi::Sint32 uvtile_y,
+    bool& valid,
+    int& first_frame,
+    int& last_frame);
+
+/// Retrieve the attributes of a texture resource (per frame/uvtile).
+///
+/// \param transaction        The DB transaction to use.
+/// \param tex_tag            A texture tag.
+/// \param frame_number       The frame number.
+/// \param uvtile_u           The u-coordinate of the uvtile (or 0 for non-uvtiles).
+/// \param uvtile_v           The v-coordinate of the uvtile (or 0 for non-uvtiles).
+/// \param[out] valid         The result of texture_isvalid().
+/// \param[out] width         The width of the texture.
+/// \param[out] height        The height of the texture.
+/// \param[out] depth         The depth of the texture.
+/// \param[out] first_frame   The first frame of of the texture.
+/// \param[out] first_frame   The last frame of of the texture.
+void get_texture_attributes(
+    DB::Transaction* transaction,
+    DB::Tag tex_tag,
+    mi::Size frame_number,
+    mi::Sint32 uvtile_u,
+    mi::Sint32 uvtile_v,
     bool& valid,
     int& width,
     int& height,
-    int& depth);
+    int& depth,
+    int& first_frame,
+    int& last_frame);
 
 /// Retrieve the attributes of a light profile resource.
 ///
@@ -836,6 +901,34 @@ void get_bsdf_measurement_attributes(
     DB::Tag bm_tag,
     bool& valid);
 
+
+// ********** Conversion from MI::MDL to mi::mdl ***************************************************
+
+/// Converts MI::MDL::IType to mi::mdl::IType.
+const mi::mdl::IType* int_type_to_mdl_type(
+    const IType *type,
+    mi::mdl::IType_factory &tf);
+
+/// Converts MI::MDL::IValue to mi::mdl::IValue.
+const mi::mdl::IValue* int_value_to_mdl_value(
+    DB::Transaction* transaction,
+    mi::mdl::IValue_factory* vf,
+    const mi::mdl::IType* mdl_type,
+    const IValue* value);
+
+/// Converts MI::MDL::IExpression to mi::mdl::DAG_node.
+const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
+    DB::Transaction* transaction,
+    mi::mdl::IDag_builder* builder,
+    const mi::mdl::IType* type,
+    const IExpression* expr);
+
+/// Converts MI::MDL::IExpression to mi::mdl::DAG_node.
+const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
+    DB::Transaction* transaction,
+    mi::mdl::IGenerated_code_dag::DAG_node_factory* builder,
+    const mi::mdl::IType* type,
+    const IExpression* expr);
 
 // **********  Mdl_dag_builder *********************************************************************
 
@@ -1193,14 +1286,316 @@ private:
     std::mutex m_mutex;
 };
 
-/// Adds an error message to the given execution context
-/// \param context  the execution context.
-/// \param message  the message string.
-/// \param result   an error code which will be set as the current context result.
-mi::Sint32 add_context_error(
-    MDL::Execution_context* context,
-    const std::string& message,
-    mi::Sint32 result);
+// ********** Module_cache_lookup_handle **********************************************************
+
+class Module_cache_lookup_handle : public mi::mdl::IModule_cache_lookup_handle
+{
+public:
+    explicit Module_cache_lookup_handle();
+    virtual ~Module_cache_lookup_handle() = default;
+
+    void set_lookup_name(const char* name);
+    const char* get_lookup_name() const override;
+
+    bool is_processing() const override;
+    void set_is_processing(bool value);
+
+private:
+    std::string m_lookup_name;
+    bool m_is_processing;
+};
+
+// ********** Module_cache ************************************************************************
+
+/// Adapts the DB (or rather a transaction) to the IModule_cache interface.
+class Module_cache : public mi::mdl::IModule_cache
+{
+private:
+    static std::atomic<size_t> s_context_counter;
+
+public:
+    /// Default implementation of the IMdl_loading_wait_handle interface.
+    /// Used by the \c Wait_handle_factory if no other factory is registered at the module cache.
+    class Wait_handle
+        : public mi::base::Interface_implement<mi::neuraylib::IMdl_loading_wait_handle>
+    {
+    public:
+        explicit Wait_handle();
+
+        void wait() override;
+        void notify(mi::Sint32 result_code) override;
+        mi::Sint32 get_result_code() const override;
+
+    private:
+        std::condition_variable m_conditional;
+        std::mutex m_conditional_mutex;
+        bool m_processed;
+        int m_result_code;
+    };
+
+    /// Default implementation of the IMdl_loading_wait_handle_factory interface.
+    /// Uses \c Wait_handles if no other factory is registered at the module cache.
+    class Wait_handle_factory
+        : public mi::base::Interface_implement<mi::neuraylib::IMdl_loading_wait_handle_factory>
+    {
+    public:
+        explicit Wait_handle_factory() {}
+
+        mi::neuraylib::IMdl_loading_wait_handle* create_wait_handle() const override;
+    };
+
+    explicit Module_cache(
+        DB::Transaction* transaction,
+        Mdl_module_wait_queue* queue,
+        const DB::Tag_set& module_ignore_list);
+
+    virtual ~Module_cache();
+
+    /// Create an \c IModule_cache_lookup_handle for this \c IModule_cache implementation.
+    mi::mdl::IModule_cache_lookup_handle* create_lookup_handle() const override;
+
+    /// Free a handle created by \c create_lookup_handle.
+    void free_lookup_handle(mi::mdl::IModule_cache_lookup_handle* handle) const override;
+
+    /// If the DB contains the MDL module \p module_name, return it, otherwise \c NULL.
+    ///
+    /// In case of access from multiple threads, only the first thread that wants to load
+    /// module will return \c NULL immediately, further threads will block until notify was called
+    /// by the loading thread. In case loading failed on a different thread, \c lookup will also
+    /// return \c NULL after returning from waiting. The caller can check whether the current
+    /// thread is supposed to load the module by calling \c processed_on_this_thread.
+    ///
+    /// \param module_name  The core name of the module to lookup.
+    /// \param handle       a handle created by \c create_lookup_handle which is used throughout the
+    ///                     loading process of a model or NULL in case the goal is to just check if
+    ///                     a module is loaded.
+    const mi::mdl::IModule* lookup(
+        const char* module_name,
+        mi::mdl::IModule_cache_lookup_handle *handle) const override;
+
+    /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
+    ///
+    /// \param module_name  The core name of the module to lookup.
+    const mi::mdl::IModule* lookup_db(const char* module_name) const;
+
+    /// Checks if the module is the DB. If so, the module is returned and NULL otherwise.
+    const mi::mdl::IModule* lookup_db(DB::Tag tag) const;
+
+    /// Check if this module is loading was started in the current context. I.e., on the thread
+    /// that created this module cache instance.
+    /// Note, this assumes a light weight implementation of the Cache. One instance for each
+    /// call to \c load module.
+    ///
+    /// \param module_name      The core name of the module that is been processed.
+    /// \return                 True if the module loading was initialized with this instance.
+    bool loading_process_started_in_current_context(const char* module_name) const;
+
+    /// Notify waiting threads about the finishing of the loading process of module.
+    /// This function has to be called after a successfully loaded module was registered in the
+    /// Database (or a corresponding cache structure) AND also in case of loading failures.
+    ///
+    /// \param module_name      The core name of the module that has been processed.
+    /// \param result_code      Return code of the loading process. 0 in case of success.
+    virtual void notify(const char* module_name, int result_code);
+
+    /// Get the module loading callback
+    mi::mdl::IModule_loaded_callback* get_module_loading_callback() const override;
+
+    /// Set the module loading callback.
+    void set_module_loading_callback(mi::mdl::IModule_loaded_callback* callback);
+
+    /// Get the module cache wait handle factory.
+    const mi::neuraylib::IMdl_loading_wait_handle_factory* get_wait_handle_factory() const;
+
+    /// Set the module cache wait handle factory.
+    void set_wait_handle_factory(const mi::neuraylib::IMdl_loading_wait_handle_factory* factory);
+
+    /// Get an unique identifier for the context in which the current module is loaded.
+    ///
+    /// \return                 The identifier.
+    size_t get_loading_context_id() const { return m_context_id; }
+
+private:
+
+    size_t m_context_id;
+    DB::Transaction* m_transaction;
+    Mdl_module_wait_queue* m_queue;
+    mi::mdl::IModule_loaded_callback* m_module_load_callback;
+    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory> m_default_wait_handle_factory;
+    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory> m_user_wait_handle_factory;
+    DB::Tag_set m_ignore_list;
+};
+
+// ********** Call_evaluator ***********************************************************************
+
+/// Helper mixin that adds access to the tag of a resource value using an owner.
+template<typename T, typename I>
+class Call_evaluator_base : public I
+{
+public:
+    /// Constructor.
+    ///
+    /// \param owner  the owner of a resource
+    Call_evaluator_base(T const *owner)
+    : m_owner(owner)
+    {}
+
+    /// Get the resource tag for a given resource owned by the owner.
+    DB::Tag get_resource_tag(mi::mdl::IValue_resource const *r) const {
+        return DB::Tag(this->m_owner->get_resource_tag(r));
+    }
+
+private:
+    T const *m_owner;
+};
+
+/// Evaluates calls during material compilation.
+///
+/// Used to fold resource-related calls into constants.
+template<typename T>
+class Call_evaluator : public Call_evaluator_base<T, mi::mdl::ICall_evaluator>
+{
+    typedef Call_evaluator_base<T, mi::mdl::ICall_evaluator> Base;
+public:
+    /// Constructor.
+    ///
+    /// \param owner                    the owner of a resource
+    /// \param transaction              the current transaction
+    /// \param has_resource_attributes  true, if resource attributes can be folded
+    Call_evaluator(
+        T const *owner,
+        DB::Transaction* transaction,
+        bool has_resource_attributes)
+    : Base(owner)
+    , m_transaction(transaction)
+    , m_has_resource_attributes(has_resource_attributes)
+    {}
+
+    /// Destructor.
+    virtual ~Call_evaluator() {}
+
+    /// Check whether evaluate_intrinsic_function() should be called for an unhandled
+    /// intrinsic functions with the given semantic.
+    ///
+    /// \param semantic  the semantic to check for
+    bool is_evaluate_intrinsic_function_enabled(
+        mi::mdl::IDefinition::Semantics semantic) const final;
+
+    /// Called by IExpression_call::fold() to evaluate unhandled intrinsic functions.
+    ///
+    /// \param value_factory  the value factory used to create the result value
+    /// \param semantic       the semantic of the function to call
+    /// \param arguments      the arguments for the call
+    /// \param n_arguments    the number of arguments
+    ///
+    /// \return IValue_bad if this function could not be evaluated, its value otherwise
+    const mi::mdl::IValue* evaluate_intrinsic_function(
+        mi::mdl::IValue_factory* value_factory,
+        mi::mdl::IDefinition::Semantics semantic,
+        const mi::mdl::IValue* const arguments[],
+        size_t n_arguments) const final;
+
+private:
+    /// Folds df::light_profile_power() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_df_light_profile_power(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
+
+    /// Folds df::light_profile_maximum() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_df_light_profile_maximum(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
+
+    /// Folds df::light_profile_isinvalid() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_df_light_profile_isvalid(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
+
+    /// Folds df::bsdf_measurement_isvalid() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_df_bsdf_measurement_isvalid(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
+
+    /// Folds tex::width() to a constant, or returns IValue_bad in case of errors.
+    /// uvtile_arg may be NULL for non-uvtile texture calls.
+    const mi::mdl::IValue* fold_tex_width(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument,
+        const mi::mdl::IValue* uvtile_arg,
+        const mi::mdl::IValue* frame_arg) const;
+
+    /// Folds tex::height() to a constant, or returns IValue_bad in case of errors.
+    /// uvtile_arg may be NULL for non-uvtile texture calls.
+    const mi::mdl::IValue* fold_tex_height(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument,
+        const mi::mdl::IValue* uvtile_arg,
+        const mi::mdl::IValue* frame_arg) const;
+
+    /// Folds tex::depth() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_depth(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument,
+        const mi::mdl::IValue* frame_arg) const;
+
+    /// Folds tex::texture_invalid() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_texture_isvalid(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
+
+    /// Folds tex::width_offset() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_width_offset(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* tex,
+        const mi::mdl::IValue* offset) const;
+
+    /// Folds tex::height_offset() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_height_offset(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* tex,
+        const mi::mdl::IValue* offset) const;
+
+    /// Folds tex::depth_offset() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_depth_offset(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* tex,
+        const mi::mdl::IValue* offset) const;
+
+    /// Folds tex::first_frame() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_first_frame(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
+
+    /// Folds tex::last_frame() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_last_frame(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* argument) const;
+
+    /// Folds tex::grid_to_object_space() to a constant, or returns IValue_bad in case of errors.
+    const mi::mdl::IValue* fold_tex_grid_to_object_space(
+        mi::mdl::IValue_factory* value_factory,
+        const mi::mdl::IValue* tex,
+        const mi::mdl::IValue* offset) const;
+
+private:
+    DB::Transaction* m_transaction;
+    bool m_has_resource_attributes;
+};
+
+// ********** Mdl_material_instance_builder ********************************************************
+
+class Mdl_material_instance_builder
+{
+public:
+    /// Creates an MDL material instance from a compiled material.
+    ///
+    /// \param transaction    The DB transaction to use.
+    /// \param material       The compiled material to convert.
+    /// \return               The created MDL material instance for \p material, or \c NULL in case
+    ///                       of errors.
+    mi::mdl::IGenerated_code_dag::IMaterial_instance* create_material_instance(
+        DB::Transaction* transaction, const Mdl_compiled_material* material);
+};
 
 // **********  Resource names **********************************************************************
 
@@ -1211,7 +1606,10 @@ namespace DETAIL {
 ///
 /// \param module_name    The MDL name of the owning module.
 std::string unresolve_resource_filename(
-    const char* filename, const char* module_filename, const char* module_name);
+    const char* filename,
+    const char* module_filename,
+    const char* module_name,
+    MDL::Execution_context* context);
 
 /// Returns an absolute MDL file path which can be used to reload the given resource with the
 /// current search paths, or the empty string if this is not possible.
@@ -1221,7 +1619,8 @@ std::string unresolve_resource_filename(
     const char* archive_filename,
     const char* archive_membername,
     const char* module_filename,
-    const char* module_name);
+    const char* module_name,
+    MDL::Execution_context* context);
 
 } // namespace DETAIL
 
@@ -1231,28 +1630,53 @@ mi::base::Uuid convert_hash( const unsigned char hash[16]);
 /// Converts a hash from the base API representation to the MDL API representation.
 bool convert_hash( const mi::base::Uuid& hash_in, unsigned char hash_out[16]);
 
-/// Replaces the uv-tile marker by coordinates of a given uv-tile.
+/// Replaces the frame and/or uv-tile marker by coordinates of a given uv-tile.
 ///
-/// \param s       String containing a valid uv-tile marker.
+/// \param s       String containing a valid frame and/or uv-tile marker.
+/// \param f       The frame number of the uv-tile.
 /// \param u       The u coordinate of the uv-tile.
 /// \param u       The v coordinate of the uv-tile.
-/// \return        String with the uv-tile marker replaced by the coordinates of the uv-tile, or
-///                the empty string in case of errors.
-std::string uvtile_marker_to_string( const std::string& s, mi::Sint32 u, mi::Sint32 v);
+/// \return        String with the frame and/or uv-tile marker replaced by the coordinates of the
+///                uv-tile, or the empty string in case of errors.
+std::string frame_uvtile_marker_to_string( std::string s, mi::Size f, mi::Sint32 u, mi::Sint32 v);
 
 /// Replaces the pattern describing the coordinates of a uv-tile by the given marker.
 ///
-/// \param s        String containing the index pattern, e.g., "_u1_v1"
+/// The methods simply replaces the first matching substring, this is not necessarily the correct
+/// semantic location, in particular for the "UDIM" marker scheme.
+///
+/// \param s        String containing the coordinate pattern, e.g., "_u1_v1"
 /// \param marker   The marker to replace the pattern with, e.g., "<UVTILE1>"
-/// \return         The string with the index pattern replaced by the marked (if found), or the
+/// \return         The string with the coordinate pattern replaced by the marker (if found), or the
 ///                 empty string in case of errors.
-std::string uvtile_string_to_marker( const std::string& s, const std::string& marker);
+std::string deprecated_uvtile_string_to_marker( const std::string& s, const std::string& marker);
 
 /// Returns an absolute MDL file path for the given filename.
 ///
 /// Does not check for existence. Returns the empty string on failure.
 std::string get_file_path(
     std::string filename, mi::neuraylib::IMdl_impexp_api::Search_option option);
+
+/// Converts the mi::mdl enum for gamma mode into a float (using 0.0f for gamma_default).
+mi::Float32 convert_gamma_enum_to_float( mi::mdl::IValue_texture::gamma_mode gamma);
+
+/// Converts a gamma value as float to the mi::mdl enum (using gamma_default for all values
+/// different from 1.0f and 2.2f).
+mi::mdl::IValue_texture::gamma_mode convert_gamma_float_to_enum( mi::Float32 gamma);
+
+/// Functions in the MDL core use the special value 0xffffffffU, although it is not part of the
+/// corresponding enum.
+const mi::mdl::IMDL::MDL_version mi_mdl_IMDL_MDL_VERSION_INVALID
+    = static_cast<mi::mdl::IMDL::MDL_version>( 0xffffffffU);
+
+/// Converts mi::mdl::IMDL::MDL_version into mi::neuraylib::Mdl_version.
+mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version version);
+
+/// Converts mi::neuraylib::Mdl_version into mi::mdl::IMDL::MDL_version.
+mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version version);
+
+/// Returns a string representation of mi::mdl::IMDL::MDL_version.
+const char* stringify_mdl_version( mi::mdl::IMDL::MDL_version version);
 
 } // namespace MDL
 

@@ -759,10 +759,15 @@ IExpression *Module_inliner::clone_expr_call(IExpression_call const *c_expr)
             // was modified
             new_ref = ref;
 
-            if (rules &  Module::PR_FRESNEL_LAYER_TO_COLOR)
+            if (rules & Module::PR_FRESNEL_LAYER_TO_COLOR) {
                 register_import("::df", "color_fresnel_layer");
-            if (rules & Module::PR_MEASURED_EDF_ADD_TANGENT_U)
+            }
+            if (rules & Module::PR_MEASURED_EDF_ADD_TANGENT_U) {
                 register_import("::state", "texture_tangent_u");
+            }
+            if (rules & Module::PR_SHEEN_ADD_MULTISCATTER) {
+                register_import("::df", "diffuse_reflection_bsdf");
+            }
         } else {
             // no changes, just clone it
             new_ref = m_target_module->clone_expr(ref, this);
@@ -1180,7 +1185,7 @@ IAnnotation_block *Module_inliner::create_annotation_block(
     IAnnotation *anno_origin       = NULL;
 
     if (anno_block != NULL) {
-        for (int i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
+        for (size_t i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
             IAnnotation const     *anno = anno_block->get_annotation(i);
             IQualified_name const *qn   = anno->get_name();
             IDefinition const     *def  = qn->get_definition();
@@ -1256,7 +1261,7 @@ IAnnotation_block const *Module_inliner::clone_parameter_annotations(
     IAnnotation_block *new_block = m_af.create_annotation_block();
     bool has_display_name = false;
     if (anno_block != NULL) {
-        for (int i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
+        for (size_t i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
             IAnnotation const     *anno = anno_block->get_annotation(i);
             IQualified_name const *qn   = anno->get_name();
             IDefinition const     *def  = qn->get_definition();
@@ -1891,19 +1896,25 @@ IModule *MDL_module_transformer::inline_mdle(IModule *imodule)
 
 // Compute the resulting MDL version.
 IMDL::MDL_version MDL_module_transformer::compute_mdl_version(
-    Module const *root)
+    Module const            *root,
+    IInline_import_callback *inline_imports)
 {
     IMDL::MDL_version v = root->get_mdl_version();
 
     for (int i = 0, n = root->get_import_count(); i < n; ++i) {
         base::Handle<Module const> import(root->get_import(i));
         if (import->is_builtins() || import->is_stdlib()) {
+            // we can safely ignore the standard library: all modules there are multi-versioned
             continue;
         }
 
-        IMDL::MDL_version imp_v = import->get_mdl_version();
-        if (imp_v > v) {
-            v = imp_v;
+        // if this import is inlined, take its version into account
+        if (inline_imports->inline_import(import.get())) {
+            // need to compute the transitive closure here
+            IMDL::MDL_version imp_v = compute_mdl_version(import.get(), inline_imports);
+            if (imp_v > v) {
+                v = imp_v;
+            }
         }
     }
 
@@ -1945,19 +1956,19 @@ IModule *MDL_module_transformer::inline_module(
         return const_cast<Module*>(module);
     }
 
+    // setup inliner ...
+    Inline_import_callback callback(inline_mdle);
+
     // Create new module
     string module_name(imodule->get_name(), get_allocator());
 
-    IMDL::MDL_version v = compute_mdl_version(module);
+    IMDL::MDL_version v = compute_mdl_version(module, &callback);
 
     base::Handle<Module> inlined_module(
         m_compiler->create_module(
             /*context=*/NULL,
             module_name.c_str(),
             v));
-
-    // setup inliner ...
-    Inline_import_callback callback(inline_mdle);
 
     Def_set exports(
         0, Def_set::hasher(), Def_set::key_equal(), get_allocator());

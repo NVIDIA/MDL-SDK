@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2021 NVIDIA Corporation. All rights reserved.
+ * Copyright 2022 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -488,6 +488,15 @@ export material gltf_material(
         anno::description("The emissive map texture. Influenced by the 'Emissive Factor'."),
         anno::enable_if("::math::average(emissive_factor)>0.0")
     ]],
+    // KHR_materials_emissive_strength
+    uniform float emissive_strength = 1.0
+    [[
+        anno::hard_range(0.0, ::limits::FLOAT_MAX),
+        anno::in_group("Emission"),
+        anno::display_name("Emissive Strength"),
+        anno::description("The maximum strength of the emissive texture. Multiplied to the 'Emissive Factor'."),
+        anno::enable_if("::math::average(emissive_factor)>0.0")
+    ]],
 
     // KHR_materials_volume
     uniform bool thin_walled = true
@@ -567,7 +576,7 @@ export material gltf_material(
 
     float3 normal = gltf_prepare_normal(normal_texture);
     float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_strength);
-    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_factor);
+    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_factor * math::max(0.0f, emissive_strength));
 
     // KHR_materials_specular
     // ------------------------------------------------------------------------
@@ -738,6 +747,15 @@ export material gltf_material_khr_specular_glossiness(
         anno::description("The emissive map texture. Influenced by the 'Emissive Factor'."),
         anno::enable_if("::math::average(emissive_factor)>0.0")
     ]],
+    // KHR_materials_emissive_strength
+    uniform float emissive_strength = 1.0
+    [[
+        anno::hard_range(0.0, ::limits::FLOAT_MAX),
+        anno::in_group("Emission"),
+        anno::display_name("Emissive Strength"),
+        anno::description("The maximum strength of the emissive texture. Multiplied to the 'Emissive Factor'."),
+        anno::enable_if("::math::average(emissive_factor)>0.0")
+    ]],
 
     // ambient occlusion
     gltf_texture_lookup_value occlusion_texture = gltf_texture_lookup()
@@ -796,7 +814,7 @@ export material gltf_material_khr_specular_glossiness(
 
     float3 normal = gltf_prepare_normal(normal_texture);
     float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_strength);
-    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_factor);
+    color emissive_color = gltf_perpare_emission(emissive_texture, emissive_factor * math::max(0.0f, emissive_strength));
 
     // specular glossiness model
     // ------------------------------------------------------------------------

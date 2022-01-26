@@ -57,7 +57,7 @@ detail::Linked_list* detail::Linked_list::g_first = 0;
 
 // Constructor.
 Module_registration_entry::Module_registration_entry(
-    const char* name)					/// name of the module
+    const char* name)                                   /// name of the module
   : m_name(name), m_reference_count(0), m_status(MODULE_STATUS_UNINITIALIZED), m_enabled(true)
 {
 //    fprintf(stderr, "Module \"%s\" is registered\n", name);
@@ -95,11 +95,11 @@ Module_state Module_registration_entry::get_status() const
 
 // Initialize the given module. Make this module ready for a(nother) client.
 Module_registration_entry* Module_registration_entry::init_module(
-    const char* name)					/// name of the module
+    const char* name)                                   /// name of the module
 {
     Module_registration_entry* module = find(name);
     if (module)
-	module->call_init();
+        module->call_init();
     return module;
 }
 
@@ -108,11 +108,11 @@ Module_registration_entry* Module_registration_entry::init_module(
 
 // Finalize the given module.
 void Module_registration_entry::exit_module(
-    const char* name)					/// name of the module
+    const char* name)                                   /// name of the module
 {
     Module_registration_entry* module = find(name);
     if (module)
-	module->call_exit();
+        module->call_exit();
 }
 
 
@@ -120,14 +120,14 @@ void Module_registration_entry::exit_module(
 
 // Find the \c Module_registration_entry with the given \p name.
 Module_registration_entry* Module_registration_entry::find(
-    const char* name)					/// name of the module
+    const char* name)                                   /// name of the module
 {
     Module_registration_entry* module = static_cast<Module_registration_entry*>(g_first);
     while (module != 0) {
-	if (strcmp(module->m_name, name) == 0) {
-	    break;
-	}
-	module = static_cast<Module_registration_entry*>(module->m_next);
+        if (strcmp(module->m_name, name) == 0) {
+            break;
+        }
+        module = static_cast<Module_registration_entry*>(module->m_next);
     }
 
     return module;
@@ -142,23 +142,23 @@ void Module_registration_entry::call_init()
     mi::base::Lock::Block lock(&m_lock);
 
     if (m_reference_count++ == 0) {
-	ASSERT(M_MAIN,
-	    m_status == MODULE_STATUS_UNINITIALIZED ||
-	    m_status == MODULE_STATUS_FAILED ||
-	    m_status == MODULE_STATUS_EXITED);
-	// switch state to STARTING
-	m_status = MODULE_STATUS_STARTING;
-	// virtual call to template method
-	if (m_enabled && this->do_init())
-	    m_status = MODULE_STATUS_INITIALIZED;
-	else
-	    m_status = MODULE_STATUS_FAILED;
+        ASSERT(M_MAIN,
+            m_status == MODULE_STATUS_UNINITIALIZED ||
+            m_status == MODULE_STATUS_FAILED ||
+            m_status == MODULE_STATUS_EXITED);
+        // switch state to STARTING
+        m_status = MODULE_STATUS_STARTING;
+        // virtual call to template method
+        if (m_enabled && this->do_init())
+            m_status = MODULE_STATUS_INITIALIZED;
+        else
+            m_status = MODULE_STATUS_FAILED;
     }
     else if (m_status == MODULE_STATUS_STARTING) {
-	const char* name = this->get_name();
-	//LOG_ERROR_ABOUT_CIRCULAR_DEPENDENCIES but log module is probably not initialized yet
-	fprintf(stderr, "Module %s has circular dependencies. Please fix. Will abort now.", name);
-	abort();
+        const char* name = this->get_name();
+        //LOG_ERROR_ABOUT_CIRCULAR_DEPENDENCIES but log module is probably not initialized yet
+        fprintf(stderr, "Module %s has circular dependencies. Please fix. Will abort now.", name);
+        abort();
     }
 }
 
@@ -170,9 +170,9 @@ void Module_registration_entry::call_exit()
 {
     mi::base::Lock::Block lock(&m_lock);
     if (m_reference_count == 0)
-	return;
+        return;
     if (--m_reference_count != 0)
-	return;
+        return;
 
     // virtual call to template method
     this->do_exit();
@@ -185,24 +185,24 @@ void Module_registration_entry::call_exit()
 const char* enum_to_string(Module_state state)
 {
     switch (state) {
-	case MODULE_STATUS_UNINITIALIZED:
-	    return "UNINITIALIZED";
-	    break;
-	case MODULE_STATUS_STARTING:
-	    return "STARTING";
-	    break;
-	case MODULE_STATUS_INITIALIZED:
-	    return "INITIALIZED";
-	    break;
-	case MODULE_STATUS_EXITED:
-	    return "EXITED";
-	    break;
-	case MODULE_STATUS_FAILED:
-	    return "FAILED";
-	    break;
-	default:
-	    return "unknown";
-	    break;
+        case MODULE_STATUS_UNINITIALIZED:
+            return "UNINITIALIZED";
+            break;
+        case MODULE_STATUS_STARTING:
+            return "STARTING";
+            break;
+        case MODULE_STATUS_INITIALIZED:
+            return "INITIALIZED";
+            break;
+        case MODULE_STATUS_EXITED:
+            return "EXITED";
+            break;
+        case MODULE_STATUS_FAILED:
+            return "FAILED";
+            break;
+        default:
+            return "unknown";
+            break;
     }
 }
 
@@ -211,9 +211,9 @@ void Module_registration_entry::dump_registered_modules()
 {
     Module_registration_entry* module = static_cast<Module_registration_entry*>(g_first);
     while (module != 0) {
-	fprintf(stderr, "Module %s\t(%s)\n",
-	    module->get_name(), enum_to_string(module->get_status()));
-	module = static_cast<Module_registration_entry*>(module->m_next);
+        fprintf(stderr, "Module %s\t(%s)\n",
+            module->get_name(), enum_to_string(module->get_status()));
+        module = static_cast<Module_registration_entry*>(module->m_next);
     }
 }
 
@@ -241,7 +241,7 @@ void Module_registration_entry::dump_alive_modules()
     {
         if (module->m_reference_count > 0) {
             fprintf(stderr, "    Module %s\t(%s) refcount:%u\n",
-                module->get_name(), enum_to_string(module->get_status()), 
+                module->get_name(), enum_to_string(module->get_status()),
                 module->m_reference_count);
         }
     }

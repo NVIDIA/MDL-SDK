@@ -41,6 +41,7 @@
 
 #include "i_mdl_elements_utilities.h"
 #include "i_mdl_elements_type.h"
+#include "i_mdl_elements_resource_tag_tuple.h"
 
 namespace mi {
 
@@ -70,6 +71,7 @@ class IType_factory;
 class IValue_factory;
 class IValue_bsdf_measurement;
 class IValue_light_profile;
+class IValue_resource;
 class IValue_texture;
 class Symbol_importer;
 
@@ -281,6 +283,7 @@ public:
     ///                      corresponding to the return value.
     /// \param gamma         The value that is returned by #TEXTURE::Texture::get_gamma()
     ///                      on the DB element referenced by the return value.
+    /// \param selector      The selector (or \c NULL).
     /// \param shared        Indicates whether you want to re-use the DB elements for that texture
     ///                      if it has already been loaded, or if you want to create new DB elements
     ///                      in all cases. Note that sharing is based on the location where the
@@ -300,6 +303,7 @@ public:
         const char* file_path,
         IType_texture::Shape shape,
         mi::Float32 gamma,
+        const char* selector,
         bool shared,
         mi::Sint32* errors = nullptr);
 
@@ -408,9 +412,9 @@ public:
 
     mi::Size get_annotation_definition_count() const;
 
-    const IAnnotation_definition* get_annotation_definition(mi::Size index) const;
+    const IAnnotation_definition* get_annotation_definition( mi::Size index) const;
 
-    const IAnnotation_definition* get_annotation_definition(const char* name) const;
+    const IAnnotation_definition* get_annotation_definition( const char* name) const;
 
     bool is_standard_module() const;
 
@@ -427,22 +431,18 @@ public:
 
     mi::Size get_resources_count() const;
 
-    const char* get_resource_mdl_file_path(mi::Size index) const;
-
-    DB::Tag get_resource_tag(mi::Size index) const;
-
-    const IType_resource* get_resource_type(mi::Size index) const;
+    const IValue_resource* get_resource( mi::Size index) const;
 
     mi::Sint32 reload(
-        DB::Transaction *transaction,
+        DB::Transaction* transaction,
         bool recursive,
-        Execution_context *context);
+        Execution_context* context);
 
     mi::Sint32 reload_from_string(
-        DB::Transaction *transaction,
+        DB::Transaction* transaction,
         mi::neuraylib::IReader* module_source,
         bool recursive,
-        Execution_context *context);
+        Execution_context* context);
 
     // internal methods
 
@@ -457,7 +457,7 @@ public:
     /// Returns true if the tag versions of all imported modules still match
     /// the tag versions stored in this module.
     bool is_valid(
-        DB::Transaction *transaction,
+        DB::Transaction* transaction,
         Execution_context* context) const;
 
     /// Improved version of SERIAL::Serializable::dump().
@@ -519,6 +519,22 @@ public:
     /// Reloading is not supported for standard or builtin modules plus ::base.
     bool supports_reload() const;
 
+    /// Returns the resource tag tuple for a given resource (low-level access to the resource
+    /// vector).
+    ///
+    /// Returns \c NULL for invalid indices.
+    ///
+    /// \see #get_resource_count(), #get_resource()
+    const Resource_tag_tuple* get_resource_tag_tuple( mi::Size index) const;
+
+    /// Returns the AST index for a given resource (low-level access to the resource
+    /// vector).
+    ///
+    /// Returns -1 for invalid indices.
+    ///
+    /// \see #get_resource_count(), #get_resource()
+    mi::Size get_resource_ast_index( mi::Size index) const;
+
     /// Factory (public, takes an mi::mdl::IModule and creates the DB element if needed).
     ///
     /// Used by Mdl_module_builder.
@@ -529,13 +545,14 @@ public:
     /// definitions which need the tag of their module). If necessary, DB elements for imported
     /// modules are created recursively, too.
     ///
-    /// \param transaction       The DB transaction to use.
-    /// \param mdl               The IMDL instance.
-    /// \param module            The corresponding MDL module.
-    /// \param[inout] context    Execution context used to pass options to and store messages from
-    ///                          the compiler.
-    /// \param[out] module_tag   The tag of the already existing or just created DB element (only
-    ///                          valid if the return value is 0).
+    /// \param transaction             The DB transaction to use.
+    /// \param mdl                     The IMDL instance.
+    /// \param module                  The corresponding MDL module.
+    /// \param[inout] context          Execution context used to pass options to and store messages
+    ///                                from the compiler.
+    /// \param[out] module_tag_ident   The identifier of the already existing or just created DB
+    ///                                element (only valid if the return value is 0 or 1).
+
     /// \return
     ///
     ///           -  1: Success (module exists already, was not created from \p module).
@@ -549,7 +566,7 @@ public:
         mi::mdl::IMDL* mdl,
         const mi::mdl::IModule* module,
         Execution_context* context,
-        Mdl_tag_ident* module_ident = nullptr);
+        Mdl_tag_ident* module_tag_ident = nullptr);
 
 private:
     /// Constructor.
@@ -639,9 +656,9 @@ private:
     /// archives.
     std::string m_api_file_name;
 
-    Mdl_ident   m_ident;                             ///< This module's current identifier.
+    Mdl_ident m_ident;                               ///< This module's current identifier.
 
-    std::vector<Mdl_tag_ident>       m_imports;      ///< The imported modules.
+    std::vector<Mdl_tag_ident> m_imports;            ///< The imported modules.
 
     mi::base::Handle<IType_list> m_exported_types;   ///< The exported user defined types.
     mi::base::Handle<IType_list> m_local_types;      ///< The local user defined types.
@@ -655,20 +672,16 @@ private:
     std::vector<Mdl_tag_ident> m_materials;     ///< Tags of the contained material definitions.
     std::vector<DB::Tag> m_annotation_proxies;  ///< Tags of the contained annotation def. proxies.
 
-    // Resource tags
-    // This vector has en entry for each item in mi::mdl::IModules' resource table
-    // and contains a list of tags corresponding to the resource (a texture used with different
-    // gamma modes is stored per gamma mode in the DB, so one file can refer to more than one
-    // db element). It may contain invalid tags for non-existing resources.
-    std::vector<std::vector<DB::Tag> > m_resource_reference_tags;
+    /// Resources of this module (including corresponding AST index).
+    std::vector<std::pair<Resource_tag_tuple, mi::Size>> m_resources;
 
     /// Maps functions definition DB names to indices as used in #m_functions.
     std::map <std::string, mi::Size> m_function_name_to_index;
 
-    /// Maps material definition DB names to indices as used in #m_functions.
+    /// Maps material definition DB names to indices as used in #m_materials.
     std::map <std::string, mi::Size> m_material_name_to_index;
 
-    /// Maps annotation definition DB names to indices as used in #m_annotatoin_proxies.
+    /// Maps annotation definition DB names to indices as used in #m_annotation_proxies.
     std::map <std::string, mi::Size> m_annotation_name_to_index;
 };
 

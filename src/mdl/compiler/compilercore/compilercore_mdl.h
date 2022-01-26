@@ -203,6 +203,9 @@ public:
     static char const *option_state_wavelength_base_max;
 
 
+    /// The name of the option that allows to pass a user defined interface to callbacks.
+    static char const *option_user_data;
+
     /// The name of the option to keep resource file paths as is.
     static char const *option_keep_original_resource_file_paths;
 
@@ -529,7 +532,7 @@ public:
     /// \param minor                         minor number
     /// \param version                       the accepted MDL version on success
     /// \param enable_experimental_features  if true, allow experimental MDL features
-    /// 
+    ///
     /// \return true on success
     bool check_version(
         int major,
@@ -579,12 +582,14 @@ public:
     /// \param pos                     The position where the import must be resolved for an
     ///                                error message.
     ///                                This may be NULL for the top-level import.
+    /// \param ctx                     The thread context or NULL.
     /// \returns                       The import result or null if the module does not exist.
     IMDL_import_result *resolve_import(
-        File_resolver  &resolver,
-        char const     *import_name,
-        Module         *owner_module,
-        Position const *pos);
+        File_resolver   &resolver,
+        char const      *import_name,
+        Module          *owner_module,
+        Position const  *pos,
+        IThread_context *ctx);
 
     /// Compile a module with a given name.
     ///
@@ -599,6 +604,20 @@ public:
         Thread_context &ctx,
         char const     *module_name,
         IModule_cache  *module_cache);
+
+    /// Compile a module from an import result.
+    ///
+    /// \param ctx            The thread context.
+    /// \param import_result  The import result.
+    /// \param module_cache   If non-NULL, a module cache.
+    /// \returns              An interface to the compiled module.
+    ///
+    /// If the module is already loaded, no new module will be created,
+    /// but an interface to the already loaded module will be returned.
+    Module const *compile_module(
+        Thread_context           &ctx,
+        IMDL_import_result const &import_result,
+        IModule_cache            *module_cache);
 
     /// Compile a foreign module with a given name.
     ///
@@ -748,9 +767,11 @@ public:
     ///
     /// \param analysis    the current analysis
     /// \param front_path  a front path to set if any
+    /// \param user_data   a user data interface
     Thread_context *create_thread_context(
-        Analysis const &analysis,
-        char const    *front_path);
+        Analysis const             &analysis,
+        char const                 *front_path,
+        mi::base::IInterface const *user_data);
 
     /// If the given module name names a foreign module, return the matching translator.
     ///

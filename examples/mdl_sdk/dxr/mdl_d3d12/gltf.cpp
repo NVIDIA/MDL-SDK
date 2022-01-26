@@ -1019,6 +1019,7 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             add_specular(doc, mat.metallic_roughness.specular, m.materialsSpecular);
             mat.metallic_roughness.ior.ior = m.materialsIOR.ior;
             add_volume(doc, mat.metallic_roughness.volume, m.materialsVolume);
+            mat.emissive_strength.emissive_strength = m.materialEmissiveStrength.emissiveStrength;
         }
 
         mat.normal_texture = get_texture(doc, m.normalTexture);

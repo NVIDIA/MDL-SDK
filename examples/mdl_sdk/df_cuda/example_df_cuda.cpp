@@ -311,14 +311,14 @@ static void create_environment(
         transaction->create<mi::neuraylib::IImage>("Image"));
     check_success(image->reset_file(envmap_name) == 0);
 
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
     const mi::Uint32 rx = canvas->get_resolution_x();
     const mi::Uint32 ry = canvas->get_resolution_y();
     res->x = rx;
     res->y = ry;
 
     // Check, whether we need to convert the image
-    char const *image_type = image->get_type();
+    char const *image_type = image->get_type(0, 0);
     if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
         canvas = image_api->convert(canvas.get(), "Color");
 
@@ -446,6 +446,7 @@ struct Options {
     bool enable_derivatives;
     bool fold_ternary_on_df;
     bool enable_auxiliary_output;
+    bool use_adapt_normal;
     unsigned int res_x, res_y;
     unsigned int iterations;
     unsigned int samples_per_iteration;
@@ -472,6 +473,7 @@ struct Options {
     , enable_derivatives(false)
     , fold_ternary_on_df(false)
     , enable_auxiliary_output(true)
+    , use_adapt_normal(false)
     , res_x(1024)
     , res_y(1024)
     , iterations(4096)
@@ -702,7 +704,7 @@ private:
                 if (char const *img = tex->get_image()) {
                     mi::base::Handle<mi::neuraylib::IImage const> image(
                         transaction->access<mi::neuraylib::IImage>(img));
-                    url = image->get_filename();
+                    url = image->get_filename(0, 0);
                 }
                 if (url == nullptr)
                     url = s;
@@ -1040,7 +1042,7 @@ static void render_scene(
         for (size_t i = 0, num_mats = compiled_materials.size(); i < num_mats; ++i) {
             // Get the compiled material and the parameter annotations
             mi::neuraylib::ICompiled_material const *cur_mat = compiled_materials[i].get();
-            mi::neuraylib::IMaterial_definition const *cur_def = material_defs[i].get();
+            mi::neuraylib::IFunction_definition const *cur_def = material_defs[i].get();
             mi::base::Handle<mi::neuraylib::IAnnotation_list const> anno_list(
                 cur_def->get_parameter_annotations());
 
@@ -1975,6 +1977,7 @@ static void usage(const char *name)
         << "--nogl                      don't open interactive display\n"
         << "--nocc                      don't use class-compilation\n"
         << "--noaux                     don't generate code for albedo and normal buffers\n"
+        << "--an                        use adapt normal function\n"
         << "--gui_scale <factor>        GUI scaling factor (default: 1.0)\n"
         << "--res <res_x> <res_y>       resolution (default: 1024x1024)\n"
         << "--hdr <filename>            HDR environment map "
@@ -2024,6 +2027,8 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.use_class_compilation = false;
             } else if (strcmp(opt, "--noaux") == 0) {
                 options.enable_auxiliary_output = false;
+            } else if (strcmp(opt, "--an") == 0) {
+                options.use_adapt_normal = false;
             } else if (strcmp(opt, "--gui_scale") == 0 && i < argc - 1) {
                 options.gui_scale = static_cast<float>(atof(argv[++i]));
             } else if (strcmp(opt, "--res") == 0 && i < argc - 2) {
@@ -2196,6 +2201,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_derivatives,
                 options.fold_ternary_on_df,
                 options.enable_auxiliary_output,
+                options.use_adapt_normal,
                 /*df_handle_mode=*/ "pointer");
 
             // List of materials in the scene
@@ -2253,8 +2259,8 @@ int MAIN_UTF8(int argc, char* argv[])
 
                         // get the j`th material
                         const char* material_db_name = loaded_module->get_material(j);
-                        mi::base::Handle<const mi::neuraylib::IMaterial_definition> mat_def(
-                            transaction->access<const mi::neuraylib::IMaterial_definition>(
+                        mi::base::Handle<const mi::neuraylib::IFunction_definition> mat_def(
+                            transaction->access<const mi::neuraylib::IFunction_definition>(
                                 material_db_name));
 
                         // make sure the material name starts with the pattern

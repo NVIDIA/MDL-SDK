@@ -39,11 +39,18 @@ namespace mi {
 namespace mdl {
 namespace hlsl {
 
+/// Insert a message into a sorted message vector.
+///
+/// \param messages  a sorted message vector
+/// \param message   the message to insert
+///
+/// \return the index of the inserted message
 static size_t insert_message(Arena_message_vector &messages, Message *message)
 {
-    Location const &loc = message->get_location();
-    unsigned line = loc.get_line();
-    unsigned column = loc.get_column();
+    Location const &nloc = message->get_location();
+    unsigned line   = nloc.get_line();
+    unsigned column = nloc.get_column();
+
     Arena_message_vector::iterator it = messages.begin();
     for (size_t i = 0; it != messages.end(); ++i, ++it) {
         Message *msg = *it;

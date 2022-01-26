@@ -42,11 +42,11 @@ namespace llvm {
 namespace hlsl {
 
 class Region;
-class ASTFunction;
+class StructuredFunction;
 
-/// This pass computes a reducible AST above the control flow.
+/// This pass computes a structured control flow above the LLVM control flow.
 /// Irreducible control flow is removed using "Controlled Node Splitting".
-class ASTComputePass : public ModulePass
+class StructuredControlFlowPass : public ModulePass
 {
 public:
     static char ID;
@@ -55,25 +55,29 @@ public:
     /// Constructor.
     ///
     /// \param type_mapper  the MDL type mapper.
-    explicit ASTComputePass(mi::mdl::Type_mapper &type_mapper);
+    explicit StructuredControlFlowPass(
+        mi::mdl::Type_mapper &type_mapper);
 
     /// Destructor.
-    ~ASTComputePass() override;
+    ~StructuredControlFlowPass() override;
 
-    void getAnalysisUsage(AnalysisUsage &usage) const final;
+    void getAnalysisUsage(
+        AnalysisUsage &usage) const final;
 
     StringRef getPassName() const final {
-        return "AST compute";
+        return "Structured Control Flow";
     }
 
     /// Process a whole module.
     bool runOnModule(Module &M) final;
 
-    /// Get the AST function for the given LLVM function.
+    /// Get the structured function for the given LLVM function.
     /// Returns nullptr, if the LLVM function is unknown.
-    ASTFunction const *getASTFunction(Function *func) const {
-        auto it = m_ast_function_map.find(func);
-        if (it == m_ast_function_map.end()) {
+    StructuredFunction const *getStructuredFunction(
+        llvm::Function *func) const
+    {
+        auto it = m_structured_function_map.find(func);
+        if (it == m_structured_function_map.end()) {
             return nullptr;
         }
         return it->second;
@@ -85,8 +89,8 @@ private:
     /// The MDL type mapper.
     mi::mdl::Type_mapper &m_type_mapper;
 
-    /// Map from LLVM functions to AST functions.
-    std::map<llvm::Function *, ASTFunction *> m_ast_function_map;
+    /// Map from LLVM functions to structured functions.
+    std::map<llvm::Function *, StructuredFunction *> m_structured_function_map;
 };
 
 /// Creates a new AST compute pass.
@@ -95,7 +99,8 @@ private:
 Pass *createASTComputePass(mi::mdl::Type_mapper &type_mapper);
 
 
-/// This pass ensures that loops only have one exit node as preparation for the ASTComputePass.
+/// This pass ensures that loops only have one exit node as preparation
+// for the StructuredControlFlowPass.
 class LoopExitEnumerationPass : public FunctionPass
 {
 public:
@@ -135,7 +140,10 @@ public:
 private:
     /// Fixes the PHI nodes in the given block, when the predecessor old_pred is replaced
     /// by new_pred.
-    static void fixPhis(BasicBlock *bb, BasicBlock *old_pred, BasicBlock *new_pred);
+    static void fixPhis(
+        BasicBlock *bb,
+        BasicBlock *old_pred,
+        BasicBlock *new_pred);
 
 };
 

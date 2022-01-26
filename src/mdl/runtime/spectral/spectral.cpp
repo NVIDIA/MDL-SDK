@@ -180,6 +180,7 @@ void spectrum_resample_input(
     }
 }
 
+#if 0
 //  blackbody emitter, compute intensity at specific wavelength (in nm)
 //  and temperature (in Kelvin) using Planck's law 
 static float blackbody(const float lambda, const float temperature)
@@ -196,7 +197,6 @@ static float blackbody(const float lambda, const float temperature)
     return f / (expf(h * c / (x * k * temperature)) - 1.0f);
 }
 
-#if 0
 void create_blackbody_spectrum(
     float * const spectrum,
     const unsigned int num_lambda,
@@ -345,8 +345,6 @@ void convert_cs_to_XYZ(float target[3], const float source[3], const Color_space
     }
 }
 
-
-
 /// The MDL blackbody function implementation.
 void mdl_blackbody(float sRGB[3], float kelvin)
 {
@@ -354,8 +352,9 @@ void mdl_blackbody(float sRGB[3], float kelvin)
     if (kelvin < threshold)
         kelvin = threshold;
 
+#if 0
+    // reference code operating on full resolution of our tabulated color matching functions
     float XYZ[3] = {0.0f, 0.0f, 0.0f};
-    // code currently operates on full resolution of our tabulated color matching functions
     for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
     {
         const float lambda = SPECTRAL_XYZ_LAMBDA_MIN + (float)i * SPECTRAL_XYZ_LAMBDA_STEP;
@@ -369,6 +368,20 @@ void mdl_blackbody(float sRGB[3], float kelvin)
     XYZ[0] /= XYZ[1];
     XYZ[2] /= XYZ[1];
     XYZ[1] = 1.0f;
+#else
+    // using X/Y and Z/Y fitted to a rational function
+    const float k2 = kelvin * kelvin;
+    const float k3 = k2 * kelvin;
+    const float k4 = k2 * k2;
+
+#define FITTED_FUNC(a, b, c, d, e, f, g, h, i, j) (a + b * kelvin + c * k2 + d * k3 + e * k4) / (f + g * kelvin + h * k2 + i * k3 + j * k4)    
+    const float XYZ[3] = {
+        FITTED_FUNC(1.00000000e+00f, -1.44688464e+11f, 3.65139181e+08f, -5.24496810e+04f, 7.03428125e+01f, 1.00000000e+00f, -3.89910067e+10f, 7.73122653e+07f, 1.99017054e+04f, 6.78027157e+01f),
+        1.0f,
+        FITTED_FUNC(1.00000000e+00f, -1.39076125e+11f, 6.08958603e+08f, -8.68632924e+05f, 4.08263556e+02f, -8.56817534e+03f, -9.49412452e+11f, 2.40214241e+09f, 1.47983610e+05f, 1.81111205e+02f)
+    };
+#undef FITTED_FUNC
+#endif
 
     convert_XYZ_to_cs(sRGB, XYZ, CS_sRGB);
 

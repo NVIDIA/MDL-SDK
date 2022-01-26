@@ -249,7 +249,8 @@ size_t Messages_impl::add_message(
     Position const     *pos,
     char const         *str)
 {
-    Message *msg = m_builder.create<Message>(this, sev, code, msg_class, mod_id, pos, str);
+    Message *msg = Arena_builder(m_msg_arena).create<Message>(
+        this, sev, code, msg_class, mod_id, pos, str);
     return add_message(*msg);
 }
 
@@ -263,7 +264,7 @@ size_t Messages_impl::add_note(
     Position const     *pos,
     char const         *str)
 {
-    Message *note = m_builder.create<Message>(
+    Message *note = Arena_builder(m_msg_arena).create<Message>(
         this, IMessage::MS_INFO, code, msg_class, mod_id, pos, str);
     m_msgs.at(message_index)->add_note(note);
     return 0;
@@ -308,7 +309,7 @@ size_t Messages_impl::add_imported_msg_as_note(
     size_t         fname_id,
     IMessage const *msg)
 {
-    Message *note = m_builder.create<Message>(this, msg, fname_id);
+    Message *note = Arena_builder(m_msg_arena).create<Message>(this, msg, fname_id);
     m_msgs.at(message_index)->add_note(note);
     return 0;
 }
@@ -318,7 +319,7 @@ size_t Messages_impl::add_imported_msg(
     size_t         fname_id,
     IMessage const *msg)
 {
-    Message *nmsg = m_builder.create<Message>(this, msg, fname_id);
+    Message *nmsg = Arena_builder(m_msg_arena).create<Message>(this, msg, fname_id);
     return add_message(*nmsg);
 }
 
@@ -472,7 +473,8 @@ void Messages_impl::deserialize_msg_list(
         string             s(deserializer.read_cstring(), deserializer.get_allocator());
         // no need to serializer owner, will be automatically restored
 
-        Message *msg = m_builder.create<Message>(this, sev, code, cls, f_id, &pos, s.c_str());
+        Message *msg = Arena_builder(m_msg_arena).create<Message>(
+            this, sev, code, cls, f_id, &pos, s.c_str());
         deserialize_msg_list(deserializer, msg->m_notes);
 
         msgs.push_back(msg);
@@ -515,7 +517,6 @@ void Messages_impl::deserialize(Entity_deserializer &deserializer)
 Messages_impl::Messages_impl(IAllocator *alloc, char const *owner_fname)
 : Base()
 , m_msg_arena(alloc)
-, m_builder(m_msg_arena)
 , m_msgs(alloc)
 , m_err(alloc)
 , m_filenames(alloc)

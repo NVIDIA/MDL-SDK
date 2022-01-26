@@ -250,14 +250,14 @@ Value *Expr_binary::fold(
             size_t index   = 0;
             bool  can_fold = false;
 
-            if (Value_two_complement<32> *i_value = as<Value_two_complement<32> >(rhs)) {
-                index = i_value->get_value_unsigned();
+            if (Value_two_complement<32> *i32_value = as<Value_two_complement<32> >(rhs)) {
+                index = i32_value->get_value_unsigned();
                 can_fold = true;
-            } else if (Value_two_complement<12> *i_value = as<Value_two_complement<12> >(rhs)) {
-                index = i_value->get_value_unsigned();
+            } else if (Value_two_complement<12> *i12_value = as<Value_two_complement<12> >(rhs)) {
+                index = i12_value->get_value_unsigned();
                 can_fold = true;
-            } else if (Value_two_complement<16> *i_value = as<Value_two_complement<16> >(rhs)) {
-                index = i_value->get_value_unsigned();
+            } else if (Value_two_complement<16> *i16_value = as<Value_two_complement<16> >(rhs)) {
+                index = i16_value->get_value_unsigned();
                 can_fold = true;
             }
 

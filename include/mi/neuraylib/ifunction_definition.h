@@ -54,6 +54,10 @@ class IMdl_execution_context;
 /// #create_function_call() method allows to create function calls based on this function
 /// definition.
 ///
+/// \note This interface also supports materials, which are considered as a special kind of
+///       functions, namely functions with the return type \c "material". See
+///       \ref mi_mdl_materials_are_functions for details.
+///
 /// \note See \ref mi_neuray_mdl_template_like_function_definitions for function definitions
 ///       with special semantics.
 ///
@@ -66,6 +70,8 @@ class IFunction_definition : public
 public:
 
     /// All known semantics of functions definitions.
+    ///
+    /// Material definitions always have the sematic #DS_UNKNOWN.
     ///
     /// \note Do not rely on the numeric values of the enumerators since they may change without
     ///       further notice.
@@ -320,7 +326,7 @@ public:
         DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF,
         DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX,     ///< The df::color_normalized_mix() function.
         DS_INTRINSIC_DF_COLOR_CLAMPED_MIX,        ///< The df::color_clamped_mix() function.
-        DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER,     ///< The df::color_weigthed_layer() function.
+        DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER,     ///< The df::color_weighted_layer() function.
         DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER,      ///< The df::color_fresnel_layer() function.
         DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER, ///< The df::color_custom_curve_layer() function.
 
@@ -348,15 +354,15 @@ public:
         DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3,          ///< scene::data_lookup_float3()
         DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4,          ///< scene::data_lookup_float4()
         DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR,           ///< scene::data_lookup_color()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT,     ///< scene::data_lookup_uniorm_int()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2,    ///< scene::data_lookup_uniorm_int2()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3,    ///< scene::data_lookup_uniorm_int3()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4,    ///< scene::data_lookup_uniorm_int4()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT,   ///< scene::data_lookup_uniorm_float()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2,  ///< scene::data_lookup_uniorm_float2()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3,  ///< scene::data_lookup_uniorm_float3()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,  ///< scene::data_lookup_uniorm_float4()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,   ///< scene::data_lookup_uniorm_color()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT,     ///< scene::data_lookup_uniform_int()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2,    ///< scene::data_lookup_uniform_int2()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3,    ///< scene::data_lookup_uniform_int3()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4,    ///< scene::data_lookup_uniform_int4()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT,   ///< scene::data_lookup_uniform_float()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2,  ///< scene::data_lookup_uniform_float2()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3,  ///< scene::data_lookup_uniform_float3()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,  ///< scene::data_lookup_uniform_float4()
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,   ///< scene::data_lookup_uniform_color()
         DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
 
         // ::debug module intrinsics
@@ -453,11 +459,8 @@ public:
 
     /// Indicates whether the definition represents a material.
     ///
-    /// If materials-are-functions is enabled, then this method returns \c true iff
-    /// #mi::neuraylib::IFunction_definition::get_interface<mi::neuraylib::IMaterial_definition>()
-    /// succeeds. Otherwise, this method always returns \c false.
-    ///
-    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions().
+    /// If \ref mi_mdl_materials_are_functions is disabled, then this method returns always
+    /// \c false.
     virtual bool is_material() const = 0;
 
     /// Returns the return type.
@@ -511,7 +514,7 @@ public:
     ///       defaults should be retrieved via the name of the parameter instead of its index.
     virtual const IExpression_list* get_defaults() const = 0;
 
-    /// Returns the enable_if conditions of all parameters.
+    /// Returns the \c enable_if conditions of all parameters.
     ///
     /// \note Not all parameters have a condition. Hence, the indices in the returned expression
     ///       list do not necessarily coincide with the parameter indices of this definition.
@@ -519,20 +522,20 @@ public:
     ///       its index.
     virtual const IExpression_list* get_enable_if_conditions() const = 0;
 
-    /// Returns the number of other parameters whose enable_if condition might depend on the
+    /// Returns the number of other parameters whose \c enable_if condition might depend on the
     /// argument of the given parameter.
     ///
     /// \param index    The index of the parameter.
-    /// \return         The number of other parameters whose enable_if condition depends on this
+    /// \return         The number of other parameters whose \c enable_if condition depends on this
     ///                 parameter argument.
     virtual Size get_enable_if_users( Size index) const = 0;
 
-    /// Returns the index of a parameter whose enable_if condition might depend on the
+    /// Returns the index of a parameter whose \c enable_if condition might depend on the
     /// argument of the given parameter.
     ///
     /// \param index    The index of the parameter.
     /// \param u_index  The index of the enable_if user.
-    /// \return         The index of a parameter whose enable_if condition depends on this
+    /// \return         The index of a parameter whose \c enable_if condition depends on this
     ///                 parameter argument, or ~0 if indexes are out of range.
     virtual Size get_enable_if_user( Size index, Size u_index) const = 0;
 
@@ -562,6 +565,7 @@ public:
     virtual const char* get_thumbnail() const = 0;
 
     /// Returns \c true if the definition is valid, \c false otherwise.
+    ///
     /// A definition can become invalid if the module it has been defined in
     /// or another module imported by that module has been reloaded. In the first case,
     /// the definition can no longer be used. In the second case, the

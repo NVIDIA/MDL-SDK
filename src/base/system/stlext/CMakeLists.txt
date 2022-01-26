@@ -50,7 +50,6 @@ set(PROJECT_HEADERS
     "i_stlext_safe_cast.h"
     "i_stlext_type_traits.h"
     "i_stlext_type_traits_base_types.h"
-    "stlext_atomic_counter_inline.h"
     "stlext_mpl.h"
     "stlext_type_traits_defs.h"
     "stlext_type_traits_helper.h"

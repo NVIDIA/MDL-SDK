@@ -45,7 +45,7 @@ class ICanvas_cuda;
 class IReader;
 class ITile;
 
-/** 
+/**
 \if MDL_SDK_API
     \defgroup mi_neuray_mdl_sdk_misc Miscellaneous Interfaces
     \ingroup mi_neuray
@@ -67,39 +67,6 @@ class ITile;
 */
 
 
-/// A wrapped boolean that cannot implicitly constructed from integers or floats.
-///
-/// This is a temporary measure to avoid inadvertent misuse of the changed canvas creation API.
-///
-/// \note For best forwards compatibility, do not instantiate this class explicitly! Pass plain
-/// booleans instead of #mi::neuraylib::Boolean, i.e., use \c create_canvas(...,false), not
-/// \c create_canvas(...,Boolean(false)).
-///
-/// If your program fails to compile with errors about #mi::neuraylib::Boolean constructors being
-/// private or ambiguous, please update the call site to use the new API, i.e.,
-/// #mi::neuraylib::IImage_api::create_canvas() without tile support. If you still require tiles,
-/// you may define MI_NEURAYLIB_DEPRECATED_TILES, but note that support for tiled canvases will be
-/// dropped in the next major release.
-class Boolean
-{
-public:
-    Boolean(const bool val) : m_val(val) {}
-
-    operator bool() const { return m_val; }
-
-private:
-    Boolean(int);
-    Boolean(unsigned);
-    Boolean(float);
-
-    const bool m_val;
-};
-
-#if (__cplusplus >= 201103L)
-static_assert(sizeof(Boolean) == sizeof(bool),"needed for API transition");
-#endif
-
-
 /// This interface provides various utilities related to canvases and buffers.
 ///
 /// Note that #create_buffer_from_canvas() and #create_canvas_from_buffer() encode and decode pixel
@@ -112,41 +79,6 @@ class IImage_api : public
 public:
     /// \name Factory methods for canvases and tiles
     //@{
-
-    /// Creates a canvas with given pixel type, width, height, and layers.
-    ///
-    /// This factory function allows to create instances of the abstract interface
-    /// #mi::neuraylib::ICanvas based on an internal default implementation. However, you are not
-    /// obligated to use this factory function and the internal default implementation. It is
-    /// absolutely fine to use your own (correct) implementation of the #mi::neuraylib::ICanvas
-    /// interface.
-    ///
-    /// Note that tiled canvases are deprecated and will no longer be supported in the next
-    /// major release.
-    ///
-    /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of
-    ///                     supported pixel types.
-    /// \param width        The desired width.
-    /// \param height       The desired height.
-    /// \param tile_width   The desired tile width. The special value 0 represents the canvas
-    ///                     width.
-    /// \param tile_height  The desired tile height. The special value 0 represents the canvas
-    ///                     height.
-    /// \param layers       The desired number of layers (depth). Must be 6 for cubemaps.
-    /// \param is_cubemap   Flag that indicates whether this canvas represents a cubemap.
-    /// \param gamma        The desired gamma value. The special value 0.0 represents the default
-    ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
-    /// \return             The requested canvas, or \c NULL in case of invalid pixel type, width,
-    ///                     height, layers, or cubemap flag.
-    virtual ICanvas* deprecated_create_tiled_canvas(
-        const char* pixel_type,
-        Uint32 width,
-        Uint32 height,
-        Uint32 tile_width,
-        Uint32 tile_height,
-        Uint32 layers = 1,
-        bool is_cubemap = false,
-        Float32 gamma = 0.0f) const = 0;
 
     /// Creates a tile with given pixel type, width, and height.
     ///
@@ -166,6 +98,32 @@ public:
         const char* pixel_type,
         Uint32 width,
         Uint32 height) const = 0;
+
+    /// Creates a canvas with given pixel type, resolution, and layers.
+    ///
+    /// This factory function allows to create instances of the abstract interface
+    /// #mi::neuraylib::ICanvas based on an internal default implementation. However, you are not
+    /// obligated to use this factory function and the internal default implementation. It is
+    /// absolutely fine to use your own (correct) implementation of the #mi::neuraylib::ICanvas
+    /// interface.
+    ///
+    /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of
+    ///                     supported pixel types.
+    /// \param width        The desired width.
+    /// \param height       The desired height.
+    /// \param layers       The desired number of layers (depth). Must be 6 for cubemaps.
+    /// \param is_cubemap   Flag that indicates whether this canvas represents a cubemap.
+    /// \param gamma        The desired gamma value. The special value 0.0 represents the default
+    ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
+    /// \return             The requested canvas, or \c NULL in case of invalid pixel type, width,
+    ///                     height, layers, or cubemap flag.
+    virtual ICanvas* create_canvas(
+        const char* pixel_type,
+        Uint32 width,
+        Uint32 height,
+        Uint32 layers = 1,
+        bool is_cubemap = false,
+        Float32 gamma = 0.0f) const = 0;
 
 #ifndef MI_SKIP_WITH_MDL_SDK_DOXYGEN
     /// Creates a CUDA canvas with given pixel type, width, height, and layers.
@@ -194,6 +152,20 @@ public:
         Uint32 height,
         Uint32 layers = 1,
         Float32 gamma = 0.0f) const = 0;
+
+    /// Creates mipmaps from the given canvas.
+    ///
+    /// \note The base level (the canvas that is passed in) is not included in the returned
+    /// canvas array.
+    ///
+    /// \param canvas           The canvas to create the mipmaps from.
+    /// \param gamma_override   If this parameter is different from zero, it is used instead of the
+    ///                         canvas gamma during mipmap creation.
+    /// \return                 An array of type #mi::IPointer containing pointers to
+    ///                         the mipmaps of type #mi::neuraylib::ICanvas.
+    ///                         If no mipmaps could be created, NULL is returned.
+    virtual IArray* create_mipmaps(
+        const ICanvas* canvas, Float32 gamma_override = 0.0f) const = 0;
 
     //@}
     /// \name Conversion between canvases and raw memory buffers
@@ -310,8 +282,18 @@ public:
     ///                      format.
     /// \return              The canvas with the decoded pixel data, or \c NULL in case of failure.
     virtual ICanvas* create_canvas_from_buffer(
-        const IBuffer* buffer,
-        const char* image_format) const = 0;
+        const IBuffer* buffer, const char* image_format) const = 0;
+
+    /// Decodes the pixel data from a reader into a canvas.
+    ///
+    /// \param reader        The reader that provides the data for the image. The reader needs to
+    ///                      support absolute access.
+    /// \param image_format  The image format of the buffer, e.g., \c "jpg". Note that support for
+    ///                      a given image format requires an image plugin capable of handling that
+    ///                      format.
+    /// \return              The canvas with the decoded pixel data, or \c NULL in case of failure.
+    virtual ICanvas* create_canvas_from_reader(
+        IReader* reader, const char* image_format) const = 0;
 
     /// Indicates whether a particular image format is supported for decoding.
     ///
@@ -417,98 +399,42 @@ public:
     /// \see #get_components_per_pixel()
     virtual Uint32 get_bytes_per_component( const char* pixel_type) const = 0;
 
-    /// Creates mipmaps from the given canvas.
+    //@}
+    /// \name Utility methods for RGBA channels
+    //@{
+
+    /// Returns the pixel type of an RGBA channel.
     ///
-    /// \note The base level (the canvas that is passed in) is not included in the returned 
-    /// canvas array.
+    /// Invalid pixel type/selector combinations are:
+    /// - \p pixel_type is not an RGB or RGBA pixel type
+    /// - \p selector is not an RGBA channel selector
     ///
-    /// \param canvas           The canvas to create the mipmaps from.
-    /// \param gamma_override   If this parameter is different from zero, it is used instead of the
-    ///                         canvas gamma during mipmap creation.
-    /// \return                 An array of type #mi::IPointer containing pointers to
-    ///                         the mipmaps of type #mi::neuraylib::ICanvas.
-    ///                         If no mipmaps could be created, NULL is returned.
-    virtual IArray* create_mipmaps(
-        const ICanvas* canvas, Float32 gamma_override=0.0f) const = 0;
+    /// \param pixel_type   The pixel type of the mipmap/canvas/tile.
+    /// \param selector     The RGBA channel selector.
+    /// \return             Returns PT_UNDEF for invalid pixel type/selector combinations.
+    ///                     Otherwise, returns PT_SINT8 or PT_FLOAT32, depending on
+    ///                     \p pixel_type.
+    virtual const char* get_pixel_type_for_channel(
+        const char* pixel_type, const char* selector) const = 0;
+
+    /// Extracts an RGBA channel from a canvas.
+    ///
+    /// \param canvas           The canvas to extract a channel from.
+    /// \param selector         The RGBA channel selector.
+    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    ///                         channel selector combinations (see #get_pixel_type_for_channel()).
+    virtual ICanvas* extract_channel( const ICanvas* canvas, const char* selector) const = 0;
+
+    /// Extracts an RGBA channel from a tile.
+    ///
+    /// \param tile             The tile to extract a channel from.
+    /// \param selector         The RGBA channel selector.
+    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    ///                         channel selector combinations (see #get_pixel_type_for_channel()).
+    virtual ITile* extract_channel( const ITile* tile, const char* selector) const = 0;
 
     //@}
 
-    /// Creates a canvas with given pixel type, resolution, and layers.
-    ///
-    /// This factory function allows to create instances of the abstract interface
-    /// #mi::neuraylib::ICanvas based on an internal default implementation. However, you are not
-    /// obligated to use this factory function and the internal default implementation. It is
-    /// absolutely fine to use your own (correct) implementation of the #mi::neuraylib::ICanvas
-    /// interface.
-    ///
-    /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of
-    ///                     supported pixel types.
-    /// \param width        The desired width.
-    /// \param height       The desired height.
-    /// \param layers       The desired number of layers (depth). Must be 6 for cubemaps.
-    /// \param is_cubemap   Flag that indicates whether this canvas represents a cubemap.
-    /// \param gamma        The desired gamma value. The special value 0.0 represents the default
-    ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
-    /// \return             The requested canvas, or \c NULL in case of invalid pixel type, width,
-    ///                     height, layers, or cubemap flag.
-    virtual ICanvas* create_canvas(
-        const char* pixel_type,
-        Uint32 width,
-        Uint32 height,
-        Uint32 layers = 1,
-        Boolean is_cubemap = false,
-        Float32 gamma = 0.0f) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_TILES
-    /// Creates a canvas with given pixel type, width, height, and layers.
-    ///
-    /// This factory function allows to create instances of the abstract interface
-    /// #mi::neuraylib::ICanvas based on an internal default implementation. However, you are not
-    /// obligated to use this factory function and the internal default implementation. It is
-    /// absolutely fine to use your own (correct) implementation of the #mi::neuraylib::ICanvas
-    /// interface.
-    ///
-    /// Note that tiled canvases are deprecated and will no longer be supported in the next
-    /// major release. Please use the overload without tile parameters instead of this function.
-    ///
-    /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of
-    ///                     supported pixel types.
-    /// \param width        The desired width.
-    /// \param height       The desired height.
-    /// \param tile_width   The desired tile width. The special value 0 represents the canvas
-    ///                     width.
-    /// \param tile_height  The desired tile height. The special value 0 represents the canvas
-    ///                     height.
-    /// \param layers       The desired number of layers (depth). Must be 6 for cubemaps.
-    /// \param is_cubemap   Flag that indicates whether this canvas represents a cubemap.
-    /// \param gamma        The desired gamma value. The special value 0.0 represents the default
-    ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
-    /// \return             The requested canvas, or \c NULL in case of invalid pixel type, width,
-    ///                     height, layers, or cubemap flag.
-    ICanvas* create_canvas(
-        const char* pixel_type,
-        Uint32 width,
-        Uint32 height,
-        Uint32 tile_width,
-        Uint32 tile_height,
-        Uint32 layers = 1,
-        bool is_cubemap = false,
-        Float32 gamma = 0.0f) const
-    {
-        return (tile_width || tile_height) ?
-                deprecated_create_tiled_canvas(
-                        pixel_type,
-                        width, height,
-                        tile_width, tile_height,
-                        layers, is_cubemap,
-                        gamma):
-                create_canvas(
-                        pixel_type,
-                        width, height,
-                        layers, Boolean(is_cubemap),
-                        gamma);
-    }
-#endif
 };
 
 /*@}*/ // end group mi_neuray_rendering / mi_neuray_rtmp

@@ -55,6 +55,13 @@ class IScope;
 /// Transactions are associated with a scope of the database and can be created with
 /// #mi::neuraylib::IScope::create_transaction().
 ///
+/// Transactions are not thread-safe. If you use a particular transaction from multiple threads,
+/// then you have to serialize all transaction uses. This does not ony apply to methods of
+/// #mi::neuraylib::ITransaction, but all methods that implicitly use the transaction. For example,
+/// such a use can happen by methods of DB elements returned from #access() or #edit() calls, or by
+/// objects returned from factories taking the transaction as \ifnot DICE_API argument, like
+/// #mi::neuraylib::IMdl_factory::create_module_builder(). \else argument. \endif.
+///
 /// \par Concurrent accesses to database elements within a transaction
 /// Access to database elements is provided by #access() (read-only) and #edit() (for modification).
 /// The interface pointers returned by these methods must be released when you are done, in
@@ -135,11 +142,9 @@ public:
     /// \ref mi_neuray_scene_element. \endif Note that most types can also be created via the API
     /// component #mi::neuraylib::IFactory which does not require the context of a transaction.
     ///
-    /// This method can not be used to create MDL definitions, material instances, or
-    /// function calls. To create instances of
-    /// #mi::neuraylib::IMaterial_instance and #mi::neuraylib::IFunction_call, use the
-    /// methods #mi::neuraylib::IMaterial_definition::create_material_instance() or
-    /// #mi::neuraylib::IFunction_definition::create_function_call(), respectively.
+    /// This method can not be used to create MDL modules, definitions, or function calls. To
+    /// create instances of #mi::neuraylib::IFunction_call, use the method
+    /// #mi::neuraylib::IFunction_definition::create_function_call().
     ///
     /// The created object will be initialized in a manner dependent upon the passed type
     /// name. Each class has its own policy on initialization. So, one should not make any
@@ -174,11 +179,9 @@ public:
     /// \ref mi_neuray_scene_element. \endif Note that most types can also be created via the API
     /// component #mi::neuraylib::IFactory which does not require the context of a transaction.
     ///
-    /// This method can not be used to create MDL definitions, material instances, or
-    /// function calls. To create instances of
-    /// #mi::neuraylib::IMaterial_instance and #mi::neuraylib::IFunction_call, use the
-    /// methods #mi::neuraylib::IMaterial_definition::create_material_instance() or
-    /// #mi::neuraylib::IFunction_definition::create_function_call(), respectively.
+    /// This method can not be used to create MDL modules, definitions, or function calls. To
+    /// create instances of #mi::neuraylib::IFunction_call, use the method
+    /// #mi::neuraylib::IFunction_definition::create_function_call().
     ///
     /// The created object will be initialized in a manner dependent upon the passed type name. Each
     /// class has its own policy on initialization. So, one should not make any assumptions on the
@@ -240,11 +243,9 @@ public:
     /// \ref mi_neuray_scene_element. \endif Note that most types can also be created via the API
     /// component #mi::neuraylib::IFactory which does not require the context of a transaction.
     ///
-    /// This method can not be used to create MDL definitions, material instances, or
-    /// function calls. To create instances of
-    /// #mi::neuraylib::IMaterial_instance and #mi::neuraylib::IFunction_call, use the
-    /// methods #mi::neuraylib::IMaterial_definition::create_material_instance() or
-    /// #mi::neuraylib::IFunction_definition::create_function_call(), respectively.
+    /// This method can not be used to create MDL modules, definitions, or function calls. To
+    /// create instances of #mi::neuraylib::IFunction_call, use the method
+    /// #mi::neuraylib::IFunction_definition::create_function_call().
     ///
     /// The created object will be initialized in a manner dependent upon the passed type name. Each
     /// class has its own policy on initialization. So, one should not make any assumptions on the
@@ -453,6 +454,10 @@ public:
     /// committed and before starting the next one to force garbage collection of all possible
     /// elements.
     ///
+    /// \if IRAY_API
+    /// See also \ref mi_neuray_database_reuse_of_names for more details and correct usage patterns.
+    /// \endif
+    ///
     /// \param name           The name of the element in the database to remove.
     /// \param only_localized \if MDL_SDK_API Unused. \else If \c true, the element is only removed
     ///                       if it exists in the scope of the transaction; parent scopes are not
@@ -511,7 +516,7 @@ public:
     /// stamp.
     ///
     /// \note \p time_stamp should not stem from another concurrent transaction. Such changes will
-    ///       never be visible in this transaction, but the method might still return \p true
+    ///       never be visible in this transaction, but the method might still return \c true
     ///       depending on the start order of the two transactions.
     ///
     /// \note In case of multiple overlapping transactions the returned answer may not list

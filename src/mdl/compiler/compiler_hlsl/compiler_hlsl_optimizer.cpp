@@ -48,6 +48,7 @@ Optimizer::Optimizer(
 , m_ef(unit.get_expression_factory())
 , m_df(unit.get_declaration_factory())
 , m_value_factory(unit.get_value_factory())
+, m_symtab(unit.get_symbol_table())
 , m_opt_level(opt_level)
 {
 }
@@ -152,11 +153,11 @@ Expr *Optimizer::optimize_vector_constructor(Expr_call *constr)
 {
     Expr_binary *arg0 = as<Expr_binary>(constr->get_argument(0));
     if (arg0 == NULL) {
-        return NULL;
+        return constr;
     }
 
     if (arg0->get_operator() != Expr_binary::OK_SELECT) {
-        return NULL;
+        return constr;
     }
 
     size_t n_args = constr->get_argument_count();
@@ -168,24 +169,24 @@ Expr *Optimizer::optimize_vector_constructor(Expr_call *constr)
 
     Type_vector *v_type = as<Type_vector>(base->get_type());
     if (v_type == NULL) {
-        return NULL;
+        return constr;
     }
 
     for (size_t i = 1; i < n_args; ++i) {
         Expr_binary *arg = as<Expr_binary>(constr->get_argument(i));
 
         if (arg == NULL) {
-            return NULL;
+            return constr;
         }
 
-        if (arg0->get_operator() != Expr_binary::OK_SELECT) {
-            return NULL;
+        if (arg->get_operator() != Expr_binary::OK_SELECT) {
+            return constr;
         }
 
         Expr *left = arg->get_left_argument();
 
         if (!same_expr(base, left)) {
-            return NULL;
+            return constr;
         }
 
         symbols[i] =
@@ -200,7 +201,14 @@ Expr *Optimizer::optimize_vector_constructor(Expr_call *constr)
     bool need_swizzle = true;
 
     size_t l = v_type->get_size();
-    if (l <= 4 && l == swizzle.length() && strncmp(swizzle.c_str(), "xyzw", l) == 0) {
+    if (l <= 4 && l == swizzle.length() &&
+        (
+            // normal swizzle
+            strncmp(swizzle.c_str(), "xyzw", l) == 0 ||
+            // HLSL color swizzle
+            strncmp(swizzle.c_str(), "rgba", l) == 0
+        ))
+    {
         need_swizzle = false;
     }
 
@@ -227,20 +235,29 @@ Expr *Optimizer::optimize_vector_constructor(Expr_call *constr)
 // Optimize calls.
 Expr *Optimizer::optimize_call(Expr_call *call)
 {
+    // optimize arguments
+    for (size_t i = 0, n = call->get_argument_count(); i < n; ++i) {
+        Expr *arg = call->get_argument(i);
+        Expr *n_args = local_opt(arg);
+        if (n_args != arg) {
+            call->set_argument(i, n_args);
+        }
+    }
+
     Expr_ref *callee = as<Expr_ref>(call->get_callee());
     if (callee == NULL) {
-        return NULL;
+        return call;
     }
 
     Definition *def = callee->get_definition();
     if (def == NULL) {
         // bad, there should be one
-        return NULL;
+        return call;
     }
 
     Def_function *fdef = as<Def_function>(def);
     if (fdef == NULL) {
-        return NULL;
+        return call;
     }
 
     if (fdef->get_semantics() == Def_function::DS_ELEM_CONSTRUCTOR) {
@@ -248,12 +265,10 @@ Expr *Optimizer::optimize_call(Expr_call *call)
 
         if (is<Type_vector>(res_tp->skip_type_alias())) {
             // vector(a.x, a.y, ...) ==> a.xy...
-            if (Expr *res = optimize_vector_constructor(call)) {
-                return res;
-            }
+            return optimize_vector_constructor(call);
         }
     }
-    return NULL;
+    return call;
 }
 
 
@@ -590,6 +605,97 @@ Stmt *Optimizer::local_opt(Stmt *stmt)
     return res;
 }
 
+
+// Check if the given binary expression is a vector swizzle.
+bool Optimizer::is_swizzle(
+    Expr_binary *binary,
+    Expr *lhs,
+    Expr *rhs)
+{
+    if (binary->get_operator() != Expr_binary::OK_SELECT) {
+        return false;
+    }
+
+    if (!is<Type_vector>(lhs->get_type())) {
+        return false;
+    }
+
+    if (!is<Expr_ref>(rhs)) {
+        return false;
+    }
+    return true;
+}
+
+static size_t swizzle_pos(char c)
+{
+    switch (c) {
+    case 'r':
+    case 'x': return 0;
+    case 'g':
+    case 'y': return 1;
+    case 'b':
+    case 'z': return 2;
+    case 'a':
+    case 'w': return 3;
+    }
+    HLSL_ASSERT(!"unexpected swizzle character");
+    return 0;
+}
+
+/// Return the vector length of a type.
+static inline size_t vector_length(Type *tp)
+{
+    if (Type_vector *v_type = as<Type_vector>(tp)) {
+        return v_type->get_size();
+    }
+    return 1;
+}
+
+// Optimize a swizzle lhs.rhs.
+Expr *Optimizer::optimize_swizzle(
+    Type *res_type,
+    Expr *lhs,
+    Expr *rhs)
+{
+    if (Expr_binary *binary = as<Expr_binary>(lhs)) {
+        Expr *lhs_base = binary->get_left_argument();
+        Expr *rhs_base = binary->get_right_argument();
+
+        if (is_swizzle(binary, lhs_base, rhs_base)) {
+            Expr_ref *inner_ref = cast<Expr_ref>(rhs_base);
+            Expr_ref *outer_ref = cast<Expr_ref>(rhs);
+
+            char n_swizzle[8];
+
+            Symbol *inner_sym = inner_ref->get_name()->get_name()->get_symbol();
+            char const *inner_swizzle = inner_sym->get_name();
+            Symbol *outer_sym = outer_ref->get_name()->get_name()->get_symbol();
+            char const *outer_swizzle = outer_sym->get_name();
+
+            HLSL_ASSERT(strlen(outer_swizzle) == vector_length(res_type));
+            size_t i = 0;
+            for (size_t n = strlen(outer_swizzle); i < n; ++i) {
+                size_t pos = swizzle_pos(outer_swizzle[i]);
+                n_swizzle[i] = inner_swizzle[pos];
+            }
+            n_swizzle[i] = '\0';
+
+            Symbol *n_sym = m_symtab.get_symbol(n_swizzle);
+            Type_name *n_tname = m_df.create_type_name(outer_ref->get_location());
+            n_tname->set_name(m_df.create_name(outer_ref->get_location(), n_sym));
+
+            Expr_ref *n_ref = m_ef.create_reference(n_tname);
+            n_ref->set_type(rhs_base->get_type());
+
+            Expr *n_expr = m_ef.create_binary(Expr_binary::OK_SELECT, lhs_base, n_ref);
+            n_expr->set_type(res_type);
+
+            return n_expr;
+        }
+    }
+    return NULL;
+}
+
 // Run local optimizations.
 Expr *Optimizer::local_opt(Expr *expr)
 {
@@ -673,10 +779,7 @@ Expr *Optimizer::local_opt(Expr *expr)
         }
         break;
     case Expr::EK_CALL:
-        if (Expr *res = optimize_call(cast<Expr_call>(expr))) {
-            return res;
-        }
-        break;
+        return optimize_call(cast<Expr_call>(expr));
     case Expr::EK_COMPOUND:
         // NYI
         break;

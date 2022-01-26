@@ -78,7 +78,7 @@ void Tile_impl<PT_SINT8>::set_pixel(
 
     mi::Uint8* const position = m_data.data()
             + (x_offset + y_offset * static_cast<mi::Size>( m_width)) * s_components_per_pixel;
-    mi::Float32 value = 0.27f * floats[0] + 0.67f * floats[1] + 0.06f * floats[2];
+    const mi::Float32 value = 0.27f * floats[0] + 0.67f * floats[1] + 0.06f * floats[2];
     position[0] = mi::Uint8( mi::math::clamp( value, 0.0f, 1.0f) * 255.0f);
 }
 
@@ -91,7 +91,7 @@ void Tile_impl<PT_SINT8>::get_pixel(
 
     const mi::Uint8* const position = m_data.data()
             + (x_offset + y_offset * static_cast<mi::Size>( m_width)) * s_components_per_pixel;
-    mi::Float32 value = mi::Float32( position[0]) * mi::Float32( 1.0/255.0);
+    const mi::Float32 value = mi::Float32( position[0]) * mi::Float32( 1.0/255.0);
     floats[0] = floats[1] = floats[2] = value;
     floats[3] = 1.0f;
 }

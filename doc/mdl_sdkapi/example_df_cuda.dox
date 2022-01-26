@@ -195,7 +195,7 @@ The GUI controls are linked to the data of the target argument block using the o
 When ImGui reports any changes by the user, the target argument block is updated on the device for the current material.
 
 When presenting material arguments to the user, additional information from parameter annotations may improve the user experience.
-To find the annotations for an argument of a compiled material, you have to look up the annotation block for a parameter of the corresponding #mi::neuraylib::IMaterial_definition with the same name as the argument.
+To find the annotations for an argument of a compiled material, you have to look up the annotation block for a parameter of the corresponding #mi::neuraylib::IFunction_definition with the same name as the argument.
 
 \note You will only find a parameter in a material definition with an exactly matching name for a compiled material argument, when non-struct constants were used as arguments during class-compilation.
 For other arguments you will get paths like "x.b" as parameter names.

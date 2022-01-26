@@ -31,6 +31,7 @@
 #include <cstdio>
 
 #include "compilercore_allocator.h"
+#include "compilercore_analysis.h"
 #include "compilercore_def_table.h"
 #include "compilercore_modules.h"
 #include "compilercore_tools.h"
@@ -119,26 +120,6 @@ static char const * const expr_operator_name[] = {
     // variadic
     "OK_CALL"
 };
-
-/// Check if the given type is a user defined type (but not an array).
-static bool is_user_type(IType const *type)
-{
-    if (IType_struct const *s_type = as<IType_struct>(type)) {
-        if (s_type->get_predefined_id() == IType_struct::SID_USER) {
-            return true;
-        }
-    }
-    else if (IType_enum const *e_type = as<IType_enum>(type)) {
-        IType_enum::Predefined_id id = e_type->get_predefined_id();
-        if (id == IType_enum::EID_USER || id == IType_enum::EID_TEX_GAMMA_MODE) {
-            // although tex::gamma_mode is predefined in the compiler (due to its use
-            // in the texture constructor), it IS a user type: There is even MDL code
-            // for it
-            return true;
-        }
-    }
-    return false;
-}
 
 /// Helper class to compute the semantic function hash.
 class Function_hasher : public Module_visitor, public ICallgraph_visitor {

@@ -60,8 +60,8 @@
 /// - MI::DBIMAGE::Image                #include <io/scene/dbimage/i_dbimage.h>
 /// - MI::TEXTURE::Texture              #include <io/scene/texture/i_texture.h>
 ///
-/// MI::DBIMAGE::Image wraps MI::IMAGE::IMipmap as DB element,
-/// MI::TEXTURE::Texture references MI::DBIMAGE::Image via tag, and
+/// MI::DBIMAGE::Image wraps MI::IMAGE::IMipmap as DB element, and
+/// MI::TEXTURE::Texture references MI::DBIMAGE::Image via tag.
 ///
 /// Note about mipmaps: several methods related to mipmaps have a only_first_level flag that
 /// controls whether higher miplevels are recomputed if needed or loaded/serialized/copied/converted
@@ -125,10 +125,6 @@ public:
     /// \param pixel_type         The desired pixel type.
     /// \param width              The desired width.
     /// \param height             The desired height.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
     /// \param layers             The desired number of layers (depth).
     /// \param is_cubemap         Flag that indicates whether this mipmap represents a cubemap.
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
@@ -140,8 +136,6 @@ public:
         Pixel_type pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
         mi::Uint32 layers = 1,
         bool is_cubemap = false,
         mi::Float32 gamma = 0.0f) const = 0;
@@ -149,10 +143,7 @@ public:
     /// Creates a file-based mipmap that represents the given file on disk.
     ///
     /// \param filename           The file that shall be represented by this mipmap.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
+    /// \param selector           The selector (or \c NULL).
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the file.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -165,8 +156,7 @@ public:
     ///                           case of errors.
     virtual IMipmap* create_mipmap(
         const std::string& filename,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
+        const char* selector,
         bool only_first_level = true,
         mi::Sint32* errors = 0) const = 0;
 
@@ -176,10 +166,7 @@ public:
     ///                           absolute access.
     /// \param archive_filename   The resolved filename of the archive itself.
     /// \param member_filename    The relative filename of the mipmap in the archive.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
+    /// \param selector           The selector (or \c NULL).
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -196,8 +183,7 @@ public:
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
+        const char* selector,
         bool only_first_level = true,
         mi::Sint32* errors = 0) const = 0;
 
@@ -206,12 +192,9 @@ public:
     /// \param reader             The reader to be used to obtain the mipmap. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
+    /// \param selector           The selector (or \c NULL).
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
     ///                           or \c NULL in other contexts.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -227,9 +210,8 @@ public:
         Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* selector,
         const char* mdl_file_path = nullptr,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
         bool only_first_level = true,
         mi::Sint32* errors = 0) const = 0;
 
@@ -266,10 +248,6 @@ public:
     /// \param pixel_type         The desired pixel type.
     /// \param width              The desired width.
     /// \param height             The desired height.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
     /// \param layers             The desired number of layers (depth).
     /// \param is_cubemap         Flag that indicates whether this canvas represents a cubemap.
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
@@ -281,8 +259,6 @@ public:
         Pixel_type pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
         mi::Uint32 layers = 1,
         bool is_cubemap = false,
         mi::Float32 gamma = 0.0f) const = 0;
@@ -290,11 +266,8 @@ public:
     /// Creates a file-based canvas that represents the given file on disk.
     ///
     /// \param filename           The file that shall be represented by this canvas.
+    /// \param selector           The selector (or \c NULL).
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
     ///                           -  0: Success.
@@ -305,9 +278,8 @@ public:
     ///                           case of errors.
     virtual mi::neuraylib::ICanvas* create_canvas(
         const std::string& filename,
+        const char* selector,
         mi::Uint32 miplevel = 0,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
         mi::Sint32* errors = 0) const = 0;
 
     /// Creates a memory-based canvas obtained from a reader.
@@ -316,12 +288,9 @@ public:
     ///                           absolute access.
     /// \param archive_filename   The resolved filename of the archive itself.
     /// \param member_filename    The relative filename of the canvas in the archive.
+    /// \param selector           The selector (or \c NULL).
     /// \param miplevel           The miplevel in the reader that shall be represented by this
     ///                           canvas.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
     ///                           -  0: Success.
@@ -336,9 +305,8 @@ public:
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
+        const char* selector,
         mi::Uint32 miplevel = 0,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
         mi::Sint32* errors = 0) const = 0;
 
     /// Creates a memory-based canvas that represents encoded pixel data (as buffer in memory).
@@ -350,14 +318,11 @@ public:
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
+    /// \param selector           The selector (or \c NULL).
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
     ///                           or \c NULL in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
-    /// \param tile_width         The desired tile width. The special value 0 implies an
-    ///                           implementation-defined default.
-    /// \param tile_height        The desired tile height. The special value 0 implies an
-    ///                           implementation-defined default.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
     ///                           -  0: Success.
@@ -371,24 +336,24 @@ public:
         Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* selector,
         const char* mdl_file_path = nullptr,
         mi::Uint32 miplevel = 0,
-        mi::Uint32 tile_width = 0,
-        mi::Uint32 tile_height = 0,
         mi::Sint32* errors = 0) const = 0;
 
-    /// Creates a memory-based canvas with given tile.
+    /// Creates a memory-based canvas with given array of tiles.
     ///
-    /// \param tile               The single tile the canvas will be made of. Note that the tile is
-    ///                           not copied, but shared. See copy_tile() below if sharing is not
-    ///                           desired.
+    /// \param tile               The array of tiles the canvas will be made of (in z-direction).
+    ///                           Note that the tiles are not copied, but shared. See copy_tile()
+    ///                           below if sharing is not desired.
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
     ///                           default gamma which is 1.0 for HDR pixel types and 2.2 for LDR
     ///                           pixel types. Note that the pixel data itself is not changed.
     /// \return                   The requested canvas, or \c NULL in case of invalid \c tile
     ///                           pointers.
     virtual mi::neuraylib::ICanvas* create_canvas(
-        mi::neuraylib::ITile* tile, mi::Float32 gamma = 0.0f) const = 0;
+        const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles,
+        mi::Float32 gamma = 0.0f) const = 0;
 
     /// Creates a tile with given pixel type, width, and height.
     ///
@@ -531,6 +496,52 @@ public:
     /// \param new_gamma        The new gamma value.
     virtual void adjust_gamma( mi::neuraylib::ICanvas* canvas, mi::Float32 new_gamma) const = 0;
 
+    // Methods to select "R", "G", "B", or "A" channel of mipmaps, canvases, and tiles
+    // ===============================================================================
+
+    /// Returns the pixel type of an RGBA channel.
+    ///
+    /// Invalid pixel type/selector combinations are:
+    /// - \p pixel_type is not an RGB or RGBA pixel type
+    /// - \p selector is not an RGBA channel selector
+    ///
+    /// \param pixel_type   The pixel type of the mipmap/canvas/tile.
+    /// \param selector     The RGBA channel selector.
+    /// \return             Returns PT_UNDEF for invalid pixel type/selector combinations.
+    ///                     Otherwise, returns PT_SINT8 or PT_FLOAT32, depending on
+    ///                     \p pixel_type.
+    virtual Pixel_type get_pixel_type_for_channel(
+        Pixel_type pixel_type, const char* selector) const = 0;
+
+    /// Extracs an RGBA channel from a mipmap.
+    ///
+    /// \param mipmap           The mipmap to extract a channel from.
+    /// \param selector         The RGBA channel selector.
+    /// \param only_first_level Indicates whether only the first (or all) miplevels should be
+    ///                         extracted.
+    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    ///                         channel selector combinations (see #get_pixel_type_for_channel()).
+    virtual IMipmap* extract_channel(
+        const IMipmap* mipmap, const char* selector, bool only_first_level = true) const = 0;
+
+    /// Extracs an RGBA channel from a canvas.
+    ///
+    /// \param canvas           The canvas to extract a channel from.
+    /// \param selector         The RGBA channel selector.
+    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    ///                         channel selector combinations (see #get_pixel_type_for_channel()).
+    virtual mi::neuraylib::ICanvas* extract_channel(
+        const mi::neuraylib::ICanvas* canvas, const char* selector) const = 0;
+
+    /// Extracs an RGBA channel from a tile.
+    ///
+    /// \param tile             The tile to extract a channel from.
+    /// \param selector         The RGBA channel selector.
+    /// \return                 The extracted channel, or \c NULL in case of invalid pixel type/
+    ///                         channel selector combinations (see #get_pixel_type_for_channel()).
+    virtual mi::neuraylib::ITile* extract_channel(
+        const mi::neuraylib::ITile* tile, const char* selector) const = 0;
+
     // Methods to serialize/deserialize canvases and tiles
     // ===================================================
 
@@ -651,13 +662,13 @@ public:
     ///                    \p extension, or \c NULL in case of failure.
     virtual mi::neuraylib::IImage_plugin* find_plugin_for_export( const char* extension) const = 0;
 
-    /// Sets the callback to support lazy loading of images in MDL archives and MDLe.
+    /// Sets the callback to support lazy loading of images in MDL archives and MDLE.
     ///
     /// Pass \c NULL to clear the callback. Not thread-safe. Resetting during runtime causes errors
     /// for not yet loaded tiles.
     virtual void set_mdl_container_callback( IMdl_container_callback* mdl_container_callback) = 0;
 
-    /// Returns the callback to support lazy loading of images in MDL archives and MDLe.
+    /// Returns the callback to support lazy loading of images in MDL archives and MDLE.
     ///
     /// ... or \c NULL if no callback is set.
     virtual IMdl_container_callback* get_mdl_container_callback() const = 0;
@@ -681,12 +692,12 @@ public:
 
 };
 
-/// Callback to support lazy loading of images in MDL archives and MDLe
+/// Callback to support lazy loading of images in MDL archives and MDLE
 class IMdl_container_callback : public
     mi::base::Interface_declare<0x039d55cf,0xd57f,0x4ef8,0x8e,0xb4,0xc7,0x2b,0x9e,0x77,0x02,0x96>
 {
 public:
-    /// Returns a reader for a file in an MDL archive, MDLe, or \c NULL in case of failure.
+    /// Returns a reader for a file in an MDL archive, MDLE, or \c NULL in case of failure.
     virtual mi::neuraylib::IReader* get_reader(
         const char* archive_filename, const char* member_filename) = 0;
 };

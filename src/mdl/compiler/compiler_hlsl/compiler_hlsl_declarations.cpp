@@ -59,7 +59,6 @@ Type *Name::get_type()
 // Set the definition for this name.
 void Name::set_definition(Definition *def)
 {
-    HLSL_ASSERT(m_def == NULL);
     m_def = def;
 }
 
@@ -148,7 +147,6 @@ Type_name::Type_name(
 // Set the type represented by this name.
 void Type_name::set_type(Type *type)
 {
-    HLSL_ASSERT(m_type == NULL);
     m_type = type;
 }
 

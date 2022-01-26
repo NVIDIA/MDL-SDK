@@ -1952,24 +1952,24 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 IExpression const *init = d->get_constant_exp(i);
                 if (is_constructor_init(d->get_type_name(),init)) {
                     IExpression_call const *call = cast<IExpression_call>(init);
-                    int count = call->get_argument_count();
-                    if (count == 1) {
+                    int arg_count = call->get_argument_count();
+                    if (arg_count == 1) {
                         // rewrite T v(a) into T v = a;
                         print(" = ");
                         print(
                             call->get_argument(0),
                             get_priority(IExpression::OK_ASSIGN),
                             /*ignore_named=*/true);
-                    } else if (count > 0) {
-                        bool vertical = 1 < count;
+                    } else if (arg_count > 0) {
+                        bool vertical = 1 < arg_count;
                         print("(");
                         if (vertical) {
                             ++m_indent;
                             nl();
                         }
-                        for (int i = 0; i < count; i++) {
-                            print(call->get_argument(i));
-                            if (i < count - 1) {
+                        for (int arg_idx = 0; arg_idx < arg_count; ++arg_idx) {
+                            print(call->get_argument(arg_idx));
+                            if (arg_idx < arg_count - 1) {
                                 print(",");
                                 if (vertical) {
                                     nl();
@@ -2096,24 +2096,24 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 if (IExpression const *init = d->get_variable_init(i)) {
                     if (is_constructor_init(d->get_type_name(), init)) {
                         IExpression_call const *call = cast<IExpression_call>(init);
-                        int count = call->get_argument_count();
-                        if (count == 1 && can_rewite_constructor_init(init)) {
+                        int arg_count = call->get_argument_count();
+                        if (arg_count == 1 && can_rewite_constructor_init(init)) {
                             // rewrite T v(a) into T v = a;
                             print(" = ");
                             print(
                                 call->get_argument(0),
                                 get_priority(IExpression::OK_ASSIGN),
                                 /*ignore_named=*/true);
-                        } else if (count > 0) {
-                            bool vertical = 3 < count;
+                        } else if (arg_count > 0) {
+                            bool vertical = 3 < arg_count;
                             print("(");
                             if (vertical) {
                                 ++m_indent;
                                 nl();
                             }
-                            for (int i = 0; i < count; i++) {
-                                print(call->get_argument(i));
-                                if (i < count - 1) {
+                            for (int arg_idx = 0; arg_idx < arg_count; arg_idx++) {
+                                print(call->get_argument(arg_idx));
+                                if (arg_idx < arg_count - 1) {
                                     print(",");
                                     if (vertical) {
                                         nl();

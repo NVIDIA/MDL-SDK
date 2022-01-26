@@ -212,7 +212,7 @@ public:
         // GetResources
         [this](llvm::orc::VModuleKey) {
             return llvm::orc::RTDyldObjectLinkingLayer::Resources{
-                std::make_shared<llvm::SectionMemoryManager>(), m_resolver };
+                std::make_shared<llvm::SectionMemoryManager>(&m_memory_mapper), m_resolver };
         })
     , m_compile_layer(
         m_object_layer,
@@ -296,6 +296,31 @@ private:
 
     /// The already compiled modules.
     std::map<MDL_JIT_module_key, std::unique_ptr<llvm::Module>> m_compiled_modules;
+
+    // Trivial implementation of SectionMemoryManager::MemoryMapper that just calls
+    // into sys::Memory. Copied from LLVM's SectionMemoryManager.cpp.
+    // Needed to avoid used of global MemoryMapper which may be freed before the jitted code,
+    // leading to use-after-free in SectionMemoryManager destructor.
+    class DefaultMMapper final : public llvm::SectionMemoryManager::MemoryMapper {
+    public:
+        llvm::sys::MemoryBlock
+            allocateMappedMemory(llvm::SectionMemoryManager::AllocationPurpose Purpose,
+                size_t NumBytes, const llvm::sys::MemoryBlock *const NearBlock,
+                unsigned Flags, std::error_code &EC) override {
+            return llvm::sys::Memory::allocateMappedMemory(NumBytes, NearBlock, Flags, EC);
+        }
+
+        std::error_code protectMappedMemory(const llvm::sys::MemoryBlock &Block,
+            unsigned Flags) override {
+            return llvm::sys::Memory::protectMappedMemory(Block, Flags);
+        }
+
+        std::error_code releaseMappedMemory(llvm::sys::MemoryBlock &M) override {
+            return llvm::sys::Memory::releaseMappedMemory(M);
+        }
+    };
+
+    DefaultMMapper m_memory_mapper;
 };
 
 
@@ -1051,6 +1076,23 @@ static unsigned map_target_lang(
     return def_mode;
 }
 
+/// Convert BinaryOptionData to a vector.
+static vector<char>::Type to_store(BinaryOptionData data, IAllocator *alloc)
+{
+    vector<char>::Type v(0, alloc);
+    v.assign(data.data, data.data + data.size);
+    return v;
+}
+
+/// Convert string option to string.
+static string to_string(char const *option, IAllocator *alloc)
+{
+    if (option == nullptr) {
+        option = "";
+    }
+    return string(option, alloc);
+}
+
 // Constructor.
 LLVM_code_generator::LLVM_code_generator(
     Jitted_code        *jitted_code,
@@ -1076,7 +1118,8 @@ LLVM_code_generator::LLVM_code_generator(
 , m_trans_builder(NULL)
 , m_llvm_context(context)
 , m_state_mode(state_mode)
-, m_internal_space(options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE))
+, m_internal_space(to_string(
+    options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE), jitted_code->get_allocator()))
 , m_fold_meters_per_scene_unit(options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT))
 , m_meters_per_scene_unit(options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT))
 , m_wavelength_min(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN))
@@ -1092,9 +1135,17 @@ LLVM_code_generator::LLVM_code_generator(
 , m_messages(messages)
 , m_module(NULL)
 , m_exported_func_list(jitted_code->get_allocator())
-, m_user_state_module(options.get_binary_option(MDL_JIT_BINOPTION_LLVM_STATE_MODULE))
-, m_renderer_module(options.get_binary_option(MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE))
-, m_visible_functions(options.get_string_option(MDL_JIT_OPTION_VISIBLE_FUNCTIONS))
+, m_user_state_store(to_store(
+    options.get_binary_option(MDL_JIT_BINOPTION_LLVM_STATE_MODULE),
+    jitted_code->get_allocator()))
+, m_user_state_module(m_user_state_store.data(), m_user_state_store.size())
+, m_renderer_store(to_store(
+    options.get_binary_option(MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE),
+    jitted_code->get_allocator()))
+, m_renderer_module(m_renderer_store.data(), m_renderer_store.size())
+, m_visible_functions(to_string(
+    options.get_string_option(MDL_JIT_OPTION_VISIBLE_FUNCTIONS),
+    jitted_code->get_allocator()))
 , m_func_pass_manager()
 , m_fast_math(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH))
 , m_enable_ro_segment(
@@ -1116,7 +1167,7 @@ LLVM_code_generator::LLVM_code_generator(
     target_lang,
     m_fast_math,
     has_tex_handler,
-    m_internal_space))
+    m_internal_space.c_str()))
 , m_has_res_handler(has_tex_handler)
 , m_di_builder(NULL)
 , m_di_file()
@@ -1532,7 +1583,7 @@ void LLVM_code_generator::prepare_internal_functions()
         "::state::adapt_normal(float3)",
         "_ZN5state12adapt_normalERK6float3",
         Internal_function::KI_STATE_ADAPT_NORMAL,
-        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_EXEC_CTX,
+        Internal_function::FL_HAS_STATE | Internal_function::FL_HAS_RES,
         /*ret_type=*/ m_type_mapper.get_float3_type(),
         /*param_types=*/ Array_ref<IType const*>(float3_type),
         /*param_names=*/ Array_ref<char const*>("normal"));
@@ -2648,7 +2699,7 @@ LLVM_context_data::Flags LLVM_code_generator::get_function_flags(IDefinition con
     }
     if (def->get_property(mi::mdl::IDefinition::DP_USES_TRANSFORM)) {
         if ((!need_render_state_param || !state_include_uniform_state()) &&
-            strcmp(m_internal_space, "*") != 0)
+            strcmp(m_internal_space.c_str(), "*") != 0)
         {
             flags |= LLVM_context_data::FL_HAS_TRANSFORMS;
         }
@@ -2795,7 +2846,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
     }
     if (def->get_property(mi::mdl::IDefinition::DP_USES_TRANSFORM)) {
         if ((!need_render_state_param || !state_include_uniform_state()) &&
-            strcmp(m_internal_space, "*") != 0)
+            strcmp(m_internal_space.c_str(), "*") != 0)
         {
             // add two hidden transform (matrix) parameters
             arg_types.push_back(m_type_mapper.get_arr_float_4_ptr_type());
@@ -4808,12 +4859,19 @@ int LLVM_code_generator::find_resource_tag(IValue_resource const *res) const
     // linear search
     Resource_tag_tuple::Kind kind = kind_from_value(res);
     char const               *url = res->get_string_value();
+    char const               *sel = "";
+
+    if (IValue_texture const *tex = as<IValue_texture>(res)) {
+        sel = tex->get_selector();
+    }
 
     for (size_t i = 0, n = m_resource_tag_map->size(); i < n; ++i) {
         Resource_tag_tuple const &e = (*m_resource_tag_map)[i];
 
-        // beware of NULL pointer
-        if (e.m_kind == kind && (e.m_url == url || strcmp(e.m_url, url) == 0)) {
+        if (e.m_kind == kind &&
+            (e.m_url      == url || strcmp(e.m_url,      url) == 0) &&
+            (e.m_selector == sel || strcmp(e.m_selector, sel) == 0))
+        {
             return e.m_tag;
         }
     }
@@ -6954,7 +7012,7 @@ Expression_result LLVM_code_generator::translate_call(
             IValue const *arg_0 = call_expr->get_const_argument(0);
             IValue const *arg_1 = call_expr->get_const_argument(1);
             if (arg_0 != NULL && arg_1 != NULL &&
-                equal_coordinate_space(arg_0, arg_1, m_internal_space))
+                equal_coordinate_space(arg_0, arg_1, m_internal_space.c_str()))
             {
                 // does not really use the transform state here, so we do not flag it
                 return Expression_result::value(create_identity_matrix(ctx));
@@ -6969,7 +7027,7 @@ Expression_result LLVM_code_generator::translate_call(
             IValue const *arg_0 = call_expr->get_const_argument(0);
             IValue const *arg_1 = call_expr->get_const_argument(1);
             if (arg_0 != NULL && arg_1 != NULL &&
-                equal_coordinate_space(arg_0, arg_1, m_internal_space))
+                equal_coordinate_space(arg_0, arg_1, m_internal_space.c_str()))
             {
                 // just a no-op, return the second argument
                 // does not really use the transform state here, so we do not flag it
@@ -7060,8 +7118,6 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_WIDTH_OFFSET:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_HEIGHT_OFFSET:
     case mi::mdl::IDefinition::DS_INTRINSIC_TEX_DEPTH_OFFSET:
-    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_FIRST_FRAME:
-    case mi::mdl::IDefinition::DS_INTRINSIC_TEX_LAST_FRAME:
         // TODO: for now, just return zero
         return Expression_result::value(ctx.get_constant(int(0)));
 
@@ -7367,7 +7423,7 @@ Expression_result LLVM_code_generator::translate_transform_call(
         call_expr->translate_argument_value(*this, ctx, 1, /*return_derivs=*/ false);
 
     int sp_encoding = coordinate_world;
-    if (strcmp(m_internal_space, "coordinate_object") == 0) {
+    if (strcmp(m_internal_space.c_str(), "coordinate_object") == 0) {
         sp_encoding = coordinate_object;
     }
 
@@ -9524,7 +9580,7 @@ llvm::Module *LLVM_code_generator::finalize_module()
             }
         }
 
-        if (m_visible_functions != NULL && *m_visible_functions) {
+        if (!m_visible_functions.empty()) {
             // first mark all non-external functions as internal
             for (llvm::Function &func : llvm_module->functions()) {
                 if (!func.isDeclaration()) {
@@ -9533,7 +9589,7 @@ llvm::Module *LLVM_code_generator::finalize_module()
             }
 
             // now mark requested functions as external
-            char const *start = m_visible_functions;
+            char const *start = m_visible_functions.c_str();
             while (start && *start) {
                 char const *ptr = strchr(start, ',');
                 if (ptr == NULL) {

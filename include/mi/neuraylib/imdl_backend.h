@@ -63,8 +63,8 @@ public:
     /// Sets a backend option.
     ///
     /// The following options are supported by all backends:
-    /// - \c "compile_constants": If true, compile simple constants into functions returning
-    ///                           constants. If false, do not compile simple constants but return
+    /// - \c "compile_constants": If \c true, compile simple constants into functions returning
+    ///                           constants. If \c false, do not compile simple constants but return
     ///                           error -4. Possible values: \c "on", \c "off". Default: \c "on".
     /// - \c "fast_math": Enables/disables unsafe floating point optimization. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
@@ -87,6 +87,7 @@ public:
     ///                             Possible values: \c "none", \c "fixed_1", \c "fixed_2",
     ///                             \c "fixed_4", \c "fixed_8", and \c "pointer", while \c "pointer"
     ///                             is not available for all backends. Default: \c "none".
+    ///
     /// The following options are supported by the NATIVE backend only:
     /// - \c "use_builtin_resource_handler": Enables/disables the built-in texture runtime.
     ///   Possible values: \c "on", \c "off". Default: \c "on".
@@ -117,7 +118,7 @@ public:
     ///   \c "on", \c "off". Default: \c "off".
     /// - \c "scene_data_names": Comma-separated list of names for which scene data may be
     ///   available in the renderer.
-    ///   For names not in the list, \c scene::data_isvalid will always return false and
+    ///   For names not in the list, \c scene::data_isvalid will always return \c false and
     ///   the \c scene::data_lookup_* functions will always return the provided default value.
     ///   Use \c "*" to specify that scene data for any name may be available.
     ///   Default: \c ""
@@ -126,6 +127,18 @@ public:
     ///   Can especially be used in combination with \c "llvm_renderer_module" binary option to
     ///   limit the number of functions for which target code will be generated.
     ///   Default: \c ""
+    /// - \c "use_renderer_adapt_normal": If enabled, the generated code expects
+    ///   the renderer to provide a function with the prototype
+    ///   \c "void adapt_normal(float result[3], Textue_handler_base const *self,
+    ///   Shading_state_material *state, float const normal[3])"
+    ///   which can adapt the normal of BSDFs.
+    ///   For native: The function must be set in the vtable of the
+    ///   \c Texture_handler_base object provided to the execute functions. If the built-in
+    ///   texture runtime is used, only the \c adapt_normal entry of the vtable needs to be set.
+    ///   For HLSL: The expected function is
+    ///   \c "float3 mdl_adapt_normal(Shading_state_material state, float3 normal)".
+    ///   Possible values:
+    ///   \c "on", \c "off". Default: \c "off".
     ///
     /// The following options are supported by the LLVM-IR backend only:
     /// - \c "enable_simd": Enables/disables the use of SIMD instructions. Possible values:
@@ -164,12 +177,6 @@ public:
     ///   \c "float2 mdl_adapt_microfacet_roughness(Shading_state_material state, float2 roughness_uv)"
     ///   which can adapt the roughness of microfacet BSDFs. For sheen_bsdf, the same roughness will
     ///   be provided in both dimensions and only the \c x component of the result will be used.
-    ///   Possible values:
-    ///   \c "on", \c "off". Default: \c "off".
-    /// - \c "use_renderer_adapt_normal": If enabled, the generated code expects
-    ///   the renderer to provide a function with the prototype
-    ///   \c "float3 mdl_adapt_normal(Shading_state_material state, float3 normal)"
-    ///   which can adapt the normal of BSDFs.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     ///
@@ -295,7 +302,6 @@ public:
         IMdl_execution_context* context) = 0;
 
     /// Transforms an MDL distribution function to target code.
-    /// Note that currently this is only supported for BSDFs.
     /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
     /// \c "_evaluate" and \c "_pdf".
     ///
@@ -308,9 +314,9 @@ public:
     /// \param[inout] context An execution context which can be used
     ///                       to pass compilation options to the MDL compiler. The
     ///                       following options are supported by this operation:
-    ///                       - bool "include_geometry_normal". If true, the \c
+    ///                       - bool "include_geometry_normal". If \c true, the \c
     ///                       "geometry.normal" field will be applied to the MDL state prior
-    ///                       to evaluation of the given DF (default: true).
+    ///                       to evaluation of the given DF (default: \c true).
     ///                       .
     ///                       During material translation, messages like errors and
     ///                       warnings will be passed to the context for
@@ -324,7 +330,6 @@ public:
     ///                       -  The backend does not support compiled MDL materials obtained
     ///                          from class compilation mode.
     ///                       -  The backend does not implement this function, yet.
-    ///                       -  EDFs are not supported.
     ///                       -  VDFs are not supported.
     ///                       -  The requested BSDF is not supported, yet.
     /// \return               The generated target code, or \c NULL in case of failure.
@@ -350,9 +355,10 @@ public:
     /// \param[inout] context           An execution context which can be used
     ///                                 to pass compilation options to the MDL compiler. The
     ///                                 following options are supported for this operation:
-    ///                                 - bool "include_geometry_normal". If true, the \c
+    ///                                 - bool "include_geometry_normal". If \c true, the \c
     ///                                   "geometry.normal" field will be applied to the MDL
-    ///                                   state prior to evaluation of the given DF (default true).
+    ///                                   state prior to evaluation of the given DF (default:
+    ///                                   \c true).
     ///                                 .
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for
@@ -410,6 +416,7 @@ public:
     /// Deserialization can fail for outdated input date, which is not an error. Check the context
     /// messages for details.
     ///
+    /// \param transaction    The transaction to be used.
     /// \param buffer         The buffer containing the serialized target code to restore.
     /// \param[inout] context An execution context which can be
     ///                       used to pass serialization options. Currently there are no options
@@ -425,6 +432,7 @@ public:
     ///                         - MDL SDK version mismatch, deserialization invalid.
     /// \return               The restored object in case of success or \c NULL otherwise.
     virtual const ITarget_code* deserialize_target_code(
+        ITransaction* transaction,
         const IBuffer* buffer,
         IMdl_execution_context* context) const = 0;
 
@@ -432,6 +440,7 @@ public:
     /// Deserialization can fail for outdated input date, which is not an error. Check the context
     /// messages for details.
     ///
+    /// \param transaction    The transaction to be used.
     /// \param buffer_data    The buffer containing the serialized target code to restore.
     /// \param buffer_size    The size of \c buffer_data.
     /// \param[inout] context An execution context which can be
@@ -448,6 +457,7 @@ public:
     ///                         - MDL SDK version mismatch, deserialization invalid.
     /// \return               The restored object in case of success or \c NULL otherwise.
     virtual const ITarget_code* deserialize_target_code(
+        ITransaction* transaction,
         const Uint8* buffer_data,
         Size buffer_size,
         IMdl_execution_context* context) const = 0;
@@ -509,7 +519,7 @@ public:
     /// Returns the size of the target argument block data.
     virtual Size get_size() const = 0;
 
-    /// Clones the argument block (to make it writeable).
+    /// Clones the argument block (to make it writable).
     virtual ITarget_argument_block *clone() const = 0;
 };
 
@@ -709,7 +719,7 @@ public:
 
     /// \name Textures
     //@{
-    
+
     /// Returns the number of texture resources used by the target code.
     virtual Size get_texture_count() const = 0;
 
@@ -752,6 +762,14 @@ public:
     /// \return           The gamma of the texture resource of the given
     ///                   index, or \c GM_GAMMA_UNKNOWN if \p index is out of range.
     virtual Gamma_mode get_texture_gamma( Size index) const = 0;
+
+    /// Returns the selector mode of a texture resource used by the target code.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           The selector of the texture resource of the given
+    ///                   index, or \c NULL if \p index is out of range or there is no selector for
+    ///                   that texture resource.
+    virtual const char* get_texture_selector( Size index) const = 0;
 
     /// Returns the texture shape of a given texture resource used by the target code.
     ///
@@ -1333,7 +1351,7 @@ public:
     /// \param[inout] context An execution context which can be
     ///                       used to pass serialization options. The following options are
     ///                       supported for this operation:
-    ///                        - \c bool "serialize_class_instance_data": If true, the argument
+    ///                        - \c bool "serialize_class_instance_data": If \c true, the argument
     ///                          block, resources, and strings in class instance parameters are
     ///                          serialized as well. Otherwise only body information are stored,
     ///                          which is sufficient to create new argument blocks for a material
@@ -1417,7 +1435,6 @@ public:
 
     /// Add an MDL distribution function to this link unit.
     ///
-    /// Note that currently this is only supported for BSDFs.
     /// For a BSDF it results in four functions, suffixed with \c "_init", \c "_sample",
     /// \c "_evaluate" and \c "_pdf".
     ///
@@ -1429,9 +1446,9 @@ public:
     /// \param[inout] context   An execution context which can be used
     ///                         to pass compilation options to the MDL compiler. The
     ///                         following options are supported for this operation:
-    ///                         - bool "include_geometry_normal". If true, the \c
+    ///                         - bool "include_geometry_normal". If \c true, the \c
     ///                           "geometry.normal" field will be applied to the MDL
-    ///                           state prior to evaluation of the given DF (default true).
+    ///                           state prior to evaluation of the given DF (default: \c true).
     ///                         .
     ///                         During material compilation messages like errors and
     ///                         warnings will be passed to the context for
@@ -1475,9 +1492,10 @@ public:
     /// \param[inout] context           An execution context which can be used
     ///                                 to pass compilation options to the MDL compiler. The
     ///                                 following options are supported for this operation:
-    ///                                 - bool "include_geometry_normal". If true, the \c
+    ///                                 - bool "include_geometry_normal". If \c true, the \c
     ///                                   "geometry.normal" field will be applied to the MDL
-    ///                                   state prior to evaluation of the given DF (default true).
+    ///                                   state prior to evaluation of the given DF (default:
+    ///                                   \c true).
     ///                                 .
     ///                                 During material compilation messages like errors and
     ///                                 warnings will be passed to the context for

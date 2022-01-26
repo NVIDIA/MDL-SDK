@@ -231,62 +231,39 @@ typedef IResource_handler::Mbsdf_part                   Mbsdf_part;
 typedef Generated_code_lambda_function::Res_data_pair   Res_data_pair;
 typedef Generated_code_lambda_function::Res_data        Res_data;
 
-/// Glue function for tex::width(texture_2d, int2) and tex::height(texture_2d, int2)
+/// Glue function for tex::width(texture_2d, int2, float) and tex::height(texture_2d, int2, float)
 void tex_resolution_2d(
     int                 result[2],
     Res_data_pair const *data,
     unsigned            texture,
-    int const           uv_tile[2])
+    int const           uv_tile[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
-        handler->tex_resolution_2d(result, res_data->get_resource_store(texture - 1), uv_tile);
+        handler->tex_resolution_2d(result, res_data->get_resource_store(texture - 1), uv_tile, frame);
     } else {
         result[0] = 0;
         result[1] = 0;
     }
 }
 
-/// Glue function for tex::width(texture_*)
-int tex_width(
+/// Glue function for tex::width(texture_3d, float), tex::height(texture_3d, float), and tex::depth(texture_3d, float)
+void tex_resolution_3d(
+    int                 result[3],
     Res_data_pair const *data,
-    unsigned            texture)
+    unsigned            texture,
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
-        return handler->tex_width(res_data->get_resource_store(texture - 1));
+        handler->tex_resolution_3d(result, res_data->get_resource_store(texture - 1), frame);
     } else {
-        return 0;
-    }
-}
-
-/// Glue function for tex::height(texture_*)
-int tex_height(
-    Res_data_pair const *data,
-    unsigned            texture)
-{
-    Res_data const          *res_data = data->get_shared_data();
-    IResource_handler const *handler  = res_data->get_resource_handler();
-    if (handler != NULL && texture != 0) {
-        return handler->tex_height(res_data->get_resource_store(texture - 1));
-    } else {
-        return 0;
-    }
-}
-
-/// Glue function for tex::depth(texture_*)
-int tex_depth(
-    Res_data_pair const *data,
-    unsigned            texture)
-{
-    Res_data const          *res_data = data->get_shared_data();
-    IResource_handler const *handler  = res_data->get_resource_handler();
-    if (handler != NULL && texture != 0) {
-        return handler->tex_depth(res_data->get_resource_store(texture - 1));
-    } else {
-        return 0;
+        result[0] = 0;
+        result[1] = 0;
+        result[2] = 0;
     }
 }
 
@@ -304,6 +281,22 @@ bool tex_isvalid(
     }
 }
 
+/// Glue function for tex::first_frame(texture_*), tex::last_frame(texture_*)
+void tex_frame(
+    int                 result[2],
+    Res_data_pair const *data,
+    unsigned            texture)
+{
+    Res_data const          *res_data = data->get_shared_data();
+    IResource_handler const *handler  = res_data->get_resource_handler();
+    if (handler != NULL && texture != 0) {
+        handler->tex_frame(result, res_data->get_resource_store(texture - 1));
+    } else {
+        result[0] = 0;
+        result[1] = 0;
+    }
+}
+
 /// Glue function for tex::lookup_float(texture_2d, ...)
 float tex_lookup_float_2d(
     Res_data_pair const *data,
@@ -312,14 +305,15 @@ float tex_lookup_float_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         return handler->tex_lookup_float_2d(
             res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         return 0.0f;
     }
@@ -333,14 +327,15 @@ float tex_lookup_deriv_float_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         return handler->tex_lookup_deriv_float_2d(
             res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         return 0.0f;
     }
@@ -356,14 +351,15 @@ float tex_lookup_float_3d(
     Tex_wrap_mode       wrap_w,
     float const         crop_u[2],
     float const         crop_v[2],
-    float const         crop_w[2])
+    float const         crop_w[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         return handler->tex_lookup_float_3d(
             res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w);
+            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
     } else {
         return 0.0f;
     }
@@ -410,14 +406,15 @@ void tex_lookup_float2_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_float2_2d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         result[0] = result[1] = 0.0f;
     }
@@ -432,14 +429,15 @@ void tex_lookup_deriv_float2_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_deriv_float2_2d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         result[0] = result[1] = 0.0f;
     }
@@ -456,14 +454,15 @@ void tex_lookup_float2_3d(
     Tex_wrap_mode       wrap_w,
     float const         crop_u[2],
     float const         crop_v[2],
-    float const         crop_w[2])
+    float const         crop_w[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_float2_3d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w);
+            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
     } else {
         result[0] = result[1] = 0.0f;
     }
@@ -512,14 +511,15 @@ void tex_lookup_float3_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_float3_2d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         result[0] = result[1] = result[2] = 0.0f;
     }
@@ -534,14 +534,15 @@ void tex_lookup_deriv_float3_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_deriv_float3_2d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         result[0] = result[1] = result[2] = 0.0f;
     }
@@ -558,14 +559,15 @@ void tex_lookup_float3_3d(
     Tex_wrap_mode       wrap_w,
     float const         crop_u[2],
     float const         crop_v[2],
-    float const         crop_w[2])
+    float const         crop_w[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_float3_3d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w);
+            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
     } else {
         result[0] = result[1] = result[2] = 0.0f;
     }
@@ -614,14 +616,15 @@ void tex_lookup_float4_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_float4_2d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         result[0] = result[1] = result[2] = result[3] = 0.0f;
     }
@@ -636,14 +639,15 @@ void tex_lookup_deriv_float4_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_deriv_float4_2d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         result[0] = result[1] = result[2] = result[3] = 0.0f;
     }
@@ -660,14 +664,15 @@ void tex_lookup_float4_3d(
     Tex_wrap_mode       wrap_w,
     float const         crop_u[2],
     float const         crop_v[2],
-    float const         crop_w[2])
+    float const         crop_w[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_float4_3d(
             result, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w);
+            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
     } else {
         result[0] = result[1] = result[2] = result[3] = 0.0f;
     }
@@ -716,14 +721,15 @@ void tex_lookup_color_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_color_2d(
             rgb, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         rgb[0] = rgb[1] = rgb[2] = 0.0f;
     }
@@ -738,14 +744,15 @@ void tex_lookup_deriv_color_2d(
     Tex_wrap_mode       wrap_u,
     Tex_wrap_mode       wrap_v,
     float const         crop_u[2],
-    float const         crop_v[2])
+    float const         crop_v[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_deriv_color_2d(
             rgb, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, crop_u, crop_v);
+            coord, wrap_u, wrap_v, crop_u, crop_v, frame);
     } else {
         rgb[0] = rgb[1] = rgb[2] = 0.0f;
     }
@@ -762,14 +769,15 @@ void tex_lookup_color_3d(
     Tex_wrap_mode       wrap_w,
     float const         crop_u[2],
     float const         crop_v[2],
-    float const         crop_w[2])
+    float const         crop_w[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_lookup_color_3d(
             rgb, res_data->get_resource_store(texture - 1), data->get_thread_data(),
-            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w);
+            coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame);
     } else {
         rgb[0] = rgb[1] = rgb[2] = 0.0f;
     }
@@ -814,13 +822,14 @@ float tex_texel_float_2d(
     Res_data_pair const *data,
     unsigned            texture,
     int const           coord[2],
-    int const           uv_tile[2])
+    int const           uv_tile[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         return handler->tex_texel_float_2d(
-            res_data->get_resource_store(texture - 1), data->get_thread_data(), coord, uv_tile);
+            res_data->get_resource_store(texture - 1), data->get_thread_data(), coord, uv_tile, frame);
     } else {
         return 0.0f;
     }
@@ -832,7 +841,8 @@ void tex_texel_float2_2d(
     Res_data_pair const *data,
     unsigned            texture,
     int const           coord[2],
-    int const           uv_tile[2])
+    int const           uv_tile[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
@@ -842,7 +852,8 @@ void tex_texel_float2_2d(
             res_data->get_resource_store(texture - 1),
             data->get_thread_data(),
             coord,
-            uv_tile);
+            uv_tile,
+            frame);
     } else {
         result[0] = result[1] = 0.0f;
     }
@@ -854,7 +865,8 @@ void tex_texel_float3_2d(
     Res_data_pair const *data,
     unsigned            texture,
     int const           coord[2],
-    int const           uv_tile[2])
+    int const           uv_tile[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
@@ -864,7 +876,8 @@ void tex_texel_float3_2d(
             res_data->get_resource_store(texture - 1),
             data->get_thread_data(),
             coord,
-            uv_tile);
+            uv_tile,
+            frame);
     } else {
         result[0] = result[1] = result[2] = 0.0f;
     }
@@ -876,7 +889,8 @@ void tex_texel_float4_2d(
     Res_data_pair const *data,
     unsigned            texture,
     int const           coord[2],
-    int const           uv_tile[2])
+    int const           uv_tile[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
@@ -886,7 +900,8 @@ void tex_texel_float4_2d(
             res_data->get_resource_store(texture - 1),
             data->get_thread_data(),
             coord,
-            uv_tile);
+            uv_tile,
+            frame);
     } else {
         result[0] = result[1] = result[2] = result[3] = 0.0f;
     }
@@ -898,7 +913,8 @@ void tex_texel_color_2d(
     Res_data_pair const *data,
     unsigned            texture,
     int const           coord[2],
-    int const           uv_tile[2])
+    int const           uv_tile[2],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
@@ -908,7 +924,8 @@ void tex_texel_color_2d(
             res_data->get_resource_store(texture - 1),
             data->get_thread_data(),
             coord,
-            uv_tile);
+            uv_tile,
+            frame);
     } else {
         rgb[0] = rgb[1] = rgb[2] = 0.0f;
     }
@@ -918,13 +935,14 @@ void tex_texel_color_2d(
 float tex_texel_float_3d(
     Res_data_pair const *data,
     unsigned            texture,
-    int const           coord[3])
+    int const           coord[3],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         return handler->tex_texel_float_3d(
-            res_data->get_resource_store(texture - 1), data->get_thread_data(), coord);
+            res_data->get_resource_store(texture - 1), data->get_thread_data(), coord, frame);
     } else {
         return 0.0f;
     }
@@ -935,13 +953,14 @@ void tex_texel_float2_3d(
     float               result[2],
     Res_data_pair const *data,
     unsigned            texture,
-    int const           coord[3])
+    int const           coord[3],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_texel_float2_3d(
-            result, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord);
+            result, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord, frame);
     } else {
         result[0] = result[1] = 0.0f;
     }
@@ -952,13 +971,14 @@ void tex_texel_float3_3d(
     float               result[3],
     Res_data_pair const *data,
     unsigned            texture,
-    int const           coord[3])
+    int const           coord[3],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_texel_float3_3d(
-            result, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord);
+            result, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord, frame);
     } else {
         result[0] = result[1] = result[2] = 0.0f;
     }
@@ -969,13 +989,14 @@ void tex_texel_float4_3d(
     float               result[4],
     Res_data_pair const *data,
     unsigned            texture,
-    int const           coord[3])
+    int const           coord[3],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_texel_float4_3d(
-            result, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord);
+            result, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord, frame);
     } else {
         result[0] = result[1] = result[2] = result[3] = 0.0f;
     }
@@ -986,13 +1007,14 @@ void tex_texel_color_3d(
     float               rgb[3],
     Res_data_pair const *data,
     unsigned            texture,
-    int const           coord[3])
+    int const           coord[3],
+    float               frame)
 {
     Res_data const          *res_data = data->get_shared_data();
     IResource_handler const *handler  = res_data->get_resource_handler();
     if (handler != NULL && texture != 0) {
         handler->tex_texel_color_3d(
-            rgb, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord);
+            rgb, res_data->get_resource_store(texture - 1), data->get_thread_data(), coord, frame);
     } else {
         rgb[0] = rgb[1] = rgb[2] = 0.0f;
     }
@@ -1940,13 +1962,21 @@ llvm::Value *MDL_runtime_creator::call_tex_attr_func(
     llvm::Value                           *res_data,
     llvm::Value                           *tex_id,
     llvm::Value                           *opt_uv_tile,
+    llvm::Value                           *opt_frame,
     llvm::Type                            *res_type)
 {
     llvm::Value *res;
 
     if (m_has_res_handler) {
+        MDL_ASSERT(!opt_uv_tile);
         llvm::Function *glue_func = get_runtime_func(tex_func_code);
-        res = ctx->CreateCall(glue_func, { res_data, tex_id });
+        if (tex_func_code == RT_MDL_TEX_ISVALID)
+            res = ctx->CreateCall(glue_func, { res_data, tex_id });
+        else {
+            if (!opt_frame)
+                opt_frame = ctx.get_constant(0.0f);
+            res = ctx->CreateCall(glue_func, { res_data, tex_id, opt_frame });
+        }
     } else {
         llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
             res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
@@ -1978,6 +2008,12 @@ llvm::Value *MDL_runtime_creator::call_tex_attr_func(
                 ctx.store_int2_zero(opt_uv_tile);
             }
             args.push_back(opt_uv_tile);
+        }
+        if (tex_func_idx != Type_mapper::THV_tex_texture_isvalid) {
+            if (opt_frame == nullptr) {
+                opt_frame = ctx.get_constant(0.0f);
+            }
+            args.push_back(opt_frame);
         }
         llvm::CallInst *call = ctx->CreateCall(tex_func, args);
         call->setDoesNotThrow();
@@ -2198,6 +2234,12 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_isvalid
+        return func;
+    case RT_MDL_TEX_FRAME:
+        func->setDoesNotThrow();
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // result
+        func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
+        MARK_NATIVE(func);  // tex_frame
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_2D:
         func->setDoesNotThrow();
@@ -2571,6 +2613,10 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // theta_phi
         MARK_NATIVE(func);  // df_light_profile_pdf
+        return func;
+
+    case RT_MDL_ADAPT_NORMAL:
+        MDL_ASSERT(!"adapt_normal not available via resource handler interface");
         return func;
 
     case RT_MDL_BLACKBODY:
@@ -3193,12 +3239,9 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_FUNC2("mdl_float_bits_to_intf", check_sig<II_FF>(mdl_float_bits_to_int));
 
     REG_FUNC(tex_resolution_2d);
-    // Note: no tex_resolution_3d function is used for the internal native runtime,
-    //       instead the width, height and depth functions are called directly
-    REG_FUNC(tex_width);
-    REG_FUNC(tex_height);
-    REG_FUNC(tex_depth);
+    REG_FUNC(tex_resolution_3d);
     REG_FUNC(tex_isvalid);
+    REG_FUNC(tex_frame);
 
     REG_FUNC(tex_lookup_float_2d);
     REG_FUNC(tex_lookup_deriv_float_2d);
@@ -3495,12 +3538,42 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
     unsigned          flags     = ctx_data->get_function_flags();
 
     Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
+    llvm::Value* res;
 
     llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
     llvm::Value *a = load_by_value(ctx, arg_it++);
 
-    // just return the normal unmodified
-    ctx.create_return(a);
+    if (m_code_gen.m_use_renderer_adapt_normal) {
+        llvm::Type  *arr_float_3_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
+        llvm::Value *tmp = ctx.create_local(arr_float_3_type, "tmp");
+        llvm::Value *normal = ctx.create_local(arr_float_3_type, "normal");
+        ctx.convert_and_store(a, normal);
+
+        llvm::Value *res_data = ctx.get_resource_data_parameter();
+        llvm::Value* state = ctx.get_state_parameter();
+
+        // adapt_normal is only supported via the texture handler, which will also be used
+        // if the builtin texture runtime is used (which uses the resource handler)
+        llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+            res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+        llvm::Value *self = ctx->CreateBitCast(
+            ctx->CreateLoad(self_adr),
+            m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+            self, Type_mapper::THV_adapt_normal);
+
+        llvm::Value *args[] = {tmp, self, state, normal};
+        llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
+        call->setDoesNotThrow();
+
+        res = ctx.load_and_convert(ctx_data->get_return_type(), tmp);
+    }
+    else {
+        // just return the normal unmodified
+        res = a;
+    }
+    ctx.create_return(res);
     return func;
 }
 
@@ -3625,7 +3698,7 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_sample(
 
     llvm::Value *theta_phi_out = ctx.create_local(arr_float_2_type, "theta_phi_out");
     ctx.convert_and_store(b, theta_phi_out);
-    
+
     llvm::Value *xi = ctx.create_local(arr_float_3_type, "xi");
     ctx.convert_and_store(c, xi);
 
@@ -3855,7 +3928,7 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_pdf(
     llvm::Type  *arr_float_2_type = m_code_gen.m_type_mapper.get_arr_float_2_type();
     llvm::Value *theta_phi = ctx.create_local(arr_float_2_type, "theta_phi");
     ctx.convert_and_store(b, theta_phi);
-    
+
     llvm::CallInst *call;
     if (m_has_res_handler) {
         llvm::Function *lookup_func = get_runtime_func(RT_MDL_DF_LIGHT_PROFILE_PDF);
@@ -3987,7 +4060,8 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
             break;
 
         case Internal_function::KI_STATE_ADAPT_NORMAL:
-            if (m_code_gen.m_use_renderer_adapt_normal) {
+            if (m_code_gen.m_use_renderer_adapt_normal &&
+                    m_code_gen.m_target_lang == LLVM_code_generator::TL_HLSL) {
                 Function_instance inst(
                     m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
                 LLVM_context_data* ctx_data =
@@ -4514,8 +4588,10 @@ bool LLVM_code_generator::init_user_modules()
     }
 
     // make sure all required functions are provided
-    if (!m_runtime->check_state_module(state_mod->get()))
+    if (!m_runtime->check_state_module(state_mod->get())) {
+        error(STATE_MODULE_IS_INCOMPLETE, Error_params(get_allocator()));
         return false;
+    }
 
     // create prototypes in the target module for all function definitions to force the linker to
     // correctly map the types
@@ -4586,7 +4662,7 @@ bool LLVM_code_generator::init_user_modules()
         llvm::GlobalValue::ExternalLinkage,
         llvm::ConstantInt::get(
             m_type_mapper.get_int_type(),
-            strcmp(m_internal_space, "coordinate_object") == 0
+            strcmp(m_internal_space.c_str(), "coordinate_object") == 0
                 ? coordinate_object : coordinate_world),
         "INTERNAL_SPACE");
 

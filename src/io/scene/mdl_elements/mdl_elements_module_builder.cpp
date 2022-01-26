@@ -2206,6 +2206,8 @@ void Mdl_module_builder::create_module( Execution_context* context)
 
 void Mdl_module_builder::analyze_module( Execution_context* context)
 {
+    // Note that the AST dump is not guaranteed to be valid MDL (even for valid modules), e.g., it
+    // generates empty selector strings for MDL < 1.7.
     SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
     const CONFIG::Config_registry& registry = config_module->get_configuration();
     bool dump_ast = false;

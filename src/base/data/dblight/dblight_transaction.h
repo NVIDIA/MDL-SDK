@@ -33,9 +33,9 @@
 #ifndef BASE_DATA_DBLIGHT_DBLIGHT_TRANSACTION_H
 #define BASE_DATA_DBLIGHT_DBLIGHT_TRANSACTION_H
 
-#include <base/data/db/i_db_transaction.h>
+#include <atomic>
 
-#include <mi/base/atom.h>
+#include <base/data/db/i_db_transaction.h>
 #include <base/data/db/i_db_tag.h>
 
 namespace MI {
@@ -203,8 +203,8 @@ private:
     Database_impl* m_database;
     Scope_impl* m_scope;
     DB::Transaction_id m_id;
-    mi::base::Atom32 m_refcount;
-    mi::base::Atom32 m_next_sequence_number;
+    std::atomic_uint32_t m_refcount;
+    std::atomic_uint32_t m_next_sequence_number;
     bool m_is_open;
 };
 

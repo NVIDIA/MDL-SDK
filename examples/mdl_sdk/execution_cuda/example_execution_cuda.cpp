@@ -283,6 +283,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_derivatives,
                 options.fold_ternary_on_df,
                 /*enable_axuiliary_output*/ false,
+                /*use_adapt_normal*/ false,
                 /*df_handle_mode*/ "none");
 
             for (std::size_t i = 0, n = options.material_names.size(); i < n; ++i) {

@@ -67,7 +67,26 @@ private:
         Location const      &pos);
 
     /// Optimize vector constructors.
-    Expr *optimize_vector_constructor(Expr_call *constr);
+    ///
+    /// \param const  a call to a vector elemental constructor
+    Expr *optimize_vector_constructor(
+        Expr_call *constr);
+
+    /// Check if the given binary expression is a vector swizzle.
+    ///
+    /// \param res_type  the result type
+    /// \param lhs       left side of the swizzle
+    /// \param rhs       the swizzle
+    bool is_swizzle(
+        Expr_binary *binary,
+        Expr *lhs,
+        Expr *rhs);
+
+    /// Optimize a swizzle lhs.rhs.
+    Expr *optimize_swizzle(
+        Type *res_type,
+        Expr *lhs,
+        Expr *rhs);
 
     /// Optimize calls.
     Expr *optimize_call(Expr_call *call);
@@ -132,6 +151,9 @@ private:
 
     /// The value factory of the current unit.
     Value_factory &m_value_factory;
+
+    /// The symbol table of the current unit.
+    Symbol_table &m_symtab;
 
     /// Current optimizer level.
     int m_opt_level;

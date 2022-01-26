@@ -37,7 +37,6 @@
 #include <io/scene/mdl_elements/i_mdl_elements_expression.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
-#include <io/scene/mdl_elements/mdl_elements_utilities.h> // for get_db_name_annotation_definition
 
 #include "neuray_expression_impl.h"
 #include "neuray_transaction_impl.h"
@@ -650,19 +649,27 @@ mi::neuraylib::IExpression_list* Expression_factory::clone(
 }
 
 mi::Sint32 Expression_factory::compare(
-    const mi::neuraylib::IExpression* lhs, const mi::neuraylib::IExpression* rhs) const
+    const mi::neuraylib::IExpression* lhs,
+    const mi::neuraylib::IExpression* rhs,
+    mi::Uint32 flags,
+    mi::Float64 epsilon) const
 {
     mi::base::Handle<const MDL::IExpression> lhs_int( get_internal_expression( lhs));
     mi::base::Handle<const MDL::IExpression> rhs_int( get_internal_expression( rhs));
-    return m_ef->compare( lhs_int.get(), rhs_int.get());
+    DB::Transaction* db_transaction = get_db_transaction();
+    return m_ef->compare( lhs_int.get(), rhs_int.get(), flags, epsilon, db_transaction);
 }
 
 mi::Sint32 Expression_factory::compare(
-    const mi::neuraylib::IExpression_list* lhs, const mi::neuraylib::IExpression_list* rhs) const
+    const mi::neuraylib::IExpression_list* lhs,
+    const mi::neuraylib::IExpression_list* rhs,
+    mi::Uint32 flags,
+    mi::Float64 epsilon) const
 {
     mi::base::Handle<const MDL::IExpression_list> lhs_int( get_internal_expression_list( lhs));
     mi::base::Handle<const MDL::IExpression_list> rhs_int( get_internal_expression_list( rhs));
-    return m_ef->compare( lhs_int.get(), rhs_int.get());
+    DB::Transaction* db_transaction = get_db_transaction();
+    return m_ef->compare( lhs_int.get(), rhs_int.get(), flags, epsilon, db_transaction);
 }
 
 const mi::IString* Expression_factory::dump(

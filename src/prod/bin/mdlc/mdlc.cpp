@@ -115,6 +115,7 @@ Mdlc::Mdlc(char const *program_name)
 , m_verbose(false)
 , m_syntax_coloring(false)
 , m_show_positions(false)
+, m_show_resource_table(false)
 , m_imdl()
 , m_check_root()
 , m_internal_space("coordinate_object")
@@ -192,6 +193,8 @@ void Mdlc::usage()
         "\t\tworld\n"
         "  --show-positions\n"
         "\tShow source code position in target output.\n"
+        "  --show-resource-table\n"
+        "\tShow resource tables in target output.\n"
         "  --inline\n"
         "  -i\n"
         "\tInlines the given module (if target is set to MDL).\n"
@@ -221,11 +224,12 @@ int Mdlc::run(int argc, char *argv[])
         /*11*/ { "backend",                mi::getopt::REQUIRED_ARGUMENT, NULL, 'B' },
         /*12*/ { "internal-space",         mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
         /*13*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /*15*/{ "inline",                  mi::getopt::NO_ARGUMENT,       NULL, 'i' },
-        /*16*/{ "plugin",                  mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
-        /*17*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
+        /*14*/ { "show-resource-table",    mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /*16*/ { "inline",                 mi::getopt::NO_ARGUMENT,       NULL, 'i' },
+        /*17*/ { "plugin",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
+        /*18*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
        
-        /*18*/ { NULL,                     0,                             NULL, 0 }
+        /*19*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;
@@ -385,7 +389,10 @@ int Mdlc::run(int argc, char *argv[])
             case 13:
                 m_show_positions = true;
                 break;
-            case 16:
+            case 14:
+                m_show_resource_table = true;
+                break;
+            case 17:
                 plugin_filenames.push_back(mi::getopt::optarg);
                 break;
             default:
@@ -692,16 +699,17 @@ IModule const *Mdlc::load_binary(char const *filename, size_t &errors)
 void Mdlc::print_generated_code(IModule const *mod)
 {
     mi::base::Handle<IOutput_stream> os_stdout(m_imdl->create_std_stream(IMDL::OS_STDOUT));
-    if (mod->is_valid()) {
+    if (mod->is_valid() && !(m_show_positions || m_show_resource_table)) {
         // use the exporter
         mi::base::Handle<IMDL_exporter> exporter(m_imdl->create_exporter());
         exporter->enable_color(m_syntax_coloring);
         exporter->export_module(os_stdout.get(), mod, /*resource_cb=*/NULL);
-    } else if (m_verbose) {
+    } else if (m_verbose || m_show_positions || m_show_resource_table) {
         // use the printer, this module contains errors
         mi::base::Handle<IPrinter> printer(m_imdl->create_printer(os_stdout.get()));
         printer->enable_color(m_syntax_coloring);
         printer->show_positions(m_show_positions);
+        printer->show_resource_table(m_show_resource_table);
         printer->print(mod);
     }
 }
@@ -713,6 +721,7 @@ void Mdlc::print_generated_code(IGenerated_code const *code)
     mi::base::Handle<IPrinter> printer(m_imdl->create_printer(os_stdout.get()));
     printer->enable_color(m_syntax_coloring);
     printer->show_positions(m_show_positions);
+    printer->show_resource_table(m_show_resource_table);
     printer->print(code);
 }
 

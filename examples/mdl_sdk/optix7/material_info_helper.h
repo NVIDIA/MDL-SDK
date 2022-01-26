@@ -174,7 +174,7 @@ class Material_info
 {
 public:
     Material_info(
-        mi::neuraylib::IMaterial_definition const *mat_def,
+        mi::neuraylib::IFunction_definition const *mat_def,
         mi::neuraylib::ICompiled_material const *comp_mat,
         mi::neuraylib::ITarget_value_layout const *arg_block_layout,
         mi::neuraylib::ITarget_argument_block const *arg_block)

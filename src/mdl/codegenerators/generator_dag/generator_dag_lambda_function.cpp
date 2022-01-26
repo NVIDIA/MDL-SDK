@@ -1142,6 +1142,7 @@ void Lambda_function::enumerate_resources(
 void Lambda_function::map_tex_resource(
     IValue::Kind                   res_kind,
     char const                     *res_url,
+    char const                     *res_sel,
     IValue_texture::gamma_mode     gamma,
     IValue_texture::Bsdf_data_kind bsdf_data_kind,
     IType_texture::Shape           shape,
@@ -1220,7 +1221,8 @@ void Lambda_function::map_tex_resource(
     }
 
     res_url = res_url != NULL ? Arena_strdup(m_arena, res_url) : NULL;
-    Resource_tag_tuple key(kind, res_url, res_tag);
+    res_sel = res_sel != NULL ? Arena_strdup(m_arena, res_sel) : NULL;
+    Resource_tag_tuple key(kind, res_url, res_sel, res_tag);
 
     m_resource_attr_map[key] = e;
 }
@@ -1255,7 +1257,7 @@ void Lambda_function::map_lp_resource(
     }
 
     res_url = res_url != NULL ? Arena_strdup(m_arena, res_url) : NULL;
-    Resource_tag_tuple key(kind, res_url, res_tag);
+    Resource_tag_tuple key(kind, res_url, /*selector=*/NULL, res_tag);
 
     m_resource_attr_map[key] = e;
 }
@@ -1286,7 +1288,7 @@ void Lambda_function::map_bm_resource(
     }
 
     res_url = res_url != NULL ? Arena_strdup(m_arena, res_url) : NULL;
-    Resource_tag_tuple key(kind, res_url, res_tag);
+    Resource_tag_tuple key(kind, res_url, /*selector=*/NULL, res_tag);
 
     m_resource_attr_map[key] = e;
 }
@@ -2315,12 +2317,13 @@ void Lambda_function::set_has_resource_attributes(bool avail)
 void Lambda_function::set_resource_tag(
     Resource_tag_tuple::Kind const res_kind,
     char const                    *res_url,
+    char const                    *res_sel,
     int                           tag)
 {
-    int old_tag = find_resource_tag(res_kind, res_url);
+    int old_tag = find_resource_tag(res_kind, res_url, res_sel);
 
     if (old_tag == 0) {
-        add_resource_tag(res_kind, res_url, tag);
+        add_resource_tag(res_kind, res_url, res_sel, tag);
     } else {
         MDL_ASSERT(old_tag == tag && "Changing tag of a resource");
     }
@@ -2329,7 +2332,13 @@ void Lambda_function::set_resource_tag(
 // Remap a resource value according to the resource map.
 int Lambda_function::get_resource_tag(IValue_resource const *r) const
 {
-    int tag = find_resource_tag(kind_from_value(r), r->get_string_value());
+    char const *selector = NULL;
+
+    if (IValue_texture const *tex = as<IValue_texture>(r)) {
+        selector = tex->get_selector();
+    }
+
+    int tag = find_resource_tag(kind_from_value(r), r->get_string_value(), selector);
     if (tag == 0) {
         tag = r->get_tag_value();
     }
@@ -2354,14 +2363,17 @@ Resource_tag_tuple const *Lambda_function::get_resource_entry(size_t index) cons
 // Find the resource tag of a resource.
 int Lambda_function::find_resource_tag(
     Resource_tag_tuple::Kind const res_kind,
-    char const                     *res_url) const
+    char const                     *res_url,
+    char const                     *res_sel) const
 {
     // linear search so far
     for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
         // beware of NULL pointer
-        if (e.m_kind == res_kind && (e.m_url == res_url || strcmp(e.m_url, res_url) == 0)) {
+        if (e.m_kind == res_kind &&
+            (e.m_url      == res_url || strcmp(e.m_url,      res_url) == 0) &&
+            (e.m_selector == res_sel || strcmp(e.m_selector, res_sel) == 0)) {
             return e.m_tag;
         }
     }
@@ -2372,10 +2384,11 @@ int Lambda_function::find_resource_tag(
 void Lambda_function::add_resource_tag(
     Resource_tag_tuple::Kind const res_kind,
     char const                     *res_url,
+    char const                     *res_sel,
     int                            tag)
 {
     res_url = res_url != NULL ? Arena_strdup(m_arena, res_url) : NULL;
-    m_resource_tag_map.push_back(Resource_tag_tuple(res_kind, res_url, tag));
+    m_resource_tag_map.push_back(Resource_tag_tuple(res_kind, res_url, res_sel, tag));
 }
 
 // Get the derivative information if they have been initialized.
@@ -3964,7 +3977,7 @@ private:
         for (size_t i = 0, n = root_lambda->get_resource_entries_count(); i < n; ++i) {
             Resource_tag_tuple const *e = root_lambda->get_resource_entry(i);
 
-            lambda->set_resource_tag(e->m_kind, e->m_url, e->m_tag);
+            lambda->set_resource_tag(e->m_kind, e->m_url, e->m_selector, e->m_tag);
         }
         return lambda;
     }
@@ -4595,12 +4608,13 @@ Resource_attr_map const &Distribution_function::get_resource_attribute_map() con
 void Distribution_function::set_resource_tag(
     Resource_tag_tuple::Kind const res_kind,
     char const                     *res_url,
+    char const                     *res_sel,
     int                            tag)
 {
-    int old_tag = find_resource_tag(res_kind, res_url);
+    int old_tag = find_resource_tag(res_kind, res_url, res_sel);
 
     if (old_tag == 0) {
-        add_resource_tag(res_kind, res_url, tag);
+        add_resource_tag(res_kind, res_url, res_sel, tag);
     } else {
         MDL_ASSERT(old_tag == tag && "Changing tag of a resource");
     }
@@ -4609,14 +4623,17 @@ void Distribution_function::set_resource_tag(
 // Find the resource tag of a resource.
 int Distribution_function::find_resource_tag(
     Resource_tag_tuple::Kind const res_kind,
-    char const                    *res_url) const
+    char const *res_url,
+    char const *res_sel) const
 {
     // linear search so far
     for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
         // beware of NULL pointer
-        if (e.m_kind == res_kind && (e.m_url == res_url || strcmp(e.m_url, res_url) == 0)) {
+        if (e.m_kind == res_kind &&
+            (e.m_url      == res_url || strcmp(e.m_url,      res_url) == 0) &&
+            (e.m_selector == res_sel || strcmp(e.m_selector, res_sel) == 0)) {
             return e.m_tag;
         }
     }
@@ -4627,10 +4644,11 @@ int Distribution_function::find_resource_tag(
 void Distribution_function::add_resource_tag(
     Resource_tag_tuple::Kind res_kind,
     char const               *res_url,
+    char const               *res_sel,
     int                      tag)
 {
     res_url = res_url != NULL ? Arena_strdup(m_arena, res_url) : NULL;
-    m_resource_tag_map.push_back(Resource_tag_tuple(res_kind, res_url, tag));
+    m_resource_tag_map.push_back(Resource_tag_tuple(res_kind, res_url, res_sel, tag));
 }
 
 // Returns the number of distribution function handles referenced by this distribution function.

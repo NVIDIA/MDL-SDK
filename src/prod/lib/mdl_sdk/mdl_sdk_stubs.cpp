@@ -34,13 +34,12 @@
 #include <io/scene/scene/i_scene_scene_element_base.h>
 
 namespace MI {
-    
+
 // needed because MDL and other scene elements are used without linking the SCENE module
 namespace SCENE {
 
 std::string get_class_name( SERIAL::Class_id id)
 {
-    // TODO implement this (used by the API page for the admin HTTP server only)
     return "";
 }
 
@@ -78,9 +77,10 @@ namespace VOLUME {
 
 DB::Tag load_mdl_volume_texture(
     DB::Transaction* transaction,
-    const std::string& file_name,
-    const std::string& container_file_name,
-    const std::string& container_member_name,
+    const std::string& filename,
+    const std::string& container_filename,
+    const std::string& container_membername,
+    const std::string& mdl_file_path,
     const std::string& channel,
     bool shared)
 {

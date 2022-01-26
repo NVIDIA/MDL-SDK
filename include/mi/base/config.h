@@ -44,7 +44,7 @@
  */
 
 // The current copyright year string.
-#define MI_COPYRIGHT_YEARS_STRING "2021"
+#define MI_COPYRIGHT_YEARS_STRING "2022"
 
 // The NVIDIA company name string for copyrights etc.
 #define MI_COPYRIGHT_COMPANY_STRING "NVIDIA Corporation"
@@ -279,13 +279,13 @@
 #define MI_ARCH_LITTLE_ENDIAN
 #endif // !defined(MI_ARCH_LITTLE_ENDIAN)
 
-#elif defined(__aarch64__)
+#elif defined(__aarch64__) || defined(_M_ARM64)
 
 #if !defined(MI_ARCH_ARM_64)
 #define MI_ARCH_ARM_64
 #endif // !defined( MI_ARCH_ARM_64)
 
-#if !defined(__AARCH64EL__)
+#if !defined(__AARCH64EL__) && !defined(_M_ARM64) // windows implies little endian mode for now
 #error Architecture ARM_64 is only supported in little endian mode.
 #endif
 
@@ -295,7 +295,10 @@
 
 #endif
 
-#if defined(MI_ARCH_X86_64) || defined(MI_ARCH_SPARC_64) || defined(MI_ARCH_POWERPC_64) || defined(MI_ARCH_ARM_64)
+#if    defined(MI_ARCH_X86_64) \
+    || defined(MI_ARCH_SPARC_64) \
+    || defined(MI_ARCH_POWERPC_64) \
+    || defined(MI_ARCH_ARM_64)
 #define MI_ARCH_64BIT
 #endif // defined(MI_ARCH_X86_64) ...
 

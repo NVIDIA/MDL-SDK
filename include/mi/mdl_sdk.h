@@ -66,6 +66,8 @@
 #include <mi/neuraylib/ifunction_definition.h>
 #include <mi/neuraylib/iimage.h>
 #include <mi/neuraylib/iimage_api.h>
+#include <mi/neuraylib/iimage_plugin.h>
+#include <mi/neuraylib/iimpexp_base.h>
 #include <mi/neuraylib/ilightprofile.h>
 #include <mi/neuraylib/imap.h>
 #include <mi/neuraylib/imaterial_definition.h>
@@ -91,6 +93,7 @@
 #include <mi/neuraylib/imodule.h>
 #include <mi/neuraylib/ineuray.h>
 #include <mi/neuraylib/inumber.h>
+#include <mi/neuraylib/iplugin_api.h>
 #include <mi/neuraylib/iplugin_configuration.h>
 #include <mi/neuraylib/ipointer.h>
 #include <mi/neuraylib/ireader.h>

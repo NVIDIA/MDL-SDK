@@ -510,8 +510,8 @@ void CUnit_visitor::do_type_struct(Declaration_struct *decl)
             do_name(name);
 
         for (Declaration_struct::iterator it(decl->begin()), end(decl->end()); it != end; ++it) {
-            Declaration *decl = it;
-            do_declaration(decl);
+            Declaration *fdecl = it;
+            do_declaration(fdecl);
         }
     }
     post_visit(decl);
@@ -525,8 +525,8 @@ void CUnit_visitor::do_interface(Declaration_interface *decl)
 
         for (Declaration_interface::iterator it(decl->begin()), end(decl->end()); it != end; ++it)
         {
-            Declaration *decl = it;
-            do_declaration(decl);
+            Declaration *fdecl = it;
+            do_declaration(fdecl);
         }
 
         if (Name *name = decl->get_identifier())

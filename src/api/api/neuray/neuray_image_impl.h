@@ -38,6 +38,8 @@
 #include "neuray_db_element_impl.h"
 #include "neuray_attribute_set_impl.h"
 
+#include <string>
+
 namespace MI {
 
 namespace DBIMAGE { class Image; }
@@ -63,17 +65,12 @@ public:
 
     mi::neuraylib::Element_type get_element_type() const;
 
-    mi::Sint32 reset_file( const char* filename);
+    mi::Sint32 reset_file( const char* filename, const char* selector);
 
-    mi::Sint32 reset_reader( mi::neuraylib::IReader* reader, const char* image_format);
+    mi::Sint32 reset_reader(
+        mi::neuraylib::IReader* reader, const char* image_format, const char* selector);
 
-    Sint32 reset_reader( mi::IArray* reader, const char* image_format);
-
-    const char* get_filename( mi::Uint32 uvtile_id = 0) const;
-
-    const char* get_original_filename() const;
-
-    const char* get_type( mi::Uint32 uvtile_id = 0) const;
+    mi::Sint32 reset_reader( mi::IArray* reader, const char* image_format, const char* selector);
 
     bool set_from_canvas( const mi::neuraylib::ICanvas* canvas);
 
@@ -83,26 +80,52 @@ public:
 
     bool set_from_canvas( mi::IArray* canvas, bool shared);
 
-    const mi::neuraylib::ICanvas* get_canvas( mi::Uint32 level, mi::Uint32 uvtile_id = 0) const;
+    bool is_animated() const;
 
-    mi::Uint32 get_levels( mi::Uint32 uvtile_id = 0) const;
+    mi::Size get_length() const;
 
-    mi::Uint32 resolution_x( mi::Uint32 level, mi::Uint32 uvtile_id = 0) const;
+    mi::Size get_frame_number( mi::Size frame_id) const;
 
-    mi::Uint32 resolution_y( mi::Uint32 level, mi::Uint32 uvtile_id = 0) const;
-
-    mi::Uint32 resolution_z( mi::Uint32 level, mi::Uint32 uvtile_id = 0) const;
+    mi::Size get_frame_id( mi::Size frame_number) const;
 
     bool is_uvtile() const;
 
+    mi::Size get_frame_length( mi::Size frame_id) const;
+
+    mi::Sint32 get_uvtile_uv(
+        mi::Size frame_id, mi::Size uvtile_id, mi::Sint32& u, mi::Sint32& v) const;
+
+    mi::Size get_uvtile_id( mi::Size frame_id, mi::Sint32 u, mi::Sint32 v) const;
+
     void get_uvtile_uv_ranges(
-        mi::Sint32& min_u, mi::Sint32& min_v, mi::Sint32& max_u, mi::Sint32& max_v) const;
+        mi::Size frame_id,
+        mi::Sint32& min_u,
+        mi::Sint32& min_v,
+        mi::Sint32& max_u,
+        mi::Sint32& max_v) const;
 
-    mi::Size get_uvtile_length() const;
+    const char* get_original_filename() const;
 
-    mi::Sint32 get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const;
+    const char* get_selector() const;
 
-    mi::Uint32 get_uvtile_id( Sint32 u, Sint32 v) const;
+    const char* get_filename( mi::Size frame_id, mi::Size uvtile_id) const;
+
+    const mi::neuraylib::ICanvas* get_canvas(
+        mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const;
+
+    const char* get_type( mi::Size frame_id, mi::Size uvtile_id) const;
+
+    mi::Uint32 get_levels( mi::Size frame_id, mi::Size uvtile_id) const;
+
+    mi::Uint32 resolution_x( mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const;
+
+    mi::Uint32 resolution_y( mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const;
+
+    mi::Uint32 resolution_z( mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const;
+
+private:
+
+    mutable std::string m_cached_selector;
 };
 
 } // namespace NEURAY

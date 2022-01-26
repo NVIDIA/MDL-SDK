@@ -374,6 +374,14 @@ mi::neuraylib::ITarget_code::Gamma_mode Target_code::get_texture_gamma(mi::Size 
     return mi::neuraylib::ITarget_code::GM_GAMMA_UNKNOWN;
 }
 
+const char* Target_code::get_texture_selector(mi::Size index) const
+{
+    if (index < m_texture_table.size()) {
+        return m_texture_table[index].get_selector();
+    }
+    return nullptr;
+}
+
 Target_code::Texture_shape Target_code::get_texture_shape( mi::Size index) const
 {
     if( index < m_texture_table.size()) {
@@ -795,6 +803,7 @@ void Target_code::add_texture_index(
     const std::string& name,
     const std::string& mdl_url,
     float gamma,
+    const std::string& selector,
     Texture_shape shape,
     mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
 {
@@ -804,6 +813,7 @@ void Target_code::add_texture_index(
             /*mdl_url=*/"",
             /*owner=*/"",
             /*gamma=*/0.0f,
+            /*selector=*/selector,
             /*texture_shape=*/Texture_shape_invalid,
             /*df_data_kind=*/ mi::mdl::IValue_texture::BDK_NONE));
     }
@@ -811,7 +821,7 @@ void Target_code::add_texture_index(
     std::string owner = MDL::get_resource_owner_prefix( mdl_url);
     std::string url   = MDL::strip_resource_owner_prefix( mdl_url);
     m_texture_table[index] = Target_code::Texture_info(
-        name, url, owner, gamma, shape, df_data_kind);
+        name, url, owner, gamma, selector, shape, df_data_kind);
 }
 
 // Registers a used light profile index.
@@ -875,8 +885,8 @@ void Target_code::set_body_resource_counts(
 }
 
 void Target_code::add_ro_segment(
-    const char* name, 
-    const unsigned char* data, 
+    const char* name,
+    const unsigned char* data,
     mi::Size size)
 {
     m_data_segments.push_back(Target_code::Segment(name, data, size));
@@ -1242,6 +1252,12 @@ const SERIAL::Serializable* Target_code::Texture_info::serialize(SERIAL::Seriali
 
 SERIAL::Serializable* Target_code::Texture_info::deserialize(SERIAL::Deserializer* deserializer)
 {
+    return deserialize(deserializer, /*transaction*/ nullptr);
+}
+
+SERIAL::Serializable* Target_code::Texture_info::deserialize(
+    SERIAL::Deserializer* deserializer, DB::Transaction* transaction)
+{
     Target_code::Resource_info::deserialize(deserializer);
     SERIAL::read(deserializer, &m_gamma);
     mi::Sint32 value;
@@ -1249,6 +1265,14 @@ SERIAL::Serializable* Target_code::Texture_info::deserialize(SERIAL::Deserialize
     m_texture_shape = static_cast<mi::neuraylib::ITarget_code::Texture_shape>(value);
     SERIAL::read(deserializer, &value);
     m_df_data_kind = static_cast<mi::mdl::IValue_texture::Bsdf_data_kind>(value);
+
+    // Create DF textures on the fly if a transaction is given.
+    if (transaction) {
+        Df_data_helper helper(transaction);
+        if (helper.get_texture_db_name(m_df_data_kind))
+            helper.store_df_data(m_df_data_kind);
+    }
+
     return this + 1;
 }
 
@@ -1297,6 +1321,31 @@ namespace {
 
 } // anonymous namespace
 
+/// Variant of SERIAL::write(...,const std::vector<T>&).
+///
+/// Functionally identical (right now), just to ensure that write() matches read() below.
+template <typename T, typename S, typename = SERIAL::enable_if_serializer_t<S>>
+void write(S* serializer, const std::vector<T>& array)
+{
+    mi::Uint64 size = array.size();
+    serializer->write(size);
+
+    for (const auto& element: array)
+        element.serialize(serializer);
+}
+
+/// Variant of SERIAL::read(...,std::vector<T>*) that passes the transaction around.
+template <typename T, typename D, typename = SERIAL::enable_if_deserializer_t<D>>
+void read(D* deserializer, std::vector<T>* array, DB::Transaction* transaction)
+{
+    mi::Uint64 size;
+    deserializer->read(&size);
+    array->resize(size);
+
+    for (auto& element: *array)
+        element.deserialize(deserializer, transaction);
+}
+
 const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_execution_context* context) const
 {
     if (context)
@@ -1337,7 +1386,7 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
 
     if (serialize_instance_data)
     {
-        SERIAL::write(&serializer, m_texture_table);
+        BACKENDS::write(&serializer, m_texture_table);
         SERIAL::write(&serializer, m_light_profile_table);
         SERIAL::write(&serializer, m_bsdf_measurement_table);
     }
@@ -1403,6 +1452,7 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
 
 bool Target_code::deserialize(
     mi::mdl::ICode_generator* code_gen,
+    DB::Transaction* transaction,
     const mi::neuraylib::IBuffer* buffer,
     mi::neuraylib::IMdl_execution_context* context)
 {
@@ -1457,7 +1507,7 @@ bool Target_code::deserialize(
     SERIAL::read(&deserializer, &m_body_texture_count);
     SERIAL::read(&deserializer, &m_body_light_profile_count);
     SERIAL::read(&deserializer, &m_body_bsdf_measurement_count);
-    SERIAL::read(&deserializer, &m_texture_table);
+    BACKENDS::read(&deserializer, &m_texture_table, transaction);
     SERIAL::read(&deserializer, &m_light_profile_table);
     SERIAL::read(&deserializer, &m_bsdf_measurement_table);
     SERIAL::read(&deserializer, &m_string_constant_table);

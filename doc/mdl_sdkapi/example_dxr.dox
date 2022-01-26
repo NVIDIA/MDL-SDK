@@ -134,7 +134,7 @@ directly inside shaders.
 
         The possibilities of this standard material are limited.
         Glass for instance can not be described properly without an index of refraction (IOR).
-        To overcome this limitation without introducing an MDL extension to glFT,
+        To overcome this limitation without introducing an MDL extension to glTF,
         an arbitrary MDL material can be assigned by setting the \c name property of the glTF material node
         to a fully qualified absolute MDL material identifier like this:
 \code{.unparsed}
@@ -147,7 +147,7 @@ directly inside shaders.
         All other material properties are ignored in that case. This means that the selected MDL material must provide default values for all its parameters.
 
         The Example also supports the MDL encapsulated format. In this case, the file path of the MDLE has to be specified
-        in the \c name property of the glTF material node. This file path can either be absolute or relative to the \c .glft scene file:
+        in the \c name property of the glTF material node. This file path can either be absolute or relative to the \c .gltf scene file:
 \code{.unparsed}
 
 {

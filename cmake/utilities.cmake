@@ -152,6 +152,7 @@ function(TARGET_BUILD_SETUP)
                 "-Wall"
                 "-Wvla"
 
+                "$<$<COMPILE_LANGUAGE:CXX>:-Wno-init-list-lifetime>"
                 "$<$<COMPILE_LANGUAGE:CXX>:-Wno-placement-new>"
                 "-Wno-parentheses"
                 "-Wno-sign-compare"

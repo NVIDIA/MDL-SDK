@@ -34,8 +34,12 @@ set(PROJECT_HEADERS
     "compat.h"
     "config.h"
     "zip.h"
+    "zip_source_file.h"
+    "zip_source_file_stdio.h"
+    "zip_source_file_win32.h"
     "zipconf.h"
     "zipint.h"
+    "zipwin32.h"
     )
 
 set(PROJECT_SOURCES 
@@ -74,7 +78,6 @@ set(PROJECT_SOURCES
     "zip_file_set_external_attributes.c"
     "zip_file_set_mtime.c"
     "zip_file_strerror.c"
-    "zip_filerange_crc.c"
     "zip_fopen.c"
     "zip_fopen_encrypted.c"
     "zip_fopen_index.c"
@@ -96,6 +99,7 @@ set(PROJECT_SOURCES
     "zip_name_locate.c"
     "zip_new.c"
     "zip_open.c"
+    "zip_pkware.c"
     "zip_progress.c"
     "zip_rename.c"
     "zip_replace.c"
@@ -105,6 +109,7 @@ set(PROJECT_SOURCES
     "zip_set_file_comment.c"
     "zip_set_file_compression.c"
     "zip_set_name.c"
+    "zip_source_accept_empty.c"
     "zip_source_begin_write.c"
     "zip_source_begin_write_cloning.c"
     "zip_source_buffer.c"
@@ -114,14 +119,17 @@ set(PROJECT_SOURCES
     "zip_source_compress.c"
     "zip_source_crc.c"
     "zip_source_error.c"
-    "zip_source_filep.c"
+    "zip_source_file_common.c"
+    "zip_source_file_stdio.c"
+    "zip_source_get_file_attributes.c"
     "zip_source_free.c"
     "zip_source_function.c"
-    "zip_source_get_compression_flags.c"
+    "zip_source_get_file_attributes.c"
     "zip_source_is_deleted.c"
     "zip_source_layered.c"
     "zip_source_open.c"
-    "zip_source_pkware.c"
+    "zip_source_pkware_decode.c"
+    "zip_source_pkware_encode.c"
     "zip_source_read.c"
     "zip_source_remove.c"
     "zip_source_rollback_write.c"
@@ -151,15 +159,18 @@ set(PROJECT_SOURCES
 # platform depenedent sources
 if(WIN32)
     list(APPEND PROJECT_SOURCES
-        "zip_source_win32handle.c"
-        "zip_source_win32utf8.c"
-        "zip_source_win32w.c"
-        "mkstemp.c"
-        "zipwin32.h"
+         "zip_source_file_win32.c"
+         "zip_source_file_win32_ansi.c"
+         "zip_source_file_win32_named.c"
+         "zip_source_file_win32_utf16.c"
+         "zip_source_file_win32_utf8.c"
+         "zip_random_win32.c"
         )
 else()
     list(APPEND PROJECT_SOURCES
-        "zip_source_file.c"
+         "zip_mkstempm.c"
+         "zip_source_file_stdio_named.c"
+         "zip_random_unix.c"
         )
 endif()
 

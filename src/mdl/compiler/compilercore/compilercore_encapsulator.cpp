@@ -417,8 +417,9 @@ bool Encapsulate_tool::add_file_uncompressed(
     // but this happens later
     MD5_hasher hasher;
     unsigned char buffer[1024];
-    while (size_t count = reader->read(buffer, 1024))
+    while (size_t count = reader->read(buffer, 1024)) {
         hasher.update(buffer, count);
+    }
 
     hasher.final(hash);
     reader->seek(0, mi::mdl::IMDL_resource_reader::MDL_SEEK_SET);
@@ -486,7 +487,7 @@ bool Encapsulate_tool::create_encapsulated_module(
     // wrap it by the extra layer that writes our MDR header
     Layered_zip_source layer(src, header_write_version);
     zip_source_t *lsrc = layer.open(ze);
-    if (lsrc == 0) {
+    if (lsrc == NULL) {
         zip_source_free(src);
         translate_zip_error(mdle_name, ze);
         return false;

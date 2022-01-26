@@ -449,9 +449,8 @@ bool file_copy(
 bool file_remove(
     const char          *path)          // path of file to remove
 {
-    std::string npath(path? path : "");
-
-    bool success = DeleteFile(npath.c_str()) != FALSE;
+    std::wstring npath(STRING::utf8_to_wchar(path ? path : ""));
+    bool success = DeleteFileW(npath.c_str()) != FALSE;
     if (!success)
         set_error(HAL::get_errno());
     return success;
@@ -464,10 +463,10 @@ bool rename(
     const char          *opath,         // path of file to rename
     const char          *npath)         // new path; must be on the same disk
 {
-    std::string nopath(opath? opath : "");
-    std::string nnpath(npath? npath : "");
+    std::wstring nopath(STRING::utf8_to_wchar(opath ? opath : ""));
+    std::wstring nnpath(STRING::utf8_to_wchar(npath ? npath : ""));
 
-    return MoveFile(nopath.c_str(), nnpath.c_str()) != FALSE;
+    return MoveFileW(nopath.c_str(), nnpath.c_str()) != FALSE;
 }
 
 //-----------------------------------------------------------------------------
@@ -488,7 +487,8 @@ bool mkdir(
     // TODO: Translate mode flags to Win32 security descriptor
     HWND window_handle = 0;                             // I think we get along without one ;-)
     SECURITY_ATTRIBUTES* sec = 0;
-    int result = SHCreateDirectoryEx(window_handle, npath.c_str(), sec);
+    std::wstring wnpath(STRING::utf8_to_wchar(npath.c_str()));
+    int result = SHCreateDirectoryExW(window_handle, wnpath.c_str(), sec);
 
 #ifdef DEBUG
     char buf[2048];
@@ -507,9 +507,9 @@ bool mkdir(
 bool rmdir(
     const char          *path)          // path of directory to delete
 {
-    std::string npath(path? path : "");
+    std::wstring npath(STRING::utf8_to_wchar(path ? path : ""));
 
-    return RemoveDirectory(npath.c_str()) != FALSE;
+    return RemoveDirectoryW(npath.c_str()) != FALSE;
 }
 
 
@@ -522,9 +522,9 @@ bool chdir(
     if (path == NULL)
         return false;
 
-    std::string npath(path);
+    std::wstring npath(STRING::utf8_to_wchar(path));
 
-    if (SetCurrentDirectory(npath.c_str())) {
+    if (SetCurrentDirectoryW(npath.c_str())) {
         set_error(0);
         return true;
     } else {
@@ -540,15 +540,17 @@ bool chdir(
 std::string get_cwd()
 {
     // retrieve required buffer size first
-    DWORD size = GetCurrentDirectory(0, 0); // return value contains terminating null char
-    std::vector<char> buf(static_cast<size_t>(size), '\0');
+    DWORD size = GetCurrentDirectoryW(0, 0); // return value contains terminating null char
+    std::vector<WCHAR> buf(static_cast<size_t>(size), '\0');
 
-    if (!GetCurrentDirectory(size, &buf[0])) {
+    if (!GetCurrentDirectoryW(size, &buf[0])) {
         set_error(HAL::get_errno());
         return std::string();
     }
     set_error(0);
-    return std::string(&buf[0]);
+
+    std::string cwd(STRING::wchar_to_utf8(&buf[0]));
+    return cwd;
 }
 
 
@@ -758,10 +760,11 @@ bool rmdir_r(const char* path)
     bool success = true;
     while (!next.empty())
     {
-        if (is_directory(next.c_str()))
-            success &= rmdir_r(next.c_str());
+        std::string full = std::string(path) + HAL::Ospath::sep() + next;
+        if (is_directory(full.c_str()))
+            success &= rmdir_r(full.c_str());
         else
-            success &= file_remove(next.c_str());
+            success &= file_remove(full.c_str());
 
         next = dir.read();
     }

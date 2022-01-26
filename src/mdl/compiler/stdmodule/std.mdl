@@ -32,7 +32,6 @@ export using ::anno import *;
 export using ::state import *;
 export using ::math import *;
 export using ::tex import *;
-export using ::noise import *;
 export using ::df import *;
 export using ::scene import *;
 export using ::debug import *;

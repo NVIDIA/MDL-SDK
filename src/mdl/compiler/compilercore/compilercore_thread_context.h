@@ -131,6 +131,9 @@ public:
         return m_front_path.empty() ? NULL : m_front_path.c_str();
     }
 
+    /// Get the user data.
+    mi::base::IInterface const *get_user_data() const;
+
     /// Set the front path.
     ///
     /// \param front_path   the new front path

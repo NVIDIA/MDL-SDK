@@ -46,11 +46,9 @@ class Deserializer;
 class Serializable : public MI::MEM::Allocatable
 {
   public:
-    /// Constructor.
-    Serializable() {}
 
     /// Virtual destructor for being able to delete a \c Serializable.
-    virtual ~Serializable() {}
+    virtual ~Serializable() = default;
 
     /// This will return the class id of the given object. This is needed by the serializer when it
     /// wants to write the class id in the stream. It is public because the smart pointers need to

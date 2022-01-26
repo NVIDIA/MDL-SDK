@@ -50,7 +50,13 @@
 #include "i_image_quantization.h"
 
 #if defined(HAS_SSE) || defined(SSE_INTRINSICS)
- #include <xmmintrin.h>
+ #ifdef MI_ARCH_X86_64
+  #include <xmmintrin.h>
+ #elif defined(MI_ARCH_ARM_64)
+  //#include <prod/iray-wf/core-cpu/sse2neon.h>
+  #define SIMDE_ENABLE_NATIVE_ALIASES
+  #include <base/lib/simde/x86/sse2.h>
+#endif
 #endif
 
 #include <mi/math/function.h>
@@ -65,18 +71,16 @@ namespace IMAGE {
 
 /// Performs a gamma correction for floating point pixel types.
 ///
-/// For types with three \p components or less, every component is adjusted. For 4 components,
-/// i.e. \c PT_COLOR, the alpha component is skipped.
-///
 /// \param data       The pixel data to be manipulated.
 /// \param count      The number of pixels in \p data.
 /// \param components The number of components of each pixel (3 for PT_RGB_FP, 4 for PT_COLOR).
-/// \param exponent   The exponent that is applied to the red, green, and blue channel. For
-///                   arbitrary gamma changes this exponent is the quotient of the old and new gamma
-///                   value. For decoding gamma compressed data into linear data the exponent is the
-///                   gamma value itself, and for encoding linear data into gamma compressed data
-///                   the exponent is the inverse gamma value.
-MI_HOST_DEVICE_INLINE void adjust_gamma( mi::Float32* data, mi::Size count, mi::Uint32 components, mi::Float32 exponent);
+/// \param exponent   The exponent that is applied to all channels. For arbitrary gamma changes
+///                   this exponent is the quotient of the old and new gamma value. For decoding
+///                   gamma compressed data into linear data the exponent is the gamma value
+///                   itself, and for encoding linear data into gamma compressed data the exponent
+///                   is the inverse gamma value.
+MI_HOST_DEVICE_INLINE void adjust_gamma(
+    mi::Float32* data, mi::Size count, mi::Uint32 components, mi::Float32 exponent);
 
 /// Indicates whether a particular pixel type conversion is implemented.
 ///
@@ -131,17 +135,22 @@ MI_HOST_DEVICE_INLINE bool convert(
 ///                        negative in order to flip the row order, but then \p dest must
 ///                        point to the first pixel of the last row.
 MI_HOST_DEVICE_INLINE bool convert(
-    const void* source, void* dest,
-    Pixel_type Source, Pixel_type Dest,
-    mi::Size width, mi::Size height,
-    mi::Difference source_stride, mi::Difference dest_stride);
+    const void* source,
+    void* dest,
+    Pixel_type Source,
+    Pixel_type Dest,
+    mi::Size width,
+    mi::Size height,
+    mi::Difference source_stride,
+    mi::Difference dest_stride);
 
 /// Converts a contiguous region of pixels from the source format to the destination format.
 ///
 /// See #convert(const void*,void*,Pixel_type,Pixel_type,mi::Size) for argument details. The first
 /// pixel type argument there is a template parameter here.
 template <Pixel_type Source>
-MI_HOST_DEVICE_INLINE bool convert( const void* source, void* dest, Pixel_type Dest, mi::Size count = 1);
+MI_HOST_DEVICE_INLINE bool convert(
+    const void* source, void* dest, Pixel_type Dest, mi::Size count = 1);
 
 /// Converts rectangular region of pixels with arbitrary row strides from the source format to
 /// the destination format.
@@ -151,10 +160,13 @@ MI_HOST_DEVICE_INLINE bool convert( const void* source, void* dest, Pixel_type D
 /// parameter here.
 template <Pixel_type Source>
 MI_HOST_DEVICE_INLINE bool convert(
-    const void* source, void* dest,
+    const void* source,
+    void* dest,
     Pixel_type Dest,
-    mi::Size width, mi::Size height,
-    mi::Difference source_stride, mi::Difference dest_stride);
+    mi::Size width,
+    mi::Size height,
+    mi::Difference source_stride,
+    mi::Difference dest_stride);
 
 /// Copies a contiguous region of pixels.
 ///
@@ -181,10 +193,23 @@ MI_HOST_DEVICE_INLINE bool copy(
 ///                        negative in order to flip the row order, but then \p dest must
 ///                        point to the first pixel of the last row.
 MI_HOST_DEVICE_INLINE bool copy(
-    const void* source, void* dest,
+    const void* source,
+    void* dest,
     Pixel_type Type,
-    mi::Size width, mi::Size height,
-    mi::Difference source_stride, mi::Difference dest_stride);
+    mi::Size width,
+    mi::Size height,
+    mi::Difference source_stride,
+    mi::Difference dest_stride);
+
+/// Extracts a channel from a contiguous region of pixels
+///
+/// \param source          The first pixel to copy from pixel type \p Type.
+/// \param dest            The first pixel to store the channel from \p source.
+/// \param Type            The pixel type of \p source.
+/// \param count           The number of pixels to handle.
+/// \param channel_index   The channel to extract.
+void extract_channel(
+    const char* source, char* dest, mi::Size count, Pixel_type Type, mi::Size channel_index);
 
 /// Converts a region of pixels from a fixed source pixel type to a fixed destination pixel type.
 ///
@@ -213,17 +238,19 @@ struct Pixel_converter
     typedef typename Pixel_type_traits<Dest>::Base_type   Dest_base_type;
 
     /// Converts a single pixel from the source format to the destination format.
-    ///
+    ///contiguous region of pixels
     /// \param source   The pixel to convert from pixel type \p Source.
     /// \param dest     The pixel to store the result in pixel type \p Dest.
-    static MI_HOST_DEVICE_INLINE void convert( const Source_base_type* source, Dest_base_type* dest);
+    static MI_HOST_DEVICE_INLINE void convert(
+        const Source_base_type* source, Dest_base_type* dest);
 
     /// Converts a contiguous region of pixels from the source format to the destination format.
     ///
     /// \param source   The first pixel to convert from pixel type \p Source.
     /// \param dest     The first pixel to store the result in pixel type \p Dest.
     /// \param count    The number of pixels to convert.
-    static MI_HOST_DEVICE_INLINE void convert( const Source_base_type* source, Dest_base_type* dest, mi::Size count);
+    static MI_HOST_DEVICE_INLINE void convert(
+        const Source_base_type* source, Dest_base_type* dest, mi::Size count);
 
     /// Converts a rectangular region of pixels with arbitrary row strides from the source format to
     /// the destination format.
@@ -241,9 +268,12 @@ struct Pixel_converter
     ///                        negative in order to flip the row order, but then \p dest must
     ///                        point to the first pixel of the last row.
     static MI_HOST_DEVICE_INLINE void convert(
-        const Source_base_type* source, Dest_base_type* dest,
-        mi::Size width, mi::Size height,
-        mi::Difference source_stride, mi::Difference dest_stride);
+        const Source_base_type* source,
+        Dest_base_type* dest,
+        mi::Size width,
+        mi::Size height,
+        mi::Difference source_stride,
+        mi::Difference dest_stride);
 
     /// Converts a contiguous region of pixels from the source format to the destination format.
     ///
@@ -251,7 +281,8 @@ struct Pixel_converter
     /// the callers below.
     ///
     /// For documentation, see the corresponding method above.
-    static MI_HOST_DEVICE_INLINE void convert( const void* source, void* dest, mi::Size count = 1);
+    static MI_HOST_DEVICE_INLINE void convert(
+        const void* source, void* dest, mi::Size count = 1);
 
     /// Converts a rectangular region of pixels with arbitrary row strides from the source format to
     /// the destination format.
@@ -261,9 +292,12 @@ struct Pixel_converter
     ///
     /// For documentation, see the corresponding method above.
     static MI_HOST_DEVICE_INLINE void convert(
-        const void* source, void* dest,
-        mi::Size width, mi::Size height,
-        mi::Difference source_stride, mi::Difference dest_stride);
+        const void* source,
+        void* dest,
+        mi::Size width,
+        mi::Size height,
+        mi::Difference source_stride,
+        mi::Difference dest_stride);
 };
 
 /// Copies a region of pixels with a fixed pixel type.
@@ -292,7 +326,8 @@ struct Pixel_copier
     /// \param source   The first pixel to copy from pixel type \p Type.
     /// \param dest     The first pixel to store the result in pixel type \p Type.
     /// \param count    The number of pixels to copy.
-    static MI_HOST_DEVICE_INLINE void copy( const Base_type* source, Base_type* dest, mi::Size count);
+    static MI_HOST_DEVICE_INLINE void copy(
+        const Base_type* source, Base_type* dest, mi::Size count);
 
     /// Copies a rectangular region of pixels with arbitrary row strides.
     ///
@@ -309,9 +344,12 @@ struct Pixel_copier
     ///                        negative in order to flip the row order, but then \p dest must
     ///                        point to the first pixel of the last row.
     static MI_HOST_DEVICE_INLINE void copy(
-        const Base_type* source, Base_type* dest,
-        mi::Size width, mi::Size height,
-        mi::Difference source_stride, mi::Difference dest_stride);
+        const Base_type* source,
+        Base_type* dest,
+        mi::Size width,
+        mi::Size height,
+        mi::Difference source_stride,
+        mi::Difference dest_stride);
 
     /// Copies a contiguous region of pixels.
     ///
@@ -328,9 +366,12 @@ struct Pixel_copier
     ///
     /// For documentation, see the corresponding method above.
     static MI_HOST_DEVICE_INLINE void copy(
-        const void* source, void* dest,
-        mi::Size width, mi::Size height,
-        mi::Difference source_stride, mi::Difference dest_stride);
+        const void* source,
+        void* dest,
+        mi::Size width,
+        mi::Size height,
+        mi::Difference source_stride,
+        mi::Difference dest_stride);
 };
 
 // ---------- implementation -----------------------------------------------------------------------
@@ -350,21 +391,23 @@ MI_HOST_DEVICE_INLINE void quantize_s(Dest& dest, const Src src)
     dest = quantize_signed<Dest>(src);
 }
 
-MI_HOST_DEVICE_INLINE void to_rgbe(mi::Float32 src, mi::Uint8 dest[3])
+MI_HOST_DEVICE_INLINE void to_rgbe(const mi::Float32 src, mi::Uint8 dest[3])
 {
     const mi::Float32 tmp[3] = { src, src, src};
     mi::math::to_rgbe(tmp, dest);
 }
 
 MI_HOST_DEVICE_INLINE void adjust_gamma(
-    mi::Float32* const data, const mi::Size count, const mi::Uint32 components, const mi::Float32 exponent)
+    mi::Float32* const data,
+    const mi::Size count,
+    const mi::Uint32 components,
+    const mi::Float32 exponent)
 {
-    const mi::Uint32 active_components = std::min(components, 3u);
     for( mi::Size i = 0; i < count * components; i += components) {
 #ifdef __CUDACC__
 #pragma unroll
 #endif
-        for ( mi::Uint32 c = 0; c < active_components; ++c) {
+        for ( mi::Uint32 c = 0; c < components; ++c) {
 #ifdef __CUDACC__
             data[i+c] = powf( data[i+c], exponent);
 #else
@@ -380,7 +423,11 @@ MI_HOST_DEVICE_INLINE bool exists_pixel_conversion( const Pixel_type Source, con
 }
 
 MI_HOST_DEVICE_INLINE bool convert(
-    const void* const source, void* const dest, Pixel_type Source, Pixel_type Dest, const mi::Size count)
+    const void* const source,
+    void* const dest,
+    Pixel_type Source,
+    Pixel_type Dest,
+    const mi::Size count)
 {
     if( Source == PT_SINT32)    Source = PT_RGBA;
     if( Source == PT_FLOAT32_3) Source = PT_RGB_FP;
@@ -445,7 +492,8 @@ MI_HOST_DEVICE_INLINE bool convert(
 }
 
 template <Pixel_type Source>
-MI_HOST_DEVICE_INLINE bool convert( const void* const source, void* const dest, Pixel_type Dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE bool convert(
+    const void* const source, void* const dest, Pixel_type Dest, const mi::Size count)
 {
     if( Dest == PT_SINT32)      Dest = PT_RGBA;
     if( Dest == PT_FLOAT32_3)   Dest = PT_RGB_FP;
@@ -549,6 +597,34 @@ MI_HOST_DEVICE_INLINE bool copy(
 #undef MI_IMAGE_ARGS
 }
 
+inline void extract_channel(
+    const char* source, char* dest, mi::Size count, Pixel_type Type, mi::Size channel_index)
+{
+    if( (channel_index == 3) && !has_alpha( Type)) {
+        if( Type == PT_RGB) {
+            memset( dest, 0xff, count);
+        } else if( Type == PT_RGBE || Type == PT_RGB_16 || Type == PT_RGB_FP) {
+            float* p = static_cast<float*>( static_cast<void*>( dest));
+            for( mi::Size i = 0; i < count; ++i)
+                *p++ = 1.0f;
+        } else {
+            ASSERT( M_IMAGE, false);
+        }
+        return;
+    }
+
+    const int bytes_per_component = get_bytes_per_component( Type);
+    const int bytes_per_pixel     = get_bytes_per_pixel( Type);
+
+    source += channel_index * bytes_per_component;
+
+    for( mi::Size i = 0; i < count; ++i) {
+        memcpy( dest, source, bytes_per_component);
+        source += bytes_per_pixel;
+        dest   += bytes_per_component;
+    }
+}
+
 template <Pixel_type Source, Pixel_type Dest>
 MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const Source_base_type* source, Dest_base_type* dest, const mi::Size count)
@@ -585,7 +661,8 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
 }
 
 template <Pixel_type Source, Pixel_type Dest>
-MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert( const void* const source, void* const dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
+    const void* const source, void* const dest, const mi::Size count)
 {
     const Source_base_type* const source2 = static_cast<const Source_base_type*>( source);
     Dest_base_type* const dest2           = static_cast<Dest_base_type*>( dest);
@@ -604,7 +681,8 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
 }
 
 template <Pixel_type Type>
-MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy( const Base_type* const source, Base_type* const dest)
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
+    const Base_type* const source, Base_type* const dest)
 {
     const mi::Size bytes_per_pixel = Pixel_type_traits<Type>::s_components_per_pixel
                                    * sizeof( typename Pixel_type_traits<Type>::Base_type);
@@ -612,7 +690,8 @@ MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy( const Base_type* const sour
 }
 
 template <Pixel_type Type>
-MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy( const Base_type* const source, Base_type* const dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
+    const Base_type* const source, Base_type* const dest, const mi::Size count)
 {
     const mi::Size bytes_per_pixel = Pixel_type_traits<Type>::s_components_per_pixel
                                    * sizeof( typename Pixel_type_traits<Type>::Base_type);
@@ -655,7 +734,8 @@ MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
 }
 
 template <Pixel_type Type>
-MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy( const void* const source, void* dest, const mi::Size count)
+MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
+    const void* const source, void* dest, const mi::Size count)
 {
     const Base_type* const source2 = static_cast<const Base_type*>( source);
     Base_type* const dest2         = static_cast<Base_type*>( dest);
@@ -1682,7 +1762,7 @@ template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_COLOR>::conve
 MI_FORCE_INLINE __m128i quantize_unsigned_sse(const float* const source)
 {
     __m128 fp0 = _mm_loadu_ps(source);         // 4 floats (RGBA or RGBR, GBRG, BRGB)
-    fp0 = _mm_mul_ps(_mm_min_ps(fp0, _mm_set1_ps(MI::STLEXT::binary_cast<float>(0x3f800000u-1))),_mm_set1_ps(256.0f)); // see quantize_unsigned(), need to mul by 256 and clamp instead of 255
+    fp0 = _mm_mul_ps(_mm_min_ps(fp0, _mm_set1_ps(mi::base::binary_cast<float>(0x3f800000u-1))),_mm_set1_ps(256.0f)); // see quantize_unsigned(), need to mul by 256 and clamp instead of 255
     return _mm_cvttps_epi32(fp0);
 }
 

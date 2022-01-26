@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,14 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#ifndef MDL_COMPILER_HLSL_HALF_H
-#define MDL_COMPILER_HLSL_HALF_H 1
+#ifndef MDL_COMPILERCORE_HALF_H
+#define MDL_COMPILERCORE_HALF_H 1
 
 #include <cstdint>
 
 namespace mi {
 namespace mdl {
-namespace hlsl {
 
 /// Convert an IEEE 754 single float to an IEEE 754-2008 half float.
 ///
@@ -45,7 +44,6 @@ uint16_t bit_single_to_half(uint32_t f);
 /// \param h  bitwise representation of the half float value
 uint32_t bit_half_to_single(uint16_t h);
 
-}  // hlsl
 }  // mdl
 }  // mi
 

@@ -60,8 +60,8 @@
 #define HLSL_OVERRIDE
 #endif
 
-//// HLSL_CONSTEXPR - Expands to 'constexpr' if the compiler supports it.
-/// Use to mark functions computing conatnt expressions.
+/// HLSL_CONSTEXPR - Expands to 'constexpr' if the compiler supports it.
+/// Use to mark functions computing constant expressions.
 #if __has_feature(cxx_constexpr) || defined(__GXX_EXPERIMENTAL_CXX0X__)
 # define HLSL_CONSTEXPR constexpr
 #else

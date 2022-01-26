@@ -62,6 +62,8 @@ namespace DB { class Transaction; }
 
 namespace MDL {
 
+class Execution_context;
+
 namespace DETAIL {
 
 /// Searches a thumbnail image for the given mdl definition by considering both the
@@ -97,16 +99,13 @@ std::string lookup_thumbnail(
 ///                                separators), or \c NULL for string-based modules.
 /// \param module_name             The MDL module name, or \c NULL for import of resources (absolute
 ///                                file paths only) without module context.
-/// \param callbacks_under_mutex   Indicates whether the application supports callbacks under a
-///                                mutex. If not, a temporary copy of the data is created (in case
-///                                of canvases or streams).
 /// \return                        The tag for the MDL resource (invalid in case of failures).
 DB::Tag mdl_resource_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_resource* value,
     const char* module_filename,
     const char* module_name,
-    bool callbacks_under_mutex);
+    Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL texture.
 ///
@@ -116,7 +115,7 @@ DB::Tag mdl_texture_to_tag(
     const mi::mdl::IValue_texture* value,
     const char* module_filename,
     const char* module_name,
-    bool callbacks_under_mutex);
+    Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL texture.
 ///
@@ -126,9 +125,10 @@ DB::Tag mdl_texture_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
-    bool callbacks_under_mutex,
+    mi::Float32 gamma,
+    const char* selector,
     bool shared,
-    mi::Float32 gamma);
+    Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL volume texture.
 ///
@@ -139,7 +139,8 @@ DB::Tag mdl_volume_texture_to_tag(
     const char* module_filename,
     const char* module_name,
     const char* selector,
-    bool shared);
+    bool shared,
+    Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL light profile.
 ///
@@ -148,7 +149,8 @@ DB::Tag mdl_light_profile_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_light_profile* value,
     const char* module_filename,
-    const char* module_name);
+    const char* module_name,
+    Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL light profile.
 ///
@@ -158,7 +160,8 @@ DB::Tag mdl_light_profile_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
-    bool shared);
+    bool shared,
+    Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL BSDF measurement.
 ///
@@ -167,7 +170,8 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_bsdf_measurement* value,
     const char* module_filename,
-    const char* module_name);
+    const char* module_name,
+    Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL BSDF measurement.
 ///
@@ -177,7 +181,8 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
-    bool shared);
+    bool shared,
+    Execution_context* context);
 
 /// Generates a name that is unique in the DB (at least from the given transaction's point of view).
 std::string generate_unique_db_name( DB::Transaction* transaction, const char* prefix);
@@ -584,15 +589,10 @@ class Mdl_image_set : public DBIMAGE::Image_set
 {
 public:
 
-    Mdl_image_set( mi::mdl::IMDL_resource_set* set, const std::string& file_path);
-
-    mi::Size get_length() const;
-
-    bool is_uvtile() const;
+    Mdl_image_set(
+        mi::mdl::IMDL_resource_set* set, const std::string& file_path, const char* selector);
 
     bool is_mdl_container() const;
-
-    void get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const;
 
     const char* get_original_filename() const;
 
@@ -600,15 +600,29 @@ public:
 
     const char* get_mdl_file_path() const;
 
-    const char* get_resolved_filename( mi::Size i) const;
-
-    const char* get_container_membername( mi::Size i) const;
-
-    mi::neuraylib::IReader* open_reader( mi::Size i) const;
-
-    mi::neuraylib::ICanvas* get_canvas( mi::Size i) const;
+    const char* get_selector() const;
 
     const char* get_image_format() const;
+
+    bool is_animated() const;
+
+    bool is_uvtile() const;
+
+    mi::Size get_length() const;
+
+    mi::Size get_frame_number( mi::Size f) const;
+
+    mi::Size get_frame_length( mi::Size f) const;
+
+    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const;
+
+    const char* get_resolved_filename( mi::Size f, mi::Size i) const;
+
+    const char* get_container_membername( mi::Size f, mi::Size i) const;
+
+    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const;
+
+    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const;
 
 private:
 
@@ -616,8 +630,53 @@ private:
     std::string m_mdl_file_path;
     std::string m_container_filename;
     std::string m_file_format;
+    std::string m_selector;
     bool m_is_container;
 };
+
+/// An implementation of mi::mdl::IMDL_resource_element that copies all data of its constructor
+/// argument.
+///
+/// Can be used to enforce reading all data from \c other once upfront in situations where later
+/// calls are not feasible.
+///
+/// This also includes creating an instance of Local_mdl_resource_reader for all readers.
+class Local_mdl_resource_element
+    : public mi::base::Interface_implement<mi::mdl::IMDL_resource_element>
+{
+public:
+    Local_mdl_resource_element( const mi::mdl::IMDL_resource_element* other);
+
+    size_t get_frame_number() const final;
+
+    size_t get_count() const final;
+
+    const char* get_mdl_url( size_t i) const final;
+
+    const char* get_filename( size_t i) const final;
+
+    bool get_udim_mapping( size_t i, int &u, int &v) const final;
+
+    mi::mdl::IMDL_resource_reader* open_reader( size_t i) const final;
+
+    bool get_resource_hash( size_t i, unsigned char hash[16]) const final;
+
+private:
+    size_t m_frame;
+
+    struct Resource_element_entry {
+        std::string m_mdl_url;
+        std::string m_filename;
+        mi::base::Handle<mi::mdl::IMDL_resource_reader> m_reader;
+        int m_u;
+        int m_v;
+        bool m_hash_valid;
+        unsigned char m_hash[16];
+    };
+
+    std::vector<Resource_element_entry> m_entries;
+};
+
 
 /// An implementation of mi::mdl::IMDL_resource_set that copies all data of its constructor argument.
 ///
@@ -631,41 +690,34 @@ class Local_mdl_resource_set
 public:
     Local_mdl_resource_set( mi::mdl::IMDL_resource_set* other);
 
-    const char* get_mdl_url_mask() const;
+    const char* get_mdl_url_mask() const final;
 
-    const char* get_filename_mask() const;
+    const char* get_filename_mask() const final;
 
-    size_t get_count() const { return m_uv_tiles.size(); }
+    bool has_sequence_marker() const final;
 
-    const char* get_mdl_url( size_t i) const;
+    mi::mdl::UDIM_mode get_udim_mode() const final;
 
-    const char* get_filename( size_t i) const;
+    size_t get_count() const final;
 
-    bool get_udim_mapping( size_t i, int& u, int& v) const;
+    const mi::mdl::IMDL_resource_element* get_element( size_t i) const final;
 
-    mi::mdl::IMDL_resource_reader* open_reader( size_t i) const;
+    size_t get_first_frame() const final;
 
-    mi::mdl::UDIM_mode get_udim_mode() const { return m_udim_mode; };
+    size_t get_last_frame() const final;
 
-    bool get_resource_hash( size_t i, unsigned char hash[16]) const;
+    const mi::mdl::IMDL_resource_element* get_frame( size_t frame) const final;
 
 private:
+    size_t m_first_frame;
+    size_t m_last_frame;
     std::string m_mdl_url_mask;
     std::string m_filename_mask;
+    bool m_has_sequence_marker;
     mi::mdl::UDIM_mode m_udim_mode;
 
-    struct Uv_tile {
-        std::string m_mdl_url;
-        std::string m_filename;
-        bool m_uv_success;
-        int m_u;
-        int m_v;
-        mi::base::Handle<mi::mdl::IMDL_resource_reader> m_reader;
-        bool m_hash_valid;
-        unsigned char m_hash[16];
-    };
-
-    std::vector<Uv_tile> m_uv_tiles;
+    std::vector<mi::base::Handle<Local_mdl_resource_element> > m_elements;
+    std::vector<size_t> m_element_idx;
 };
 
 /// An implementation of mi::mdl::IMDL_resource_reader that copies all data of its constructor

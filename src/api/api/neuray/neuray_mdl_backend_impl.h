@@ -118,10 +118,12 @@ public:
         mi::neuraylib::IMdl_execution_context* context) final;
 
     const mi::neuraylib::ITarget_code* deserialize_target_code(
+        mi::neuraylib::ITransaction* transaction,
         const mi::neuraylib::IBuffer* buffer,
         mi::neuraylib::IMdl_execution_context* context) const final;
 
     const mi::neuraylib::ITarget_code* deserialize_target_code(
+        mi::neuraylib::ITransaction* transaction,
         const mi::Uint8* buffer_data,
         mi::Size buffer_size,
         mi::neuraylib::IMdl_execution_context* context) const final;

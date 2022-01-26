@@ -70,39 +70,19 @@ public:
 public:
     // public API methods
 
-    /// Evaluates if a material instance parameter is enabled (i.e. the enable_if condition
-    /// computes true).
-    ///
-    /// \param[in]  trans  the transaction
-    /// \param[in]  fact   the expression factory to create the result value
-    /// \param[in]  inst   the material instance
-    /// \param[in]  index  the index of the material instance parameter
-    /// \param[out] error  if non-NULL gets an error code if the evaluation fails
-    ///
-    /// \return NULL if the condition was to complex to evaluate, else true or false
-    mi::neuraylib::IValue_bool const *is_material_parameter_enabled(
-        mi::neuraylib::ITransaction             *trans,
-        mi::neuraylib::IValue_factory           *fact,
-        mi::neuraylib::IMaterial_instance const *inst,
-        mi::Size                                 index,
-        mi::Sint32                               *error) const final;
+    const mi::neuraylib::IValue_bool* is_material_parameter_enabled(
+        mi::neuraylib::ITransaction* trans,
+        mi::neuraylib::IValue_factory* fact,
+        const mi::neuraylib::IMaterial_instance* inst,
+        mi::Size index,
+        mi::Sint32* error) const final;
 
-    /// Evaluates if a function call parameter is enabled (i.e. the enable_if condition
-    /// computes true).
-    ///
-    /// \param[in]  trans  the transaction
-    /// \param[in]  fact   the expression factory to create the result value
-    /// \param[in]  call   the function call
-    /// \param[in]  index  the index of the material instance parameter
-    /// \param[out] error  if non-NULL gets an error code if the evaluation fails
-    ///
-    /// \return NULL if the condition was to complex to evaluate, else true or false
-    mi::neuraylib::IValue_bool const *is_function_parameter_enabled(
-        mi::neuraylib::ITransaction             *trans,
-        mi::neuraylib::IValue_factory           *fact,
-        mi::neuraylib::IFunction_call const     *call,
-        mi::Size                                index,
-        mi::Sint32                              *error) const final;
+    const mi::neuraylib::IValue_bool*is_function_parameter_enabled(
+        mi::neuraylib::ITransaction* trans,
+        mi::neuraylib::IValue_factory* fact,
+        const mi::neuraylib::IFunction_call* call,
+        mi::Size index,
+        mi::Sint32* error) const final;
 
     // internal methods
 

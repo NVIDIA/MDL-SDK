@@ -514,10 +514,12 @@ public:
             MS_SURFACE_BSDF_SCATTERING,         ///< .surface.scattering
             MS_SURFACE_EMISSION_EDF_EMISSION,   ///< .surface.emission.emission
             MS_SURFACE_EMISSION_INTENSITY,      ///< .surface.emission.intensity
+            MS_SURFACE_EMISSION_MODE,           ///< .surface.emission.mode
 
             MS_BACKFACE_BSDF_SCATTERING,        ///< .backface.scattering
             MS_BACKFACE_EMISSION_EDF_EMISSION,  ///< .backface.emission.emission
             MS_BACKFACE_EMISSION_INTENSITY,     ///< .backface.emission.intensity
+            MS_BACKFACE_EMISSION_MODE,          ///< .backface.emission.mode
 
             MS_IOR,                             ///< .ior
 

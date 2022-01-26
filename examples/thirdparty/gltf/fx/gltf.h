@@ -775,6 +775,18 @@ namespace gltf
             }
         };
 
+        struct KHR_MaterialsEmissiveStrength
+        {
+            float emissiveStrength = 1.0f;
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return emissiveStrength == 1.0f;
+            }
+        };
+
         float alphaCutoff{ defaults::MaterialAlphaCutoff };
         AlphaMode alphaMode{ AlphaMode::Opaque };
 
@@ -790,6 +802,7 @@ namespace gltf
         KHR_MaterialsSpecular materialsSpecular;
         KHR_MaterialsIOR materialsIOR;
         KHR_MaterialsVolume materialsVolume;
+        KHR_MaterialsEmissiveStrength materialEmissiveStrength;
 
         Texture emissiveTexture;
         std::array<float, 3> emissiveFactor = { defaults::NullVec3 };
@@ -1335,6 +1348,13 @@ namespace gltf
         detail::ReadExtensionsAndExtras(json, materialsVolume.extensionsAndExtras);
     }
 
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsEmissiveStrength& materialsEmissiveStrength)
+    {
+        detail::ReadOptionalField("emissiveStrength", json, materialsEmissiveStrength.emissiveStrength);
+
+        detail::ReadExtensionsAndExtras(json, materialsEmissiveStrength.extensionsAndExtras);
+    }
+
     inline void from_json(nlohmann::json const & json, Material & material)
     {
         detail::ReadOptionalField("alphaMode", json, material.alphaMode);
@@ -1357,6 +1377,7 @@ namespace gltf
             detail::ReadOptionalField("KHR_materials_specular", *iterExtensions, material.materialsSpecular);
             detail::ReadOptionalField("KHR_materials_ior", *iterExtensions, material.materialsIOR);
             detail::ReadOptionalField("KHR_materials_volume", *iterExtensions, material.materialsVolume);
+            detail::ReadOptionalField("KHR_materials_emissive_strength", *iterExtensions, material.materialEmissiveStrength);
         }
 
         detail::ReadExtensionsAndExtras(json, material.extensionsAndExtras);

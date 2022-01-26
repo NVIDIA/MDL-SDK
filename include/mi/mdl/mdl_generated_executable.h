@@ -423,39 +423,28 @@ public:
         void                 *data,
         IType_texture::Shape shape) = 0;
 
-    /// Handle tex::width(texture_2d, int2) and tex::height(texture_2d, int2)
+    /// Handle tex::width(texture_2d, int2, float) and tex::height(texture_2d, int2, float)
     ///
     /// \param result    the result of tex::width and tex::height
     /// \param tex_data  the read-only shared texture data pointer
     /// \param uv_tile   uv_tile parameter of tex::width/height
+    /// \param frame     frame parameter of tex::wdith/height
     virtual void tex_resolution_2d(
         int           result[2],
         void const    *tex_data,
-        int const     uv_tile[2]) const = 0;
+        int const     uv_tile[2],
+        float         frame) const = 0;
 
-    /// Handle tex::width(texture_*) (not for udim textures).
+    /// Handle tex::width(texture_3d, float), tex::height(texture_3d, float), and
+    /// tex::depth(texture_3d, float)
     ///
+    /// \param result    the result of tex::width and tex::height
     /// \param tex_data  the read-only shared texture data pointer
-    ///
-    /// \return The width of the texture represented by tex_data.
-    virtual int tex_width(
-        void const    *tex_data) const = 0;
-
-    /// Handle tex::height(texture_*) (not for udim textures).
-    ///
-    /// \param tex_data  the read-only shared texture data pointer
-    ///
-    /// \return The height of the texture represented by tex_data.
-    virtual int tex_height(
-        void const    *tex_data) const = 0;
-
-    /// Handle tex::depth(texture_*).
-    ///
-    /// \param tex_data  the read-only shared texture data pointer
-    ///
-    /// \return The depth of the texture represented by tex_data.
-    virtual int tex_depth(
-        void const    *tex_data) const = 0;
+    /// \param frame     frame parameter of tex::wdith/height/depth
+    virtual void tex_resolution_3d(
+        int           result[3],
+        void const    *tex_data,
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float(texture_2d, ...).
     ///
@@ -466,6 +455,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float(texture_2d, ...)
     ///
     /// \return the result of tex::lookup_float(texture_2d, ...)
     virtual float tex_lookup_float_2d(
@@ -475,7 +465,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const = 0;
+        float const   crop_v[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float(texture_2d, ...) with derivatives.
     ///
@@ -486,6 +477,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float(texture_2d, ...)
     ///
     /// \return the result of tex::lookup_float(texture_2d, ...)
     virtual float tex_lookup_deriv_float_2d(
@@ -495,7 +487,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const = 0;
+        float const        crop_v[2],
+        float              frame) const = 0;
 
     /// Handle tex::lookup_float(texture_3d, ...).
     ///
@@ -508,6 +501,7 @@ public:
     /// \param crop_u       crop_u parameter of tex::lookup_float(texture_3d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float(texture_3d, ...)
     /// \param crop_w       crop_w parameter of tex::lookup_float(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float(texture_3d, ...)
     ///
     /// \return the result of tex::lookup_float(texture_3d, ...)
     virtual float tex_lookup_float_3d(
@@ -519,7 +513,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const = 0;
+        float const   crop_w[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float(texture_cube, ...).
     ///
@@ -555,6 +550,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float2(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float2(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float2(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float2(texture_2d, ...)
     virtual void tex_lookup_float2_2d(
         float         result[2],
         void const    *tex_data,
@@ -563,7 +559,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const = 0;
+        float const   crop_v[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float2(texture_2d, ...) with derivatives.
     ///
@@ -575,6 +572,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float2(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float2(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float2(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float2(texture_2d, ...)
     virtual void tex_lookup_deriv_float2_2d(
         float              result[2],
         void const         *tex_data,
@@ -583,7 +581,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const = 0;
+        float const        crop_v[2],
+        float              frame) const = 0;
 
     /// Handle tex::lookup_float2(texture_3d, ...).
     ///
@@ -597,6 +596,7 @@ public:
     /// \param crop_u       crop_u parameter of tex::lookup_float2(texture_3d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float2(texture_3d, ...)
     /// \param crop_w       crop_w parameter of tex::lookup_float2(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float2(texture_3d, ...)
     virtual void tex_lookup_float2_3d(
         float         result[2],
         void const    *tex_data,
@@ -607,7 +607,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const = 0;
+        float const   crop_w[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float2(texture_cube, ...).
     ///
@@ -643,6 +644,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float3(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float3(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float3(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float3(texture_2d, ...)
     virtual void tex_lookup_float3_2d(
         float         result[3],
         void const    *tex_data,
@@ -651,7 +653,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const = 0;
+        float const   crop_v[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float3(texture_2d, ...) with derivatives.
     ///
@@ -663,6 +666,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float3(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float3(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float3(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float3(texture_2d, ...)
     virtual void tex_lookup_deriv_float3_2d(
         float              result[3],
         void const         *tex_data,
@@ -671,7 +675,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const = 0;
+        float const        crop_v[2],
+        float              frame) const = 0;
 
     /// Handle tex::lookup_float3(texture_3d, ...).
     ///
@@ -685,6 +690,7 @@ public:
     /// \param crop_u       crop_u parameter of tex::lookup_float3(texture_3d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float3(texture_3d, ...)
     /// \param crop_w       crop_w parameter of tex::lookup_float3(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float3(texture_3d, ...)
     virtual void tex_lookup_float3_3d(
         float         result[3],
         void const    *tex_data,
@@ -695,7 +701,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const = 0;
+        float const   crop_w[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float3(texture_cube, ...).
     ///
@@ -731,6 +738,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float4(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float4(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float4(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float4(texture_2d, ...)
     virtual void tex_lookup_float4_2d(
         float         result[4],
         void const    *tex_data,
@@ -739,7 +747,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const = 0;
+        float const   crop_v[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float4(texture_2d, ...) with derivatives.
     ///
@@ -751,6 +760,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_float4(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_float4(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float4(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float4(texture_2d, ...)
     virtual void tex_lookup_deriv_float4_2d(
         float              result[4],
         void const         *tex_data,
@@ -759,7 +769,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const = 0;
+        float const        crop_v[2],
+        float              frame) const = 0;
 
     /// Handle tex::lookup_float4(texture_3d, ...).
     ///
@@ -773,6 +784,7 @@ public:
     /// \param crop_u       crop_u parameter of tex::lookup_float4(texture_3d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_float4(texture_3d, ...)
     /// \param crop_w       crop_w parameter of tex::lookup_float4(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float4(texture_3d, ...)
     virtual void tex_lookup_float4_3d(
         float         result[4],
         void const    *tex_data,
@@ -783,7 +795,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const = 0;
+        float const   crop_w[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_float4(texture_cube, ...).
     ///
@@ -819,6 +832,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_color(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_color(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_color(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_color(texture_2d, ...)
     virtual void tex_lookup_color_2d(
         float         rgb[3],
         void const    *tex_data,
@@ -827,7 +841,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const = 0;
+        float const   crop_v[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_color(texture_2d, ...) with derivatives.
     ///
@@ -839,6 +854,7 @@ public:
     /// \param wrap_v       wrap_v parameter of tex::lookup_color(texture_2d, ...)
     /// \param crop_u       crop_u parameter of tex::lookup_color(texture_2d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_color(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_color(texture_2d, ...)
     virtual void tex_lookup_deriv_color_2d(
         float              rgb[3],
         void const         *tex_data,
@@ -847,7 +863,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const = 0;
+        float const        crop_v[2],
+        float              frame) const = 0;
 
     /// Handle tex::lookup_color(texture_3d, ...).
     ///
@@ -861,6 +878,7 @@ public:
     /// \param crop_u       crop_u parameter of tex::lookup_color(texture_3d, ...)
     /// \param crop_v       crop_u parameter of tex::lookup_color(texture_3d, ...)
     /// \param crop_w       crop_w parameter of tex::lookup_color(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_color(texture_3d, ...)
     virtual void tex_lookup_color_3d(
         float         rgb[3],
         void const    *tex_data,
@@ -871,7 +889,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const = 0;
+        float const   crop_w[2],
+        float         frame) const = 0;
 
     /// Handle tex::lookup_color(texture_cube, ...).
     ///
@@ -903,13 +922,15 @@ public:
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float(texture_2d, ...)
     /// \param uv_tile      uv_tile parameter of tex::texel_float(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float(texture_2d, ...)
     ///
     /// \return the result of tex::texel_float(texture_2d, ...)
     virtual float tex_texel_float_2d(
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const = 0;
+        int const     uv_tile[2],
+        float         frame) const = 0;
 
     /// Handle tex::texel_float2(texture_2d, ...).
     ///
@@ -918,12 +939,14 @@ public:
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float2(texture_2d, ...)
     /// \param uv_tile      uv_tile parameter of tex::texel_float2(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float2(texture_2d, ...)
     virtual void tex_texel_float2_2d(
         float         result[2],
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const = 0;
+        int const     uv_tile[2],
+        float         frame) const = 0;
 
     /// Handle tex::texel_float3(texture_2d, ...).
     ///
@@ -932,12 +955,14 @@ public:
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float3(texture_2d, ...)
     /// \param uv_tile      uv_tile parameter of tex::texel_float3(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float3(texture_2d, ...)
     virtual void tex_texel_float3_2d(
         float         result[3],
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const = 0;
+        int const     uv_tile[2],
+        float         frame) const = 0;
 
     /// Handle tex::texel_float4(texture_2d, ...).
     ///
@@ -946,12 +971,14 @@ public:
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float4(texture_2d, ...)
     /// \param uv_tile      uv_tile parameter of tex::texel_float4(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_float4(texture_2d, ...)
     virtual void tex_texel_float4_2d(
         float         result[4],
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const = 0;
+        int const     uv_tile[2],
+        float         frame) const = 0;
 
     /// Handle tex::texel_color(texture_2d, ...).
     ///
@@ -960,24 +987,28 @@ public:
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_color(texture_2d, ...)
     /// \param uv_tile      uv_tile parameter of tex::texel_color(texture_2d, ...)
+    /// \param frame        frame parameter of tex::lookup_color(texture_2d, ...)
     virtual void tex_texel_color_2d(
         float         rgb[3],
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const = 0;
+        int const     uv_tile[2],
+        float         frame) const = 0;
 
     /// Handle tex::texel_float(texture_3d, ...).
     ///
     /// \param tex_data     the read-only shared texture data pointer
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float(texture_3d, ...)
     ///
     /// \return the result of tex::texel_float(texture_3d, ...)
     virtual float tex_texel_float_3d(
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const = 0;
+        int const     coord[3],
+        float         frame) const = 0;
 
     /// Handle tex::texel_float2(texture_3d, ...).
     ///
@@ -985,11 +1016,13 @@ public:
     /// \param tex_data     the read-only shared texture data pointer
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float2(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float2(texture_3d, ...)
     virtual void tex_texel_float2_3d(
         float         result[2],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const = 0;
+        int const     coord[3],
+        float         frame) const = 0;
 
     /// Handle tex::texel_float3(texture_3d, ...).
     ///
@@ -997,11 +1030,13 @@ public:
     /// \param tex_data     the read-only shared texture data pointer
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float3(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float3(texture_3d, ...)
     virtual void tex_texel_float3_3d(
         float         result[3],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const = 0;
+        int const     coord[3],
+        float         frame) const = 0;
 
     /// Handle tex::texel_float4(texture_3d, ...).
     ///
@@ -1009,11 +1044,13 @@ public:
     /// \param tex_data     the read-only shared texture data pointer
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_float4(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_float4(texture_3d, ...)
     virtual void tex_texel_float4_3d(
         float         result[4],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const = 0;
+        int const     coord[3],
+        float         frame) const = 0;
 
     /// Handle tex::texel_color(texture_3d, ...).
     ///
@@ -1021,17 +1058,27 @@ public:
     /// \param tex_data     the read-only shared texture data pointer
     /// \param thread_data  extra per-thread data that was passed to the lambda function
     /// \param coord        coord parameter of tex::texel_color(texture_3d, ...)
+    /// \param frame        frame parameter of tex::lookup_color(texture_3d, ...)
     virtual void tex_texel_color_3d(
         float         rgb[3],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const = 0;
+        int const     coord[3],
+        float         frame) const = 0;
 
     /// Handle tex::texture_isvalid().
     ///
     /// \param tex_data  the read-only shared texture data pointer
     virtual bool tex_isvalid(
         void const *tex_data) const = 0;
+
+    /// Handle tex::first_frame() and tex::last_frame()
+    ///
+    /// \param result    the result of tex::first_frame and tex::last_frame
+    /// \param tex_data  the read-only shared texture data pointer
+    virtual void tex_frame(
+        int           result[2],
+        void const    *tex_data) const = 0;
 
     /// Initializes a light profile data helper object from a given light profile tag.
     ///

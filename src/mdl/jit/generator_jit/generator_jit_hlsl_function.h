@@ -55,14 +55,14 @@ class DominatorTree;
 namespace hlsl {
 
 // forward
-class ASTFunction;
+class StructuredFunction;
 class Region;
 class RegionComplex;
 
-// Base class for all regions in the AST Function.
-class Region : public ilist_node_with_parent<Region, ASTFunction> {
+// Base class for all regions in the Structured Function.
+class Region : public ilist_node_with_parent<Region, StructuredFunction> {
     friend class RegionBuilder;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 public:
     typedef std::vector<Region *>     RegionList;
@@ -105,7 +105,10 @@ protected:
     }
 
     /// Constructor from a basic block.
-    Region(ASTFunction *parent, size_t id, BasicBlock *bb)
+    Region(
+        StructuredFunction *parent,
+        size_t             id,
+        BasicBlock         *bb)
     : m_parent(parent)
     , m_owner(nullptr)
     , m_id(id)
@@ -127,10 +130,10 @@ public:
 
     /// Get the parent.
     /// Note: Must be called getParent(), otherwise the LLVM dominance builder will not work.
-    ASTFunction *getParent() { return m_parent; }
+    StructuredFunction *getParent() { return m_parent; }
 
     /// Set the parent.
-    void setParent(ASTFunction *parent) { m_parent = parent; }
+    void setParent(StructuredFunction *parent) { m_parent = parent; }
 
     /// Get the owning region, if any.
     RegionComplex *getOwnerRegion() { return m_owner; }
@@ -321,7 +324,7 @@ public:
 
 protected:
     /// The (function) parent.
-    ASTFunction            *m_parent;
+    StructuredFunction   *m_parent;
 
     /// The owning region, if any.
     RegionComplex        *m_owner;
@@ -362,7 +365,10 @@ class RegionComplex : public Region {
 
 protected:
     /// Constructor.
-    RegionComplex(ASTFunction *parent, size_t id, Region *head)
+    RegionComplex(
+        StructuredFunction *parent,
+        size_t             id,
+        Region             *head)
     : Base(parent, id, nullptr)
     , m_head(head)
     {
@@ -394,14 +400,14 @@ private:
 /// Base class for continue, break, or return regions.
 class RegionJump : public RegionComplex {
     typedef RegionComplex Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
     RegionJump(
-        ASTFunction *parent,
-        size_t      id,
-        Region      *head)
+        StructuredFunction *parent,
+        size_t             id,
+        Region             *head)
     : Base(parent, id, head)
     {
     }
@@ -410,11 +416,14 @@ protected:
 /// A basic block region.
 class RegionBlock : public Region {
     typedef Region Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor from a basic block.
-    RegionBlock(ASTFunction *parent, size_t id, BasicBlock *bb)
+    RegionBlock(
+        StructuredFunction *parent,
+        size_t             id,
+        BasicBlock         *bb)
     : Base(parent, id, bb)
     {}
 
@@ -429,14 +438,14 @@ public:
 /// An invalid (dead) region.
 class RegionInvalid : public RegionComplex {
     typedef RegionComplex Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
     RegionInvalid(
-        ASTFunction *parent,
-        size_t      id,
-        Region      *head)
+        StructuredFunction *parent,
+        size_t             id,
+        Region             *head)
     : Base(parent, id, head)
     {
     }
@@ -452,12 +461,12 @@ public:
 /// A Sequence region.
 class RegionSequence : public RegionComplex {
     typedef RegionComplex Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
     RegionSequence(
-        ASTFunction              *parent,
+        StructuredFunction       *parent,
         size_t                   id,
         Region                   *head,
         ArrayRef<Region *> const &tail)
@@ -506,17 +515,17 @@ private:
 /// A If-Then region.
 class RegionIfThen : public RegionComplex {
     typedef RegionComplex Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
     RegionIfThen(
-        ASTFunction    *parent,
-        size_t         id,
-        Region         *head,
-        Region         *then,
-        TerminatorInst *terminator,
-        bool           negated)
+        StructuredFunction *parent,
+        size_t             id,
+        Region             *head,
+        Region             *then,
+        TerminatorInst     *terminator,
+        bool               negated)
     : Base(parent, id, head)
     , m_terminator_inst(terminator)
     , m_then(then)
@@ -567,17 +576,17 @@ private:
 /// A If-Then-Else region.
 class RegionIfThenElse : public RegionIfThen {
     typedef RegionIfThen Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
     RegionIfThenElse(
-        ASTFunction    *parent,
-        size_t         id,
-        Region         *head,
-        Region         *then_node,
-        Region         *else_node,
-        TerminatorInst *terminator)
+        StructuredFunction *parent,
+        size_t             id,
+        Region             *head,
+        Region             *then_node,
+        Region             *else_node,
+        TerminatorInst     *terminator)
     : Base(parent, id, head, then_node, terminator, false)
     , m_else(else_node)
     {
@@ -616,11 +625,14 @@ private:
 /// A natural loop region.
 class RegionNaturalLoop : public RegionComplex {
     typedef RegionComplex Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
-    RegionNaturalLoop(ASTFunction *parent, size_t id, Region *head)
+    RegionNaturalLoop(
+        StructuredFunction *parent,
+        size_t             id,
+        Region             *head)
     : Base(parent, id, head)
     {
     }
@@ -636,11 +648,13 @@ public:
 /// A break region.
 class RegionBreak : public Region {
     typedef Region Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
-    RegionBreak(ASTFunction *parent, size_t id)
+    RegionBreak(
+        StructuredFunction *parent,
+        size_t             id)
     : Base(parent, id, nullptr)
     {
     }
@@ -656,11 +670,13 @@ public:
 /// A continue region.
 class RegionContinue : public Region {
     typedef Region Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
-    RegionContinue(ASTFunction *parent, size_t id)
+    RegionContinue(
+        StructuredFunction *parent,
+        size_t             id)
     : Base(parent, id, nullptr)
     {
     }
@@ -676,15 +692,15 @@ public:
 /// A return region.
 class RegionReturn : public RegionComplex {
     typedef RegionComplex Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
     RegionReturn(
-        ASTFunction *parent,
-        size_t      id,
-        Region      *head,
-        ReturnInst  *return_inst)
+        StructuredFunction *parent,
+        size_t             id,
+        Region             *head,
+        ReturnInst         *return_inst)
     : Base(parent, id, head)
     , m_return_inst(return_inst)
     {
@@ -707,12 +723,12 @@ private:
 /// A Switch region.
 class RegionSwitch : public RegionComplex {
     typedef RegionComplex Base;
-    friend class ASTFunction;
+    friend class StructuredFunction;
 
 protected:
     /// Constructor.
     RegionSwitch(
-        ASTFunction              *parent,
+        StructuredFunction       *parent,
         size_t                   id,
         Region                   *head,
         ArrayRef<Region *> const &cases,
@@ -762,7 +778,7 @@ inline T const *cast(Region const *arg) {
 }
 
 /// A function with an CFG AST on top.
-class ASTFunction {
+class StructuredFunction {
 public:
     typedef std::list<Region *> RegionList;
 
@@ -773,14 +789,14 @@ public:
     /// \param type_mapper  the type mapper of the backend
     /// \param domTree      the dominator tree for \c func
     /// \param loop_info    the loop info for \func
-    ASTFunction(
+    StructuredFunction(
         Function              &func,
         mi::mdl::Type_mapper  &type_mapper,
         DominatorTree         &domTree,
         LoopInfo              &loop_info);
 
     /// Destructor.
-    ~ASTFunction();
+    ~StructuredFunction();
 
     RegionList::iterator       begin()       { return m_region_list.begin(); }
     RegionList::const_iterator begin() const { return m_region_list.begin(); }
@@ -887,9 +903,9 @@ public:
 
 private:
     // no copy
-    ASTFunction(ASTFunction const &) = delete;
+    StructuredFunction(StructuredFunction const &) = delete;
     // no assignment
-    ASTFunction &operator=(ASTFunction const &) = delete;
+    StructuredFunction &operator=(StructuredFunction const &) = delete;
 
 private:
     /// The LLVM function.

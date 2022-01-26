@@ -150,24 +150,67 @@ BSDF_INLINE void diffuse_sample(
     const bool transmit,
     const int handle)
 {
-    // sample direction and transform to world coordinates
-    const float3 cosh = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
+    const float cos_alpha = math::max(math::dot(g.n.shading_normal, g.n.geometry_normal), 0.0f);
 
-    const float sign = transmit ? -1.0f : 1.0f;
+    const float area_a = (float)(M_PI * 0.5);             // one hemisphere is fully valid
+    const float area_b = (float)(M_PI * 0.5) * cos_alpha; // the other is partially shadowed by the geometric normal
+    const float area = area_a + area_b;
 
+    bool flip = false;
+    // cosine_hemisphere_sample() uniformly samples the disk, need to swap some samples from area 'b' to 'a'
+    // (such that the ratio matches the valid area)
+    const float prob_flip = (2.0f * area_a / area - 1.0f);
+    flip = (data->xi.x < prob_flip);
+    if (flip)
+        data->xi.x /= prob_flip;
+    else
+        data->xi.x = (data->xi.x - prob_flip) / (1.0f - prob_flip);
+
+    float3 local_dir = cosine_hemisphere_sample(make_float2(data->xi.x, data->xi.y));
+
+    float3 x_axis, z_axis;
+    // use coordinate system that separates area 'a' and 'b' (x_axis is the separating line)    
+    if (cos_alpha < 0.999f) {
+        x_axis = math::normalize(math::cross(g.n.geometry_normal, g.n.shading_normal));
+        z_axis = math::cross(x_axis, g.n.shading_normal);
+    } else {
+        // don't care, we essentially sample the full hemisphere then anyway
+        x_axis = g.x_axis;
+        z_axis = g.z_axis;
+    }
+
+    if (local_dir.z > 0.0f) {
+        if (flip)
+            local_dir.z = -local_dir.z;
+        else {
+            // samples in area 'b' need to be transformed to the unshadowed part of 'b'
+            local_dir.z *= cos_alpha;
+            local_dir.y = math::sqrt(math::max(1.0f - local_dir.x * local_dir.x - local_dir.z * local_dir.z, 0.0f));
+        }
+    }
+    if (transmit) {
+        // for transmission the shadowed part is on the other side
+        local_dir.y = -local_dir.y;
+        // and we need to flip the direction downwards
+        local_dir.z = -local_dir.z;
+    }
     data->k2 = math::normalize(
-        g.x_axis * cosh.x + sign * g.n.shading_normal * cosh.y + g.z_axis * cosh.z);
+        x_axis * local_dir.x + g.n.shading_normal * local_dir.y + z_axis * local_dir.z);
 
-    if (cosh.y <= 0.0f || sign * math::dot(data->k2, g.n.geometry_normal) <= 0.0f) {
+    if ((math::dot(data->k2, g.n.geometry_normal) <= 0.0f) != transmit) {
         absorb(data);
         return;
     }
 
-    data->bsdf_over_pdf = tint;
-    if (roughness > 0.0f)
-        data->bsdf_over_pdf *= eval_oren_nayar(data->k2, data->k1, g.n.shading_normal, roughness);
+    if (roughness < 0.0f) {
+        data->bsdf_over_pdf = lambert_sphere_brdf(data->k1, data->k2, math::max(math::dot(data->k1, g.n.shading_normal), 0.0f), local_dir.y, tint) * area;
+    } else {
+        data->bsdf_over_pdf = tint;
+        if (roughness > 0.0f)
+            data->bsdf_over_pdf *= eval_oren_nayar(data->k2, data->k1, g.n.shading_normal, roughness);
+    }
 
-    data->pdf = cosh.y * (float)(1.0 / M_PI);
+    data->pdf = math::abs(local_dir.y) / area;
     data->event_type = transmit ? BSDF_EVENT_DIFFUSE_TRANSMISSION : BSDF_EVENT_DIFFUSE_REFLECTION;
     data->handle = handle;
 }
@@ -191,12 +234,22 @@ BSDF_INLINE void diffuse_evaluate(
         absorb(data);
         return;
     }
-    const float nk2 = math::max(sign * math::dot(data->k2, shading_normal), 0.0f);
-    const float pdf = nk2 * (float)(1.0f / M_PI);
+    const float cos_alpha = math::max(math::dot(shading_normal, geometry_normal), 0.0f);
+    const float pdf_proj = 1.0f / ((float)(M_PI * 0.5) + (float)(M_PI * 0.5) * cos_alpha);
 
-    float3 bsdf_diffuse = pdf * tint;
-    if (nk2 > 0.0f && roughness > 0.0f)
-        bsdf_diffuse *= eval_oren_nayar(data->k2, data->k1, shading_normal, roughness);
+    const float nk2 = math::max(sign * math::dot(data->k2, shading_normal), 0.0f);
+    const float pdf = nk2 * pdf_proj;
+
+    float3 bsdf_diffuse = make_float3(0.0f, 0.0f, 0.0f);
+    if (nk2 > 0.0) {
+        if (roughness < 0.0f)
+            bsdf_diffuse = lambert_sphere_brdf(data->k1, data->k2, math::max(math::dot(data->k1, shading_normal),0.0f), nk2, tint) * 2.0f / (1.0f + cos_alpha) * nk2;
+        else {
+            bsdf_diffuse = tint * pdf;
+            if (roughness > 0.0f)
+                bsdf_diffuse *= eval_oren_nayar(data->k2, data->k1, shading_normal, roughness);
+        }
+    }
 
     add_elemental_bsdf_evaluate_contribution(
         data, handle, bsdf_diffuse * inherited_weight, make<float3>(0.0f));
@@ -218,9 +271,12 @@ BSDF_INLINE void diffuse_pdf(
     if (sign * math::dot(data->k2, geometry_normal) <= 0.0f) {
         absorb(data);
         return;
-    }    
+    }
+    const float cos_alpha = math::max(math::dot(shading_normal, geometry_normal), 0.0f);
+    const float pdf_proj = 1.0f / ((float)(M_PI * 0.5) + (float)(M_PI * 0.5) * cos_alpha);
+    
     const float nk2 = math::max(sign * math::dot(data->k2, shading_normal), 0.0f);
-    data->pdf = nk2 * (float)(1.0f / M_PI);
+    data->pdf = nk2 * pdf_proj;
 }
 
 template <typename Data>
@@ -3141,7 +3197,7 @@ BSDF_API void tint_rt_bsdf_auxiliary(
     const float3 &transmission_tint,
     const BSDF &base)
 {
-    const float3 factor = math::saturate((reflection_tint + reflection_tint) * 0.5f);
+    const float3 factor = math::saturate((reflection_tint + transmission_tint) * 0.5f);
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
@@ -5963,7 +6019,7 @@ BSDF_INLINE void color_mix_df_sample(
         return;
     }
 
-    float3 w_sum = make_float3(0.0f, 0.0f, 0.0f);;
+    float3 w_sum = make_float3(0.0f, 0.0f, 0.0f);
     for (unsigned int i = 0; i < num_components; ++i)
         w_sum += clamp_mixing_weight<normalized_mix>(components[i].weight);
 

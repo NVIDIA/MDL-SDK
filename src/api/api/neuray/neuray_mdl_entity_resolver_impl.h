@@ -39,6 +39,8 @@
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_entity_resolver.h>
 
+#include <map>
+
 #include <mdl/compiler/compilercore/compilercore_messages.h>
 
 namespace mi { namespace mdl { class IMDL; } }
@@ -97,6 +99,32 @@ private:
     std::string m_module_name;
 };
 
+class Mdl_resolved_resource_element_impl
+  : public mi::base::Interface_implement<mi::neuraylib::IMdl_resolved_resource_element>
+{
+public:
+    Mdl_resolved_resource_element_impl( const mi::mdl::IMDL_resource_element* element);
+
+    // public API methods
+
+    Size get_frame_number() const final;
+
+    Size get_count() const final;
+
+    const char* get_mdl_file_path( Size i) const final;
+
+    const char* get_filename( Size i) const final;
+
+    mi::neuraylib::IReader* create_reader( Size i) const final;
+
+    mi::base::Uuid get_resource_hash( Size i) const final;
+
+    bool get_uvtile_uv( Size i, Sint32 &u, Sint32 &v) const final;
+
+private:
+    mi::base::Handle<const mi::mdl::IMDL_resource_element> m_resource_element;
+};
+
 class Mdl_resolved_resource_impl
   : public mi::base::Interface_implement<mi::neuraylib::IMdl_resolved_resource>
 {
@@ -105,23 +133,17 @@ public:
 
     // public API methods
 
-    mi::neuraylib::Uvtile_mode get_uvtile_mode() const final;
+    Size get_count() const final;
 
     const char* get_mdl_file_path_mask() const final;
 
     const char* get_filename_mask() const final;
 
-    mi::Size get_count() const final;
+    bool has_sequence_marker() const final;
 
-    const char* get_mdl_file_path( mi::Size i) const final;
+    mi::neuraylib::Uvtile_mode get_uvtile_mode() const final;
 
-    const char* get_filename( mi::Size i) const final;
-
-    mi::neuraylib::IReader* create_reader( mi::Size i) const final;
-
-    mi::base::Uuid get_resource_hash( mi::Size i) const final;
-
-    bool get_uvtile_uv( mi::Size i, mi::Sint32& u, mi::Sint32& v) const final;
+    const Mdl_resolved_resource_element_impl* get_element( Size i) const final;
 
 private:
     mi::base::Handle<mi::mdl::IMDL_resource_set> m_resource_set;
@@ -139,13 +161,15 @@ public:
         const char* module_name,
         const char* owner_file_path,
         const char* owner_name,
-        const mi::mdl::Position* pos) final;
+        const mi::mdl::Position* pos,
+        mi::mdl::IThread_context* ctx) final;
 
     mi::mdl::IMDL_resource_set* resolve_resource_file_name(
         const char* file_path,
         const char* owner_file_path,
         const char* owner_name,
-        const mi::mdl::Position* pos) final;
+        const mi::mdl::Position* pos,
+        mi::mdl::IThread_context* ctx) final;
 
     const mi::mdl::Messages& access_messages() const final;
 
@@ -174,15 +198,13 @@ private:
     std::string m_core_module_name;
 };
 
-class Core_mdl_resource_set_impl
-  : public mi::base::Interface_implement<mi::mdl::IMDL_resource_set>
+class Core_mdl_resource_element_impl
+  : public mi::base::Interface_implement<mi::mdl::IMDL_resource_element>
 {
 public:
-    Core_mdl_resource_set_impl( mi::neuraylib::IMdl_resolved_resource* resolved_resource);
+    Core_mdl_resource_element_impl( const mi::neuraylib::IMdl_resolved_resource_element* element);
 
-    const char* get_mdl_url_mask() const final;
-
-    const char* get_filename_mask() const final;
+    size_t get_frame_number() const final;
 
     size_t get_count() const final;
 
@@ -192,14 +214,43 @@ public:
 
     bool get_udim_mapping( size_t i, int &u, int &v) const final;
 
-    mi::mdl::IMDL_resource_reader* open_reader(size_t i) const final;
-
-    mi::mdl::UDIM_mode get_udim_mode() const final;
+    mi::mdl::IMDL_resource_reader* open_reader( size_t i) const final;
 
     bool get_resource_hash( size_t i, unsigned char hash[16]) const final;
 
 private:
+    mi::base::Handle<const mi::neuraylib::IMdl_resolved_resource_element> m_resource_element;
+};
+
+class Core_mdl_resource_set_impl
+  : public mi::base::Interface_implement<mi::mdl::IMDL_resource_set>
+{
+public:
+    Core_mdl_resource_set_impl(
+        mi::neuraylib::IMdl_resolved_resource* resolved_resource,
+        const std::map<size_t, size_t>& frame_number_to_id);
+
+    const char* get_mdl_url_mask() const final;
+
+    const char* get_filename_mask() const final;
+
+    size_t get_count() const final;
+
+    bool has_sequence_marker() const final;
+
+    mi::mdl::UDIM_mode get_udim_mode() const final;
+
+    const Core_mdl_resource_element_impl* get_element( size_t i) const final;
+
+    size_t get_first_frame() const final;
+
+    size_t get_last_frame() const final;
+
+    const Core_mdl_resource_element_impl* get_frame( size_t frame) const final;
+
+private:
     mi::base::Handle<mi::neuraylib::IMdl_resolved_resource> m_resolved_resource;
+    std::map<size_t, size_t> m_frame_number_to_id;
 };
 
 } // namespace NEURAY

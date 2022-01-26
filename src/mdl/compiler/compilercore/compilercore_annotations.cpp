@@ -54,16 +54,16 @@ public:
     IQualified_name const *get_name() const MDL_FINAL { return m_name; }
 
     /// Get the argument count.
-    int get_argument_count() const MDL_FINAL { return m_args.size(); }
+    size_t get_argument_count() const MDL_FINAL { return m_args.size(); }
 
     /// Get the argument at index.
-    IArgument const *get_argument(int index) const MDL_FINAL { return m_args.at(index); }
+    IArgument const *get_argument(size_t index) const MDL_FINAL { return m_args.at(index); }
 
     /// Add an argument.
     void add_argument(IArgument const *arg) MDL_FINAL { m_args.push_back(arg); }
 
     /// Replace an argument.
-    void replace_argument(int index, IArgument const *arg) MDL_FINAL {
+    void replace_argument(size_t index, IArgument const *arg) MDL_FINAL {
         m_args.at(index) = arg;
     }
 
@@ -123,6 +123,7 @@ public:
     void set_expression(IExpression const *expr) MDL_FINAL { m_expr = expr; }
 
 private:
+    /// Constructor.
     explicit Annotation_enable_if(Memory_arena *arena, IQualified_name const *name)
     : Base(arena, name)
     , m_expr(NULL)
@@ -142,10 +143,10 @@ class Annotation_block : public IAnnotation_block
 public:
 
     /// Get the number of annotations.
-    int get_annotation_count() const MDL_FINAL { return m_annos.size(); }
+    size_t get_annotation_count() const MDL_FINAL { return m_annos.size(); }
 
     /// Get the annotation at index.
-    IAnnotation const *get_annotation(int index) const MDL_FINAL {
+    IAnnotation const *get_annotation(size_t index) const MDL_FINAL {
         return m_annos.at(index);
     }
 
@@ -159,8 +160,8 @@ public:
     Position const &access_position() const MDL_FINAL { return m_pos; }
 
     /// Delete an annotation.
-    void delete_annotation(int index) MDL_FINAL {
-        if (0 <= index && size_t(index) < m_annos.size()) {
+    void delete_annotation(size_t index) MDL_FINAL {
+        if (index < m_annos.size()) {
             m_annos.erase(m_annos.begin() + index);
         }
     }
@@ -172,11 +173,11 @@ public:
     ///
     /// \return the old anno or NULL if the index was invalid
     IAnnotation const *set_annotation(
-        int               index,
+        size_t            index,
         IAnnotation const *anno) MDL_FINAL
     {
         IAnnotation const *ret = NULL;
-        if (0 <= index && size_t(index) < m_annos.size()) {
+        if (index < m_annos.size()) {
             ret = m_annos[index];
             m_annos[index] = anno;
         }
@@ -184,6 +185,7 @@ public:
     }
 
 private:
+    /// Constructor.
     explicit Annotation_block(Memory_arena *arena)
     : Base()
     , m_annos(arena)

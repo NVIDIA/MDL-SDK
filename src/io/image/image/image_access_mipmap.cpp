@@ -277,13 +277,13 @@ bool Edit_mipmap::lookup(
     if( !canvas)
         return false;
 
-    mi::base::Handle<const mi::neuraylib::ITile> tile( canvas->deprecated_get_tile( x, y, z));
+    mi::base::Handle<const mi::neuraylib::ITile> tile( canvas->get_tile( z));
     if( !tile)
         return false;
 
-    mi::Uint32 local_x = x % tile->get_resolution_x();
-    mi::Uint32 local_y = y % tile->get_resolution_y();
-    tile->get_pixel( local_x, local_y, &color.r);
+    ASSERT(M_IMAGE,x < tile->get_resolution_x());
+    ASSERT(M_IMAGE,y < tile->get_resolution_y());
+    tile->get_pixel( x, y, &color.r);
     return true;
 }
 
@@ -302,13 +302,13 @@ bool Edit_mipmap::store(
     if( !canvas)
         return false;
 
-    mi::base::Handle<mi::neuraylib::ITile> tile( canvas->deprecated_get_tile( x, y, z));
+    mi::base::Handle<mi::neuraylib::ITile> tile( canvas->get_tile( z));
     if( !tile)
         return false;
 
-    mi::Uint32 local_x = x % tile->get_resolution_x();
-    mi::Uint32 local_y = y % tile->get_resolution_y();
-    tile->set_pixel( local_x, local_y, &color.r);
+    ASSERT(M_IMAGE,x < tile->get_resolution_x());
+    ASSERT(M_IMAGE,y < tile->get_resolution_y());
+    tile->set_pixel( x, y, &color.r);
     return true;
 }
 

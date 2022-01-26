@@ -594,19 +594,22 @@ class SignatureParser:
 					return True
 				if len(params) == 3:
 					# support width(), height() with uv_tile, frame parameters
-					# FIXME: frame ignored so far
-					self.intrinsic_modes[name + signature] = "tex::attr_lookup_uvtile"
+					self.intrinsic_modes[name + signature] = "tex::attr_lookup_uvtile_frame"
 					return True
 			elif params[0] == "T3":
 				if len(params) == 2:
-					# support width(), height() with frame parameter
-					# FIXME: frame ignored so far
-					self.intrinsic_modes[name + signature] = "tex::attr_lookup"
+ 					# support width(), height(), depth() with frame parameter
+					self.intrinsic_modes[name + signature] = "tex::attr_lookup_frame"
 					return True
 		elif  name == "texture_isvalid":
 			if len(params) == 1:
 				# support texture_isvalid()
 				self.intrinsic_modes[name + signature] = "tex::attr_lookup"
+				return True
+		elif  name == "first_frame" or name == "last_frame":
+			if len(params) == 1:
+				# support first_frame(), last_frame()
+				self.intrinsic_modes[name + signature] = "tex::frame"
 				return True
 		elif name == "lookup_float":
 			# support lookup_float()
@@ -629,14 +632,12 @@ class SignatureParser:
 					return True
 				if len(params) == 4:
 					# support texel_float(texture_2d) with uv_tile, frame parameter
-					# FIXME: frame ignored so far
-					self.intrinsic_modes[name + signature] = "tex::texel_float_uvtile"
+					self.intrinsic_modes[name + signature] = "tex::texel_float_uvtile_frame"
 					return True
 			elif params[0] == "T3":
 				if len(params) == 3:
 					# support texel_float(texture_3d) with frame parameter
-					# FIXME: frame ignored so far
-					self.intrinsic_modes[name + signature] = "tex::texel_float"
+					self.intrinsic_modes[name + signature] = "tex::texel_float_frame"
 					return True
 		elif (name == "texel_float2" or name == "texel_float3" or
 				name == "texel_float4" or name == "texel_color"):
@@ -651,18 +652,15 @@ class SignatureParser:
 					return True
 				if len(params) == 4:
 					# support texel_float2|3|4|color(texture_2d) with uv_tile, frame parameter
-					# FIXME: frame ignored so far
-					self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile"
+					self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile_frame"
 					return True
 			elif params[0] == "T3":
 				if len(params) == 3:
 					# support texel_float2|3|4|color(texture_3d) with frame parameter
-					# FIXME: frame ignored so far
-					self.intrinsic_modes[name + signature] = "tex::texel_floatX_uvtile"
+					self.intrinsic_modes[name + signature] = "tex::texel_floatX_frame"
 					return True
 		elif (name == "width_offset" or name == "height_offset" or
-				name == "depth_offset" or name == "first_frame" or
-				name == "last_frame"):
+				name == "depth_offset"):
 			# for now, these return 0
 			self.intrinsic_modes[name + signature] = "tex::zero_return"
 			return True
@@ -3799,17 +3797,14 @@ class SignatureParser:
 			"""
 			self.format_code(f, code)
 
-		elif mode == "tex::attr_lookup" or mode ==  "tex::attr_lookup_uvtile":
+		elif mode == "tex::attr_lookup" \
+			or mode == "tex::attr_lookup_uvtile" \
+			or mode == "tex::attr_lookup_uvtile_frame" \
+			or mode == "tex::attr_lookup_frame":
 			texture_param = params[0]
 			tex_dim = "3d" if texture_param == "T3" else "2d"
 
 			code = ""
-			if texture_param == "T2" and len(params) == 3:
-				# skip 3. parameter: frame
-				code += "(void)c;\n"
-			elif texture_param == "T3" and len(params) == 2:
-				# skip 2. parameter: frame
-				code += "(void)b;\n"
 
 			# texture attribute
 			code_params = { "intrinsic": intrinsic }
@@ -3826,10 +3821,19 @@ class SignatureParser:
 				code_params["name"]  = "ISVALID"
 				code_params["handler_name"] = "tex_texture_isvalid"
 
-			if mode == "tex::attr_lookup_uvtile":
-				code_params["get_uv_tile"] = "ctx.convert_and_store(b, uv_tile);"
-			else:
+			if mode == "tex::attr_lookup":
 				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
+				code_params["get_frame"]   = "llvm::Value *frame      = ctx.get_constant(0.0f);"
+			elif mode == "tex::attr_lookup_uvtile":
+				code_params["get_uv_tile"] = "ctx.convert_and_store(b, uv_tile);"
+				code_params["get_frame"]   = "llvm::Value *frame      = ctx.get_constant(0.0f);"
+			elif mode == "tex::attr_lookup_uvtile_frame":
+				code_params["get_uv_tile"] = "ctx.convert_and_store(b, uv_tile);"
+				code_params["get_frame"]   = "llvm::Value *frame      = c;"
+			elif mode == "tex::attr_lookup_frame":
+				code_params["get_frame"]   = "llvm::Value *frame      = b;"
+			else:
+				assert(False)
 
 			# check for udim special cases
 			if texture_param == "T2" and intrinsic in ["width", "height"]:
@@ -3848,10 +3852,11 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_2_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *uv_tile    = ctx.create_local(coord_type, "uv_tile");
+					%(get_frame)s
 
 					%(get_uv_tile)s
 					llvm::Function *glue_func = get_runtime_func(RT_MDL_TEX_RESOLUTION_2D);
-					ctx->CreateCall(glue_func, { tmp, res_data, a, uv_tile });
+					ctx->CreateCall(glue_func, { tmp, res_data, a, uv_tile, frame });
 
 					// return the %(comment_name)s component of the resolution
 					llvm::Value *arr = ctx->CreateLoad(tmp);
@@ -3871,9 +3876,10 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_2_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *uv_tile    = ctx.create_local(coord_type, "uv_tile");
+					%(get_frame)s
 
 					%(get_uv_tile)s
-					llvm::Value *args[] = { tmp, self, a, uv_tile };
+					llvm::Value *args[] = { tmp, self, a, uv_tile, frame };
 					llvm::CallInst *call = ctx->CreateCall(resolution_func, args);
 					call->setDoesNotThrow();
 
@@ -3883,7 +3889,27 @@ class SignatureParser:
 					res = ctx->CreateExtractValue(arr, idxs);
 				}
 				""" % code_params
-			else:
+			elif mode == "tex::attr_lookup_frame":
+				# use resource handler
+				code += """
+					llvm::Type  *res_type = ctx.get_non_deriv_return_type();
+					%(get_frame)s
+
+					res = call_tex_attr_func(
+						ctx,
+						RT_MDL_TEX_%(name)s,
+						Type_mapper::THV_%(handler_name)s,
+						res_data,
+						a,
+						nullptr,
+						frame,
+						res_type);
+						""" % code_params
+			elif mode == "tex::attr_lookup":
+				# FIXME: When is the lookup table supposed to be used? Right now it is *not* used for 2d
+				# width()/height() without uvtile/frame parameter, but it *is* used for 3d
+				# width()/height()/depth() without frame parameter.
+
 				# use resource handler or lookup table
 				code += """
 				llvm::Type  *res_type = ctx.get_non_deriv_return_type();
@@ -3927,6 +3953,7 @@ class SignatureParser:
 							res_data,
 							a,
 							nullptr,
+							nullptr,
 							res_type);
 
 						ctx->CreateStore(val, tmp);
@@ -3946,9 +3973,67 @@ class SignatureParser:
 						res_data,
 						a,
 						nullptr,
+						nullptr,
 						res_type);
 				}
 				""" % code_params
+			else:
+				assert(False)
+			self.format_code(f, code)
+
+			self.format_code(f, """
+			if (inst.get_return_derivs()) { // expand to dual
+				res = ctx.get_dual(res);
+			}
+			""")
+
+		elif mode == "tex::frame":
+
+			code = ""
+
+			code_params = { "intrinsic": intrinsic }
+
+			if intrinsic == "first_frame":
+				code_params["res_proj"] = "0"
+				code_params["comment_name"] = "first"
+			else:
+				code_params["res_proj"] = "1"
+				code_params["comment_name"] = "second"
+			code += """
+			if (m_has_res_handler) {
+				llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_int_2_type();
+				llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
+
+				llvm::Function *glue_func = get_runtime_func(RT_MDL_TEX_FRAME);
+				ctx->CreateCall(glue_func, { tmp, res_data, a });
+
+				// return the %(comment_name)s component of the frame numbers
+				llvm::Value *arr = ctx->CreateLoad(tmp);
+				unsigned idxs[] = { %(res_proj)s };
+				res = ctx->CreateExtractValue(arr, idxs);
+			} else {
+				llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+					res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+				llvm::Value *self     = ctx->CreateBitCast(
+					ctx->CreateLoad(self_adr),
+					m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+				llvm::Value *resolution_func = ctx.get_tex_lookup_func(
+					self, Type_mapper::THV_tex_frame);
+
+				llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_int_2_type();
+				llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
+
+				llvm::Value *args[] = { tmp, self, a };
+				llvm::CallInst *call = ctx->CreateCall(resolution_func, args);
+				call->setDoesNotThrow();
+
+				// return the %(comment_name)s component of the frame numbers
+				llvm::Value *arr = ctx->CreateLoad(tmp);
+				unsigned idxs[] = { %(res_proj)s };
+				res = ctx->CreateExtractValue(arr, idxs);
+			}
+			""" % code_params
 			self.format_code(f, code)
 
 			self.format_code(f, """
@@ -3961,12 +4046,14 @@ class SignatureParser:
 			# texture lookup for texture
 			texture_param = params[0]
 			code = "";
-			if texture_param == "T2" and len(params) == 7:
-				# skip 7. parameter: frame
-				code = "(void)g;\n";
-			if texture_param == "T3" and len(params) == 9:
-				# skip 9. parameter: frame
-				code = "(void)i;\n";
+			if texture_param == "T2" and len(params) < 7:
+				code += """
+				llvm::Value *g = ctx.get_constant(0.0f);
+				""";
+			if texture_param == "T3" and len(params) < 9:
+				code += """
+				llvm::Value *i = ctx.get_constant(0.0f);
+				""";
 
 			if texture_param == "T2":
 				code += """
@@ -3995,7 +4082,7 @@ class SignatureParser:
 
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
-					llvm::Value *args[] = { res_data, a, coord, c, d, crop_u, crop_v };
+					llvm::Value *args[] = { res_data, a, coord, c, d, crop_u, crop_v, g };
 					res = ctx->CreateCall(lookup_func, args);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
@@ -4029,7 +4116,7 @@ class SignatureParser:
 
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
-					llvm::Value *args[] = { tmp, self, a, coord, c, d, crop_u, crop_v };
+					llvm::Value *args[] = { tmp, self, a, coord, c, d, crop_u, crop_v, g };
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
 
@@ -4060,7 +4147,7 @@ class SignatureParser:
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
-					llvm::Value *args[] = { res_data, a, coord, c, d, e, crop_u, crop_v, crop_w };
+					llvm::Value *args[] = { res_data, a, coord, c, d, e, crop_u, crop_v, crop_w, i };
 					res = ctx->CreateCall(lookup_func, args);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
@@ -4090,7 +4177,7 @@ class SignatureParser:
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
-					llvm::Value *args[] = { tmp, self, a, coord, c, d, e, crop_u, crop_v, crop_w };
+					llvm::Value *args[] = { tmp, self, a, coord, c, d, e, crop_u, crop_v, crop_w, i };
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
 
@@ -4196,12 +4283,14 @@ class SignatureParser:
 
 			texture_param = params[0]
 			code = "";
-			if texture_param == "T2" and len(params) == 7:
-				# skip 7. parameter: frame
-				code = "(void)g;\n";
-			if texture_param == "T3" and len(params) == 9:
-				# skip 9. parameter: frame
-				code = "(void)i;\n";
+			if texture_param == "T2" and len(params) < 7:
+				code += """
+				llvm::Value *g = ctx.get_constant(0.0f);
+				""";
+			if texture_param == "T3" and len(params) < 9:
+				code += """
+				llvm::Value *i = ctx.get_constant(0.0f);
+				""";
 
 			if texture_param == "T2":
 				code += """
@@ -4232,7 +4321,7 @@ class SignatureParser:
 
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
-					llvm::Value *args[] = { tmp, res_data, a, coord, c, d, crop_u, crop_v };
+					llvm::Value *args[] = { tmp, res_data, a, coord, c, d, crop_u, crop_v, g };
 					ctx->CreateCall(lookup_func, args);
 
 					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
@@ -4268,7 +4357,7 @@ class SignatureParser:
 
 					ctx.convert_and_store(e, crop_u);
 					ctx.convert_and_store(f, crop_v);
-					llvm::Value *args[] = { tmp, self, a, coord, c, d, crop_u, crop_v };
+					llvm::Value *args[] = { tmp, self, a, coord, c, d, crop_u, crop_v, g };
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
 
@@ -4298,7 +4387,7 @@ class SignatureParser:
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
-					llvm::Value *args[] = { tmp, res_data, a, coord, c, d, e, crop_u, crop_v, crop_w };
+					llvm::Value *args[] = { tmp, res_data, a, coord, c, d, e, crop_u, crop_v, crop_w, i };
 					ctx->CreateCall(lookup_func, args);
 
 					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
@@ -4330,7 +4419,7 @@ class SignatureParser:
 					ctx.convert_and_store(f, crop_u);
 					ctx.convert_and_store(g, crop_v);
 					ctx.convert_and_store(h, crop_w);
-					llvm::Value *args[] = { tmp, self, a, coord, c, d, e, crop_u, crop_v, crop_w };
+					llvm::Value *args[] = { tmp, self, a, coord, c, d, e, crop_u, crop_v, crop_w, i };
 					llvm::CallInst *call = ctx->CreateCall(lookup_func, args);
 					call->setDoesNotThrow();
 
@@ -4412,22 +4501,29 @@ class SignatureParser:
 			}
 			""")
 
-		elif mode == "tex::texel_float" or mode == "tex::texel_float_uvtile":
-			# texture lookup_float()
+		elif mode == "tex::texel_float" \
+			or mode == "tex::texel_float_uvtile" \
+			or mode == "tex::texel_float_uvtile_frame" \
+			or mode == "tex::texel_float_frame":
+			# texture texel_float()
 			texture_param = params[0]
 
 			code_params = {}
 			code = ""
 			if mode == "tex::texel_float":
 				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
-				if (texture_param == "T3" and len(params) == 3):
-					# skip 3. parameter: frame
-					code = "(void)c;\n"
-			else:
+				code_params["get_frame"]   = "llvm::Value *frame      = ctx.get_constant(0.0f);"
+			elif mode == "tex::texel_float_uvtile":
 				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
-				if (texture_param == "T2" and len(params) == 4):
-					# skip 4. parameter: frame
-					code = "(void)d;\n"
+				code_params["get_frame"]   = "llvm::Value *frame      = ctx.get_constant(0.0f);"
+			elif mode == "tex::texel_float_uvtile_frame":
+				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
+				code_params["get_frame"]   = "llvm::Value *frame      = d;"
+			elif mode == "tex::texel_float_frame":
+				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
+				code_params["get_frame"]   = "llvm::Value *frame      = c;"
+			else:
+				assert(False)
 
 			if texture_param == "T2":
 				code += """
@@ -4437,10 +4533,11 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_2_type();
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
 					llvm::Value *uv_tile    = ctx.create_local(coord_type, "uv_tile");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
 					%(get_uv_tile)s
-					llvm::Value *args[] = { res_data, a, coord, uv_tile };
+					llvm::Value *args[] = { res_data, a, coord, uv_tile, frame };
 					res = ctx->CreateCall(lookup_func, args);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
@@ -4457,10 +4554,11 @@ class SignatureParser:
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
 					llvm::Value *uv_tile    = ctx.create_local(coord_type, "uv_tile");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
 					%(get_uv_tile)s
-					llvm::Value *args[] = { tmp, self, a, coord, uv_tile };
+					llvm::Value *args[] = { tmp, self, a, coord, uv_tile, frame };
 					llvm::CallInst *call = ctx->CreateCall(texel_func, args);
 					call->setDoesNotThrow();
 
@@ -4477,9 +4575,10 @@ class SignatureParser:
 
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_3_type();
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
-					llvm::Value *args[] = { res_data, a, coord };
+					llvm::Value *args[] = { res_data, a, coord, frame };
 					res = ctx->CreateCall(lookup_func, args);
 				} else {
 					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
@@ -4495,9 +4594,10 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_3_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
-					llvm::Value *args[] = { tmp, self, a, coord };
+					llvm::Value *args[] = { tmp, self, a, coord, frame };
 					llvm::CallInst *call = ctx->CreateCall(texel_func, args);
 					call->setDoesNotThrow();
 
@@ -4518,8 +4618,13 @@ class SignatureParser:
 			}
 			""")
 
-		elif mode == "tex::texel_floatX" or mode == "tex::texel_floatX_uvtile":
-			# texture lookup_floatX()
+		elif mode == "tex::texel_floatX" \
+			or mode == "tex::texel_floatX_uvtile" \
+			or mode == "tex::texel_floatX_uvtile_frame" \
+			or mode == "tex::texel_floatX_frame":
+			# texture texel_floatX()
+			texture_param = params[0]
+
 			code_params = {}
 			code = ""
 			if intrinsic == "texel_float2":
@@ -4537,18 +4642,20 @@ class SignatureParser:
 			else:
 				error("Unsupported tex texel function '%s'" % intrinsic)
 
-			texture_param = params[0]
-
 			if mode == "tex::texel_floatX":
 				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
-			else:
+				code_params["get_frame"]   = "llvm::Value *frame      = ctx.get_constant(0.0f);"
+			elif mode == "tex::texel_floatX_uvtile":
 				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
-				if (texture_param == "T2" and len(params) == 4):
-					# skip 4. parameter: frame
-					code += "(void)d;\n"
-				if (texture_param == "T3" and len(params) == 3):
-					# skip 3. parameter: frame
-					code += "(void)c;\n"
+				code_params["get_frame"]   = "llvm::Value *frame      = ctx.get_constant(0.0f);"
+			elif mode == "tex::texel_floatX_uvtile_frame":
+				code_params["get_uv_tile"] = "ctx.convert_and_store(c, uv_tile);"
+				code_params["get_frame"]   = "llvm::Value *frame      = d;"
+			elif mode == "tex::texel_floatX_frame":
+				code_params["get_uv_tile"] = "ctx.store_int2_zero(uv_tile);"
+				code_params["get_frame"]   = "llvm::Value *frame      = c;"
+			else:
+				assert(False)
 
 			if texture_param == "T2":
 				code += """
@@ -4560,10 +4667,11 @@ class SignatureParser:
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
 					llvm::Value *uv_tile    = ctx.create_local(coord_type, "uv_tile");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
 					%(get_uv_tile)s
-					llvm::Value *args[] = { tmp, res_data, a, coord, uv_tile };
+					llvm::Value *args[] = { tmp, res_data, a, coord, uv_tile, frame };
 					ctx->CreateCall(lookup_func, args);
 					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
@@ -4581,10 +4689,11 @@ class SignatureParser:
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
 					llvm::Value *uv_tile    = ctx.create_local(coord_type, "uv_tile");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
 					%(get_uv_tile)s
-					llvm::Value *args[] = { tmp, self, a, coord, uv_tile };
+					llvm::Value *args[] = { tmp, self, a, coord, uv_tile, frame };
 					llvm::CallInst *call = ctx->CreateCall(texel_func, args);
 					call->setDoesNotThrow();
 
@@ -4600,9 +4709,10 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_3_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
-					llvm::Value *args[] = { tmp, res_data, a, coord };
+					llvm::Value *args[] = { tmp, res_data, a, coord, frame };
 					ctx->CreateCall(lookup_func, args);
 					res = ctx.load_and_convert(ctx.get_non_deriv_return_type(), tmp);
 				} else {
@@ -4619,9 +4729,10 @@ class SignatureParser:
 					llvm::Type  *coord_type = m_code_gen.m_type_mapper.get_arr_int_3_type();
 					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
 					llvm::Value *coord      = ctx.create_local(coord_type, "coord");
+					%(get_frame)s
 
 					ctx.convert_and_store(b, coord);
-					llvm::Value *args[] = { tmp, self, a, coord };
+					llvm::Value *args[] = { tmp, self, a, coord, frame };
 					llvm::CallInst *call = ctx->CreateCall(texel_func, args);
 					call->setDoesNotThrow();
 
@@ -5687,7 +5798,7 @@ class SignatureParser:
 
 			for (size_t i = 0, n = dimension_of(m_intrinsics); i < n; ++i) {
 				m_intrinsics[i] = NULL;
-			} 
+			}
 
 			for (size_t i = 0, n = dimension_of(m_internal_funcs); i < n; ++i) {
 				m_internal_funcs[i] = NULL;
@@ -5803,54 +5914,55 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_maxf",        "FF_FFFF")
 		self.register_mdl_runtime_func("mdl_max",         "DD_DDDD")
 		# tex functions
-		self.register_mdl_runtime_func("mdl_tex_resolution_2d", "IA2_PTIIIA2")
-		self.register_mdl_runtime_func("mdl_tex_resolution_3d", "IA3_PTII")
-		self.register_mdl_runtime_func("mdl_tex_width",         "II_PTII")
-		self.register_mdl_runtime_func("mdl_tex_height",        "II_PTII")
-		self.register_mdl_runtime_func("mdl_tex_depth",         "II_PTII")
+		self.register_mdl_runtime_func("mdl_tex_resolution_2d", "IA2_PTIIIA2FF")
+		self.register_mdl_runtime_func("mdl_tex_resolution_3d", "IA3_PTIIFF")
+		self.register_mdl_runtime_func("mdl_tex_width",         "II_PTIIFF")
+		self.register_mdl_runtime_func("mdl_tex_height",        "II_PTIIFF")
+		self.register_mdl_runtime_func("mdl_tex_depth",         "II_PTIIFF")
 		self.register_mdl_runtime_func("mdl_tex_isvalid",       "BB_PTII")
+		self.register_mdl_runtime_func("mdl_tex_frame",         "IA2_PTII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float_2d",       "FF_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float_2d", "FF_PTIIFD2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float_3d",       "FF_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float_2d",       "FF_PTIIFA2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float_2d", "FF_PTIIFD2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float_3d",       "FF_PTIIFA3EWMEWMEWMFA2FA2FA2FF")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float_cube",     "FF_PTIIFA3")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float_ptex",     "FF_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float2_2d",       "FA2_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float2_2d", "FA2_PTIIFD2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float2_3d",       "FA2_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float2_2d",       "FA2_PTIIFA2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float2_2d", "FA2_PTIIFD2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float2_3d",       "FA2_PTIIFA3EWMEWMEWMFA2FA2FA2FF")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float2_cube",     "FA2_PTIIFA3")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float2_ptex",     "FA2_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float3_2d",       "FA3_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float3_2d", "FA3_PTIIFD2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float3_3d",       "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float3_2d",       "FA3_PTIIFA2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float3_2d", "FA3_PTIIFD2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float3_3d",       "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2FF")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float3_cube",     "FA3_PTIIFA3")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float3_ptex",     "FA3_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_float4_2d",       "FA4_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float4_2d", "FA4_PTIIFD2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_float4_3d",       "FA4_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float4_2d",       "FA4_PTIIFA2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_float4_2d", "FA4_PTIIFD2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_float4_3d",       "FA4_PTIIFA3EWMEWMEWMFA2FA2FA2FF")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float4_cube",     "FA4_PTIIFA3")
 		self.register_mdl_runtime_func("mdl_tex_lookup_float4_ptex",     "FA4_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_lookup_color_2d",       "FA3_PTIIFA2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_color_2d", "FA3_PTIIFD2EWMEWMFA2FA2")
-		self.register_mdl_runtime_func("mdl_tex_lookup_color_3d",       "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2")
+		self.register_mdl_runtime_func("mdl_tex_lookup_color_2d",       "FA3_PTIIFA2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_deriv_color_2d", "FA3_PTIIFD2EWMEWMFA2FA2FF")
+		self.register_mdl_runtime_func("mdl_tex_lookup_color_3d",       "FA3_PTIIFA3EWMEWMEWMFA2FA2FA2FF")
 		self.register_mdl_runtime_func("mdl_tex_lookup_color_cube",     "FA3_PTIIFA3")
 		self.register_mdl_runtime_func("mdl_tex_lookup_color_ptex",     "FA3_PTIIII")
 
-		self.register_mdl_runtime_func("mdl_tex_texel_float_2d",        "FF_PTIIIA2IA2")
-		self.register_mdl_runtime_func("mdl_tex_texel_float2_2d",       "FA2_PTIIIA2IA2")
-		self.register_mdl_runtime_func("mdl_tex_texel_float3_2d",       "FA3_PTIIIA2IA2")
-		self.register_mdl_runtime_func("mdl_tex_texel_float4_2d",       "FA4_PTIIIA2IA2")
-		self.register_mdl_runtime_func("mdl_tex_texel_color_2d",        "FA3_PTIIIA2IA2")
+		self.register_mdl_runtime_func("mdl_tex_texel_float_2d",        "FF_PTIIIA2IA2FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_float2_2d",       "FA2_PTIIIA2IA2FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_float3_2d",       "FA3_PTIIIA2IA2FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_float4_2d",       "FA4_PTIIIA2IA2FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_color_2d",        "FA3_PTIIIA2IA2FF")
 
-		self.register_mdl_runtime_func("mdl_tex_texel_float_3d",        "FF_PTIIIA3")
-		self.register_mdl_runtime_func("mdl_tex_texel_float2_3d",       "FA2_PTIIIA3")
-		self.register_mdl_runtime_func("mdl_tex_texel_float3_3d",       "FA3_PTIIIA3")
-		self.register_mdl_runtime_func("mdl_tex_texel_float4_3d",       "FA4_PTIIIA3")
-		self.register_mdl_runtime_func("mdl_tex_texel_color_3d",        "FA3_PTIIIA3")
+		self.register_mdl_runtime_func("mdl_tex_texel_float_3d",        "FF_PTIIIA3FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_float2_3d",       "FA2_PTIIIA3FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_float3_3d",       "FA3_PTIIIA3FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_float4_3d",       "FA4_PTIIIA3FF")
+		self.register_mdl_runtime_func("mdl_tex_texel_color_3d",        "FA3_PTIIIA3FF")
 
 		# df functions
 		self.register_mdl_runtime_func("mdl_df_light_profile_power",            "FF_PTII")
@@ -5865,6 +5977,9 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_df_light_profile_evaluate",         "FF_PTIIFA2")
 		self.register_mdl_runtime_func("mdl_df_light_profile_sample",           "FA3_PTIIFA3")
 		self.register_mdl_runtime_func("mdl_df_light_profile_pdf",              "FF_PTIIFA2")
+
+		# renderer support
+		self.register_mdl_runtime_func("mdl_adapt_normal",           "FA3_PTFA3")
 
 		# exception handling
 		self.register_mdl_runtime_func("mdl_out_of_bounds",          "VV_xsIIZZCSII")
@@ -6069,6 +6184,7 @@ class SignatureParser:
 		/// \param res_data       the resource data
 		/// \param tex_id         the ID of the texture
 		/// \param opt_uv_tile    the UV tile, if resolution_2d will be called
+		/// \param opt_frame      the frame (optional)
 		/// \param res_type       the type of the attribute
 		llvm::Value *call_tex_attr_func(
 			Function_context &ctx,
@@ -6077,6 +6193,7 @@ class SignatureParser:
 			llvm::Value *res_data,
 			llvm::Value *tex_id,
 			llvm::Value *opt_uv_tile,
+			llvm::Value *opt_frame,
 			llvm::Type *res_type);
 
 		/// Call attribute runtime function.

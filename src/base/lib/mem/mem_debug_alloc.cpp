@@ -44,11 +44,13 @@
 
 #include <dbghelp.h>
 
+
 #elif defined(__GNUC__)
 
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <signal.h>
+
 
 #endif
 
@@ -78,13 +80,19 @@ public:
 
 /// OS-specific frame capture.
 ///
-/// \param skip    number of frames to skip
-/// \param n       number of frames to capture
-/// \param frames  destination
-/// \param tmp     a temporary array of size skip + n
+/// \param skip           number of frames to skip
+/// \param n              number of frames to capture
+/// \param frames         destination
+/// \param tmp            a temporary array of size skip + n
+/// \param use_fp_unwind  true, if frame pointer based unwind should be used
 ///
 /// \return number of captured frames
-static unsigned os_capture_frames(size_t skip, size_t n, void *frames[], void *tmp[]);
+static unsigned os_capture_frames(
+    size_t skip,
+    size_t n,
+    void   *frames[],
+    void   *tmp[],
+    bool   use_fp_unwind);
 
 /// Return the OS-specific Symbol lookup interface.
 static ISymbol_lookup *os_get_symbol_lookup();
@@ -94,6 +102,7 @@ static void os_break_point();
 
 /// OS-specific printer
 int os_printf(char const *fmt, ...);
+
 
 #ifdef _MSC_VER
 // MS runtime does not support %z type modifier
@@ -119,33 +128,41 @@ static const char *reserved[] = {
     "bpf",
     "bpi",
     "bpd",
+    "bpx",
     "abort",
     "noabort",
     "expensive",
     "noexpensive",
     "size",
     "nosize",
+    "fpunwind",
+    "nofpunwind",
     "all",
     "ref",
+    "none",
     "help"
 };
 
 static void show_commands() {
-    os_printf("MEURAY memory allocator internal debugger commands:\n"
+    os_printf("NEURAY memory allocator internal debugger commands:\n"
         "capture id   capture allocations for block id\n"
         "capture all  capture all allocations (Danger: slow, huge memory consumption)\n"
+        "capture none disable capturing\n"
         "depth num    sets the depth of the captured frame, default 5\n"
         "skip num     skip the first num frames when capturing, default 3\n"
         "bpa id       break into debugger if block id is allocated\n"
         "bpf id       break into debugger if block id is freed\n"
         "bpi id       break into debugger if object id's reference count is increased\n"
         "bpd id       break into debugger if object id's reference count is decreased\n"
+        "bpx          break into debugger if a wrong memory address is freed\n"
         "abort        abort after memory errors were reported (default in DEBUG mode)\n"
         "noabort      do not abort after memory errors were reported (default in RELEASE mode)\n"
         "expensive    enable expensive checks (default in DEBUG mode)\n"
         "noexpensive  disable expensive check (default in RELEASE mode)\n"
         "size         regularly dump allocated size\n"
         "nosize       do not dump allocated size\n"
+        "fpunwind     use frame pointer based unwinding if available\n"
+        "nofpunwind   do not use frame pointer based unwinding\n"
         "help         this help text\n");
 }
 
@@ -160,14 +177,18 @@ public:
         tok_bpf,
         tok_bpi,
         tok_bpd,
+        tok_bpx,
         tok_abort,
         tok_noabort,
         tok_expensive,
         tok_noexpensive,
         tok_size,
         tok_nosize,
+        tok_fpunwind,
+        tok_nofpunwind,
         tok_all,
         tok_ref,
+        tok_none,
         tok_help,
         tok_num,
         tok_error,
@@ -287,6 +308,8 @@ void DebugMallocAllocator::free(void *memory)
     Header *h = m_expensive_checks ? find_header(memory) : find_header_fast(memory);
 
     if (h == NULL) {
+        handle_breakpoint(Debug_cmd_lexer::tok_bpx, SIZE(memory));
+
         // create an error
         Free_error *err = (Free_error *)internal_malloc(sizeof(*err));
         if (err != NULL) {
@@ -301,7 +324,8 @@ void DebugMallocAllocator::free(void *memory)
                     m_num_skip_frames,
                     frame->length,
                     frame->frames,
-                    m_temp_frames);
+                    m_temp_frames,
+                    m_use_fp_unwind);
 
                 if (count > 0) {
                     frame->reason = CR_FREE;
@@ -352,7 +376,7 @@ void *DebugMallocAllocator::objalloc(char const *cls_name, size_t size)
 
     Header *h = (Header *)internal_malloc(size + sizeof(Header));
 
-    if (h == NULL && size != 0) {
+    if (h == NULL) {
         os_printf("*** Memory exhausted (after " PRT_SIZE "Mb).\n",
             m_allocated_size >> size_t(20));
         abort();
@@ -454,11 +478,17 @@ DebugMallocAllocator::DebugMallocAllocator()
 , m_num_skip_frames(4)
 , m_temp_frames(NULL)
 , m_free_frames(NULL)
+#ifdef MI_PLATFORM_WINDOWS
 , m_capture_mode(CAPTURE_ALL)
+#else
+// capture might be slow on non-Windows, so do not enable it by default
+, m_capture_mode(CAPTURE_NONE)
+#endif
 , m_had_memory_error(false)
 , m_abort_on_error(false)
 , m_expensive_checks(false)
 , m_dump_size(false)
+, m_use_fp_unwind(false)
 , m_allocated_size(0)
 , m_max_allocated_size(0)
 , m_allocated_blocks(0)
@@ -618,6 +648,8 @@ void DebugMallocAllocator::parse_commands(char const *cmd)
                 m_capture_mode = CAPTURE_ALL;
             } else if (token == Debug_cmd_lexer::tok_ref) {
                 m_capture_mode = CAPTURE_REF;
+            } else if (token == Debug_cmd_lexer::tok_none) {
+                m_capture_mode = CAPTURE_NONE;
             } else if (token == Debug_cmd_lexer::tok_num) {
                 if (m_num_tracked < dimension_of(m_tracked_ids)) {
                     m_tracked_ids[m_num_tracked++] = lexer.get_num_value();
@@ -650,6 +682,9 @@ void DebugMallocAllocator::parse_commands(char const *cmd)
                 set_breakpoint(token, lexer.get_num_value());
             }
             break;
+        case Debug_cmd_lexer::tok_bpx:
+            set_breakpoint(token, 0);
+            break;
         case Debug_cmd_lexer::tok_abort:
             m_abort_on_error = true;
             break;
@@ -667,6 +702,12 @@ void DebugMallocAllocator::parse_commands(char const *cmd)
             break;
         case Debug_cmd_lexer::tok_nosize:
             m_dump_size = false;
+            break;
+        case Debug_cmd_lexer::tok_fpunwind:
+            m_use_fp_unwind = true;
+            break;
+        case Debug_cmd_lexer::tok_nofpunwind:
+            m_use_fp_unwind = false;
             break;
         case Debug_cmd_lexer::tok_help:
             show_commands();
@@ -804,7 +845,11 @@ void DebugMallocAllocator::capture_stack_frame(
         return;
 
     unsigned count = os_capture_frames(
-        m_num_skip_frames, frame->length, frame->frames, m_temp_frames);
+        m_num_skip_frames,
+        frame->length,
+        frame->frames,
+        m_temp_frames,
+        m_use_fp_unwind);
 
     if (count == 0) {
         free_frame(frame);
@@ -867,6 +912,15 @@ void DebugMallocAllocator::set_breakpoint(unsigned token, size_t id)
 // Check if a breakpoint must be executed.
 void DebugMallocAllocator::handle_breakpoint(unsigned token, size_t id) const
 {
+    if (token == Debug_cmd_lexer::tok_bpx) {
+        for (size_t i = 0; i < m_num_breakpoints; ++i) {
+            if (token == m_breakpoints[i].token) {
+                os_printf("*** Breakpoint on wrong free %p\n", (void *)id);
+                os_break_point();
+            }
+        }
+        return;
+    }
     for (size_t i = 0; i < m_num_breakpoints; ++i) {
         if (id == m_breakpoints[i].id && token == m_breakpoints[i].token) {
             os_printf("*** Breakpoint on block " PRT_SIZE " reached\n", SIZE(id));
@@ -1054,8 +1108,9 @@ void Win32_symbol_lookup::report_error(TCHAR const *text)
 static unsigned os_capture_frames(
     size_t skip,
     size_t n,
-    void *frames[],
-    void *tmp[])
+    void   *frames[],
+    void   *tmp[],
+    bool   use_fp_unwind)
 {
     if (n == 0)
         return 0;
@@ -1119,6 +1174,7 @@ int os_printf(WCHAR const *fmt, ...)
     return res;
 }
 
+
 #elif defined(__GNUC__)
 
 
@@ -1180,16 +1236,39 @@ char *Linux_symbol_lookup::demangle(char const *mangled, size_t len)
     return demangled;
 }
 
+static unsigned fp_backtrace(
+    void *frames[],
+    size_t skip,
+    size_t n)
+{
+    size_t *fp = (size_t *)__builtin_frame_address(0);
+
+    size_t i;
+    for (i = 0; i < skip + n && fp != NULL; ++i) {
+        if (i >= skip) {
+            frames[i - skip] = (void *)fp[1];
+        }
+        fp = (size_t *)fp[0];
+    }
+    return i < skip ? 0u : unsigned(i - skip);
+}
+
 static unsigned os_capture_frames(
     size_t skip,
     size_t n,
-    void *frames[],
-    void *tmp[])
+    void   *frames[],
+    void   *tmp[],
+    bool   use_fp_unwind)
 {
     int res;
 
     if (n == 0)
         return 0;
+#if defined(__x86_64) || defined(__aarch64__)
+    if (use_fp_unwind) {
+        return fp_backtrace(frames, skip, n);
+    }
+#endif
     if (skip > 0) {
         res = backtrace(tmp, int(skip + n));
         if (res > 0) {
@@ -1216,8 +1295,8 @@ static void os_break_point()
 #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64))
     __asm__ __volatile__("int3");
 #else
-    // poor unix way
-    raise(SIGINT);
+    // default unix way
+    raise(SIGTRAP);
 #endif
 }
 
@@ -1231,6 +1310,7 @@ int os_printf(char const *fmt, ...)
     return res;
 }
 
+
 #endif  // WIN32
 
 } // DBG
@@ -1238,3 +1318,4 @@ int os_printf(char const *fmt, ...)
 } // MI
 
 #endif  // DEBUG
+

@@ -113,8 +113,7 @@ void Serializer_marker_helper::serialize_with_end_marker(mi::neuraylib::ISeriali
     m_checksum.end();
 }
 
-/// Internal wrapper for treating IDeserializer and Deserializer objetcs the same.
-/// TODO remove
+/// Internal wrapper for treating IDeserializer and Deserializer objects the same.
 class Deserializer_wrapper
 {
 public:
@@ -167,14 +166,24 @@ Marker_status Deserializer_marker_helper::read_extension_marker(Deserializer* de
 }
 
 
+template <Markers M>
+constexpr bool bytes_identical = ((M & 0xffu) == ((M >>  8) & 0xffu))
+                              && ((M & 0xffu) == ((M >> 16) & 0xffu))
+                              && ((M & 0xffu) == ((M >> 24) & 0xffu));
+
+
 Marker_status Deserializer_marker_helper::skip_to_marker(Deserializer_wrapper* deserializer,
                                                          Markers marker)
 {
     const Uint8 marker_byte = reinterpret_cast<Uint8*>(&marker)[0];
     Uint8 found = 0;
 
+    static_assert(bytes_identical<END_MARKER>);
+    static_assert(bytes_identical<EXTENSION_MARKER>);
+
     // Do it byte by byte to make sure we don't go past the marker if there's a
     // serialization error which messes up the alignment.
+    // Note that this works only because the markers are made up of identical bytes.
     while (deserializer->is_valid() && found < sizeof(marker))
     {
         Uint8 byte = 0;
@@ -207,7 +216,7 @@ Marker_status Deserializer_marker_helper::read_end_marker_once(Deserializer_wrap
             return MARKER_NOT_FOUND;
     }
 
-    // Don't include the checksum's cheksum in the comparison, use previous value.
+    // Don't include the checksum's checksum in the comparison, use previous value.
     Uint32 buffer_crc = m_checksum.get();
     Uint32 read_crc = 0;
     deserializer->read(&read_crc);
@@ -246,7 +255,7 @@ Marker_status Deserializer_marker_helper::deserialize_with_end_marker(Deserializ
 
     m_checksum.start();
     serializable->deserialize(deserializer);
-    Marker_status status = read_end_marker_internal(&wrapper);
+    const Marker_status status = read_end_marker_internal(&wrapper);
     m_checksum.end();
 
     return status;
@@ -259,7 +268,7 @@ Marker_status Deserializer_marker_helper::deserialize_with_end_marker(
 
     m_checksum.start();
     serializable->deserialize(deserializer);
-    Marker_status status = read_end_marker_internal(&wrapper);
+    const Marker_status status = read_end_marker_internal(&wrapper);
     m_checksum.end();
 
     return status;

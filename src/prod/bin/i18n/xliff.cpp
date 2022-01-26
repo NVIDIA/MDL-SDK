@@ -44,7 +44,6 @@ using mi::neuraylib::IAnnotation_block;
 using mi::neuraylib::IExpression_list;
 using mi::neuraylib::IExpression;
 using mi::neuraylib::IFunction_definition;
-using mi::neuraylib::IMaterial_definition;
 using mi::neuraylib::IValue_string;
 using mi::neuraylib::IValue;
 using mi::neuraylib::IExpression_constant;

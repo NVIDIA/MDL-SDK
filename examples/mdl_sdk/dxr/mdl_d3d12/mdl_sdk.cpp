@@ -103,7 +103,7 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     // search path setup is done during scene loading as the scene folder is added too
     // reconfigure_search_paths();
 
-    // Load the FreeImage plugin.
+    // Load the plugins.
     mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
         m_neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
 
@@ -111,6 +111,13 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     if (mi::examples::mdl::load_plugin(m_neuray.get(), "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
     {
         log_error("Failed to load the 'nv_freeimage' plugin.", SRC);
+        return;
+    }
+
+    log_info("Load 'dds' plugin.");
+    if (mi::examples::mdl::load_plugin(m_neuray.get(), "dds" MI_BASE_DLL_FILE_EXT) != 0)
+    {
+        log_error("Failed to load the 'dds' plugin.", SRC);
         return;
     }
 

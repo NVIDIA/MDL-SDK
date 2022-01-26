@@ -214,7 +214,7 @@ public:
 
     /// Removes a material, function, enum or struct type from the module.
     ///
-    /// \param name                    The simple name of materal, function, enum or struct type to
+    /// \param name                    The simple name of material, function, enum or struct type to
     ///                                be removed.
     /// \param index                   The index of the function with the given name to be removed.
     ///                                Used to distinguish overloads of functions. Zero 0 for

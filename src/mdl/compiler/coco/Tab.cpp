@@ -551,7 +551,7 @@ BitArray* Tab::First(Node *p) {
 	BitArray *mark = new BitArray(nodes->Count);
 	BitArray *fs = First0(p, mark);
 	delete mark;
-	if (ddt[3]) {
+	if (ddt[DDT_TRACE_COMP_FIRST]) {
 		fwprintf(trace, L"\n");
 		if (p != NULL) fwprintf(trace, L"First: node = %d\n", p->n );
 		else fwprintf(trace, L"First: node = null\n");
@@ -785,7 +785,7 @@ void Tab::CompSymbolSets() {
 	CompAnySets();
 	CompFollowSets();
 	CompSyncSets();
-	if (ddt[1]) {
+	if (ddt[DDT_LIST_SETS]) {
 		fwprintf(trace, L"\n");
 		fwprintf(trace, L"First & follow symbols:\n");
 		fwprintf(trace, L"----------------------\n\n");
@@ -799,7 +799,7 @@ void Tab::CompSymbolSets() {
 			fwprintf(trace, L"\n");
 		}
 	}
-	if (ddt[4]) {
+	if (ddt[DDT_PRINT_ANY_SYNC_SETS]) {
 		fwprintf(trace, L"\n");
 		fwprintf(trace, L"ANY and SYNC sets:\n");
 		fwprintf(trace, L"-----------------\n");
@@ -1248,14 +1248,14 @@ void Tab::SetDDT(const wchar_t* s) {
 		ch = st[i];
 		if (L'0' <= ch && ch <= L'9') ddt[ch - L'0'] = true;
 		else switch (ch) {
-			case L'A' : ddt[0] = true; break; // trace automaton
-			case L'F' : ddt[1] = true; break; // list first/follow sets
-			case L'G' : ddt[2] = true; break; // print syntax graph
-			case L'I' : ddt[3] = true; break; // trace computation of first sets
-			case L'J' : ddt[4] = true; break; // print ANY and SYNC sets
-			case L'P' : ddt[8] = true; break; // print statistics
-			case L'S' : ddt[6] = true; break; // list symbol table
-			case L'X' : ddt[7] = true; break; // list cross reference table
+			case L'A' : ddt[DDT_TRACE_AUTOMATON]     = true; break;
+			case L'F' : ddt[DDT_LIST_SETS]           = true; break;
+			case L'G' : ddt[DDT_PRINT_SYNTAX_GRAPH]  = true; break;
+			case L'I' : ddt[DDT_TRACE_COMP_FIRST]    = true; break;
+			case L'J' : ddt[DDT_PRINT_ANY_SYNC_SETS] = true; break;
+			case L'P' : ddt[DDP_PRINT_STATS]         = true; break;
+			case L'S' : ddt[DDT_LIST_SYMBOL_TABLE]   = true; break;
+			case L'X' : ddt[DDT_LIST_XREF_TABLE]     = true; break;
 			default : break;
 		}
 	}

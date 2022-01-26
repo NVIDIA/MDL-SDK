@@ -424,9 +424,6 @@ private:
     /// The memory arena all messages are allocated on.
     Memory_arena m_msg_arena;
 
-    /// The builder for messages.
-    Arena_builder m_builder;
-
     /// The list of messages.
     Message_vector m_msgs;
 

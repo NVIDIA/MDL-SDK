@@ -35,13 +35,17 @@
 #include "window_image_file.h"
 #include "window_win32.h"
 
+#include <errhandlingapi.h>
+#include <strsafe.h>
+#include <dbghelp.h>
+
+
 namespace mi { namespace examples { namespace mdl_d3d12
 {
 
 Base_application_message_interface::Base_application_message_interface(
     Base_application* app,
     HINSTANCE instance)
-
     : m_app(app)
     , m_instance(instance)
 {
@@ -79,7 +83,11 @@ void Base_application_message_interface::resize(size_t width, size_t height, dou
 // ------------------------------------------------------------------------------------------------
 
 Base_application::Base_application()
-    : m_window(nullptr)
+    : m_options(nullptr)
+    , m_window(nullptr)
+    , m_resource_descriptor_heap(nullptr)
+    , m_render_target_descriptor_heap(nullptr)
+    , m_mdl_sdk(nullptr)
     , m_scene_is_updating_next(false)
 {
     m_update_args.frame_number = 0;
@@ -100,10 +108,63 @@ Base_application::~Base_application()
 
 // ------------------------------------------------------------------------------------------------
 
+namespace // anonymous
+{
+LONG top_level_exection_filter(PEXCEPTION_POINTERS exception_information)
+{
+    BOOL bMiniDumpSuccessful;
+    WCHAR szPath[MAX_PATH];
+    WCHAR szFileName[MAX_PATH];
+    DWORD dwBufferSize = MAX_PATH;
+    HANDLE hDumpFile;
+    SYSTEMTIME stLocalTime;
+    MINIDUMP_EXCEPTION_INFORMATION ExpParam;
+
+    // path is the executable directory
+    std::string exec_path = mi::examples::io::get_executable_folder();
+    std::wstring exec_path_w = mi::examples::strings::str_to_wstr(exec_path);
+    wmemcpy_s(szPath, dwBufferSize, exec_path_w.c_str(), exec_path_w.size());
+
+    // filename based on time and date
+    GetLocalTime(&stLocalTime);
+    wsprintfW(szFileName, L"%04d-%02d-%02d_%02d-%02d-%02d_%ld_%ld.dmp",
+        stLocalTime.wYear, stLocalTime.wMonth, stLocalTime.wDay,
+        stLocalTime.wHour, stLocalTime.wMinute, stLocalTime.wSecond,
+        GetCurrentProcessId(), GetCurrentThreadId());
+
+    std::wstring full_path = exec_path_w + L"/" + szFileName;
+    hDumpFile = CreateFile(full_path.c_str(), GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
+
+    ExpParam.ThreadId = GetCurrentThreadId();
+    ExpParam.ExceptionPointers = exception_information;
+    ExpParam.ClientPointers = TRUE;
+
+    bMiniDumpSuccessful = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(),
+        hDumpFile, MiniDumpWithFullMemory, &ExpParam, NULL, NULL);
+
+    mdl_d3d12::log_error("Application crashed. Writing dump file in the executable folder: " +
+        mi::examples::strings::wstr_to_str(szFileName));
+
+    mdl_d3d12::flush_loggers();
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+}
+
+// ------------------------------------------------------------------------------------------------
+
 int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdShow)
 {
+    // setup mini-dumps
+    SetUnhandledExceptionFilter(top_level_exection_filter);
+
     // create graphics context, load MDL SDK, ...
-    if (!initialize_internal(options)) return -1;
+    if (!initialize_internal(options))
+    {
+        // give the user time to read the reason of failure
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        return -1;
+    }
 
     // create the window
     Base_application_message_interface message_interface(this, hInstance);
@@ -129,14 +190,22 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
         flush_command_queues();
     }
     else
+    {
         log_error("Loading Applications failed. Freeing already loaded content.", SRC);
+        // give the user time to read the reason of failure 
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    }
 
     // before unloading list every library that is in use
     Diagnostics::list_loaded_libraries();
 
     // unload the application
     if (!unload())
+    {
         log_error("Unloading Applications failed.", SRC);
+        // give the user time to read the reason of failure 
+        std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    }
 
     // release base application resources
     for (auto&& queue : m_command_queues)

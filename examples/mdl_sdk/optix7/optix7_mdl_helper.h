@@ -298,16 +298,6 @@ Mdl_helper::Mdl_helper(
     if (!m_mdl_config)
         exit_failure("ERROR: Retrieving MDL configuration failed!");
 
-    // Disable encoded names for now
-    m_mdl_config->set_encoded_names_enabled(false);
-
-    // Load additionally required optional plugins for texture support
-    mi::base::Handle<mi::neuraylib::IPlugin_configuration> plug_config(
-        m_neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
-
-    // Consider the dds plugin as optional
-    plug_config->load_plugin_library("dds" MI_BASE_DLL_FILE_EXT);
-
     if (m_neuray->start() != 0)
         exit_failure("ERROR: Starting MDL SDK failed!");
 
@@ -625,19 +615,44 @@ Mdl_helper::Compile_result Mdl_helper::compile_mdl_material(
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
         mdl_factory->create_execution_context());
 
+    // Split module and material name
+    std::string module_name, material_simple_name;
+    if (!mi::examples::mdl::parse_cmd_argument_material_name(
+            material_name, module_name, material_simple_name, true)) {
+        m_last_mdl_error = "Failed to parse material name.";
+        return res;
+    }
+
     // Load the module
-    std::string module_name = get_module_name(material_name);
     mdl_impexp_api->load_module(transaction, module_name.c_str(), context.get());
     if (!log_messages(context.get()))
         return res;
 
+    // Get the database name for the module we loaded
+    mi::base::Handle<const mi::IString> module_db_name(
+        mdl_factory->get_db_module_name(module_name.c_str()));
+    mi::base::Handle<const mi::neuraylib::IModule> module(
+        transaction->access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
+    if (!module) {
+        m_last_mdl_error = "Failed to access the loaded module.";
+        return res;
+    }
+
+    // Append the material name
+    std::string material_db_name
+        = std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
+    material_db_name = mi::examples::mdl::add_missing_material_signature(
+        module.get(), material_db_name);
+    if (material_db_name.empty()) {
+        m_last_mdl_error = "Failed to find the material " + material_simple_name
+            + " in the module " + module_name + ".";
+        return res;
+    }
+
     // Create a material instance from the material definition
     // with the default arguments.
-    const char *prefix = (material_name.find("::") == 0) ? "mdl" : "mdl::";
-
-    std::string material_db_name = prefix + material_name;
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        transaction->access<mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        transaction->access<mi::neuraylib::IFunction_definition>(
             material_db_name.c_str()));
     if (!material_definition) {
         m_last_mdl_error = "Material \"" + material_name + "\" not found";
@@ -645,8 +660,8 @@ Mdl_helper::Compile_result Mdl_helper::compile_mdl_material(
     }
 
     mi::Sint32 ret = 0;
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        material_definition->create_material_instance(0, &ret));
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        material_definition->create_function_call(0, &ret));
     if (ret != 0) {
         m_last_mdl_error = "Instantiating material \"" + material_name + "\" failed";
         return res;
@@ -656,7 +671,9 @@ Mdl_helper::Compile_result Mdl_helper::compile_mdl_material(
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
-    res.compiled_material = material_instance->create_compiled_material(flags, context.get());
+    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance2(
+        material_instance->get_interface<mi::neuraylib::IMaterial_instance>());
+    res.compiled_material = material_instance2->create_compiled_material(flags, context.get());
     if (!log_messages(context.get()))
         return res;
 
@@ -793,19 +810,14 @@ bool Mdl_helper::prepare_texture(
     // Access image and canvas via the texture object
     mi::base::Handle<const mi::neuraylib::IImage> image(
         transaction->access<mi::neuraylib::IImage>(texture->get_image()));
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
     mi::Uint32 tex_width = canvas->get_resolution_x();
     mi::Uint32 tex_height = canvas->get_resolution_y();
     mi::Uint32 tex_layers = canvas->get_layers_size();
-    char const *image_type = image->get_type();
+    char const *image_type = image->get_type(0, 0);
 
-    if (image->is_uvtile()) {
-        std::cerr << "The example does not support uvtile textures!" << std::endl;
-        return false;
-    }
-
-    if (canvas->get_tiles_size_x() != 1 || canvas->get_tiles_size_y() != 1) {
-        std::cerr << "The example does not support tiled images!" << std::endl;
+    if (image->is_uvtile() || image->is_animated()) {
+        std::cerr << "The example does not support uvtile and/or animated textures!" << std::endl;
         return false;
     }
 
@@ -813,11 +825,11 @@ bool Mdl_helper::prepare_texture(
     // is pre-applied here (all images are converted to linear space).
 
     // Convert to linear color space if necessary
-    if (texture->get_effective_gamma() != 1.0f) {
+    if (texture->get_effective_gamma(0, 0) != 1.0f) {
         // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
         mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
             m_image_api->convert(canvas.get(), "Color"));
-        gamma_canvas->set_gamma(texture->get_effective_gamma());
+        gamma_canvas->set_gamma(texture->get_effective_gamma(0, 0));
         m_image_api->adjust_gamma(gamma_canvas.get(), 1.0f);
         canvas = gamma_canvas;
     } else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0) {
@@ -877,7 +889,7 @@ bool Mdl_helper::prepare_texture(
         m_texture_arrays.push_back(device_tex_array);
     } else if (m_enable_derivatives) {
         // mipmapped textures use CUDA mipmapped arrays
-        mi::Uint32 num_levels = image->get_levels();
+        mi::Uint32 num_levels = image->get_levels(0, 0);
         cudaExtent extent = make_cudaExtent(tex_width, tex_height, 0);
         cudaMipmappedArray_t device_tex_miparray;
         CUDA_CHECK(cudaMallocMipmappedArray(

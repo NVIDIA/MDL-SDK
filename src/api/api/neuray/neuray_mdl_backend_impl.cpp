@@ -277,6 +277,7 @@ mi::neuraylib::ITarget_code const* Mdl_llvm_backend::translate_link_unit(
 
 
 const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deserialize_target_code(
+    mi::neuraylib::ITransaction* transaction,
     const mi::neuraylib::IBuffer* buffer,
     mi::neuraylib::IMdl_execution_context* context) const
 {
@@ -286,7 +287,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deserialize_target_code(
     mi::base::Handle<BACKENDS::Target_code> info(new BACKENDS::Target_code());
     mi::base::Handle<mi::mdl::ICode_generator> code_gen(m_backend.get_jit_be());
 
-    if (!info->deserialize(code_gen.get(), buffer, context))
+    if (!info->deserialize(code_gen.get(), unwrap(transaction), buffer, context))
         return nullptr;
 
     // make sure the info is of the same back-end kind
@@ -323,12 +324,13 @@ namespace {
 } // anonymous namespace
 
 const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deserialize_target_code(
+    mi::neuraylib::ITransaction* transaction,
     const mi::Uint8* buffer_data,
     mi::Size buffer_size,
     mi::neuraylib::IMdl_execution_context* context) const
 {
     Buffer_wrapper buffer(buffer_data, buffer_size);
-    return deserialize_target_code(&buffer, context);
+    return deserialize_target_code(transaction, &buffer, context);
 }
 
 

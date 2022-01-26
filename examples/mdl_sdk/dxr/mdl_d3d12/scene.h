@@ -423,6 +423,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 DirectX::XMFLOAT3 attenuation_color = { 1.0f, 1.0f, 1.0f };
             };
 
+            // corresponds to glTF Extension: KHR_materials_emissive_strength
+            struct Model_data_materials_emissive_strength
+            {
+                float emissive_strength = 1.0f;
+            };
+
             struct Pbr_model_data_metallic_roughness
             {
                 Texture_info base_color_texture = {};
@@ -470,6 +476,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
             Pbr_model_data_metallic_roughness metallic_roughness;
             Pbr_model_data_khr_specular_glossiness khr_specular_glossiness;
 
+            // general extensions
+            Model_data_materials_emissive_strength emissive_strength;
         };
 
         // --------------------------------------------------------------------

@@ -87,12 +87,7 @@
 // interpreted as having the type "Class * MI_RESTRICTED_PTR const". Note that
 // the const qualifier applies to the _pointer_, not to the object.
 
-#if defined(__GNUC__)			// GNU C/C++ Compiler
-#  define MI_RESTRICTED_PTR      __restrict__
-#  define MI_RESTRICTED_THIS_PTR __restrict__
-#else
-#  define MI_RESTRICTED_PTR
-#  define MI_RESTRICTED_THIS_PTR
-#endif
+#  define MI_RESTRICTED_PTR      __restrict
+#  define MI_RESTRICTED_THIS_PTR __restrict
 
 #endif // BASE_SYSTEM_MAIN_PLATFORM_H

@@ -455,6 +455,7 @@ public:
         /// \param tag         the resource tag (if assigned)
         /// \param shape       if the resource is a texture: its shape
         /// \param gamma_mode  if the resource is a texture: its gamma mode
+        /// \param selector    if the resource is a texture: its selector
         ///
         /// \returns a resource index or 0 if no resource index can be returned
         size_t get_resource_index(
@@ -462,7 +463,8 @@ public:
             char const                 *url,
             int                        tag,
             IType_texture::Shape       shape,
-            IValue_texture::gamma_mode gamma_mode) MDL_FINAL;
+            IValue_texture::gamma_mode gamma_mode,
+            char const                 *selector) MDL_FINAL;
 
         /// Register a string constant and return its 1 based index in the string table.
         ///
@@ -718,6 +720,7 @@ public:
         /// \param tag         the resource tag (if assigned)
         /// \param shape       if the resource is a texture: its shape
         /// \param gamma_mode  if the resource is a texture: its gamma mode
+        /// \param selector    if the resource is a texture: its selector
         ///
         /// \returns a resource index or 0 if no resource index can be returned
         size_t get_resource_index(
@@ -725,7 +728,8 @@ public:
             char const                 *url,
             int                        tag,
             IType_texture::Shape       shape,
-            IValue_texture::gamma_mode gamma_mode) MDL_FINAL;
+            IValue_texture::gamma_mode gamma_mode,
+            char const                 *selector) MDL_FINAL;
 
         /// Register a string constant and return its 1 based index in the string table.
         ///

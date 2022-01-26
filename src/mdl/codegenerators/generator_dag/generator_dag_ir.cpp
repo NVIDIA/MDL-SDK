@@ -1768,8 +1768,8 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 n_call_args[2].param_name = "frame";
                 n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
 
-                MDL_ASSERT(strcmp(name, "::tex::texel_float$1.6(texture_3d,int2)") == 0);
-                name = "::tex::texel_float(texture_3d,int2,float)";
+                MDL_ASSERT(strcmp(name, "::tex::texel_float$1.6(texture_3d,int3)") == 0);
+                name = "::tex::texel_float(texture_3d,int3,float)";
                 return create_call(name, sema, n_call_args, 3, ret_type);
             }
         }
@@ -1814,8 +1814,8 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 n_call_args[2].param_name = "frame";
                 n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
 
-                MDL_ASSERT(strcmp(name, "::tex::texel_float2$1.6(texture_3d,int2)") == 0);
-                name = "::tex::texel_float2(texture_3d,int2,float)";
+                MDL_ASSERT(strcmp(name, "::tex::texel_float2$1.6(texture_3d,int3)") == 0);
+                name = "::tex::texel_float2(texture_3d,int3,float)";
                 return create_call(name, sema, n_call_args, 3, ret_type);
             }
         }
@@ -1860,8 +1860,8 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 n_call_args[2].param_name = "frame";
                 n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
 
-                MDL_ASSERT(strcmp(name, "::tex::texel_float3$1.6(texture_3d,int2)") == 0);
-                name = "::tex::texel_float3(texture_3d,int2,float)";
+                MDL_ASSERT(strcmp(name, "::tex::texel_float3$1.6(texture_3d,int3)") == 0);
+                name = "::tex::texel_float3(texture_3d,int3,float)";
                 return create_call(name, sema, n_call_args, 3, ret_type);
             }
         }
@@ -1906,8 +1906,8 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 n_call_args[2].param_name = "frame";
                 n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
 
-                MDL_ASSERT(strcmp(name, "::tex::texel_float4$1.6(texture_3d,int2)") == 0);
-                name = "::tex::texel_float4(texture_3d,int2,float)";
+                MDL_ASSERT(strcmp(name, "::tex::texel_float4$1.6(texture_3d,int3)") == 0);
+                name = "::tex::texel_float4(texture_3d,int3,float)";
                 return create_call(name, sema, n_call_args, 3, ret_type);
             }
         }
@@ -1952,8 +1952,8 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 n_call_args[2].param_name = "frame";
                 n_call_args[2].arg = create_constant(m_value_factory.create_float(0.0f));
 
-                MDL_ASSERT(strcmp(name, "::tex::texel_color$1.6(texture_3d,int2)") == 0);
-                name = "::tex::texel_color(texture_3d,int2,float)";
+                MDL_ASSERT(strcmp(name, "::tex::texel_color$1.6(texture_3d,int3)") == 0);
+                name = "::tex::texel_color(texture_3d,int3,float)";
                 return create_call(name, sema, n_call_args, 3, ret_type);
             }
         }

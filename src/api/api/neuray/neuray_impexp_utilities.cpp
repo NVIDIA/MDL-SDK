@@ -64,6 +64,7 @@
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 
 
+#include <memory>
 #include <regex>
 
 namespace MI {
@@ -162,11 +163,13 @@ private:
 
 } // anonymous namespace
 
-mi::neuraylib::IReader* Impexp_utilities::create_reader( const char* data, mi::Size length)
+mi::neuraylib::IReader* Impexp_utilities::create_reader( const std::string& path)
 {
-    const mi::Uint8* d = reinterpret_cast<const mi::Uint8*>( data);
-    mi::base::Handle<mi::neuraylib::IBuffer> buffer( new Buffer_wrapper( d, length));
-    return new DISK::Memory_reader_impl( buffer.get());
+    std::unique_ptr<DISK::File_reader_impl> file_reader_impl( new DISK::File_reader_impl());
+    if( !file_reader_impl->open( path.c_str()))
+        return nullptr;
+
+    return file_reader_impl.release();
 }
 
 mi::neuraylib::IReader* Impexp_utilities::create_reader(
@@ -176,8 +179,6 @@ mi::neuraylib::IReader* Impexp_utilities::create_reader(
     if( path.empty())
         return nullptr;
 
-    DISK::File_reader_impl* file_reader_impl = new DISK::File_reader_impl();
-
     // handle ${shader} path
     if( is_shader_path( path)) {
 
@@ -185,24 +186,34 @@ mi::neuraylib::IReader* Impexp_utilities::create_reader(
         const std::vector<std::string>& shader_paths
             = path_module->get_search_path( PATH::MDL);
 
+        std::unique_ptr<DISK::File_reader_impl> file_reader_impl( new DISK::File_reader_impl());
         for( std::vector<std::string>::const_iterator it = shader_paths.begin();
             it != shader_paths.end(); ++it) {
             std::string test_path = resolve_shader_path( path, *it);
             if( file_reader_impl->open( test_path.c_str()))
-                return file_reader_impl;
+                return file_reader_impl.release();
         }
 
-        file_reader_impl->release();
         return nullptr;
     }
 
-    // handle non-${shader} paths
-    if( !file_reader_impl->open( path.c_str())) {
-        file_reader_impl->release();
-        return nullptr;
-    }
+    return create_reader( path);
+}
 
-    return file_reader_impl;
+mi::neuraylib::IReader* Impexp_utilities::create_reader( const char* data, mi::Size length)
+{
+    const mi::Uint8* d = reinterpret_cast<const mi::Uint8*>( data);
+    mi::base::Handle<mi::neuraylib::IBuffer> buffer( new Buffer_wrapper( d, length));
+    return new DISK::Memory_reader_impl( buffer.get());
+}
+
+mi::neuraylib::IWriter* Impexp_utilities::create_writer( const std::string& path)
+{
+    std::unique_ptr<DISK::File_writer_impl> file_writer_impl( new DISK::File_writer_impl());
+    if( !file_writer_impl->open( path.c_str()))
+        return nullptr;
+
+    return file_writer_impl.release();
 }
 
 mi::neuraylib::IWriter* Impexp_utilities::create_writer(
@@ -212,13 +223,7 @@ mi::neuraylib::IWriter* Impexp_utilities::create_writer(
     if( path.empty())
         return nullptr;
 
-    DISK::File_writer_impl* file_writer_impl = new DISK::File_writer_impl();
-    if( !file_writer_impl->open( path.c_str())) {
-        file_writer_impl->release();
-        return nullptr;
-    }
-
-    return file_writer_impl;
+    return create_writer( path);
 }
 
 mi::neuraylib::IImport_result_ext* Impexp_utilities::create_import_result_ext(

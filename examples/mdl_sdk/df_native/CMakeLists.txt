@@ -70,7 +70,7 @@ target_add_content(TARGET ${PROJECT_NAME}
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
 # -------------------------------------------------------------------------------------------------
-# Create installion rules to copy the build directory
+# Create installation rules to copy the build directory
 # -------------------------------------------------------------------------------------------------
 add_target_install(
     TARGET ${PROJECT_NAME}

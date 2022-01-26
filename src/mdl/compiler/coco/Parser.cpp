@@ -208,24 +208,24 @@ void Parser::Coco() {
 		tab->noSym = tab->NewSym(Node::t, L"???", 0); // noSym gets highest number
 		tab->SetupAnys();
 		tab->RenumberPragmas();
-		if (tab->ddt[2]) tab->PrintNodes();
+		if (tab->ddt[Tab::DDT_PRINT_SYNTAX_GRAPH]) tab->PrintNodes();
 		if (errors->count == 0) {
 		 wprintf(L"checking\n");
 		 tab->CompSymbolSets();
-		 if (tab->ddt[7]) tab->XRef();
+		 if (tab->ddt[Tab::DDT_LIST_XREF_TABLE]) tab->XRef();
 		 if (tab->GrammarOk()) {
 		   wprintf(L"parser");
 		   pgen->WriteParser();
 		   if (genScanner) {
 		     wprintf(L" + scanner");
 		     dfa->WriteScanner();
-		     if (tab->ddt[0]) dfa->PrintStates();
+		     if (tab->ddt[Tab::DDT_TRACE_AUTOMATON]) dfa->PrintStates();
 		   }
 		   wprintf(L" generated\n");
-		   if (tab->ddt[8]) pgen->WriteStatistics();
+		   if (tab->ddt[Tab::DDP_PRINT_STATS]) pgen->WriteStatistics();
 		 }
 		}
-		if (tab->ddt[6]) tab->PrintSymbolTable();
+		if (tab->ddt[Tab::DDT_LIST_SYMBOL_TABLE]) tab->PrintSymbolTable();
 		
 		Expect(18 /* "." */);
 }

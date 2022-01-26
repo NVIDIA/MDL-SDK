@@ -1,3 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:ital,wght@0,400;0,600;1,400&display=swap');
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro:ital@0;1&display=swap');
+
+:root {
+    --serif: 'Libre Baskerville', serif;
+    --sans-serif: 'Source Sans Pro', sans-serif;
+    --monospace: 'Source Code Pro', monospace;
+}
+
 * { padding: 0; margin: 0; border: 0; }
 html { margin: 4%; background-color: black; }
 .draftstatus { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; font-weight:bold; padding: .5em 1em; margin:.5em 0; font-size: 16px; color:white; background-color: darkred; }
@@ -59,7 +71,7 @@ h1+p, h2+p, h3+p, h4+p, h5+p { margin-top: .5em; }
 #content > h1 { margin-top: 1em; }
 .totop { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; float:right; font-weight:normal; font-style: italic; font-size: 1.25rem; }
 .h4style { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; font-size: 1.25em; }
-.level_link { line-height: 1.5; }
+.level_link { line-height: 1.3; }
 p { margin: 0; padding: 0; margin-top: .75em; margin-bottom: .75em; }
 dd p { margin: .5em 0; }
 .prolog { border: solid black 1px; padding: 20px; clear: both; margin: 30px 0px; }
@@ -136,24 +148,26 @@ td.rotate > div > span { }
 .simpletable { border: 0px; padding: 0px; }
 .simpletable tr td { padding: 0px; padding-right: 8px; line-height: 1.3; }
 .textdown { text-orientation: mixed; writing-mode: vertical-rl; }
-html, body { font-family: 'Libre Baskerville', serif; line-height: 1.5; }
+html, body { font-family: var(--serif); line-height: 1.5; }
 ol, ul { line-height: 1.5; }
+.serif { font-family: var(--serif); font-style: normal; }
 .italic { font-style: italic; }
-.ritalic { font-family: 'Libre Baskerville', serif; font-style: italic; }
+.ritalic { font-family: var(--serif); font-style: italic; }
 .bold { font-weight: bold; }
-.sansserif { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: normal; }
-.sansserifbody { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: normal; }
-.sansserifitalic { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: normal; font-style: italic; }
-.sansserifbold { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; }
-.menuitem { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: normal; font-size: 115%; }
+.sansserif { font-family: var(--sans-serif); font-weight: normal; }
+.sansserifbody { font-family: var(--sans-serif); font-weight: normal; }
+.sansserifitalic { font-family: var(--sans-serif); font-weight: normal; font-style: italic; }
+.sansserifbold { font-family: var(--sans-serif); font-weight: bold; }
+.menuitem { font-family: var(--sans-serif); font-weight: normal; font-size: 115%; }
 .small { font-size: smaller; }
-tt, pre, .monospace { font-family: 'Source Code Pro', monospace; }
-.monospace { font-family: 'Source Code Pro', monospace; font-weight: normal; font-style: normal; }
-.regularfont { font-style: normal; }
-.regularmono { font-style: normal; font-family: 'Source Code Pro', monospace; }
-.s1font { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; font-size: 1.5em; }
-.s2font { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; font-size: 1.35em; }
-.s3font { font-family: 'Source Sans Pro', sans-serif; font-size: 112%; font-weight: bold; font-size: 1.2em; }
+tt, pre, .monospace { font-family: var(--monospace); }
+.monospace { font-family: var(--monospace); font-weight: normal; font-style: normal; }
+.regularfont { font-family: var(--serif); font-style: normal; }
+.regularmono { font-style: normal; font-family: var(--monospace); }
+.s1font { font-family: var(--sans-serif); font-weight: bold; font-size: 1.5em; }
+.s2font { font-family: var(--sans-serif); font-weight: bold; font-size: 1.35em; }
+.s3font { font-family: var(--sans-serif); font-weight: bold; font-size: 1.2em; }
+.s4font { font-family: var(--sans-serif); font-weight: bold; font-size: 1.1em; }
 .nopad, img { padding: 0; margin: 0; }
 .rimg-outline { border: solid 1px black; }
 .rimg-box { margin: 1em 0 0.5em 0; line-height: 0; }
@@ -212,7 +226,7 @@ html { margin: 0px; box-sizing: border-box; }
 #navigation li.closed { cursor: pointer; }
 #navigation li.open { cursor: pointer; }
 #navigation span.navlink { cursor: pointer; padding: 0 .2em; }
-.navlink:hover, #search_label:hover, #search_clear:hover, #help:hover, #go_back:hover, #go_forward:hover, #navshow:hover, #navfit:hover, .depthchoice:hover, #next:hover, #last:hover, #linkshow:hover, #focus:hover { text-decoration: underline; color: rgb(10%,20%,50%); }
+.navlink:hover, #search_label:hover, #search_back_label:hover, #search_clear:hover, #help:hover, #go_back:hover, #go_forward:hover, #navshow:hover, #navfit:hover, .depthchoice:hover, #next:hover, #last:hover, #linkshow:hover, #focus:hover { text-decoration: underline; color: rgb(10%,20%,50%); }
 .navlink { border: solid 1px white; }
 .highlight { background-color: rgb(237,240,237); border: solid 1px rgb(180, 190, 180); }
 .highlight_parent { background-color: rgb(240,244,240); border: solid 1px rgb(240,244,240); }
@@ -238,8 +252,8 @@ div.docheader { padding-bottom: 0; }
 #toctitle { margin: 0; font-size: 1.1em; padding: .5em 0em .25em .5em; }
 #navcontrol { overflow: hidden; padding: .35em 1em; vertical-align: middle; background-color: rgb(220,225,220); border-width: 0 0 1px 0; border-style: solid; border-collapse: collapse; }
 #navshow, #navfit { padding:0; margin:0; cursor: default; }
-#search_label, #go_back, #go_forward, #navshow, #navfit, .depthchoice, #next, #last, #linkshow, #focus, #help, #search_clear { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; padding: 0 .25em 0 .25em; cursor: default; vertical-align: middle; font-size: 1em; }
-#search_clear, #search_label, #help { vertical-align: inherit; padding: inherit; }
+#search_label, #search_back_label, #go_back, #go_forward, #navshow, #navfit, .depthchoice, #next, #last, #linkshow, #focus, #help, #search_clear { font-family: 'Source Sans Pro', sans-serif; font-size: 112%;; padding: 0 .25em 0 .25em; cursor: default; vertical-align: middle; font-size: 1em; }
+#search_clear, #search_label, #search_back_label, #help { vertical-align: inherit; padding: inherit; }
 #help { padding-right: .3em; }
 #go_back { padding-left: 2em; }
 #foldersearch { padding: 0; margin: 0; float: right; }
@@ -254,7 +268,7 @@ div.docheader { padding-bottom: 0; }
 .panelink { color: rgb(10%,20%,50%); cursor: default; }
 .pagelink:hover, .panelink:hover { text-decoration: underline; color: rgb(10%,20%,50%); }
 #help { width: 2.5em; padding-left: 1em; }
-#search_label { padding-right: .1em; }
+#search_label, #search_back_label { padding-right: .1em; }
 #bottomspacer { height: 100vh; }
 .mono { font-family: Courier,monospace; }
 #folder content { border-width: 0 0 0 1px; border-style: solid; border-collapse: collapse; }
@@ -263,6 +277,11 @@ body > #content { border: 0; }
 #logos img { padding-left: .1em; }
 .ui-resizable-e { cursor: e-resize; width: 7px; right: -5px; top: 0; height: 100%; }
 .ui-resizable-handle { position: absolute; font-size: 0.1px; display: block; -ms-touch-action: none; touch-action: none; }
+.srch { border: 0px; padding: 0px; margin: 0px; font-size: 1em; }
+#search_input { line-height: 20px !important; background-color: #FFF; border: 1px; border-style: solid; border-collapse: collapse; font-size: 90%; }
+#search_clear_input { padding: 0 3px; vertical-align: middle; cursor: default; line-height: 20px !important; border: 0px; width: 20px; }
+#search_clear_input_blank { padding: 0 3px; vertical-align: middle; cursor: default; line-height: 20px !important; border: 0px; width: 20px; }
+#search_box { }
 
 .codeblock {
     display: inline-block;

@@ -55,44 +55,61 @@ namespace MI {
 
 namespace NEURAY {
 
-class Reader_image_set : public DBIMAGE::Image_set
+// Base class for Reader_image_set and Canvas_image_set
+class Base_image_set : public DBIMAGE::Image_set
 {
 public:
 
-    Reader_image_set( mi::IArray* readers, const char* image_format)
-      : m_readers( readers), m_image_format( image_format)
+    Base_image_set( const mi::IArray* array)
+      : m_array( mi::base::make_handle_dup( array))
     {
-        ASSERT( M_NEURAY_API, readers && readers->get_length() > 0);
+        mi::Size n = array->get_length();
+        ASSERT( M_NEURAY_API, n > 0);
+
+        // Collect all frame numbers
+        for( mi::Size i = 0; i < n; ++i) {
+            mi::base::Handle<const mi::IStructure> uvtile(
+                m_array->get_value<const mi::IStructure>( i));
+            mi::base::Handle<const mi::ISize> frame(
+                uvtile->get_value<mi::ISize>( "frame"));
+            mi::Size frame_number = frame->get_value<mi::Size>();
+            m_frame_number_to_frame_index[frame_number] = 0;
+        }
+
+        // Assign frame indices
+        mi::Size id = 0;
+        mi::Size n_frames = m_frame_number_to_frame_index.size();
+        m_frame_index_to_frame_number.resize( n_frames);
+        for( auto& elem: m_frame_number_to_frame_index) {
+            m_frame_index_to_frame_number[id] = elem.first;
+            elem.second = id++;
+        }
+
+        // Collect global indices per frame index
+        m_global_indices_per_frame_index.resize( n_frames);
+        for( mi::Size i = 0; i < n; ++i) {
+            mi::base::Handle<const mi::IStructure> uvtile(
+                m_array->get_value<const mi::IStructure>( i));
+            mi::base::Handle<const mi::ISize> frame(
+                uvtile->get_value<mi::ISize>( "frame"));
+            mi::Size frame_number = frame->get_value<mi::Size>();
+            mi::Size frame_id = m_frame_number_to_frame_index.at( frame_number);
+            m_global_indices_per_frame_index[frame_id].push_back( i);
+        }
+
+        // Flag for animated textures
+        m_is_animated = n_frames > 1;
+
+        // Flag for uvtiles
+        m_is_uvtile = false;
+        for( const auto& elem: m_global_indices_per_frame_index)
+            if( elem.size() > 1) {
+                m_is_uvtile = true;
+                break;
+            }
     }
-
-    mi::Size get_length() const { return m_readers->get_length(); }
-
-    bool is_uvtile() const { return get_length() > 1; }
 
     bool is_mdl_container() const { return false; }
-
-    void get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
-    {
-        ASSERT( M_SCENE, i <= get_length());
-
-        u = 0;
-        v = 0;
-
-        mi::base::Handle<const mi::IStructure> uvtile( m_readers->get_value<const mi::IStructure>( i));
-        if( !uvtile)
-            return;
-
-        mi::base::Handle< const mi::ISint32> iu( uvtile->get_value<mi::ISint32>( "u"));
-        if( !iu)
-            return;
-
-        mi::base::Handle< const mi::ISint32> iv( uvtile->get_value<mi::ISint32>( "v"));
-        if( !iv)
-            return;
-
-        iu->get_value( u);
-        iv->get_value( v);
-    }
 
     const char* get_original_filename() const { return ""; }
 
@@ -100,20 +117,97 @@ public:
 
     const char* get_mdl_file_path() const { return ""; }
 
-    const char* get_resolved_filename( mi::Size i) const { return ""; }
+    const char* get_selector() const { return nullptr; }
 
-    const char* get_container_membername( mi::Size i) const { return ""; }
+    const char* get_image_format() const { return ""; }
 
-    mi::neuraylib::IReader* open_reader( mi::Size i) const
+    bool is_animated() const { return m_is_animated; }
+
+    bool is_uvtile() const { return m_is_uvtile; }
+
+    mi::Size get_length() const { return m_frame_index_to_frame_number.size(); }
+
+    mi::Size get_frame_number( mi::Size f) const
     {
-        ASSERT( M_SCENE, i <= get_length());
+        ASSERT( M_NEURAY_API, f < get_length());
+        return m_frame_index_to_frame_number[f];
+    }
 
-        mi::base::Handle< mi::IStructure> uvtile( m_readers->get_value< mi::IStructure>( i));
-        if( !uvtile)
-            return nullptr;
+    mi::Size get_frame_length( mi::Size f) const
+    {
+        ASSERT( M_NEURAY_API, f < get_length());
+        return m_global_indices_per_frame_index[f].size();
+    }
 
-        mi::base::Handle< mi::neuraylib::IReader> reader(
-            uvtile->get_value< mi::neuraylib::IReader>( "reader"));
+    void get_uvtile_uv( mi::Size f, mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
+    {
+        mi::Size index = get_global_index( f, i);
+        mi::base::Handle<const mi::IStructure> uvtile(
+            m_array->get_value<const mi::IStructure>( index));
+        mi::base::Handle<const mi::ISint32> iu( uvtile->get_value<mi::ISint32>( "u"));
+        mi::base::Handle<const mi::ISint32> iv( uvtile->get_value<mi::ISint32>( "v"));
+        u = iu->get_value<mi::Sint32>();
+        v = iv->get_value<mi::Sint32>();
+    }
+
+    const char* get_resolved_filename( mi::Size f, mi::Size i) const { return ""; }
+
+    const char* get_container_membername( mi::Size f, mi::Size i) const { return ""; }
+
+    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const { return nullptr; }
+
+    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const { return nullptr; }
+
+protected:
+
+    mi::Size get_global_index( mi::Size f, mi::Size i) const
+    {
+        ASSERT( M_NEURAY_API, f < get_length());
+        const std::vector<mi::Size>& element = m_global_indices_per_frame_index[f];
+        ASSERT( M_NEURAY_API, i < element.size());
+        ASSERT( M_NEURAY_API, element[i] < m_array->get_length());
+        return element[i];
+    }
+
+private:
+
+    mi::base::Handle<const mi::IArray> m_array;
+
+    /// Maps frame numbers to frame indices.
+    std::map<mi::Size, mi::Size> m_frame_number_to_frame_index;
+    /// Maps frame index to frame number.
+    std::vector<mi::Size> m_frame_index_to_frame_number;
+    /// Stores global indices into m_array per frame index.
+    std::vector<std::vector<mi::Size>> m_global_indices_per_frame_index;
+    /// Indicates whether this is an animated texture.
+    bool m_is_animated;
+    /// Indicates whether any frame has uvtiles.
+    bool m_is_uvtile;
+};
+
+// Adapts array of "Uvtile_reader" structs to DBIMAGE::Image_set.
+class Reader_image_set : public Base_image_set
+{
+public:
+
+    Reader_image_set( mi::IArray* array, const char* image_format, const char* selector)
+      : Base_image_set( array),
+        m_readers( mi::base::make_handle_dup( array)),
+        m_image_format( image_format),
+        m_selector( selector ? selector : "")
+    { }
+
+    const char* get_selector() const { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
+
+    const char* get_image_format() const { return m_image_format.c_str(); }
+
+    mi::neuraylib::IReader* open_reader( mi::Size f, mi::Size i) const
+    {
+        mi::Size index = get_global_index( f, i);
+        mi::base::Handle<mi::IStructure> uvtile(
+            m_readers->get_value<mi::IStructure>( index));
+        mi::base::Handle<mi::neuraylib::IReader> reader(
+            uvtile->get_value<mi::neuraylib::IReader>( "reader"));
         if( !reader)
             return nullptr;
 
@@ -121,87 +215,39 @@ public:
         return reader.get();
     }
 
-    mi::neuraylib::ICanvas* get_canvas( mi::Size i) const { return nullptr; }
-
-    const char* get_image_format() const { return m_image_format.c_str(); }
-
 private:
 
     mi::base::Handle<mi::IArray> m_readers;
     std::string m_image_format;
+    std::string m_selector;
 };
 
-class Canvas_image_set : public DBIMAGE::Image_set
+// Adapts array of "Uvtile" structs to DBIMAGE::Image_set.
+class Canvas_image_set : public Base_image_set
 {
 public:
 
     Canvas_image_set( mi::IArray* canvases)
-      : m_mutable_canvases( mi::base::make_handle_dup( canvases)),
+      : Base_image_set( canvases),
+        m_mutable_canvases( mi::base::make_handle_dup( canvases)),
         m_const_canvases( mi::base::make_handle_dup( canvases))
-    {
-        ASSERT( M_NEURAY_API, canvases && canvases->get_length() > 0);
-    }
+    { }
 
     Canvas_image_set( const mi::IArray* canvases)
-      : m_const_canvases( mi::base::make_handle_dup( canvases))
+      : Base_image_set( canvases),
+        m_mutable_canvases( {}),
+        m_const_canvases( mi::base::make_handle_dup( canvases))
+    { }
+
+    mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const
     {
-        ASSERT( M_NEURAY_API, canvases && canvases->get_length() > 0);
-    }
-
-    mi::Size get_length() const { return m_const_canvases->get_length(); }
-
-    bool is_uvtile() const { return get_length() > 1; }
-
-    bool is_mdl_container() const { return false; }
-
-    void get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const
-    {
-        ASSERT( M_SCENE, i <= get_length());
-
-        u = 0;
-        v = 0;
-
-        mi::base::Handle<const mi::IStructure> uvtile( m_const_canvases->get_value<const mi::IStructure>( i));
-        if( !uvtile)
-            return;
-
-        mi::base::Handle< const mi::ISint32> iu( uvtile->get_value<mi::ISint32>( "u"));
-        if( !iu)
-            return;
-
-        mi::base::Handle< const mi::ISint32> iv( uvtile->get_value<mi::ISint32>( "v"));
-        if( !iv)
-            return;
-
-        iu->get_value( u);
-        iv->get_value( v);
-    }
-
-    const char* get_original_filename() const { return ""; }
-
-    const char* get_container_filename() const { return ""; }
-
-    const char* get_mdl_file_path() const { return ""; }
-
-    const char* get_resolved_filename( mi::Size i) const { return ""; }
-
-    const char* get_container_membername( mi::Size i) const { return ""; }
-
-    mi::neuraylib::IReader* open_reader( mi::Size i) const { return nullptr; }
-
-    mi::neuraylib::ICanvas* get_canvas( mi::Size i) const
-    {
-        ASSERT( M_SCENE, i <= get_length());
-
         if( !m_mutable_canvases) {
 
-            mi::base::Handle< const mi::IStructure> uvtile(
-                m_const_canvases->get_value< const mi::IStructure>( i));
-            if( !uvtile)
-                return nullptr;
-
-            mi::base::Handle< const mi::neuraylib::ICanvas> canvas(
-                uvtile->get_value< const mi::neuraylib::ICanvas>( "canvas"));
+            mi::Size index = get_global_index( f, i);
+            mi::base::Handle<const mi::IStructure> uvtile(
+                m_const_canvases->get_value<const mi::IStructure>( index));
+            mi::base::Handle<const mi::neuraylib::ICanvas> canvas(
+                uvtile->get_value<const mi::neuraylib::ICanvas>( "canvas"));
             if( !canvas)
                 return nullptr;
 
@@ -212,12 +258,11 @@ public:
             return image_module->copy_canvas( canvas.get());
         }
 
-        mi::base::Handle< mi::IStructure> uvtile( m_mutable_canvases->get_value< mi::IStructure>( i));
-        if( !uvtile)
-            return nullptr;
-
-        mi::base::Handle< mi::neuraylib::ICanvas> canvas(
-            uvtile->get_value< mi::neuraylib::ICanvas>( "canvas"));
+        mi::Size index = get_global_index( f, i);
+        mi::base::Handle<mi::IStructure> uvtile(
+            m_mutable_canvases->get_value<mi::IStructure>( index));
+        mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+            uvtile->get_value<mi::neuraylib::ICanvas>( "canvas"));
         if( !canvas)
             return nullptr;
 
@@ -227,8 +272,6 @@ public:
         canvas->retain();
         return canvas.get();
     }
-
-    const char* get_image_format() const { return ""; }
 
 private:
 
@@ -265,59 +308,59 @@ mi::neuraylib::Element_type Image_impl::get_element_type() const
     return mi::neuraylib::ELEMENT_TYPE_IMAGE;
 }
 
-mi::Sint32 Image_impl::reset_file( const char* filename)
+mi::Sint32 Image_impl::reset_file( const char* filename, const char* selector)
 {
     if( !filename)
         return -1;
 
     mi::base::Uuid impl_hash{0,0,0,0};
-    mi::Sint32 result = get_db_element()->reset_file( get_db_transaction(), filename, impl_hash);
+    mi::Sint32 result = get_db_element()->reset_file(
+        get_db_transaction(), filename, selector, impl_hash);
     if( result == 0)
         add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return result;
 }
 
-mi::Sint32 Image_impl::reset_reader( mi::neuraylib::IReader* reader, const char* image_format)
+mi::Sint32 Image_impl::reset_reader(
+    mi::neuraylib::IReader* reader, const char* image_format, const char* selector)
 {
     if( !reader || !image_format)
         return -1;
 
     mi::base::Uuid impl_hash{0,0,0,0};
-    mi::Sint32 result
-        = get_db_element()->reset_reader( get_db_transaction(), reader, image_format, impl_hash);
+    mi::Sint32 result = get_db_element()->reset_reader(
+        get_db_transaction(), reader, image_format, selector, impl_hash);
     if( result == 0)
         add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return result;
 }
 
-mi::Sint32 Image_impl::reset_reader( mi::IArray* reader_array, const char* image_format)
+mi::Sint32 Image_impl::reset_reader(
+    mi::IArray* reader_array, const char* image_format, const char* selector)
 {
-    if( !reader_array || !image_format || reader_array->get_length() == 0)
+    if( !reader_array || !image_format)
         return -1;
 
-    Reader_image_set reader_set( reader_array, image_format);
+    mi::Size n = reader_array->get_length();
+    if( n == 0)
+        return false;
+
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle<const mi::IStructure> uvtile(
+            reader_array->get_value<const mi::IStructure>( i));
+        if( !uvtile)
+            return false;
+        if( strcmp( uvtile->get_type_name(), "Uvtile_reader") != 0)
+            return false;
+    }
+
+    Reader_image_set reader_set( reader_array, image_format, selector);
     mi::base::Uuid impl_hash{0,0,0,0};
     if( get_db_element()->reset_image_set( get_db_transaction(), &reader_set, impl_hash) < 0)
         return -3;
 
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return 0;
-}
-
-const char* Image_impl::get_filename( mi::Uint32 uvtile_id) const
-{
-    const DBIMAGE::Image *image = get_db_element();
-    const std::string& filename = image->is_file_based()
-        ? image->get_filename( uvtile_id)
-        : image->get_resolved_container_membername( uvtile_id);
-
-    return filename.empty() ? nullptr : filename.c_str();
-}
-
-const char* Image_impl::get_original_filename() const
-{
-    const std::string& filename = get_db_element()->get_original_filename();
-    return filename.empty() ? nullptr : filename.c_str();
 }
 
 bool Image_impl::set_from_canvas( const mi::neuraylib::ICanvas* canvas)
@@ -327,10 +370,10 @@ bool Image_impl::set_from_canvas( const mi::neuraylib::ICanvas* canvas)
     if ( IMAGE::convert_pixel_type_string_to_enum( canvas->get_type()) == IMAGE::PT_UNDEF)
         return false;
 
-    SYSTEM::Access_module<IMAGE::Image_module> m_image_module( false);
+    SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
     std::vector<mi::base::Handle<mi::neuraylib::ICanvas> > canvases( 1);
-    canvases[0] = m_image_module->copy_canvas( canvas);
-    mi::base::Handle<IMAGE::IMipmap> mipmap( m_image_module->create_mipmap( canvases));
+    canvases[0] = image_module->copy_canvas( canvas);
+    mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap( canvases));
     mi::base::Uuid impl_hash{0,0,0,0};
     get_db_element()->set_mipmap( get_db_transaction(), mipmap.get(), impl_hash);
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
@@ -347,10 +390,10 @@ bool Image_impl::set_from_canvas( mi::neuraylib::ICanvas* canvas, bool shared)
     if ( IMAGE::convert_pixel_type_string_to_enum( canvas->get_type()) == IMAGE::PT_UNDEF)
         return false;
 
-    SYSTEM::Access_module<IMAGE::Image_module> m_image_module( false);
+    SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
     std::vector<mi::base::Handle<mi::neuraylib::ICanvas> > canvases( 1);
     canvases[0] = make_handle_dup( canvas);
-    mi::base::Handle<IMAGE::IMipmap> mipmap( m_image_module->create_mipmap( canvases));
+    mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap( canvases));
     mi::base::Uuid impl_hash{0,0,0,0};
     get_db_element()->set_mipmap( get_db_transaction(), mipmap.get(), impl_hash);
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
@@ -359,8 +402,21 @@ bool Image_impl::set_from_canvas( mi::neuraylib::ICanvas* canvas, bool shared)
 
 bool Image_impl::set_from_canvas( const mi::IArray* canvas_array)
 {
-    if( !canvas_array || canvas_array->get_length() == 0)
+    if( !canvas_array)
         return false;
+
+    mi::Size n = canvas_array->get_length();
+    if( n == 0)
+        return false;
+
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle<const mi::IStructure> uvtile(
+            canvas_array->get_value<const mi::IStructure>( i));
+        if( !uvtile)
+            return false;
+        if( strcmp( uvtile->get_type_name(), "Uvtile") != 0)
+            return false;
+    }
 
     Canvas_image_set canvas_set( canvas_array);
     mi::base::Uuid impl_hash{0,0,0,0};
@@ -373,11 +429,24 @@ bool Image_impl::set_from_canvas( const mi::IArray* canvas_array)
 
 bool Image_impl::set_from_canvas( mi::IArray* canvas_array, bool shared)
 {
+    if( !shared)
+        return set_from_canvas( canvas_array);
+
     if( !canvas_array)
         return false;
 
-    if( !shared)
-        return set_from_canvas( canvas_array);
+    mi::Size n = canvas_array->get_length();
+    if( n == 0)
+        return false;
+
+    for( mi::Size i = 0; i < n; ++i) {
+        mi::base::Handle<const mi::IStructure> uvtile(
+            canvas_array->get_value<const mi::IStructure>( i));
+        if( !uvtile)
+            return false;
+        if( strcmp( uvtile->get_type_name(), "Uvtile") != 0)
+            return false;
+    }
 
     Canvas_image_set canvas_set( canvas_array);
     mi::base::Uuid impl_hash{0,0,0,0};
@@ -388,63 +457,24 @@ bool Image_impl::set_from_canvas( mi::IArray* canvas_array, bool shared)
     return true;
 }
 
-const mi::neuraylib::ICanvas* Image_impl::get_canvas(
-    mi::Uint32 level, mi::Uint32 uvtile_id) const
+bool Image_impl::is_animated() const
 {
-    mi::base::Handle<const IMAGE::IMipmap> mipmap(
-        get_db_element()->get_mipmap( get_db_transaction(), uvtile_id));
-    if( !mipmap)
-        return nullptr;
-    return mipmap->get_level( level);
+    return get_db_element()->is_animated();
 }
 
-const char* Image_impl::get_type( mi::Uint32 uvtile_id) const
+mi::Size Image_impl::get_length() const
 {
-    mi::base::Handle<const IMAGE::IMipmap> mipmap(
-        get_db_element()->get_mipmap( get_db_transaction(), uvtile_id));
-    if( !mipmap)
-        return nullptr;
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    return canvas->get_type();
+    return get_db_element()->get_length();
 }
 
-mi::Uint32 Image_impl::get_levels( mi::Uint32 uvtile_id) const
+mi::Size Image_impl::get_frame_number( mi::Size frame_id) const
 {
-    mi::base::Handle<const IMAGE::IMipmap> mipmap(
-        get_db_element()->get_mipmap( get_db_transaction(), uvtile_id));
-    if( !mipmap)
-        return ~0;
-    return mipmap->get_nlevels();
+    return get_db_element()->get_frame_number( frame_id);
 }
 
-mi::Uint32 Image_impl::resolution_x( Uint32 level, mi::Uint32 uvtile_id) const
+mi::Size Image_impl::get_frame_id( mi::Size frame_number) const
 {
-    mi::base::Handle<const IMAGE::IMipmap> mipmap(
-        get_db_element()->get_mipmap( get_db_transaction(), uvtile_id));
-    if( !mipmap)
-        return ~0;
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    return canvas->get_resolution_x();
-}
-
-mi::Uint32 Image_impl::resolution_y( Uint32 level, mi::Uint32 uvtile_id) const
-{
-    mi::base::Handle<const IMAGE::IMipmap> mipmap(
-        get_db_element()->get_mipmap( get_db_transaction(), uvtile_id));
-    if( !mipmap)
-        return ~0;
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    return canvas->get_resolution_y();
-}
-
-mi::Uint32 Image_impl::resolution_z( Uint32 level, mi::Uint32 uvtile_id) const
-{
-    mi::base::Handle<const IMAGE::IMipmap> mipmap(
-        get_db_element()->get_mipmap( get_db_transaction(), uvtile_id));
-    if( !mipmap)
-        return ~0;
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    return canvas->get_layers_size();
+    return get_db_element()->get_frame_id( frame_number);
 }
 
 bool Image_impl::is_uvtile() const
@@ -452,25 +482,114 @@ bool Image_impl::is_uvtile() const
     return get_db_element()->is_uvtile();
 }
 
+mi::Size Image_impl::get_frame_length( mi::Size frame_id) const
+{
+    return get_db_element()->get_frame_length( frame_id);
+}
+
+mi::Sint32 Image_impl::get_uvtile_uv(
+    mi::Size frame_id, Size uvtile_id, Sint32& u, Sint32& v) const
+{
+    return get_db_element()->get_uvtile_uv( frame_id, uvtile_id, u, v);
+}
+
+mi::Size Image_impl::get_uvtile_id(  mi::Size frame_id, Sint32 u, Sint32 v) const
+{
+    return get_db_element()->get_uvtile_id( frame_id, u, v);
+}
+
 void Image_impl::get_uvtile_uv_ranges(
-    mi::Sint32& min_u, mi::Sint32& min_v, mi::Sint32& max_u, mi::Sint32& max_v) const
+    mi::Size frame_id,
+    mi::Sint32& min_u,
+    mi::Sint32& min_v,
+    mi::Sint32& max_u,
+    mi::Sint32& max_v) const
 {
-    get_db_element()->get_uvtile_uv_ranges( min_u, min_v, max_u, max_v);
+    get_db_element()->get_uvtile_uv_ranges( frame_id, min_u, min_v, max_u, max_v);
 }
 
-mi::Size Image_impl::get_uvtile_length() const
+const char* Image_impl::get_original_filename() const
 {
-    return get_db_element()->get_uvtile_length();
+    const std::string& filename = get_db_element()->get_original_filename();
+    return filename.empty() ? nullptr : filename.c_str();
 }
 
-mi::Sint32 Image_impl::get_uvtile_uv( Uint32 uvtile_id, Sint32& u, Sint32& v) const
+const char* Image_impl::get_selector() const
 {
-    return get_db_element()->get_uvtile_uv( uvtile_id, u, v);
+    m_cached_selector = get_db_element()->get_selector();
+    return !m_cached_selector.empty() ? m_cached_selector.c_str() : nullptr;
 }
 
-mi::Uint32 Image_impl::get_uvtile_id( Sint32 u, Sint32 v) const
+const char* Image_impl::get_filename( mi::Size frame_id, mi::Size uvtile_id) const
 {
-    return get_db_element()->get_uvtile_id( u, v);
+    const DBIMAGE::Image *image = get_db_element();
+    const std::string& filename = image->is_file_based()
+        ? image->get_filename( frame_id, uvtile_id)
+        : image->get_resolved_container_membername( frame_id, uvtile_id);
+
+    return filename.empty() ? nullptr : filename.c_str();
+}
+
+const mi::neuraylib::ICanvas* Image_impl::get_canvas(
+    mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const
+{
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        get_db_element()->get_mipmap( get_db_transaction(), frame_id, uvtile_id));
+    if( !mipmap)
+        return nullptr;
+    return mipmap->get_level( level);
+}
+
+const char* Image_impl::get_type( mi::Size frame_id, mi::Size uvtile_id) const
+{
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        get_db_element()->get_mipmap( get_db_transaction(), frame_id, uvtile_id));
+    if( !mipmap)
+        return nullptr;
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
+    return canvas->get_type();
+}
+
+mi::Uint32 Image_impl::get_levels( mi::Size frame_id, mi::Size uvtile_id) const
+{
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        get_db_element()->get_mipmap( get_db_transaction(), frame_id, uvtile_id));
+    if( !mipmap)
+        return ~0;
+    return mipmap->get_nlevels();
+}
+
+mi::Uint32 Image_impl::resolution_x(
+    mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const
+{
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        get_db_element()->get_mipmap( get_db_transaction(), frame_id, uvtile_id));
+    if( !mipmap)
+        return ~0;
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( level));
+    return canvas->get_resolution_x();
+}
+
+mi::Uint32 Image_impl::resolution_y(
+    mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const
+{
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        get_db_element()->get_mipmap( get_db_transaction(), frame_id, uvtile_id));
+    if( !mipmap)
+        return ~0;
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( level));
+    return canvas->get_resolution_y();
+}
+
+mi::Uint32 Image_impl::resolution_z(
+    mi::Size frame_id, mi::Size uvtile_id, mi::Uint32 level) const
+{
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        get_db_element()->get_mipmap( get_db_transaction(), frame_id, uvtile_id));
+    if( !mipmap)
+        return ~0;
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( level));
+    return canvas->get_layers_size();
 }
 
 } // namespace NEURAY

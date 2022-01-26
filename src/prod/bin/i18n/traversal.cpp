@@ -40,7 +40,7 @@ using mi::neuraylib::IAnnotation_block;
 using mi::neuraylib::IExpression_list;
 using mi::neuraylib::IExpression;
 using mi::neuraylib::IFunction_definition;
-using mi::neuraylib::IMaterial_definition;
+using mi::neuraylib::IFunction_definition;
 using mi::neuraylib::IValue_string;
 using mi::neuraylib::IValue;
 using mi::neuraylib::IExpression_constant;
@@ -167,7 +167,7 @@ void Annotation_traversal::handle_function_definition(const IFunction_definition
     }
 }
 
-void Annotation_traversal::handle_material_definition(const IMaterial_definition* o)
+void Annotation_traversal::handle_material_definition(const IFunction_definition* o)
 {
     if (m_context)
     {
@@ -309,8 +309,8 @@ void Annotation_traversal::handle_module(const IModule* module)
         const char * name(module->get_material(i));
         if (name)
         {
-            mi::base::Handle<const IMaterial_definition> o(
-                m_transaction->access<IMaterial_definition>(name));
+            mi::base::Handle<const IFunction_definition> o(
+                m_transaction->access<IFunction_definition>(name));
             check_success(o);
             handle_material_definition(o.get());
         }

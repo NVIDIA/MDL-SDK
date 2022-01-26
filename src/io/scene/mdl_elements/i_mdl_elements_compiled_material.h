@@ -33,15 +33,17 @@
 
 #include <mi/base/handle.h>
 #include <mi/base/uuid.h>
+#include <mi/mdl/mdl_generated_dag.h>
+#include <mi/neuraylib/icompiled_material.h>
+
 #include <base/data/db/i_db_tag.h>
 #include <base/data/db/i_db_transaction.h>
-#include <mi/mdl/mdl_generated_dag.h>
 
 #include <string>
 #include <set>
 
 #include "i_mdl_elements_expression.h"
-#include "i_mdl_elements_resource_map.h"
+#include "i_mdl_elements_resource_tag_tuple.h"
 #include "i_mdl_elements_module.h"
 
 namespace mi { namespace mdl { class IGenerated_code_lambda_function; } }
@@ -118,17 +120,17 @@ public:
 
     mi::Size get_referenced_scene_data_count() const;
 
-    char const *get_referenced_scene_data_name( mi::Size index) const;
+    const char* get_referenced_scene_data_name( mi::Size index) const;
 
     mi::Size get_parameter_count() const;
 
-    char const* get_parameter_name( mi::Size index) const;
+    const char* get_parameter_name( mi::Size index) const;
 
     const IValue* get_argument( mi::Size index) const;
 
     mi::base::Uuid get_hash() const;
 
-    mi::base::Uuid get_slot_hash( mi::Uint32 slot) const;
+    mi::base::Uuid get_slot_hash( mi::neuraylib::Material_slot slot) const;
 
     const IValue_list* get_arguments() const;
 
@@ -141,21 +143,15 @@ public:
 
     mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity get_surface_opacity() const;
 
-    bool get_cutout_opacity(mi::Float32 *cutout_opacity) const;
+    bool get_cutout_opacity(mi::Float32* cutout_opacity) const;
 
     // internal methods
 
     /// Get the number of resource map entries.
-    size_t get_resource_entries_count() const;
+    mi::Size get_resource_entries_count() const;
 
-    /// Get the i'th resource table entry.
-    const Resource_tag_tuple *get_resource_entry(size_t index) const;
-
-    // Adds a tag for a given resource url.
-    void add_resource_tag(
-        mi::mdl::Resource_tag_tuple::Kind kind,
-        char const                        *url,
-        int                               tag);
+    /// Get the index'th resource table entry.
+    const Resource_tag_tuple* get_resource_entry( mi::Size index) const;
 
     const IExpression_list* get_temporaries() const;
 
@@ -217,7 +213,7 @@ private:
     mi::base::Handle<IExpression_list> m_temporaries; ///< The temporaries.
     mi::base::Handle<IValue_list> m_arguments;        ///< The arguments.
 
-    Resource_tag_map m_resource_tag_map;              ///< The resource map.
+    std::vector<Resource_tag_tuple> m_resources;      ///< The resources.
 
     mi::base::Uuid m_hash;                            ///< The hash value.
                                                       ///  The hash values for the slots.

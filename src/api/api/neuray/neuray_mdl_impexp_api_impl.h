@@ -116,12 +116,14 @@ public:
         const mi::neuraylib::IBsdf_isotropic_data* reflection,
         const mi::neuraylib::IBsdf_isotropic_data* transmission) const final;
 
-    const mi::IString* uvtile_marker_to_string(
-        const char* marker,
-        mi::Sint32 u, mi::Sint32 v) const final;
+    const mi::IString* frame_uvtile_marker_to_string(
+        const char* marker, mi::Size f, mi::Sint32 u, mi::Sint32 v) const final;
 
-    const mi::IString* uvtile_string_to_marker(
+    const mi::IString* deprecated_uvtile_string_to_marker(
         const char* str, const char* marker) const final;
+
+    const mi::IString* deprecated_frame_string_to_marker(
+        const char* str, mi::Size digits) const final;
 
     const mi::IString* get_mdl_module_name(
         const char* filename, mi::neuraylib::IMdl_impexp_api::Search_option option) const final;
@@ -150,6 +152,12 @@ public:
         const char* module_name,
         mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
         mi::neuraylib::IMdl_execution_context* context) const final;
+
+    mi::neuraylib::IReader* create_reader( const mi::neuraylib::IBuffer* buffer) const final;
+
+    mi::neuraylib::IReader* create_reader( const char* filename) const final;
+
+    mi::neuraylib::IWriter* create_writer( const char* filename) const final;
 
     // internal methods
 

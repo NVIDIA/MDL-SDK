@@ -386,8 +386,11 @@ public:
 
     mi::Float32 get_gamma() const;
 
+    const char* get_selector() const;
+
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
+    mutable std::string m_cached_selector;
 };
 
 
@@ -548,16 +551,28 @@ public:
 
     mi::neuraylib::IValue* create( const mi::neuraylib::IType* type) const;
 
+    mi::neuraylib::IValue* create( const mi::neuraylib::IAnnotation* annotation) const;
+
+    mi::neuraylib::IValue* create(
+        const mi::neuraylib::IType* type,
+        const mi::neuraylib::IAnnotation_block* annotation_block) const;
+
     mi::neuraylib::IValue_list* create_value_list() const;
 
     mi::neuraylib::IValue* clone( const mi::neuraylib::IValue* value) const;
 
-    mi::neuraylib::IValue_list* clone( const mi::neuraylib::IValue_list* value_list) const;
-
-    mi::Sint32 compare( const mi::neuraylib::IValue* lhs, const mi::neuraylib::IValue* rhs) const;
+    mi::neuraylib::IValue_list* clone(
+        const mi::neuraylib::IValue_list* value_list) const;
 
     mi::Sint32 compare(
-        const mi::neuraylib::IValue_list* lhs, const mi::neuraylib::IValue_list* rhs) const;
+        const mi::neuraylib::IValue* lhs,
+        const mi::neuraylib::IValue* rhs,
+        mi::Float64 epsilon) const;
+
+    mi::Sint32 compare(
+        const mi::neuraylib::IValue_list* lhs,
+        const mi::neuraylib::IValue_list* rhs,
+        mi::Float64 epsilon) const;
 
     const mi::IString* dump(
         const mi::neuraylib::IValue* value, const char* name, mi::Size depth) const;

@@ -45,29 +45,29 @@ namespace SYSTEM {
 // the base class from which all modules must be derived. Here is a skeleton
 // for the X.h header of a module X (where X could be net, serial, gap, etc):
 //
-//	namespace MI {
-//	namespace X {
-//	class Mod_X: public Module {
-//	    static Module_status init()
-//		ASSERT(M_X, !mod_X);
-//		mod_X = new Mod_X;
-//		mod_X->m_status = startup_code_that_may_fail();
-//		return mod_X->m_status = ST_...;
+//      namespace MI {
+//      namespace X {
+//      class Mod_X: public Module {
+//          static Module_status init()
+//              ASSERT(M_X, !mod_X);
+//              mod_X = new Mod_X;
+//              mod_X->m_status = startup_code_that_may_fail();
+//              return mod_X->m_status = ST_...;
 //
-//	    static void exit()
-//		delete mod_X;
-//		mod_X = 0;
+//          static void exit()
+//              delete mod_X;
+//              mod_X = 0;
 //
-//	    private: Mod_X() : Module(M_X, "X") 	// "X" is 4 chars max
-//		m_xxx = default value;
-//		mod_config->update(M_X, "xxx_name", "xxx_help", &m_xxx,
-//								xxx_nmembers);
-//	    public: somefunc()
-//		m_xxx = newvalue;
-//		mod_config->modified(&m_xxx);
-//	};
-//	}}
-//	extern MI::X::Mod_X *mod_X;			// is defined in X.C
+//          private: Mod_X() : Module(M_X, "X")         // "X" is 4 chars max
+//              m_xxx = default value;
+//              mod_config->update(M_X, "xxx_name", "xxx_help", &m_xxx,
+//                                                              xxx_nmembers);
+//          public: somefunc()
+//              m_xxx = newvalue;
+//              mod_config->modified(&m_xxx);
+//      };
+//      }}
+//      extern MI::X::Mod_X *mod_X;                     // is defined in X.C
 //
 // For brevity, coding guidelines have been ignored in this example. The init
 // and exit functions, and the constructor and destructor for X, uas well as
@@ -92,10 +92,10 @@ namespace SYSTEM {
 //
 
 enum Module_status {
-    ST_NOTINIT, 	// not yet initialized, or shut down, or not present
-    ST_OK,		// initialized and fully functional
-    ST_LIMITED, 	// initialized, recoverable errors, lacks functionality
-    ST_FAIL		// failed to init, not functional, cannot use neuray
+    ST_NOTINIT,         // not yet initialized, or shut down, or not present
+    ST_OK,              // initialized and fully functional
+    ST_LIMITED,         // initialized, recoverable errors, lacks functionality
+    ST_FAIL             // failed to init, not functional, cannot use neuray
 };
 
 class Module
@@ -104,44 +104,44 @@ class Module
     // health of the module
     Module_status get_status() const;
     static Module_status get_status(
-	Module_id	 mod);		// return status of this module
+        Module_id        mod);          // return status of this module
 
     // name of this module
     const char *get_name() const;
 
     // map module IDs to/from short module names for error msg etc, max 4 chars
     static const char *id_to_name(
-	Module_id	 mod);		// convert M_X to "X"
+        Module_id        mod);          // convert M_X to "X"
     static Module_id name_to_id(
-	const char	*name); 	// convert "X" to M_X
+        const char      *name);         // convert "X" to M_X
 
   protected:
-    Module(				// constructor
-	Module_id	 mod,		// module ID, one of M_*
-	const char	*name); 	// module name, up to four characters
+    Module(                             // constructor
+        Module_id        mod,           // module ID, one of M_*
+        const char      *name);         // module name, up to four characters
 
-    virtual ~Module();			// destructor
+    virtual ~Module();                  // destructor
 
-    Module_status	 m_status;	// updated by init and constructor etc
-    Module_id		 m_mod; 	// module ID from constructor
-    const char		*m_name;	// module name from constructor, max 4
-					// chars, must be all uppercase
+    Module_status        m_status;      // updated by init and constructor etc
+    Module_id            m_mod;         // module ID from constructor
+    const char          *m_name;        // module name from constructor, max 4
+                                        // chars, must be all uppercase
   private:
     // register the given name for the given id.
     static void register_module(
-	Module_id	 mod,		// module ID, one of M_*
-	const char	*name); 	// module name, up to four characters
+        Module_id        mod,           // module ID, one of M_*
+        const char      *name);         // module name, up to four characters
     // unregister the name for the given id.
     static void unregister_module(
-	Module_id	 mod);		// module ID, one of M_*
+        Module_id        mod);          // module ID, one of M_*
     // all Module_registration classes are allowed to access register_module().
     template <typename T>
     friend class Module_registration;
 };
-}	// namespace SYSTEM
+}       // namespace SYSTEM
 
 using namespace SYSTEM;
 
-}	// namespace MI
+}       // namespace MI
 
-#endif	// BASE_SYSTEM_MODULE_H
+#endif  // BASE_SYSTEM_MODULE_H

@@ -121,8 +121,8 @@ namespace mi { namespace examples { namespace mdl
     };
 
     /// Configures the MDL SDK by installing a default logger, setting the default MDL search path,
-    /// and loading the freeimage plugin. This done by many examples so it makes sense to bundle
-    /// this here in one place and focus on the actual example.
+    /// and loading the freeimage and dds image plugins. This done by many examples so it makes
+    /// sense to bundle this here in one place and focus on the actual example.
     ///
     /// \param neuray                   pointer to the main MDL SDK interface
     /// \param options                  see \Configure_options fields
@@ -231,7 +231,8 @@ namespace mi { namespace examples { namespace mdl
                     FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
                     MAKELANGID( LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buffer, 0, 0))
                     message = buffer;
-                fprintf( stderr, "Failed to load library (%u): " FMT_LPTSTR, error_code, message);
+                fprintf( stderr, "Failed to load %s library (%u): " FMT_LPTSTR,
+                    filename, error_code, message);
                 if( buffer)
                     LocalFree( buffer);
                 return 0;
@@ -502,6 +503,11 @@ namespace mi { namespace examples { namespace mdl
         if (load_plugin(neuray, "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
         {
             fprintf(stderr, "Fatal: Failed to load the nv_freeimage plugin.\n");
+            return false;
+        }
+        if (load_plugin(neuray, "dds" MI_BASE_DLL_FILE_EXT) != 0)
+        {
+            fprintf(stderr, "Fatal: Failed to load the dds plugin.\n");
             return false;
         }
 

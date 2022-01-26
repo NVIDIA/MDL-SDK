@@ -31,45 +31,16 @@
 #ifndef BASE_SYSTEM_STLEXT_ATOMIC_COUNTER_H
 #define BASE_SYSTEM_STLEXT_ATOMIC_COUNTER_H
 
-#include <base/system/main/types.h>             // Uint32 type
-#include "i_stlext_concepts.h"                  // Non_copyable
-#include "stlext_atomic_counter_inline.h"       // system-dependent implementation
+#include <atomic>
 
 namespace MI { namespace STLEXT {
 
-/**
- * \brief Portable interface to atomic counting operations.
- *
- * The Atomic_counter class can be used like any other primitive integer type
- * except for two details: (a) it is non-copyable and (b) all operations occur
- * atomically. In other words, it is safe for two threads to use the same
- * atomic counter concurrently.
- * In addition, it provides the atomic \c post_add and \c post_sub functions.
- * These functions work like post increment and decrement, but accept
- * arbitrary values.
- */
-
-class Atomic_counter : private Non_copyable
+class Atomic_counter : public std::atomic_uint_fast32_t
 {
 public:
-    explicit Atomic_counter(Uint32 val = 0u)    { IMPL::create_counter(m_counter, val);    }
-    ~Atomic_counter()                           { IMPL::destroy_counter(m_counter);        }
-    operator Uint32 () const                    { return IMPL::get_counter(m_counter);     }
-
-    Uint32 operator++ ()                        { return IMPL::atomic_inc(m_counter);      }
-    Uint32 operator++ (int)                     { return IMPL::atomic_post_inc(m_counter); }
-
-    Uint32 operator-- ()                        { return IMPL::atomic_dec(m_counter);      }
-    Uint32 operator-- (int)                     { return IMPL::atomic_post_dec(m_counter); }
-
-    Uint32 operator+= (Uint32 rhs)              { return IMPL::atomic_add(m_counter, rhs); }
-    Uint32 operator-= (Uint32 rhs)              { return IMPL::atomic_sub(m_counter, rhs); }
-
-    Uint32 post_add(Uint32 val)                 { return IMPL::atomic_post_add(m_counter, val); }
-    Uint32 post_sub(Uint32 val)                 { return IMPL::atomic_post_sub(m_counter, val); }
-
-private:
-    IMPL::Native_atomic_counter m_counter;
+    explicit Atomic_counter(unsigned val = 0u)
+    : std::atomic_uint_fast32_t{val}
+    {}
 };
 
 }} // MI::STLEXT

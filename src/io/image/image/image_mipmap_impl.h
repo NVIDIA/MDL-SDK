@@ -78,12 +78,6 @@ public:
     /// \param pixel_type         The desired pixel type.
     /// \param width              The desired width.
     /// \param height             The desired height.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the base level (but this might change without further
-    ///                           notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the base level (but this might change without further
-    ///                           notice).
     /// \param layers             The desired number of layers (depth).
     /// \param is_cubemap         Flag that indicates whether this mipmap represents a cubemap.
     /// \param gamma              The desired gamma value. The special value 0.0 represents the
@@ -93,8 +87,6 @@ public:
         Pixel_type pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         mi::Uint32 layers,
         bool is_cubemap,
         mi::Float32 gamma);
@@ -104,12 +96,7 @@ public:
     /// Creates a file-based mipmap that represents the given file on disk.
     ///
     /// \param filename           The file that shall be represented by this mipmap.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the base level (but this might change without further
-    ///                           notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the base level (but this might change without further
-    ///                           notice).
+    /// \param selector           The selector, or \c NULL.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the file.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -120,8 +107,7 @@ public:
     ///                           - -5: The image plugin failed to import the file.
     Mipmap_impl(
         const std::string& filename,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
+        const char* selector,
         bool only_first_level,
         mi::Sint32* errors = 0);
 
@@ -133,12 +119,7 @@ public:
     ///                           absolute access.
     /// \param archive_filename   The resolved filename of the archive itself.
     /// \param member_filename    The relative filename of the mipmap in the archive.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the base level (but this might change without further
-    ///                           notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the base level (but this might change without further
-    ///                           notice).
+    /// \param selector           The selector, or \c NULL.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -153,8 +134,7 @@ public:
         mi::neuraylib::IReader* reader,
         const std::string& archive_filename,
         const std::string& member_filename,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
+        const char* selector,
         bool only_first_level,
         mi::Sint32* errors = 0);
 
@@ -165,14 +145,9 @@ public:
     /// \param reader             The reader to be used to obtain the mipmap. Needs to support
     ///                           absolute access.
     /// \param image_format       The image format of the buffer.
+    /// \param selector           The selector, or \c NULL.
     /// \param mdl_file_path      The resolved MDL file path (to be used for log messages only),
     ///                           or \c NULL in other contexts.
-    /// \param tile_width         The desired tile width. The special value 0 currently implies the
-    ///                           width of the base level (but this might change without further
-    ///                           notice).
-    /// \param tile_height        The desired tile height. The special value 0 currently implies the
-    ///                           height of the base level (but this might change without further
-    ///                           notice).
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
@@ -186,9 +161,8 @@ public:
         Memory_based,
         mi::neuraylib::IReader* reader,
         const char* image_format,
+        const char* selector,
         const char* mdl_file_path,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
         bool only_first_level,
         mi::Sint32* errors = 0);
 

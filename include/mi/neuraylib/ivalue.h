@@ -46,6 +46,9 @@ namespace neuraylib {
 @{
 */
 
+class IAnnotation;
+class IAnnotation_block;
+
 /// The interface to MDL values.
 ///
 /// Values can be created using the value factory #mi::neuraylib::IValue_factory.
@@ -554,6 +557,9 @@ public:
     /// \note: A gamma value of 0 corresponds to the default gamma value for the given texture
     ///        kind.
     virtual Float32 get_gamma() const = 0;
+
+    /// Returns the selector of this texture, or \c NULL.
+    virtual const char* get_selector() const = 0;
 };
 
 /// A light profile value.
@@ -742,6 +748,56 @@ public:
         return ptr_T;
     }
 
+    /// Creates a value observing the range of an \c "::anno::soft_range()" or an
+    /// \c "::anno::hard_range()" annotation.
+    ///
+    /// The type of the value is determined by the parameter types of the annotation.
+    virtual IValue* create( const IAnnotation* annotation) const = 0;
+
+    /// Creates a value observing the range of an \c "::anno::soft_range()" or an
+    /// \c "::anno::hard_range()" annotation.
+    ///
+    /// The type of the value is determined by the parameter types of the annotation.
+    template <class T>
+    T* create( const IAnnotation* annotation) const
+    {
+        IValue* ptr_value = create( annotation);
+        if( !ptr_value)
+            return 0;
+        T* ptr_T = static_cast<T*>( ptr_value->get_interface( typename T::IID()));
+        ptr_value->release();
+        return ptr_T;
+    }
+
+    /// Creates a value observing a potentially present range annotation.
+    ///
+    /// This method is a convenience wrapper around the other two (non-template) overloads.
+    ///
+    /// If \p annotation_block contains an \c "::anno::soft_range()" or an \c "::anno::hard_range()"
+    /// annotation, then this method calls the annotation-based overload with that annotation (where
+    /// \c "::anno::soft_range()" has priority over \c "::anno::hard_range()"). Otherwise, it calls
+    /// the type-based overload with the given value type.
+    virtual IValue* create( const IType* type, const IAnnotation_block* annotation_block) const = 0;
+
+    /// Creates a value observing a potentially present range annotation.
+    ///
+    /// This method is a convenience wrapper around the other two (template) overloads.
+    ///
+    /// If \p annotation_block contains an \c "::anno::soft_range()" or an \c "::anno::hard_range()"
+    /// annotation, then this method calls the annotation-based overload with that annotation (where
+    /// \c "::anno::soft_range()" has priority over \c "::anno::hard_range()"). Otherwise, it calls
+    /// the type-based overload with the given value type.
+    template <class T>
+    T* create( const IType* type, const IAnnotation_block* annotation_block) const
+    {
+        IValue* ptr_value = create( type, annotation_block);
+        if( !ptr_value)
+            return 0;
+        T* ptr_T = static_cast<T*>( ptr_value->get_interface( typename T::IID()));
+        ptr_value->release();
+        return ptr_T;
+    }
+
     /// Creates a new value list.
     virtual IValue_list* create_value_list() const = 0;
 
@@ -788,8 +844,10 @@ public:
     ///
     /// \param lhs          The left-hand side operand for the comparison.
     /// \param rhs          The right-hand side operand for the comparison.
+    /// \param epsilon      Maximum difference for floating point values to consider them as equal.
     /// \return             -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
-    virtual Sint32 compare( const IValue* lhs, const IValue* rhs) const = 0;
+    virtual Sint32 compare(
+        const IValue* lhs, const IValue* rhs, Float64 epsilon = 0.0) const = 0;
 
     /// Compares two instances of #mi::neuraylib::IValue_list.
     ///
@@ -803,8 +861,10 @@ public:
     ///
     /// \param lhs          The left-hand side operand for the comparison.
     /// \param rhs          The right-hand side operand for the comparison.
+    /// \param epsilon      Maximum difference for floating point values to consider them as equal.
     /// \return             -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
-    virtual Sint32 compare( const IValue_list* lhs, const IValue_list* rhs) const = 0;
+    virtual Sint32 compare(
+        const IValue_list* lhs, const IValue_list* rhs, Float64 epsilon = 0.0) const = 0;
 
     /// Returns a textual representation of a value.
     ///

@@ -151,9 +151,9 @@ To switch example_execution_native to the custom texturing code, please disable 
 \include execution_native/example_execution_native.cpp
 
 <b>Source Code Location:</b>
-  <tt>examples/mdl_sdk/execution_native/texture_support.h</tt>
+  <tt>examples/mdl_sdk/shared/texture_support_native.h</tt>
 
-\include execution_native/texture_support.h
+\include shared/texture_support_native.h
 
 
 <div align="right">

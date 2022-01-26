@@ -67,10 +67,9 @@ for the language specification. See also \ref mi_neuray_mdl_types.
 The unit of compilation in MDL is a module. Importing an MDL module creates an instance of
 #mi::neuraylib::IModule in the DB. A module allows to retrieve the referenced (aka imported)
 modules, as well as the exported material and function definitions. For all exported definitions,
-instances of #mi::neuraylib::IMaterial_definition and #mi::neuraylib::IFunction_definition
-are created in the DB accordingly. Both, material and function definitions can be instantiated.
-Those instantiations are represented by the interfaces #mi::neuraylib::IMaterial_instance and
-#mi::neuraylib::IFunction_call.
+DB elements of type #mi::neuraylib::IFunction_definition are created in the DB accordingly. Both,
+material and function definitions can be instantiated. Those instantiations are represented by the
+interface #mi::neuraylib::IFunction_call.
 
 
 
@@ -219,9 +218,8 @@ the \c "mdl" or \c "mdle" prefix. Entities from the \c ::&lt;builtins&gt; module
 leading scope \c "::".
 
 The interfaces for modules as well as for function and material definitions provide methods to
-obtain the MDL name, see #mi::neuraylib::IModule::get_mdl_name(),
-#mi::neuraylib::IFunction_definition::get_mdl_name(), and
-#mi::neuraylib::IMaterial_definition::get_mdl_name(). The corresponding DB name can be obtained
+obtain the MDL name, see #mi::neuraylib::IModule::get_mdl_name(), and
+#mi::neuraylib::IFunction_definition::get_mdl_name(). The corresponding DB name can be obtained
 from an MDL name with the help of the methods #mi::neuraylib::IMdl_factory::get_db_module_name() and
 #mi::neuraylib::IMdl_factory::get_db_definition_name(). Note that there is no MDL name for function
 calls, material instances, or compiled materials.
@@ -304,9 +302,8 @@ Note that due to function overloading, multiple functions within a module might 
 simple name.
 
 The interfaces for modules as well as for function and material definitions provide methods to
-obtain the simple MDL name, see #mi::neuraylib::IModule::get_mdl_simple_name(),
-#mi::neuraylib::IFunction_definition::get_mdl_simple_name(), and
-#mi::neuraylib::IMaterial_definition::get_mdl_simple_name().
+obtain the simple MDL name, see #mi::neuraylib::IModule::get_mdl_simple_name(), and
+#mi::neuraylib::IFunction_definition::get_mdl_simple_name().
 
 For display purposes you might want to decode the simple MDL name using
 #mi::neuraylib::IMdl_factory::decode_name().
@@ -630,6 +627,80 @@ followed by the type name of the \c "cast_return" expression.
 
 See also #mi::neuraylib::IExpression_factory::create_cast().
 
+
+\section mi_mdl_materials_are_functions Materials are functions
+
+From an MDL language point of view [\ref MDLLS], materials look quite similar to functions with the
+\c material struct as return type. However, in the past the \neurayApiName used separate interfaces
+like #mi::neuraylib::IMaterial_definition and #mi::neuraylib::IMaterial_instance for materials, in
+contrast to #mi::neuraylib::IFunction_definition and #mi::neuraylib::IFunction_call for functions
+(although these interfaces are quite similar). This required that code that acts in a similar way
+on both, functions and materials, needed to be written twice.
+
+Nowadays, it is possible to treat materials as functions, i.e., it is possible to use
+#mi::neuraylib::IFunction_definition instead of #mi::neuraylib::IMaterial_definition, and
+#mi::neuraylib::IFunction_call instead of #mi::neuraylib::IMaterial_instance. This allows to write
+code that acts on both, functions and materials, just once. The only exception is the method
+#mi::neuraylib::IMaterial_instance::create_compiled_material(), which still requires to use the
+#mi::neuraylib::IMaterial_instance interface.
+
+This feature is now enabled by default. It can still be disabled by
+#mi::neuraylib::IMdl_configuration::set_materials_are_functions(), but this possibility will be
+deprecated and removed in a future release. Likewise for the interfaces
+#mi::neuraylib::IMaterial_definition and almost all methods of #mi::neuraylib::IMaterial_instance
+(one exception is #mi::neuraylib::IMaterial_instance::create_compiled_material()).
+
+It is recommended to avoid using #mi::neuraylib::IMaterial_definition and
+#mi::neuraylib::IMaterial_instance as much as possible in new code, and eventually to replace usage
+of these interfaces in existing code. If
+#mi::neuraylib::IMaterial_instance::create_compiled_material() is to be used, it is recommended to
+obtain that interface right before that call, and to use it only for that call itself.
+
+
+
+\subsection mi_mdl_materials_are_functions_api_changes API Changes when materials are functions
+
+Treating materials as functionse comes with a few API changes that need to be takes into account.
+Code shared between different applications, i.e., in plugins, should be able to handle both
+settings.
+
+- <b>Values returned by #mi::neuraylib::IScene_element::get_element_type() (and derived
+  interfaces)</b> \n \n
+  The method mi::neuraylib::IScene_element::get_element_type() returns
+  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION instead of
+  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION. The value
+  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION is only returned by
+  #mi::neuraylib::IMaterial_definition::get_element_type() (for backward compatibility),
+  but no longer by its base class #mi::neuraylib::IScene_element. \n \n Similarly, the method
+  mi::neuraylib::IScene_element::get_element_type() returns
+  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL instead of
+  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE. The value
+  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE is only returned by
+  #mi::neuraylib::IMaterial_instance::get_element_type() (for backward compatibility), but
+  no longer by its base class #mi::neuraylib::IScene_element. \n \n As a consequence,
+  #mi::neuraylib::Definition_wrapper::get_type() and
+  #mi::neuraylib::Definition_wrapper::get_element_type() only return
+  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION. Similarly,
+  #mi::neuraylib::Argument_editor::get_type() and
+  #mi::neuraylib::Argument_editor::get_element_type() only return
+  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL.
+.
+- <b>Interface queries to distinguish functions and materials</b> \n \n
+  Interface queries like #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_definition>()
+  can no longer be used to distinguish functions and materials. Note that such queries might occur
+  inside other template inline methods, e.g., they occur as part of
+  #mi::neuraylib::ITransaction::access<mi::neuraylib::IFunction_definition>(). The recommended way
+  to do this is using #mi::neuraylib::IFunction_definition::is_material(). Similarly for
+  #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_call>() and
+  #mi::neuraylib::IFunction_call::is_material().
+.
+- <b>Type names passed to #mi::neuraylib::ITransaction::list_elements()</b> \n \n
+  The method #mi::neuraylib::ITransaction::list_elements() will not return any hits for type names
+  \c "Material_definition" and \c "Material_instance". Use the type names \c "Function_definition"
+  and \c "Function_call" instead, and, if necessary,
+  #mi::neuraylib::IFunction_definition::is_material() and
+  #mi::neuraylib::IFunction_call::is_material() to discriminate the results.
+
 @}*/ // end group mi_neuray_mdl_elements
 
 /** \addtogroup mi_neuray_mdl_elements
@@ -638,7 +709,6 @@ See also #mi::neuraylib::IExpression_factory::create_cast().
 
 /// This interface represents an MDL module.
 ///
-/// \see #mi::neuraylib::IMaterial_definition, #mi::neuraylib::IMaterial_instance
 /// \see #mi::neuraylib::IFunction_definition, #mi::neuraylib::IFunction_call
 class IModule : public
     mi::base::Interface_declare<0xe283b0ee,0x712b,0x4bdb,0xa2,0x13,0x32,0x77,0x7a,0x98,0xf9,0xa6,
@@ -717,27 +787,14 @@ public:
     virtual const char* get_material( Size index) const = 0;
 
     /// Returns the number of resources defined in the module.
+    ///
     /// Resources defined in a module that is imported by this module are not included.
     virtual Size get_resources_count() const = 0;
 
-    /// Returns the type of the resource at \p index.
+    /// Returns a resource defined in the module.
     ///
-    /// \param index    The index of the resource.
-    /// \return         The type of the resource.
-    virtual const IType_resource* get_resource_type( Size index) const = 0;
-
-    /// Returns the absolute MDL file path of the resource at \p index.
-    ///
-    /// \param index    The index of the resource.
-    /// \return         The absolute MDL file path of the resource.
-    virtual const char* get_resource_mdl_file_path( Size index) const = 0;
-
-    /// Returns the database name of the resource at \p index.
-    ///
-    /// \param index    The index of the resource.
-    /// \return         The database name of the resource or \c NULL if
-    ///                 this resource could not be resolved.
-    virtual const char* get_resource_name( Size index) const = 0;
+    /// Resources defined in a module that is imported by this module are not included.
+    virtual const IValue_resource* get_resource( Size index) const = 0;
 
     /// Returns the number of annotations defined in the module.
     virtual Size get_annotation_definition_count() const = 0;
@@ -777,9 +834,8 @@ public:
     /// \param arguments        Optional arguments to select specific overload(s). If present, the
     ///                         method returns only the overloads of \p name whose signature
     ///                         matches the provided arguments, i.e., a call to
-    ///                         #mi::neuraylib::IFunction_definition::create_function_call() or
-    ///                         #mi::neuraylib::IMaterial_definition::create_material_instance()
-    ///                         with these arguments would succeed.
+    ///                         #mi::neuraylib::IFunction_definition::create_function_call() with
+    ///                         these arguments would succeed.
     /// \return                 The DB names of overloads of the given function or material
     ///                         definition, or \c NULL if \p name is invalid.
     virtual const IArray* get_function_overloads(
@@ -814,7 +870,7 @@ public:
     virtual const IArray* get_function_overloads(
         const char* name, const IArray* parameter_types) const = 0;
 
-    /// Returns true if all imports of the module are valid.
+    /// Returns \c true if all imports of the module are valid.
     ///
     /// \param context     In case of failure, the execution context can be checked for error
     ///                    messages. Can be \c NULL.
@@ -826,7 +882,7 @@ public:
     ///
     /// \param context     In case of failure, the execution context can be checked for error
     ///                    messages. Can be \c NULL.
-    /// \param recursive   If true, all imported file based modules are reloaded
+    /// \param recursive   If \c true, all imported file based modules are reloaded
     ///                    prior to this one.
     /// \return
     ///               -     0: Success
@@ -840,7 +896,7 @@ public:
     /// \c mdl::nvidia::distilling_support \endif cannot be reloaded.
     ///
     /// \param module_source The module source code.
-    /// \param recursive     If true, all imported file based modules are reloaded
+    /// \param recursive     If \c true, all imported file based modules are reloaded
     ///                      prior to this one.
     /// \param context       In case of failure, the execution context can be checked for error
     ///                      messages. Can be \c NULL.
@@ -862,6 +918,15 @@ public:
         return deprecated_get_function_overloads( name, param_sig);
     }
 #endif
+
+    virtual const IType_resource* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(get_resource_type)(
+        Size index) const = 0;
+
+    virtual const char* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(get_resource_mdl_file_path)(
+        Size index) const = 0;
+
+    virtual const char* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(get_resource_name)(
+        Size index) const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_elements

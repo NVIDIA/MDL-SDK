@@ -52,6 +52,7 @@ struct MdlLocalNodeData
     MdlLocalNodeData()
         : current_qualified_name(CONST_STRINGS::empty)
         , material_db_name("")
+        , material_simple_name("")
         , current_user_param_values()
         , user_parameters_changed(true)
         , material_hash{0, 0, 0, 0}
@@ -66,6 +67,7 @@ struct MdlLocalNodeData
 
     // store the db name
     std::string material_db_name;
+    std::string material_simple_name;
 
     // handle changes of materials in interactive sessions
     std::unordered_map<size_t, AtParamValue> current_user_param_values;
@@ -276,8 +278,10 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     mdl_sdk.set_search_paths();
 
     // set default material name
-    if (data->material_db_name == "")
+    if (data->material_db_name.empty())
         data->material_db_name = mdl_sdk.get_default_material_db_name();
+    if (data->material_simple_name.empty())
+        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
 
     // determine MDL module and material name from "qualified_name" node parameter
     std::string mdl_name(AiNodeGetStr(node, CONST_STRINGS::qualified_name).c_str());
@@ -346,8 +350,8 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     material_db_name = overload->get_c_str();
                     
     // get material by the material db name and ensure it exists
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        mdl_sdk.get_transaction().access<mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        mdl_sdk.get_transaction().access<mi::neuraylib::IFunction_definition>(
         material_db_name.c_str()));
 
     if (!material_definition)
@@ -358,6 +362,7 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     }
 
     data->material_db_name = material_db_name;
+    data->material_simple_name = material_definition->get_mdl_simple_name();
     return true;
 }
 
@@ -367,7 +372,7 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
 mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
     AtNode* node,
     Mdl_sdk_interface& mdl_sdk,
-    const mi::neuraylib::IMaterial_definition* material_definition)
+    const mi::neuraylib::IFunction_definition* material_definition)
 {
     MdlLocalNodeData *data = static_cast<MdlLocalNodeData*>(AiNodeGetLocalData(node));
 
@@ -399,7 +404,7 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
             if (helper_params.find(name) == helper_params.end() &&
                 strcmp(name, "nodeName") != 0) // special name in 3Ds max
                     AiMsgWarning("[mdl] parameter '%s' not found in material '%s'. Ignoring ...",
-                                 name, material_definition->get_mdl_name());
+                                 name, material_definition->get_mdl_simple_name());
             continue;
         }
 
@@ -596,8 +601,8 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> mdl_context(mdl_sdk.create_context());
 
     // get the material definition which should be valid after loading the module
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        mdl_sdk.get_transaction().access<mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        mdl_sdk.get_transaction().access<mi::neuraylib::IFunction_definition>(
             data->material_db_name.c_str()));
     if (!material_definition)
         return false;  // should not happen
@@ -612,8 +617,8 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
 
     // create a material instance (with default parameters, if non are specified)
     mi::Sint32 ret = 0;
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        material_definition->create_material_instance(
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        material_definition->create_function_call(
             (arguments->get_size() == 0) ? nullptr : arguments.get(), &ret));
     if (ret != 0)
     {
@@ -623,8 +628,10 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
 
     // compile the material instance (using instance compilation)
     mi::Uint32 flags = mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
+    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance2(
+        material_instance->get_interface<mi::neuraylib::IMaterial_instance>());
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        material_instance->create_compiled_material(flags, mdl_context.get()));
+        material_instance2->create_compiled_material(flags, mdl_context.get()));
     if (!mdl_sdk.log_messages(mdl_context.get()))
         return false;
 
@@ -810,7 +817,7 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
         ? descs[thin_walled_desc_index].function_index 
         : ~0;
 
-    AiMsgInfo("[mdl] compiled material '%s'", data->material_db_name.c_str());
+    AiMsgInfo("[mdl] compiled material '%s'", data->material_simple_name.c_str());
 
     data->material_hash = currentHash;      // store the hash to identify changes
     data->user_parameters_changed = false;  // parameter changes have been applied
@@ -859,6 +866,7 @@ node_initialize
                    selected_material.c_str());
 
         data->material_db_name = mdl_sdk.get_default_material_db_name();
+        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
         compile_material(node, mdl_sdk);
         return;
     }
@@ -882,6 +890,7 @@ node_update
                    selected_material.c_str());
 
         data->material_db_name = mdl_sdk.get_default_material_db_name();
+        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
         compile_material(node, mdl_sdk);
         return;
     }
@@ -893,6 +902,7 @@ node_update
                    selected_material.c_str());
 
         data->material_db_name = mdl_sdk.get_default_material_db_name();
+        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
         compile_material(node, mdl_sdk);
         return;
     }

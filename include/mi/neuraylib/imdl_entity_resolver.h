@@ -83,8 +83,8 @@ public:
     /// Resolves a resource file path.
     ///
     /// If \p owner_name and \p owner_file_path are not provided, no relative paths can be resolved.
-    /// The method can also be used to resolve files in an MDLE, e.g, to get a resource set for 
-    /// embedded UDIM textures. 
+    /// The method can also be used to resolve files in an MDLE, e.g, to get a resource set for
+    /// embedded UDIM textures.
     ///
     /// \param file_path         The MDL file path of the resource to resolve. In addition, for
     ///                          resources from MDLE files, it is also possible to provide the
@@ -139,47 +139,26 @@ public:
     virtual IReader* create_reader() const = 0;
 };
 
-/// Describes an ordered set of resolved resources (or a failed attempt).
+/// Describes an ordered set of resolved resources elements.
 ///
 /// While most resources in MDL can be mapped to exactly one entity, some resources like uvtile
 /// textures are mapped to a set of entities.
-class IMdl_resolved_resource : public
-    mi::base::Interface_declare<0x650cbe23,0xed44,0x4c2f,0x9f,0xbc,0x3b,0x64,0x4a,0x08,0x15,0xa1>
+class IMdl_resolved_resource_element : public
+    mi::base::Interface_declare<0x0c49fcd6,0xc675,0x4ca5,0xbf,0xae,0xb1,0x59,0xd9,0x75,0x5f,0xe2>
 {
 public:
-    /// Returns the uvtile mode for this resource set.
+    /// Returns the frame number of this element.
     ///
-    /// \return   Always #mi::neuraylib::UVTILE_MODE_NONE for light profiles and BSDF measurements.
-    virtual Uvtile_mode get_uvtile_mode() const = 0;
+    /// \return   Always 0 for textures without frame index, and for light profiles and BSDF
+    ///           measurements.
+    virtual Size get_frame_number() const = 0;
 
-    /// Returns the MDL file path mask for this resource set.
-    ///
-    /// The MDL file path mask is identical to the MDL file path, except that it contains the uvtile
-    /// marker if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE.
-    ///
-    /// \see #get_mdl_file_path(), #get_uvtile_mode()
-    virtual const char* get_mdl_file_path_mask() const = 0;
-
-    /// Returns the absolute resolved filename mask for this resource set.
-    ///
-    /// The filename mask is identical to the filename, except that it contains the uvtile marker if
-    /// the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE.
-    ///
-    /// \note If this resource is located inside a container (an MDL archive or MDLE), the returned
-    ///       string is a concatenation of the container filename, a colon, and the container member
-    ///       name.
-    ///
-    /// \see #get_filename(), #get_uvtile_mode()
-    virtual const char* get_filename_mask() const = 0;
-
-    /// Returns the number of resolved entities.
-    ///
-    /// \see #get_uvtile_mode()
+    /// Returns the number of resources for this element.
     virtual Size get_count() const = 0;
 
     /// Returns the MDL file path of the \p i -th resource, or \c NULL if the index is out of range.
     ///
-    /// \see #get_mdl_file_path_mask()
+    /// \see #mi::neuraylib::IMdl_resolved_resource::get_mdl_file_path_mask()
     virtual const char* get_mdl_file_path( Size i) const = 0;
 
     /// Returns the absolute resolved filename of the \p i -th resource, or \c NULL if the index
@@ -189,7 +168,7 @@ public:
     ///       string is a concatenation of the container filename, a colon, and the container member
     ///       name.
     ///
-    /// \see #get_filename_mask()
+    /// \see #mi::neuraylib::IMdl_resolved_resource::get_filename_mask()
     virtual const char* get_filename( Size i) const = 0;
 
     /// Returns a reader for the \p i -th resource (or \c NULL if the index is out of range).
@@ -211,6 +190,58 @@ public:
     /// \return        \c true if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE and \p i is
     ///                in range, \c false otherwise (and the output values are undefine).
     virtual bool get_uvtile_uv( Size i, Sint32& u, Sint32& v) const = 0;
+};
+
+/// Describes an ordered set of resolved resources (or a failed attempt).
+///
+/// While most resources in MDL can be mapped to exactly one element, some resources like animated
+/// textures are mapped to a set of elements.
+class IMdl_resolved_resource : public
+    mi::base::Interface_declare<0x650cbe23,0xed44,0x4c2f,0x9f,0xbc,0x3b,0x64,0x4a,0x08,0x15,0xa1>
+{
+public:
+    /// Indicates whether this resource has a sequence marker.
+    ///
+    /// The return value \c false implies that there is a single frame with frame number 0.
+    virtual bool has_sequence_marker() const = 0;
+
+    /// Returns the uvtile mode for this resource.
+    ///
+    /// The return value \c false implies that there is a single uv-tile (per frame) with u- and v-
+    /// coordinates of 0.
+    ///
+    /// \return   Always #mi::neuraylib::UVTILE_MODE_NONE for light profiles and BSDF measurements.
+    virtual Uvtile_mode get_uvtile_mode() const = 0;
+
+    /// Returns the MDL file path mask for this resource.
+    ///
+    /// The MDL file path mask is identical to the MDL file path, except that it contains the uvtile
+    /// marker if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE.
+    ///
+    /// \see #mi::neuraylib::IMdl_resolved_resource_element::get_mdl_file_path(),
+    ///      #get_uvtile_mode()
+    virtual const char* get_mdl_file_path_mask() const = 0;
+
+    /// Returns the absolute resolved filename mask for this resource.
+    ///
+    /// The filename mask is identical to the filename, except that it contains the uvtile marker if
+    /// the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE.
+    ///
+    /// \note If this resource is located inside a container (an MDL archive or MDLE), the returned
+    ///       string is a concatenation of the container filename, a colon, and the container member
+    ///       name.
+    ///
+    /// \see #mi::neuraylib::IMdl_resolved_resource_element::get_filename(),
+    ///      #get_uvtile_mode()
+    virtual const char* get_filename_mask() const = 0;
+
+    /// Returns the number of elements of the resolved resource.
+    virtual Size get_count() const = 0;
+
+    /// Returns the \p i -th element of the resolved resource, or \c NULL if \p i is out of bounds.
+    ///
+    /// Resource elements are sorted by increasing frame numbers.
+    virtual const IMdl_resolved_resource_element* get_element( Size i) const = 0;
 };
 
 /*@}*/ // end group mi_neuray_mdl_sdk_misc

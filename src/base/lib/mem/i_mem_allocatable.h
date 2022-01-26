@@ -129,7 +129,7 @@ typedef Tallocatable< Allocator_impl_new >  Allocatable;
 
 
 template<typename T>
-inline T* new_array(size_t size) { return (T*) (new T[size]); } //-V572 PVS
+inline T* new_array(size_t size) { return new T[size]; }
 
 template<typename T>
 inline void delete_array(T* ptr) { delete[] (ptr); }

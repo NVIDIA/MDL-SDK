@@ -41,7 +41,9 @@
 #include <boost/core/noncopyable.hpp>
 #include <base/system/main/access_module.h>
 
-namespace mi { class IArray; namespace neuraylib { class INeuray; } }
+#include <io/image/image/image_image_api_impl.h>
+
+namespace mi { class IArray; namespace neuraylib { class INeuray; class IReader; } }
 
 namespace MI {
 
@@ -64,22 +66,17 @@ public:
 
     // public API methods
 
-    mi::neuraylib::ICanvas* deprecated_create_tiled_canvas(
+    mi::neuraylib::ITile* create_tile(
         const char* pixel_type,
         mi::Uint32 width,
-        mi::Uint32 height,
-        mi::Uint32 tile_width,
-        mi::Uint32 tile_height,
-        mi::Uint32 layers,
-        bool is_cubemap,
-        mi::Float32 gamma) const;
+        mi::Uint32 height) const;
 
     mi::neuraylib::ICanvas* create_canvas(
         const char* pixel_type,
         mi::Uint32 width,
         mi::Uint32 height,
         mi::Uint32 layers,
-        mi::neuraylib::Boolean is_cubemap,
+        bool is_cubemap,
         mi::Float32 gamma) const;
 
     mi::neuraylib::ICanvas_cuda* create_canvas_cuda(
@@ -90,10 +87,8 @@ public:
         mi::Uint32 layers,
         mi::Float32 gamma) const;
 
-    mi::neuraylib::ITile* create_tile(
-        const char* pixel_type,
-        mi::Uint32 width,
-        mi::Uint32 height) const;
+    mi::IArray* create_mipmaps(
+        const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const;
 
     mi::Sint32 read_raw_pixels(
         mi::Uint32 width,
@@ -130,6 +125,10 @@ public:
         const mi::neuraylib::IBuffer* buffer,
         const char* image_format) const;
 
+    mi::neuraylib::ICanvas* create_canvas_from_reader(
+        mi::neuraylib::IReader* reader,
+        const char* image_format) const;
+
     bool supports_format_for_decoding(
         const char* image_format, mi::neuraylib::IReader* reader) const;
 
@@ -144,7 +143,14 @@ public:
 
     mi::Uint32 get_bytes_per_component( const char* pixel_type) const;
 
-    mi::IArray* create_mipmaps(const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const;
+    const char* get_pixel_type_for_channel(
+        const char* pixel_type, const char* selector) const;
+
+    mi::neuraylib::ICanvas* extract_channel(
+        const mi::neuraylib::ICanvas* canvas, const char* selector) const;
+
+    mi::neuraylib::ITile* extract_channel(
+        const mi::neuraylib::ITile* tile, const char* selector) const;
 
     // internal methods
 
@@ -172,6 +178,9 @@ private:
 
     /// Access to the IMAGE module
     SYSTEM::Access_module<IMAGE::Image_module> m_image_module;
+
+    /// Implementation class for most API functions.
+    IMAGE::Image_api_impl m_impl;
 };
 
 } // namespace NEURAY

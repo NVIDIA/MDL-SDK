@@ -464,6 +464,7 @@ public:
     ///
     /// \param res_kind        the kind of the resource (texture or invalid reference)
     /// \param res_url         the URL of the texture resource if any
+    /// \param res_sel         the selector of the texture resource if any
     /// \param gamma           the gamma mode of this resource
     /// \param bsdf_data_kind  the kind of BSDF data in case of BSDF data textures
     /// \param shape           the shape of this resource
@@ -476,6 +477,7 @@ public:
     virtual void map_tex_resource(
         IValue::Kind                   res_kind,
         char const                     *res_url,
+        char const                     *res_sel,
         IValue_texture::gamma_mode     gamma,
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
         IType_texture::Shape           shape,
@@ -634,10 +636,12 @@ public:
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_sel         the resource selector (for textures) or NULL
     /// \param tag             the tag value
     virtual void set_resource_tag(
         Resource_tag_tuple::Kind const res_kind,
         char const                     *res_url,
+        char const                     *res_sel,
         int                            tag) = 0;
 
     /// Remap a resource value according to the resource map.
@@ -825,10 +829,12 @@ public:
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_sel         the resource selector (for textures) or NULL
     /// \param tag             the tag value
     virtual void set_resource_tag(
         Resource_tag_tuple::Kind const res_kind,
         char const                     *res_url,
+        char const                     *res_sel,
         int                            tag) = 0;
 };
 
@@ -1015,6 +1021,39 @@ public:
 };
 
 
+
+/// An interface for handling different thread contexts inside the JIT code generator.
+///
+/// When the code generator is used from different threads, every thread should have its own
+/// context. If no context is provided, the backend automatically creates one.
+class ICode_generator_thread_context : public
+    mi::base::Interface_declare<0xc60c7002,0xb9f6,0x4f22,0x8d,0x83,0xb6,0xa1,0x25,0x59,0xb8,0x6e,
+    mi::base::IInterface>
+{
+public:
+    /// Access code generator messages of last operation that used this context.
+    virtual Messages const &access_messages() const = 0;
+
+    /// Access code generator messages of last operation that used this context.
+    virtual Messages &access_messages() = 0;
+
+    /// Access code generator options for the next invocation.
+    ///
+    /// \note Options set in the thread context will overwrite options set on the backend
+    ///       directly but are not persistent, i.e. only valid during the time this thread
+    ///       context is in use.
+    ///
+    virtual Options const &access_options() const = 0;
+
+    /// Access code generator options for the next invocation.
+    ///
+    /// \note Options set in the thread context will overwrite options set on the backend
+    ///       directly but are not persistent, i.e. only valid during the time this thread
+    ///       context is in use.
+    ///
+    virtual Options &access_options() = 0;
+};
+
 /// The JIT code generator interface.
 class ICode_generator_jit : public
     mi::base::Interface_declare<0x059c7e80,0x696c,0x4684,0xad,0x08,0xb7,0x17,0x72,0x5a,0x55,0x20,
@@ -1111,20 +1150,25 @@ public:
     };
 
 public:
+    /// Creates a new thread context.
+    virtual ICode_generator_thread_context *create_thread_context() = 0;
+
     /// Compile a whole module.
     ///
     /// \param module        The module to compile.
     /// \param module_cache  The module cache if any.
     /// \param mode          The compilation mode.
+    /// \param ctx           The code generator thread context.
     ///
     /// \note This method is not used currently for code generation, just
     ///       by the unit tests to test various aspects of the code generator.
     ///
     /// \returns The generated code.
     virtual IGenerated_code_executable *compile(
-        IModule const    *module,
-        IModule_cache    *module_cache,
-        Compilation_mode mode) = 0;
+        IModule const                  *module,
+        IModule_cache                  *module_cache,
+        Compilation_mode               mode,
+        ICode_generator_thread_context *ctx) = 0;
 
     /// Compile a lambda function using the JIT into an environment (shader) of a scene.
     ///
@@ -1133,12 +1177,14 @@ public:
     /// \param lambda         the lambda function to compile
     /// \param module_cache   the module cache if any
     /// \param name_resolver  the call name resolver
+    /// \param ctx            the code generator thread context
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_lambda_function *compile_into_environment(
-        ILambda_function const    *lambda,
-        IModule_cache             *module_cache,
-        ICall_name_resolver const *name_resolver) = 0;
+        ILambda_function const         *lambda,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx) = 0;
 
     /// Compile a lambda function using the JIT into a constant function.
     ///
@@ -1147,6 +1193,7 @@ public:
     /// \param lambda           the lambda function to compile
     /// \param module_cache     the module cache if any
     /// \param name_resolver    the call name resolver
+    /// \param ctx              the code generator thread context
     /// \param attr             an interface to retrieve resource attributes
     /// \param world_to_object  the world-to-object transformation matrix for this function
     /// \param object_to_world  the object-to-world transformation matrix for this function
@@ -1154,13 +1201,14 @@ public:
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_lambda_function *compile_into_const_function(
-        ILambda_function const     *lambda,
-        IModule_cache              *module_cache,
-        ICall_name_resolver const  *name_resolver,
-        ILambda_resource_attribute *attr,
-        Float4_struct const        world_to_object[4],
-        Float4_struct const        object_to_world[4],
-        int                        object_id) = 0;
+        ILambda_function const         *lambda,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        ILambda_resource_attribute     *attr,
+        Float4_struct const            world_to_object[4],
+        Float4_struct const            object_to_world[4],
+        int                            object_id) = 0;
 
     /// Compile a lambda switch function having several roots using the JIT into a
     /// function computing one of the root expressions.
@@ -1170,16 +1218,18 @@ public:
     /// \param lambda               the lambda function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
+    /// \param ctx                  the code generator thread context
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_lambda_function *compile_into_switch_function(
-        ILambda_function const    *lambda,
-        IModule_cache             *module_cache,
-        ICall_name_resolver const *name_resolver,
-        unsigned                  num_texture_spaces,
-        unsigned                  num_texture_results) = 0;
+        ILambda_function const         *lambda,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results) = 0;
 
     /// Compile a lambda switch function having several roots using the JIT into a
     /// function computing one of the root expressions for execution on the GPU.
@@ -1190,19 +1240,21 @@ public:
     /// \param lambda               the lambda function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
+    /// \param ctx                  the code generator thread context
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_into_switch_function_for_gpu(
-        ICode_cache               *code_cache,
-        ILambda_function const    *lambda,
-        IModule_cache             *module_cache,
-        ICall_name_resolver const *name_resolver,
-        unsigned                  num_texture_spaces,
-        unsigned                  num_texture_results,
-        unsigned                  sm_version) = 0;
+        ICode_cache                    *code_cache,
+        ILambda_function const         *lambda,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results,
+        unsigned                       sm_version) = 0;
 
     /// Compile a lambda function into a generic function using the JIT.
     ///
@@ -1211,6 +1263,7 @@ public:
     /// \param lambda               the lambda function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
+    /// \param ctx                  the code generator thread context
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param transformer          an optional transformer for calls in the lambda expression
@@ -1219,12 +1272,13 @@ public:
     ///
     /// \note the lambda function must have only one root expression.
     virtual IGenerated_code_lambda_function *compile_into_generic_function(
-        ILambda_function const    *lambda,
-        IModule_cache             *module_cache,
-        ICall_name_resolver const *name_resolver,
-        unsigned                  num_texture_spaces,
-        unsigned                  num_texture_results,
-        ILambda_call_transformer  *transformer) = 0;
+        ILambda_function const         *lambda,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results,
+        ILambda_call_transformer       *transformer) = 0;
 
     /// Compile a lambda function into a LLVM-IR using the JIT.
     ///
@@ -1234,18 +1288,20 @@ public:
     /// \param lambda               the lambda function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
+    /// \param ctx                  the code generator thread context
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param enable_simd          if true, SIMD instructions will be generated
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_into_llvm_ir(
-        ILambda_function const    *lambda,
-        IModule_cache             *module_cache,
-        ICall_name_resolver const *name_resolver,
-        unsigned                  num_texture_spaces,
-        unsigned                  num_texture_results,
-        bool                      enable_simd) = 0;
+        ILambda_function const         *lambda,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results,
+        bool                           enable_simd) = 0;
 
     /// Compile a lambda function into PTX or HLSL using the JIT.
     ///
@@ -1256,6 +1312,7 @@ public:
     /// \param lambda               the lambda function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
+    /// \param ctx                  the code generator thread context
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
@@ -1265,15 +1322,16 @@ public:
     ///
     /// \return the compiled function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_into_source(
-        ICode_cache               *code_cache,
-        ILambda_function const    *lambda,
-        IModule_cache             *module_cache,
-        ICall_name_resolver const *name_resolver,
-        unsigned                  num_texture_spaces,
-        unsigned                  num_texture_results,
-        unsigned                  sm_version,
-        Compilation_mode          comp_mode,
-        bool                      llvm_ir_output) = 0;
+        ICode_cache                    *code_cache,
+        ILambda_function const         *lambda,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results,
+        unsigned                       sm_version,
+        Compilation_mode               comp_mode,
+        bool                           llvm_ir_output) = 0;
 
     /// Compile a distribution function into native code using the JIT.
     ///
@@ -1293,16 +1351,18 @@ public:
     /// \param dist_func            the distribution function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
+    /// \param ctx                  the code generator thread context
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     ///
     /// \return the compiled distribution function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_distribution_function_cpu(
-        IDistribution_function const *dist_func,
-        IModule_cache                *module_cache,
-        ICall_name_resolver const    *name_resolver,
-        unsigned                     num_texture_spaces,
-        unsigned                     num_texture_results) = 0;
+        IDistribution_function const   *dist_func,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results) = 0;
 
     /// Compile a distribution function into PTX or HLSL using the JIT.
     ///
@@ -1322,6 +1382,7 @@ public:
     /// \param dist_func            the distribution function to compile
     /// \param module_cache         the module cache if any
     /// \param name_resolver        the call name resolver
+    /// \param ctx                  the code generator thread context
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
@@ -1331,14 +1392,15 @@ public:
     ///
     /// \return the compiled distribution function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_distribution_function_gpu(
-        IDistribution_function const *dist_func,
-        IModule_cache                *module_cache,
-        ICall_name_resolver const    *name_resolver,
-        unsigned                     num_texture_spaces,
-        unsigned                     num_texture_results,
-        unsigned                     sm_version,
-        Compilation_mode             comp_mode,
-        bool                         llvm_ir_output) = 0;
+        IDistribution_function const   *dist_func,
+        IModule_cache                  *module_cache,
+        ICall_name_resolver const      *name_resolver,
+        ICode_generator_thread_context *ctx,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results,
+        unsigned                       sm_version,
+        Compilation_mode               comp_mode,
+        bool                           llvm_ir_output) = 0;
 
     /// Get the device library for PTX compilation.
     ///
@@ -1374,6 +1436,7 @@ public:
 
     /// Create a link unit.
     ///
+    /// \param ctx                  the code generator thread context
     /// \param mode                 the compilation mode
     /// \param enable_simd          if LLVM-IR is targeted, specifies whether to use SIMD
     ///                             instructions
@@ -1383,19 +1446,24 @@ public:
     ///
     /// \return  a new empty link unit.
     virtual ILink_unit *create_link_unit(
-        Compilation_mode  mode,
-        bool              enable_simd,
-        unsigned          sm_version,
-        unsigned          num_texture_spaces,
-        unsigned          num_texture_results) = 0;
+        ICode_generator_thread_context *ctx,
+        Compilation_mode               mode,
+        bool                           enable_simd,
+        unsigned                       sm_version,
+        unsigned                       num_texture_spaces,
+        unsigned                       num_texture_results) = 0;
 
     /// Compile a link unit into LLVM-IR, PTX or native code using the JIT.
     ///
+    /// \param ctx   the code generator thread context
     /// \param unit  the link unit to compile
     ///
     /// \return the compiled function or NULL on compilation errors
+    ///
+    /// \note the thread context should have the same value as in create_link_unit()
     virtual IGenerated_code_executable *compile_unit(
-        ILink_unit const *unit) = 0;
+        ICode_generator_thread_context *ctx,
+        ILink_unit const               *unit) = 0;
 
     /// Create a blank layout used for deserialization of target codes.
     virtual IGenerated_code_value_layout *create_value_layout() const = 0;

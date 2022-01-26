@@ -54,7 +54,7 @@ class IMdl_execution_context;
 ///       - Defaults are inserted for parameters without arguments.
 ///       - Conversion between named and positional arguments.
 ///       - Reformatting of the MDL source code.
-///       - Possibly restructering of alias declarations (including introduction of new ones).
+///       - Possibly restructuring of alias declarations (including introduction of new ones).
 ///
 /// /// \see #mi::neuraylib::IMdl_factory::create_module_transformer()
 class IMdl_module_transformer : public

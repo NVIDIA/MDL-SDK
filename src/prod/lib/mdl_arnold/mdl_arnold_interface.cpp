@@ -337,7 +337,8 @@ Mdl_sdk_interface::Mdl_sdk_interface()
     }
 
     m_default_material_db_name = default_module_db_name->get_c_str();
-    m_default_material_db_name += "::not_available";
+    m_default_material_simple_name = "not_available";
+    m_default_material_db_name += "::" + m_default_material_simple_name;
     m_state = EMdl_sdk_state::loaded;
 }
 

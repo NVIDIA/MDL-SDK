@@ -66,7 +66,7 @@ void create_textured_material(Material_compiler &mc, bool use_class_compilation)
         tf->create_texture(mi::mdl::IType_texture::TS_2D),
         "/nvidia/sdk_examples/resources/example.png",
         mi::mdl::IValue_texture::gamma_default,
-        /*selector=*/ "",        
+        /*selector=*/ "",
         /*tag=*/ 0,
         /*tag_version=*/ 0);
 
@@ -75,7 +75,8 @@ void create_textured_material(Material_compiler &mc, bool use_class_compilation)
     mi::mdl::DAG_node const *file_texture_call = mat_instance.create_call(
         base_dag.get(),
         "::base::file_texture(texture_2d,color,color,::base::mono_mode,"
-        "::base::texture_coordinate_info,float2,float2,::tex::wrap_mode,::tex::wrap_mode,bool)",
+        "::base::texture_coordinate_info,float2,float2,::tex::wrap_mode,::tex::wrap_mode,bool,"
+        "float,int2,::tex::wrap_mode,float)",
         { Call_argument(mat_instance->create_constant(tex), "texture") });
     check_success(file_texture_call);
 

@@ -39,6 +39,7 @@
 namespace mi {
 namespace mdl {
 
+// Constructor.
 Options_impl::Options_impl(IAllocator *alloc)
 : Base()
 , m_alloc(alloc)
@@ -46,6 +47,37 @@ Options_impl::Options_impl(IAllocator *alloc)
 {
 }
 
+// Copy-like constructor.
+Options_impl::Options_impl(
+    IAllocator         *alloc,
+    Options_impl const &other)
+: Base()
+, m_alloc(alloc)
+, m_options(alloc)
+{
+    for (int i = 0, n = other.get_option_count(); i < n; ++i) {
+        Option const &o = other.get_option(i);
+
+        if (o.is_binary()) {
+            add_binary_option(o.get_name(), o.get_description());
+            BinaryOptionData bd = o.get_binary_data();
+            if (bd.size > 0) {
+                set_binary_option(o.get_name(), bd.data, bd.size);
+            }
+        } else if (o.is_interface()) {
+            add_interface_option(o.get_name(), o.get_description());
+            mi::base::Handle<mi::base::IInterface const> id(o.get_interface_value());
+            if (id.is_valid_interface()) {
+                set_interface_option(o.get_name(), id.get());
+            }
+        } else {
+            add_option(o.get_name(), o.get_default_value(), o.get_description());
+            set_option(o.get_name(), o.get_value());
+        }
+    }
+}
+
+// Destructor.
 Options_impl::~Options_impl()
 {
 }
@@ -93,6 +125,18 @@ BinaryOptionData Options_impl::get_binary_option(int index) const
     return opt.get_binary_data();
 }
 
+// Get the value and size of the binary option at index.
+mi::base::IInterface const *Options_impl::get_interface_option(int index) const
+{
+    Option const &opt = get_option(index);
+    if (!opt.is_interface())
+        return NULL;
+    mi::base::Handle<mi::base::IInterface const> value(opt.get_interface_value());
+    if (value.is_valid_interface())
+        value->retain();
+    return value.get();
+}
+
 // Get the default value of the option at index.
 char const *Options_impl::get_option_default_value(int index) const
 {
@@ -121,6 +165,7 @@ bool Options_impl::set_option(char const *name, char const *value)
     if (index >= 0) {
         Option &opt = m_options[index];
         if (opt.is_binary()) return false;
+        if (opt.is_interface()) return false;
         opt.set_value(value);
         return true;
     }
@@ -137,6 +182,20 @@ bool Options_impl::set_binary_option(char const *name, char const *data, size_t 
             return false;
         opt.set_binary_value(data, size);
         return true;
+    }
+    return false;
+}
+
+// Set an option.
+bool Options_impl::set_interface_option(char const *name, mi::base::IInterface const *value)
+{
+    int index = get_option_index(name);
+    if (index >= 0) {
+        Option &opt = m_options[index];
+        if (opt.is_interface()) {
+            opt.set_interface_value(value);
+            return true;
+        }
     }
     return false;
 }
@@ -160,7 +219,13 @@ void Options_impl::add_option(char const *name, char const *def_value, char cons
 // Add a new binary option.
 void Options_impl::add_binary_option(char const *name, char const *description)
 {
-    m_options.push_back(Option(m_alloc, name, NULL, size_t(0), description));
+    m_options.push_back(Option(m_alloc, name, /*def_value=*/NULL, size_t(0), description));
+}
+
+// Add a new binary option.
+void Options_impl::add_interface_option(char const *name, char const *description)
+{
+    m_options.push_back(Option(m_alloc, name, /*def_value=*/NULL, description));
 }
 
 // Get a string option.

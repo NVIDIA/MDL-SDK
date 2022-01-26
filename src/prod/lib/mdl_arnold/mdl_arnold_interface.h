@@ -78,6 +78,9 @@ public:
     bool log_messages(const mi::neuraylib::IMdl_execution_context* context);
 
     const std::string& get_default_material_db_name() const { return m_default_material_db_name; }
+    const std::string& get_default_material_simple_name() const { return 
+        m_default_material_simple_name; 
+    }
 
     void set_search_paths();
 
@@ -89,6 +92,7 @@ private:
     void* m_so_handle;
     EMdl_sdk_state m_state;
     std::string m_default_material_db_name;
+    std::string m_default_material_simple_name;
     std::mutex m_loading_mutex;
 
     mi::base::Handle<mi::neuraylib::INeuray> m_mdl_sdk;

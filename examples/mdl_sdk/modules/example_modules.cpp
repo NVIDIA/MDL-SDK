@@ -189,8 +189,8 @@ void load_module( mi::neuraylib::INeuray* neuray)
         // Dump a material definition from the module.
         std::cout << "Dumping material definition \"" << material_definition_name << "\":"
                   << std::endl;
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-            transaction->access<mi::neuraylib::IMaterial_definition>( material_definition_name));
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+            transaction->access<mi::neuraylib::IFunction_definition>( material_definition_name));
         dump_definition(
             transaction.get(), mdl_factory.get(), material_definition.get(), 1, std::cout);
 
@@ -198,15 +198,17 @@ void load_module( mi::neuraylib::INeuray* neuray)
         std::cout << "Dumping resources of this module: \n";
         for( mi::Size r = 0, rn = module->get_resources_count(); r < rn; ++r)
         {
-            const char* db_name = module->get_resource_name( r);
-            const char* mdl_file_path = module->get_resource_mdl_file_path( r);
+            mi::base::Handle<const mi::neuraylib::IValue_resource> resource(
+                module->get_resource( r));
+            const char* db_name = resource->get_value();
+            const char* mdl_file_path = resource->get_file_path();
 
             if( db_name == nullptr)
             {
                 // resource is either not used and therefore has not been loaded or
                 // could not be found.
                 std::cout << "    db_name:               none" << std::endl;
-                std::cout << "    mdl_file_path:         " << mdl_file_path << std::endl 
+                std::cout << "    mdl_file_path:         " << mdl_file_path << std::endl
                           << std::endl;
                 continue;
             }
@@ -214,7 +216,7 @@ void load_module( mi::neuraylib::INeuray* neuray)
             std::cout << "    mdl_file_path:         " << mdl_file_path << std::endl;
 
             const mi::base::Handle<const mi::neuraylib::IType_resource> type(
-                module->get_resource_type( r));
+                resource->get_type());
             switch( type->get_kind())
             {
                 case mi::neuraylib::IType::TK_TEXTURE:
@@ -226,12 +228,12 @@ void load_module( mi::neuraylib::INeuray* neuray)
                         const mi::base::Handle<const mi::neuraylib::IImage> image(
                             transaction->access<mi::neuraylib::IImage>( texture->get_image()));
 
-                        for( mi::Size t = 0, tn = image->get_uvtile_length(); t < tn; ++t)
+                        for( mi::Size f = 0, fn = image->get_length(); f < fn; ++f)
+                        for( mi::Size t = 0, tn = image->get_frame_length( f); t < tn; ++t)
                         {
-                            const char* system_file_path = image->get_filename(
-                                static_cast<mi::Uint32>( t));
-                            std::cout << "    resolved_file_path[" << t << "]: " 
-                                      << system_file_path << std::endl;
+                            const char* resolved_file_path = image->get_filename( f, t);
+                            std::cout << "    resolved_file_path[" << f << "," << t << "]: "
+                                      << resolved_file_path << std::endl;
                         }
                     }
                     break;
@@ -243,8 +245,8 @@ void load_module( mi::neuraylib::INeuray* neuray)
                         transaction->access<mi::neuraylib::ILightprofile>( db_name));
                     if( light_profile)
                     {
-                        const char* system_file_path = light_profile->get_filename();
-                        std::cout << "    resolved_file_path:    " << system_file_path << std::endl;
+                        const char* resolved_file_path = light_profile->get_filename();
+                        std::cout << "    resolved_file_path:    " << resolved_file_path << std::endl;
                     }
                     break;
                 }
@@ -255,8 +257,8 @@ void load_module( mi::neuraylib::INeuray* neuray)
                         transaction->access<mi::neuraylib::IBsdf_measurement>( db_name));
                     if( mbsdf)
                     {
-                        const char* system_file_path = mbsdf->get_filename();
-                        std::cout << "    resolved_file_path:    " << system_file_path << std::endl;
+                        const char* resolved_file_path = mbsdf->get_filename();
+                        std::cout << "    resolved_file_path:    " << resolved_file_path << std::endl;
                     }
                     break;
                 }

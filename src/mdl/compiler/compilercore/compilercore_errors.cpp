@@ -789,6 +789,8 @@ char const *get_error_template(
             return "parsing the user-specified renderer module failed: $0";
         case LINKING_RENDERER_MODULE_FAILED:
             return "linking the user-specified renderer module failed: $0";
+        case STATE_MODULE_IS_INCOMPLETE:
+            return "user-specified state module is incomplete";
 
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:

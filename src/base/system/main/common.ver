@@ -35,12 +35,21 @@ BEGIN
             VALUE "LegalCopyright",  VER_LEGALCOPYRIGHT_STR
             VALUE "Copyright",  VER_LEGALCOPYRIGHT_STR
             VALUE "ProductName",     VER_PRODUCTNAME_STR
+#ifdef VER_BRIDGE_VERSION_STR
+            VALUE "ProductVersion",  VER_PRODUCTVERSION_STR " (Bridge Version:" VER_BRIDGE_VERSION_STR ")"
+#else
             VALUE "ProductVersion",  VER_PRODUCTVERSION_STR
+#endif 
             VALUE "ProductDate",     VER_DATE
             VALUE "FileDescription", VER_FILEDESCRIPTION_STR EXPORT_TAG
             VALUE "FileVersion",     VER_FILEVERSION_STR
             VALUE "InternalName",    VER_INTERNALNAME_STR
             VALUE "OriginalFilename",VER_ORIGINALFILENAME_STR
+/* Not shown in File Properties Windows 7 and up
+#ifdef VER_COMMENTS_STR
+            VALUE "Comments",        VER_COMMENTS_STR
+#endif
+*/
         END
 
     END

@@ -73,20 +73,25 @@ struct Resource_hasher {
     size_t operator()(Resource_tag_tuple const &p) const {
         cstring_hash cstring_hasher;
 
-        return size_t(p.m_kind) ^ cstring_hasher(p.m_url) ^ p.m_tag;
+        return size_t(p.m_kind) ^ cstring_hasher(p.m_url) ^ cstring_hasher(p.m_selector) ^ p.m_tag;
     }
 };
 
 struct Resource_equal_to {
     bool operator()(Resource_tag_tuple const &a, Resource_tag_tuple const &b) const {
-        if (a.m_kind != b.m_kind)
+        if (a.m_kind != b.m_kind) {
             return false;
-        if (a.m_tag != b.m_tag)
+        }
+        if (a.m_tag != b.m_tag) {
             return false;
+        }
 
         cstring_equal_to cstring_cmp;
 
-        return cstring_cmp(a.m_url, b.m_url);
+        if (!cstring_cmp(a.m_url, b.m_url)) {
+            return false;
+        }
+        return cstring_cmp(a.m_selector, b.m_selector);
     }
 };
 
@@ -210,6 +215,7 @@ public:
     ///
     /// \param res_kind        the kind of the resource (texture or invalid reference)
     /// \param res_url         the URL of the texture resource if any
+    /// \param res_sel         the selector of the texture resource if any
     /// \param gamma           the gamma mode of this resource
     /// \param bsdf_data_kind  the kind of BSDF data in case of BSDF data textures
     /// \param shape           the shape of this resource
@@ -222,6 +228,7 @@ public:
     void map_tex_resource(
         IValue::Kind                   res_kind,
         char const                     *res_url,
+        char const                     *res_sel,
         IValue_texture::gamma_mode     gamma,
         IValue_texture::Bsdf_data_kind bsdf_data_kind,
         IType_texture::Shape           shape,
@@ -385,10 +392,12 @@ public:
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_sel         the resource selector (for textures) or NULL
     /// \param tag             the tag value
     void set_resource_tag(
         Resource_tag_tuple::Kind const res_kind,
         char const                     *res_url,
+        char const                     *res_sel,
         int                            tag) MDL_FINAL;
 
     /// Remap a resource value according to the resource map.
@@ -506,20 +515,24 @@ public:
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_url         the resource selector (for textures) or NULL
     ///
     /// \return 0 if not found, else the assigned tag
     int find_resource_tag(
         Resource_tag_tuple::Kind const res_kind,
-        char const                     *res_url) const;
+        char const                     *res_url,
+        char const                     *res_sel) const;
 
     /// Add a tag for a resource value that might be reachable from this function.
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_sel         the resource selector (for textures) or NULL
     /// \param tag             the tag value
     void add_resource_tag(
         Resource_tag_tuple::Kind const res_kind,
         char const                     *res_url,
+        char const                     *res_sel,
         int                            tag);
 
 private:
@@ -831,10 +844,12 @@ public:
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_sel         the resource selector (for textures) or NULL
     /// \param tag             the tag value
     void set_resource_tag(
         Resource_tag_tuple::Kind const res_kind,
         char const                     *res_url,
+        char const                     *res_sel,
         int                            tag) MDL_FINAL;
 
     /// Get the derivative information if they were requested during initialization.
@@ -854,21 +869,25 @@ private:
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_sel         the resource selector (for textures) or NULL
     ///
     /// \return 0 if not found, else the assigned tag
     int find_resource_tag(
         Resource_tag_tuple::Kind const res_kind,
-        char const                     *res_url) const;
+        char const                     *res_url,
+        char const                     *res_sel) const;
 
     /// Add tag, version pair for a resource value that might be reachable from this
     /// function.
     ///
     /// \param res_kind        the resource kind
     /// \param res_url         the resource url
+    /// \param res_sel         the resource selector (for textures) or NULL
     /// \param tag             the tag value
     void add_resource_tag(
         Resource_tag_tuple::Kind res_kind,
         char const               *res_url,
+        char const               *res_sel,
         int                      tag);
 
 private:

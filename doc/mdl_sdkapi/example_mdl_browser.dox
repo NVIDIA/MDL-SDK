@@ -145,7 +145,7 @@ configured search paths.
 
     <dt><b>Presentation of selectable materials</b></dt>
     <dd><br>
-        Depending on the user’s intension, we support him or her by sorting the results on the selection pane. 
+        Depending on the user’s intention, we support him or her by sorting the results on the selection pane. 
         The example provides three example sorting strategies: 
         sorting by name, by modification date, and by search ranking, 
         while all of them can be sorted ascending and descending. 

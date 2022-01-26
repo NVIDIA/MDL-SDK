@@ -1121,11 +1121,9 @@ int Create_mdle::execute()
         }
 
         // check if the material/function is available
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-            transaction->access<mi::neuraylib::IMaterial_definition>(db_name.c_str()));
         mi::base::Handle<const mi::neuraylib::IFunction_definition> function_definition(
             transaction->access<mi::neuraylib::IFunction_definition>(db_name.c_str()));
-        if (!material_definition && !function_definition)
+        if (!function_definition)
         {
             Util::log_error("failed to find the selected material/function: '" + function_name + "' "
                             "in module: '" + module_name + "'.");
@@ -1139,28 +1137,12 @@ int Create_mdle::execute()
         prototype->set_c_str(db_name.c_str());
 
         // keep the thumbnail (since defaults can't be change here)
-        std::string thumbnail_path("");
-        mi::Size parameter_count = 0;
-        mi::Size defaults_count = 0;
-
-        if(material_definition) 
-        {
-            const char* p = material_definition->get_thumbnail();
-            parameter_count = material_definition->get_parameter_count();
-            mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
-                material_definition->get_defaults());
-            defaults_count = defaults->get_size();
-            thumbnail_path = p ? p : "";
-        } 
-        else if (function_definition) 
-        {
-            const char* p = function_definition->get_thumbnail();
-            parameter_count = function_definition->get_parameter_count();
-            mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
-                function_definition->get_defaults());
-            defaults_count = defaults->get_size();
-            thumbnail_path = p ? p : "";
-        }
+        const char* p = function_definition->get_thumbnail();
+        mi::Size parameter_count = function_definition->get_parameter_count();
+        mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
+            function_definition->get_defaults());
+        mi::Size defaults_count = defaults->get_size();
+        std::string thumbnail_path(p ? p : "");
 
         // check if all parameters have defaults
         if (parameter_count != defaults_count)

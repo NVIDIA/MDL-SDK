@@ -77,6 +77,15 @@ public:
     /// Creates an execution context.
     virtual IMdl_execution_context* create_execution_context() = 0;
 
+    /// Clones an execution context.
+    ///
+    /// Creates a new execution context if \p context is NULL (as in #create_execution_context()).
+    /// There is \em no deep copy of option values of type #mi::base::IInterface, they are shared
+    /// by both instances.
+    ///
+    /// Useful to change options temporarily.
+    virtual IMdl_execution_context* clone( const IMdl_execution_context* context) = 0;
+
     /// Creates a value referencing a texture identified by an MDL file path.
     ///
     /// \param transaction   The transaction to be used.
@@ -88,6 +97,8 @@ public:
     ///                      to the return value.
     /// \param gamma         The value that is returned by #mi::neuraylib::ITexture::get_gamma()
     ///                      on the DB element referenced by the return value.
+    /// \param selector      The selector, or \c NULL. See section 2.3.1 in [\ref MDLLS] for
+    ///                      details.
     /// \param shared        Indicates whether you want to re-use the DB elements for that texture
     ///                      if it has already been loaded, or if you want to create new DB elements
     ///                      in all cases. Note that sharing is based on the location where the
@@ -107,8 +118,20 @@ public:
         const char* file_path,
         IType_texture::Shape shape,
         Float32 gamma,
+        const char* selector,
         bool shared,
         Sint32* errors = 0) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_12_1
+    inline IValue_texture* create_texture(
+        ITransaction* transaction,
+        const char* file_path,
+        IType_texture::Shape shape,
+        Float32 gamma,
+        bool shared,
+        Sint32* errors = 0)
+    { return create_texture( transaction, file_path, shape, gamma, 0, shared, errors); }
+#endif // MI_NEURAYLIB_DEPRECATED_12_1
 
     /// Creates a value referencing a light profile identified by an MDL file path.
     ///
@@ -347,18 +370,6 @@ public:
         const IArray* mdl_data,
         IMdl_execution_context* context) = 0;
 };
-
-/// Options for repairing material instances and function calls.
-///
-/// \see #mi::neuraylib::IMaterial_instance::repair() and  #mi::neuraylib::IFunction_call::repair().
-enum Mdl_repair_options {
-    MDL_REPAIR_DEFAULT = 0,           ///< Default mode, do not alter any inputs.
-    MDL_REMOVE_INVALID_ARGUMENTS = 1, ///< Remove an invalid call attached to an argument.
-    MDL_REPAIR_INVALID_ARGUMENTS = 2, ///< Attempt to repair invalid calls attached to an argument.
-    MDL_REPAIR_OPTIONS_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
-};
-
-mi_static_assert(sizeof(Mdl_repair_options) == sizeof(Uint32));
 
 /*@}*/ // end group mi_neuray_mdl_types
 

@@ -65,7 +65,7 @@ This example uses function calls to create a textured material.
         Creating a textured material
     </b></dt>
     <dd><br>
-        The method \c create_texture_material() shows all the steps needed to create a textured
+        The method \c create_textured_material() shows all the steps needed to create a textured
         material in a bottom-up order. First we create a DB element of type #mi::neuraylib::IImage
         that represents the provided \c .png file, and a DB element of type
         #mi::neuraylib::ITexture that references the image.

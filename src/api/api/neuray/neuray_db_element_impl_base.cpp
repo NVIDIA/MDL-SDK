@@ -36,10 +36,10 @@
 #include "neuray_db_element_tracker.h"
 #include "neuray_transaction_impl.h"
 
+#include <io/scene/mdl_elements/i_mdl_elements_annotation_definition_proxy.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
-#include <io/scene/mdl_elements/mdl_elements_annotation_definition_proxy.h>
 
 // If defined, the destructor of Db_element_impl_base dumps all set journal flags for elements in
 // state STATE_EDIT.

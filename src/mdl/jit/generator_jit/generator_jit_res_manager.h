@@ -48,14 +48,16 @@ public:
     /// \param tag         the resource tag (if assigned)
     /// \param shape       if the resource is a texture: its shape
     /// \param gamma_mode  if the resource is a texture: its gamma mode
+    /// \param selector    if the resource is a texture: its selector
     ///
     /// \returns a resource index or 0 if no resource index can be returned
     virtual size_t get_resource_index(
         Resource_tag_tuple::Kind   kind,
         char const                 *url,
         int                        tag,
-        IType_texture::Shape       shape = IType_texture::TS_2D,
-        IValue_texture::gamma_mode gamma_mode = IValue_texture::gamma_default) = 0;
+        IType_texture::Shape       shape      = IType_texture::TS_2D,
+        IValue_texture::gamma_mode gamma_mode = IValue_texture::gamma_default,
+        char const                 *selector  = "") = 0;
 
     /// Register a string constant and return its 1 based index in the string table.
     ///

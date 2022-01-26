@@ -61,7 +61,7 @@ int main(int argc, char *argv_[]) {
 #error unknown compiler!
 #endif
 
-	wprintf(L"Coco/R (Jun 7, 2020, NVidia modified)\n");
+	wprintf(L"Coco/R (Jul 7, 2021, NVidia modified)\n");
 
 	wchar_t *srcName = NULL;
 	wchar_t *nsName = NULL;

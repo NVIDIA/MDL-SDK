@@ -30,12 +30,15 @@
 #define SHADERS_PLUGIN_DDS_DDS_IMAGE_FILE_READER_IMPL_H
 
 #include <mi/base.h>
+#include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/iimage_plugin.h>
 
 #include "dds_image.h"
 #include "dds_types.h"
 
 #include <io/image/image/i_image_utilities.h>
+
+namespace mi { namespace neuraylib { class IImage_api; } }
 
 namespace MI {
 
@@ -45,10 +48,7 @@ class Image_file_reader_impl : public mi::base::Interface_implement<mi::neurayli
 {
 public:
     /// Constructs an image file that imports from the given reader
-    Image_file_reader_impl( mi::neuraylib::IReader* reader);
-
-    /// Destructor
-    ~Image_file_reader_impl();
+    Image_file_reader_impl( mi::neuraylib::IImage_api* image_api, mi::neuraylib::IReader* reader);
 
     // methods of mi::neuraylib::IImage_file
 
@@ -60,35 +60,29 @@ public:
 
     mi::Uint32 get_layers_size( mi::Uint32 level) const;
 
-    mi::Uint32 get_tile_resolution_x( mi::Uint32 level) const;
-
-    mi::Uint32 get_tile_resolution_y( mi::Uint32 level) const;
-
     mi::Uint32 get_miplevels() const;
 
     bool get_is_cubemap() const;
 
     mi::Float32 get_gamma() const;
 
-    bool read(
-        mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
+    mi::neuraylib::ITile* read(
         mi::Uint32 z,
         mi::Uint32 level) const;
 
     /// Does nothing and returns always \false.
     bool write(
         const mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
         mi::Uint32 z,
         mi::Uint32 level);
 
 private:
 
+    /// API component IImage_api.
+    mi::base::Handle<mi::neuraylib::IImage_api> m_image_api;
+
     /// The reader used to import the image.
-    mi::neuraylib::IReader* m_reader;
+    mi::base::Handle<mi::neuraylib::IReader> m_reader;
 
     /// The DDS header.
     Header m_header;
@@ -97,13 +91,13 @@ private:
     Header_dx10 m_header_dx10;
 
     /// Indicates whether a DX10 header present / #m_header_dx10 is valid.
-    bool m_is_header_dx10;
+    bool m_is_header_dx10 = false;
 
     /// The pixel type (decoded from the header).
-    IMAGE::Pixel_type m_pixel_type;
+    IMAGE::Pixel_type m_pixel_type = IMAGE::PT_UNDEF;
 
     /// The gamma value (decoded from the header).
-    mi::Float32 m_gamma;
+    mi::Float32 m_gamma = 0.0f;
 
     /// The DDS image.
     mutable Image m_image;

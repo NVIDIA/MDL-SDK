@@ -95,7 +95,7 @@ public:
     /// \param index     Index in the shadow list of this module.
     virtual const IMdl_module_info* get_shadow(Size index) const = 0;
 
-    /// Returns true if the module has been discovered inside of an archive, false if not.
+    /// Returns \c true if the module has been discovered inside of an archive, \c false if not.
     virtual bool                    in_archive() const = 0;
 };
 
@@ -114,7 +114,7 @@ public:
     /// Returns the search path in the local file system that contains this xliff file.
     virtual const char*          get_search_path() const = 0;
 
-    /// Returns true if the xliff file has been discovered inside of an archive, false if not.
+    /// Returns \c true if the xliff file has been discovered inside of an archive, \c false if not.
     virtual bool                 in_archive() const = 0;
 };
 
@@ -143,7 +143,7 @@ public:
     /// \param index     Index in the shadow list of this resource.
     virtual const IMdl_resource_info* get_shadow(Size index) const = 0;
 
-    /// Returns true if the resource has been discovered inside of an archive, false if not.
+    /// Returns \c true if the resource has been discovered inside of an archive, \c false if not.
     virtual bool                    in_archive() const = 0;
 };
 
@@ -197,7 +197,7 @@ public:
     /// \param index     Index in the resolved path list of this package.
     virtual const IString*          get_resolved_path(Size index) const = 0;
 
-    /// Returns true if the package has been discovered inside of an archive, false if not.
+    /// Returns \c true if the package has been discovered inside of an archive, \c false if not.
     /// \param index     Index in the interval [0, search_path_index_count).
     virtual bool                    in_archive(Size index) const = 0;
 };

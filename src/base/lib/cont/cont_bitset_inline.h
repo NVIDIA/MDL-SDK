@@ -34,6 +34,10 @@
 #ifndef BASE_LIB_CONT_BITSET_INLINE_H
 #define BASE_LIB_CONT_BITSET_INLINE_H
 
+#include <algorithm>
+#include <ostream>
+
+
 namespace MI {
 namespace CONT {
 
@@ -55,6 +59,15 @@ constexpr bool Bitset_storage_base<T,count>::equals(const Bitset_storage_base& r
         if (m_data[i] != rhs.m_data[i])
             return false;
     return true;
+}
+
+
+template <typename T, std::size_t count>
+constexpr bool Bitset_storage_base<T,count>::is_less_than(const Bitset_storage_base& rhs) const
+{
+    return std::lexicographical_compare(
+            std::begin(m_data),std::end(m_data),
+            std::begin(rhs.m_data),std::end(rhs.m_data));
 }
 
 
@@ -211,6 +224,13 @@ template <typename T>
 constexpr bool Bitset_storage_base<T,1>::equals(const Bitset_storage_base& rhs) const
 {
     return m_data == rhs.m_data;
+}
+
+
+template <typename T>
+constexpr bool Bitset_storage_base<T,1>::is_less_than(const Bitset_storage_base& rhs) const
+{
+    return m_data < rhs.m_data;
 }
 
 
@@ -524,6 +544,13 @@ constexpr bool Bitset<bit_count>::operator!=(const Bitset& rhs) const
 
 
 template <std::size_t bit_count>
+constexpr bool Bitset<bit_count>::operator<(const Bitset& rhs) const
+{
+    return m_data.is_less_than(rhs.m_data);
+}
+
+
+template <std::size_t bit_count>
 inline Bitset<bit_count>& Bitset<bit_count>::operator&=(const Bitset& rhs)
 {
     m_data.do_and(rhs.m_data);
@@ -602,6 +629,16 @@ constexpr void Bitset<bit_count>::clean()
     typedef DETAIL::Bit_cleaner<Base_data_type,bit_count%(sizeof(Base_data_type)*CHAR_BIT)> Cleaner;
     Cleaner::clean(m_data.data(bit_count-1));
 }
+
+
+template <std::size_t bit_count>
+std::ostream& operator<<(std::ostream& str, const Bitset<bit_count>& set)
+{
+    for (std::size_t i=0; i<bit_count; ++i)
+        str << set[bit_count-1-i];
+    return str;
+}
+
 
 
 //-------------------------------------------------

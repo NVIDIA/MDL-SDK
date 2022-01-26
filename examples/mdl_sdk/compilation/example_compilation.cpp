@@ -77,7 +77,7 @@ void dump_compiled_material(
         "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
     s << "    hash overall = " << buffer << std::endl;
 
-    for( mi::Uint32 i = 0; i <= mi::neuraylib::SLOT_GEOMETRY_NORMAL; ++i) {
+    for( mi::Uint32 i = mi::neuraylib::SLOT_FIRST; i <= mi::neuraylib::SLOT_LAST; ++i) {
         hash = cm->get_slot_hash( mi::neuraylib::Material_slot( i));
         snprintf( buffer, sizeof( buffer),
             "%08x %08x %08x %08x", hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
@@ -140,15 +140,15 @@ void create_material_instance(
         = std::string(module_db_name->get_c_str()) + "::" + material_simple_name;
 
     // Get the material definition from the database
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        transaction->access<mi::neuraylib::IMaterial_definition>(material_db_name.c_str()));
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        transaction->access<mi::neuraylib::IFunction_definition>(material_db_name.c_str()));
     if (!material_definition)
         exit_failure("Accessing definition '%s' failed.", material_db_name.c_str());
 
     // Create a material instance from the material definition with the default arguments.
     mi::Sint32 result;
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        material_definition->create_material_instance(0, &result));
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        material_definition->create_function_call(0, &result));
     if (result != 0)
         exit_failure("Instantiating '%s' failed.", material_db_name.c_str());
 
@@ -194,8 +194,8 @@ void change_arguments(
         mdl_factory->create_expression_factory( transaction));
 
     // Edit the instance of the material definition "compilation_material".
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        transaction->edit<mi::neuraylib::IMaterial_instance>( instance_name));
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        transaction->edit<mi::neuraylib::IFunction_call>( instance_name));
     check_success( material_instance.is_valid_interface());
 
     // Create the new argument for the "tint" parameter from scratch with the new value, and set it.

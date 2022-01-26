@@ -466,6 +466,7 @@ bool Mdl_material_target::generate()
                 // use the back-end to restore the serialized target code
                 // this is expected to fail when build or protocol versions do not match
                 m_target_code = m_sdk->get_backend().deserialize_target_code(
+                    m_sdk->get_transaction().get(),
                     reinterpret_cast<mi::Uint8*>(cache_buffer + offset),
                     target_code_size, context.get());
 

@@ -397,14 +397,14 @@ bool initEnvironmentLight(PathTracerState& state, const std::string& env_path)
             return false;
         }
 
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
+        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
         const mi::Uint32 rx = canvas->get_resolution_x();
         const mi::Uint32 ry = canvas->get_resolution_y();
         state.params.env_light.size.x = rx;
         state.params.env_light.size.y = ry;
 
         // Check, whether we need to convert the image
-        char const *image_type = image->get_type();
+        char const *image_type = image->get_type(0, 0);
         if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0) {
             canvas = state.mdl_helper->get_image_api()->convert(canvas.get(), "Color");
         }

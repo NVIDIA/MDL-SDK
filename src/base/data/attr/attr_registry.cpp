@@ -75,7 +75,7 @@ Attribute_spec::Attribute_spec(
 
 // Constructor.
 Attribute_registry::Attribute_registry()
-: m_counter()
+: m_counter(0)
 {}
 
 

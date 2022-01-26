@@ -48,14 +48,15 @@ namespace SERIAL { class Serializer; class Deserializer; }
 namespace TEXTURE {
 
 /// Texture compression method.
-enum Texture_compression {
+enum Texture_compression
+{
     TEXTURE_NO_COMPRESSION     = 0, ///< no compression
     TEXTURE_MEDIUM_COMPRESSION = 1, ///< medium compression ratio
     TEXTURE_HIGH_COMPRESSION   = 2  ///< high compression ratio
 };
 
 /// The class ID for the #Texture class.
-static const SERIAL::Class_id ID_TEXTURE = 0x5f546578;// '_Tex'
+static constexpr SERIAL::Class_id ID_TEXTURE = 0x5f546578;// '_Tex'
 
 /// The texture class.
 ///
@@ -97,7 +98,8 @@ public:
     ///
     /// Returns the gamma value of this texture, unless no override is set. In this case the
     /// gamma value of the underlying image is returned (or 0.0 if no image is set).
-    mi::Float32 get_effective_gamma( DB::Transaction* transaction, mi::Uint32 uvtile_id = 0) const;
+    mi::Float32 get_effective_gamma(
+        DB::Transaction* transaction, mi::Size frame_id, mi::Size uvtile_id) const;
 
     /// Sets the texture compression method.
     ///
@@ -116,6 +118,13 @@ public:
     ///
     /// \see ::Texture_compression
     Texture_compression get_compression() const;
+
+    // internal methods
+
+    /// Returns the selector of the referenced image or volume data.
+    ///
+    /// \return   The selector, or the empty string if not available.
+    std::string get_selector( DB::Transaction* transaction) const;
 
     // methods of SERIAL::Serializable
 
@@ -139,8 +148,8 @@ public:
 
 private:
 
-    DB::Tag m_volume_data;             ///< The referenced volume.
     DB::Tag m_image;                   ///< The referenced image.
+    DB::Tag m_volume_data;             ///< The referenced volume.
     mi::Float32 m_gamma;               ///< The gamma value.
     Texture_compression m_compression; ///< The compression method.
 };

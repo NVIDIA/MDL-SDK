@@ -300,6 +300,9 @@ public:
     bool resolve_resources() const { return m_resolve_resources; }
 
 
+    /// Get the thread context;
+    Thread_context& get_thread_context() { return m_ctx; }
+
 protected:
     /// Enter an imported definition.
     ///
@@ -468,7 +471,7 @@ protected:
     ///
     /// \param qual  the qualifier to apply
     /// \param type  the unqualified type
-    /// 
+    ///
     /// \return the qualified type
     const IType *qualify_type(Qualifier qual, const IType *type);
 
@@ -742,7 +745,7 @@ class NT_analysis : public Analysis, ICallgraph_scc_visitor {
         }
 
         ~Enter_function() { (void)m_ana.pop_function(); };
-    
+
     private:
         NT_analysis &m_ana;
     };
@@ -2110,7 +2113,7 @@ struct Resource_table_key
     {
     }
 
-    bool operator==(const Resource_table_key& other) const 
+    bool operator==(const Resource_table_key& other) const
     {
         if (key_tag != 0 && key_tag == other.key_tag)
             return true;
@@ -2487,7 +2490,7 @@ class AT_analysis : public Analysis
     class Assignment_stack {
     public:
         /// Constructor.
-        /// 
+        ///
         /// \param alloc  the allocator
         explicit Assignment_stack(IAllocator *alloc)
         : m_stack(Dependency_stack::container_type(alloc))
@@ -2509,7 +2512,7 @@ class AT_analysis : public Analysis
         size_t top() const { return m_stack.top(); }
 
         /// Set a new stop depth.
-        size_t set_stop_depth(size_t stop_depth) 
+        size_t set_stop_depth(size_t stop_depth)
         {
             size_t old = m_stop_depth;
             m_stop_depth = stop_depth;
@@ -2517,7 +2520,7 @@ class AT_analysis : public Analysis
         }
 
         /// Set a new stop depth at current depth.
-        size_t set_stop_depth() 
+        size_t set_stop_depth()
         {
             size_t old = m_stop_depth;
             m_stop_depth = m_depth;
@@ -2719,6 +2722,13 @@ private:
     /// Set to true, if errors was found.
     bool m_errors;
 };
+
+/// Check if the given type is a user defined type.
+///
+/// \param type  the type to check
+///
+/// \note User (defined) types are non-predefined enums, structs, and array types.
+bool is_user_type(IType const *type);
 
 /// Returns true for error names.
 bool is_error(IQualified_name const *name);

@@ -1628,6 +1628,8 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
     ASSERT( M_SCENE, context);
     ASSERT( M_SCENE, get_encoded_names_enabled());
 
+    mi::base::Handle<IType_factory> tf( get_type_factory());
+
     std::string s = definition_name;
 
     // Catch some misuse. Also important for deriving the module name.
@@ -1721,7 +1723,7 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
             return nullptr;
         }
 
-        s += Type_factory::get_serialization_type_name( arg0.get());
+        s += tf->get_serialization_type_name( arg0.get());
         s += ',';
         std::ostringstream ss;
         ss << argument_types->get_size();
@@ -1739,7 +1741,7 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
             return nullptr;
         }
 
-        s += Type_factory::get_serialization_type_name( arg0.get());
+        s += tf->get_serialization_type_name( arg0.get());
 
     } else if( is_array_length_operator) {
 
@@ -1751,7 +1753,7 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
             return nullptr;
         }
 
-        s += Type_factory::get_serialization_type_name( arg0.get());
+        s += tf->get_serialization_type_name( arg0.get());
 
     } else if( is_ternary_operator) {
 
@@ -1761,7 +1763,7 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
             return nullptr;
         }
 
-        s += Type_factory::get_serialization_type_name( arg1.get());
+        s += tf->get_serialization_type_name( arg1.get());
 
     } else if( is_cast_operator) {
 
@@ -1771,9 +1773,9 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
             return nullptr;
         }
 
-        s += Type_factory::get_serialization_type_name( arg0.get());
+        s += tf->get_serialization_type_name( arg0.get());
         s += ',';
-        s += Type_factory::get_serialization_type_name( return_type);
+        s += tf->get_serialization_type_name( return_type);
 
     } else {
         ASSERT( M_SCENE, false);
@@ -2526,17 +2528,13 @@ const IExpression* lookup_sub_expression(
 void get_texture_attributes(
     DB::Transaction* transaction,
     DB::Tag tag,
-    mi::Sint32 uv_tile_x,
-    mi::Sint32 uv_tile_y,
     bool& valid,
-    int& width,
-    int& height,
-    int& depth)
+    int& first_frame,
+    int& last_frame)
 {
-    valid     = false;
-    width     = 0;
-    height    = 0;
-    depth     = 0;
+    valid       = false;
+    first_frame = 0;
+    last_frame  = 0;
 
     if( !tag || transaction->get_class_id( tag) != TEXTURE::ID_TEXTURE)
         return;
@@ -2548,18 +2546,65 @@ void get_texture_attributes(
     if( !db_image->is_valid())
         return;
 
-    mi::Uint32 uvtile_id = 0;
-    if( db_image->is_uvtile())
-        uvtile_id = db_image->get_uvtile_id( uv_tile_x, uv_tile_y);
-    if( uvtile_id == static_cast<mi::Uint32>( -1))
+    valid  = true;
+
+    mi::Size n_frames = db_image->get_length();
+    first_frame = (int)db_image->get_frame_number( 0);
+    last_frame  = (int)db_image->get_frame_number( n_frames > 0 ? n_frames-1 : 0);
+}
+
+void get_texture_attributes(
+    DB::Transaction* transaction,
+    DB::Tag tag,
+    mi::Size frame_number,
+    mi::Sint32 uvtile_u,
+    mi::Sint32 uvtile_v,
+    bool& valid,
+    int& width,
+    int& height,
+    int& depth,
+    int& first_frame,
+    int& last_frame)
+{
+    valid       = false;
+    width       = 0;
+    height      = 0;
+    depth       = 0;
+    first_frame = 0;
+    last_frame  = 0;
+
+    if( !tag || transaction->get_class_id( tag) != TEXTURE::ID_TEXTURE)
+        return;
+    DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
+    tag = db_texture->get_image();
+    if( !tag || transaction->get_class_id( tag) != DBIMAGE::ID_IMAGE)
+        return;
+    DB::Access<DBIMAGE::Image> db_image( tag, transaction);
+    if( !db_image->is_valid())
         return;
 
-    mi::base::Handle<const IMAGE::IMipmap> mipmap( db_image->get_mipmap( transaction, uvtile_id));
+    mi::Size frame_id = db_image->get_frame_id( frame_number);
+    if( frame_id == static_cast<mi::Size>( -1))
+        return;
+
+    mi::Size n_frames = db_image->get_length();
+    first_frame = (int)db_image->get_frame_number( 0);
+    last_frame  = (int)db_image->get_frame_number( n_frames > 0 ? n_frames-1 : 0);
+
+    mi::Size uvtile_id = 0;
+    if( db_image->is_uvtile())
+        uvtile_id = db_image->get_uvtile_id( frame_id, uvtile_u, uvtile_v);
+    if( uvtile_id == static_cast<mi::Size>( -1))
+        return;
+
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        db_image->get_mipmap( transaction, frame_id, uvtile_id));
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    valid     = true;
-    width     = canvas->get_resolution_x();
-    height    = canvas->get_resolution_y();
-    depth     = canvas->get_layers_size();
+
+    valid  = true;
+    width  = canvas->get_resolution_x();
+    height = canvas->get_resolution_y();
+    depth  = canvas->get_layers_size();
 }
 
 void get_light_profile_attributes(
@@ -2617,8 +2662,16 @@ Mdl_dag_builder<T>::Mdl_dag_builder(
     m_temporaries(),
     m_parameter_types()
 {
-    if( compiled_material)
-        m_temporaries.resize( compiled_material->get_temporary_count());
+    if( !compiled_material)
+       return;
+
+    m_temporaries.resize( compiled_material->get_temporary_count());
+    m_parameter_types.resize( compiled_material->get_parameter_count());
+    for( mi::Size i = 0; i < compiled_material->get_parameter_count(); i++) {
+        mi::base::Handle<const IValue> argument( compiled_material->get_argument( i));
+        mi::base::Handle<const IType> type( argument->get_type());
+        m_parameter_types[i] = int_type_to_mdl_type( type.get(), *m_type_factory);
+    }
 }
 
 template <class T>
@@ -2790,6 +2843,10 @@ Mdl_dag_builder<T>::int_expr_parameter_to_mdl_dag_node(
     mi::Size index = expr->get_index();
 
     if( index >= m_parameter_types.size() || !m_parameter_types[index]) {
+        // Dynamic adjustment of m_paramter_types should only be necessary if no compiled material
+        // is available, e.g., for functions. Note that unused parameters remain uninitialized
+        // then. TODO Use Mdl_function_call/definition to obtain that information.
+        ASSERT( M_SCENE, !m_compiled_material);
         if( index >= m_parameter_types.size())
             m_parameter_types.resize( index+1);
         m_parameter_types[index] = mdl_type;
@@ -3664,46 +3721,63 @@ IValue* Mdl_dag_converter::mdl_value_to_int_value(
             return m_vf->create_invalid_df( type_reference_int.get());
         }
         case mi::mdl::IValue::VK_TEXTURE: {
+
             const mi::mdl::IValue_texture* value_texture = cast<mi::mdl::IValue_texture>( value);
             const mi::mdl::IType_texture* type_texture = value_texture->get_type();
             mi::base::Handle<const IType_texture> type_texture_int(
                 mdl_type_to_int_type<IType_texture>( m_tf.get(), type_texture));
+
             DB::Tag tag;
             Float32 gamma = 0.0f;
+            const char* selector = nullptr;
+            std::string selector_buf;
             bool needs_owner = false;
             std::string string_value_buf;
-            if (m_load_resources) {
-                tag = find_resource_tag(value_texture);
-                if (tag.is_valid()) {
-                    DB::Access<TEXTURE::Texture> tex(tag, m_transaction);
-                    gamma = tex->get_effective_gamma(m_transaction);
+
+            if( m_load_resources) {
+
+                // take data from DB elements
+                tag = find_resource_tag( value_texture);
+                if( tag && m_transaction->get_class_id( tag) == TEXTURE::ID_TEXTURE) {
+                    DB::Access<TEXTURE::Texture> texture( tag, m_transaction);
+                    // TODO add uvtile/animated texture support
+                    gamma = texture->get_effective_gamma( m_transaction, 0, 0);
+                    selector_buf = texture->get_selector( m_transaction);
+                    selector = !selector_buf.empty() ? selector_buf.c_str() : nullptr;
                 }
+
             }  else {
+
+                // take data from core value_texture
+                tag = DB::Tag( value_texture->get_tag_value());
+                mi::mdl::IValue_texture::gamma_mode gamma_mode = value_texture->get_gamma_mode();
+                gamma = convert_gamma_enum_to_float( gamma_mode);
+                selector = value_texture->get_selector();
+                if( selector && (selector[0] == '\0'))
+                    selector = nullptr;
                 const char* string_value = value_texture->get_string_value();
-                tag = DB::Tag(value_texture->get_tag_value());
-                gamma = value_texture->get_gamma_mode() == mi::mdl::IValue_texture::gamma_default ? 0.0f :
-                    (value_texture->get_gamma_mode() == mi::mdl::IValue_texture::gamma_linear ? 1.0f : 2.2f);
                 string_value_buf = strip_resource_owner_prefix( string_value);
                 needs_owner = string_value_buf != string_value;
             }
+
             return m_vf->create_texture(
                 type_texture_int.get(), tag, string_value_buf.c_str(),
-                needs_owner ? m_module_mdl_name : nullptr, gamma);
+                needs_owner ? m_module_mdl_name : nullptr, gamma, selector);
         }
         case mi::mdl::IValue::VK_LIGHT_PROFILE: {
             const mi::mdl::IValue_light_profile* value_light_profile
                 = cast<mi::mdl::IValue_light_profile>( value);
-            DB::Tag tag = m_load_resources ?
-                find_resource_tag(value_light_profile) :
-                DB::Tag(value_light_profile->get_tag_value());
+            DB::Tag tag = m_load_resources
+                ? find_resource_tag( value_light_profile)
+                : DB::Tag( value_light_profile->get_tag_value());
             return m_vf->create_light_profile( tag);
         }
         case mi::mdl::IValue::VK_BSDF_MEASUREMENT: {
             const mi::mdl::IValue_bsdf_measurement* value_bsdf_measurement
                 = cast<mi::mdl::IValue_bsdf_measurement>( value);
-            DB::Tag tag = m_load_resources ?
-                find_resource_tag(value_bsdf_measurement) :
-                DB::Tag(value_bsdf_measurement->get_tag_value());
+            DB::Tag tag = m_load_resources
+                ? find_resource_tag(value_bsdf_measurement)
+                : DB::Tag( value_bsdf_measurement->get_tag_value());
             return m_vf->create_bsdf_measurement( tag);
         }
     }
@@ -4405,9 +4479,11 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
     const IValue_texture* texture)
 {
     std::string resource_name;
-    DB::Tag_version tag_version, image_tag_version;
-    mi::Float32 gamma;
-    DB::Tag image_tag, volume_tag;
+    DB::Tag_version tag_version, image_volume_tag_version;
+    mi::Float32 gamma = 0.0f;
+    const char* selector = "";
+    std::string selector_buf;
+
     DB::Tag tag = texture->get_value();
     if( tag) {
 
@@ -4420,12 +4496,12 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
         }
 
         DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
-        image_tag = db_texture->get_image();
+        DB::Tag image_tag = db_texture->get_image();
         if( image_tag) {
             class_id = transaction->get_class_id( image_tag);
             if( class_id != DBIMAGE::Image::id) {
-                const char* name = transaction->tag_to_name(image_tag);
-                LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE,
+                const char* name = transaction->tag_to_name( image_tag);
+                LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
                     "Incorrect type for image resource \"%s\".", name ? name : "");
                 return vf->create_invalid_ref( mdl_type);
             }
@@ -4433,8 +4509,10 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
             DB::Access<DBIMAGE::Image> image( image_tag, transaction);
             resource_name = image->get_mdl_file_path();
             tag_version = transaction->get_tag_version( tag);
-            image_tag_version = transaction->get_tag_version( image_tag);
+            image_volume_tag_version = transaction->get_tag_version( image_tag);
             gamma = db_texture->get_gamma();
+            selector_buf = image->get_selector();
+            selector = selector_buf.c_str();
         }
         else
             return vf->create_invalid_ref( mdl_type);
@@ -4456,17 +4534,9 @@ const mi::mdl::IValue* int_value_texture_to_mdl_value(
     }
 
     // convert gamma value
-    mi::mdl::IValue_texture::gamma_mode mdl_gamma;
-    if( gamma == 1.0f)
-        mdl_gamma = mi::mdl::IValue_texture::gamma_linear;
-    else if( gamma == 2.2f)
-        mdl_gamma = mi::mdl::IValue_texture::gamma_srgb;
-    else
-        mdl_gamma = mi::mdl::IValue_texture::gamma_default;
+    mi::mdl::IValue_texture::gamma_mode mdl_gamma = convert_gamma_float_to_enum( gamma);
 
-    // FIXME:
-    const char* selector = "";
-    mi::Uint32 hash = volume_tag ? 0 : get_hash( resource_name, gamma, tag_version, image_tag_version);
+    mi::Uint32 hash = get_hash( resource_name, gamma, tag_version, image_volume_tag_version);
     return vf->create_texture(
         mdl_type, resource_name.c_str(), mdl_gamma, selector, tag.get_uint(), hash);
 }
@@ -5317,6 +5387,36 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
 }
 
 mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+    DB::Transaction* transaction, const IValue* value)
+{
+    mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
+    if( !value)
+        return version;
+
+    switch( value->get_kind()) {
+
+        case IValue::VK_TEXTURE: {
+            mi::base::Handle<const IValue_texture> texture(
+                value->get_interface<IValue_texture>());
+            DB::Tag tag = texture->get_value();
+            if( tag && transaction->get_class_id( tag) == TEXTURE::ID_TEXTURE) {
+                DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
+                std::string selector = db_texture->get_selector( transaction);
+                if( !selector.empty())
+                    version = mi::mdl::IMDL::MDL_VERSION_1_7;
+            }
+            break;
+        }
+
+        default:
+            // use the minimum version
+            break;
+    }
+
+    return version;
+}
+
+mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IExpression* expr)
 {
     mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
@@ -5325,7 +5425,15 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
 
     switch( expr->get_kind()) {
 
-        case IExpression::EK_CONSTANT:
+        case IExpression::EK_CONSTANT: {
+            mi::base::Handle<const IExpression_constant> constant(
+                expr->get_interface<IExpression_constant>());
+            mi::base::Handle<const IValue> value(
+                constant->get_value());
+            version = get_min_required_mdl_version( transaction, value.get());
+            break;
+        }
+
         case IExpression::EK_PARAMETER:
             // smallest version is fine
             break;
@@ -5699,13 +5807,13 @@ Resource_updater::Resource_updater(
     mi::mdl::IGenerated_code_dag* code_dag,
     const char* module_filename,
     const char* module_mdl_name,
-    bool callback_under_mutex)
+    Execution_context* context)
   : m_transaction( transaction),
     m_resolver( resolver),
     m_code_dag( code_dag),
     m_module_filename( module_filename),
     m_module_mdl_name( module_mdl_name),
-    m_callback_under_mutex( callback_under_mutex)
+    m_context( context)
 {
 }
 
@@ -5851,7 +5959,11 @@ void Resource_updater::update_resource_literals( const mi::mdl::IValue_resource*
     auto it = m_resource_tag_map.find( resource);
     if( it == m_resource_tag_map.end()) {
         DB::Tag tag = DETAIL::mdl_resource_to_tag(
-            m_transaction, resource, m_module_filename, m_module_mdl_name, m_callback_under_mutex);
+            m_transaction,
+            resource,
+            m_module_filename,
+            m_module_mdl_name,
+            m_context);
         it = m_resource_tag_map.insert( Resource_tag_map::value_type( resource, tag)).first;
     }
 
@@ -5882,77 +5994,6 @@ mi::mdl::IExpression* Resource_updater::post_visit( mi::mdl::IExpression_call* e
 
     update_resource_literals( def);
     return expr;
-}
-
-namespace {
-
-/// Collects all call references in a DAG node.
-///
-/// Parameter and temporary references are skipped.
-///
-/// \param transaction       The DB transaction to use (needed to convert strings into tags).
-/// \param node              The DAG node to traverse.
-/// \param[out] references   The collected references are added to this set.
-void collect_material_references(
-    DB::Transaction* transaction,
-    const mi::mdl::DAG_node* node,
-    DB::Tag_set& references)
-{
-    switch( node->get_kind()) {
-        case mi::mdl::DAG_node::EK_CONSTANT:
-            return; //-V1037 PVS nothing to do
-        case mi::mdl::DAG_node::EK_PARAMETER:
-            return; //-V1037 PVS  the referenced parameter will be traversed explicitly
-        case mi::mdl::DAG_node::EK_TEMPORARY:
-            return; //-V1037 PVS  the referenced temporary will be traversed explicitly
-        case mi::mdl::DAG_node::EK_CALL: {
-            const mi::mdl::DAG_call* call = as<mi::mdl::DAG_call>( node);
-            std::string db_name = get_db_name( call->get_name());
-            DB::Tag tag = transaction->name_to_tag( db_name.c_str());
-            ASSERT( M_SCENE, tag);
-            references.insert( tag);
-            mi::Uint32 n = call->get_argument_count();
-            for( mi::Uint32 i = 0; i < n; ++i)
-                collect_material_references( transaction, call->get_argument( i), references);
-            return;
-        }
-    }
-}
-
-} // namespace
-
-void collect_material_references(
-    DB::Transaction* transaction,
-    const mi::mdl::IGenerated_code_dag* code_dag,
-    mi::Size material_index,
-    DB::Tag_set& references)
-{
-    // traverse body
-    const mi::mdl::DAG_node* body = code_dag->get_material_value( material_index);
-    collect_material_references( transaction, body, references);
-
-    // traverse temporaries
-    mi::Size n = code_dag->get_material_temporary_count( material_index);
-    for( mi::Size i = 0; i < n; ++i) {
-        const mi::mdl::DAG_node* temporary = code_dag->get_material_temporary( material_index, i);
-        collect_material_references( transaction, temporary, references);
-    }
-}
-
-void collect_function_references(
-    DB::Transaction* transaction,
-    const mi::mdl::IGenerated_code_dag* code_dag,
-    mi::Size function_index,
-    DB::Tag_set& references)
-{
-    mi::Size n = code_dag->get_function_references_count( function_index);
-    for( mi::Size i = 0; i < n; ++i) {
-        const char* reference = code_dag->get_function_reference( function_index, i);
-        std::string db_name = get_db_name( reference);
-        DB::Tag tag = transaction->name_to_tag( db_name.c_str());
-        ASSERT( M_SCENE, tag);
-        references.insert( tag);
-    }
 }
 
 namespace {
@@ -7134,41 +7175,43 @@ const mi::mdl::IValue* Call_evaluator<T>::evaluate_intrinsic_function(
             return fold_df_bsdf_measurement_isvalid( value_factory, arguments[0]);
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_WIDTH:
-            // TODO take frame parameter into account
             ASSERT( M_SCENE, arguments && (n_arguments >= 1 || n_arguments <= 3));
             return fold_tex_width(
                 value_factory,
                 arguments[0],
-                n_arguments >= 2 ? arguments[1] : nullptr);
+                n_arguments >= 2 ? arguments[1] : nullptr,  // uvtile_arg
+                n_arguments >= 3 ? arguments[2] : nullptr); // frame_arg
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_HEIGHT:
-            // TODO take frame parameter into account
             ASSERT( M_SCENE, arguments && (n_arguments >= 1 || n_arguments <= 3));
             return fold_tex_height(
                 value_factory,
                 arguments[0],
-                n_arguments >= 2 ? arguments[1] : nullptr);
+                n_arguments >= 2 ? arguments[1] : nullptr,  // uvtile_arg
+                n_arguments >= 3 ? arguments[2] : nullptr); // frame_arg
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_DEPTH:
-            // TODO take frame parameter into account
             ASSERT( M_SCENE, arguments && (n_arguments >= 1 || n_arguments <= 2));
-            return fold_tex_depth( value_factory, arguments[0]);
+            return fold_tex_depth(
+                value_factory,
+                arguments[0],
+                n_arguments >= 2 ? arguments[1] : nullptr); // frame_arg
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_TEXTURE_ISVALID:
             ASSERT( M_SCENE, arguments && n_arguments == 1);
             return fold_tex_texture_isvalid( value_factory, arguments[0]);
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_WIDTH_OFFSET:
-            ASSERT(M_SCENE, arguments && n_arguments == 2);
+            ASSERT( M_SCENE, arguments && n_arguments == 2);
             return fold_tex_width_offset( value_factory, arguments[0], arguments[1]);
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_HEIGHT_OFFSET:
-            ASSERT(M_SCENE, arguments && n_arguments == 2);
-            return fold_tex_height_offset(value_factory, arguments[0], arguments[1]);
+            ASSERT( M_SCENE, arguments && n_arguments == 2);
+            return fold_tex_height_offset( value_factory, arguments[0], arguments[1]);
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_DEPTH_OFFSET:
-            ASSERT(M_SCENE, arguments && n_arguments == 2);
-            return fold_tex_depth_offset(value_factory, arguments[0], arguments[1]);
+            ASSERT( M_SCENE, arguments && n_arguments == 2);
+            return fold_tex_depth_offset( value_factory, arguments[0], arguments[1]);
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_FIRST_FRAME:
             ASSERT( M_SCENE, arguments && n_arguments == 1);
@@ -7179,8 +7222,8 @@ const mi::mdl::IValue* Call_evaluator<T>::evaluate_intrinsic_function(
             return fold_tex_last_frame( value_factory, arguments[0]);
 
         case mi::mdl::IDefinition::DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE:
-            ASSERT(M_SCENE, arguments && n_arguments == 2);
-            return fold_tex_grid_to_object_space(value_factory, arguments[0], arguments[1]);
+            ASSERT( M_SCENE, arguments && n_arguments == 2);
+            return fold_tex_grid_to_object_space( value_factory, arguments[0], arguments[1]);
 
         default:
             return value_factory->create_bad();
@@ -7258,7 +7301,8 @@ template<typename T>
 const mi::mdl::IValue* Call_evaluator<T>::fold_tex_width(
     mi::mdl::IValue_factory* value_factory,
     const mi::mdl::IValue* argument,
-    const mi::mdl::IValue* uvtile_arg) const
+    const mi::mdl::IValue* uvtile_arg,
+    const mi::mdl::IValue* frame_arg) const
 {
     if( is<mi::mdl::IValue_invalid_ref>( argument))
         return value_factory->create_int( 0);
@@ -7275,16 +7319,19 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_width(
     mi::Sint32 uvtile_x = 0;
     mi::Sint32 uvtile_y = 0;
     if( const mi::mdl::IValue_vector* uvtile_vector = cast<mi::mdl::IValue_vector>( uvtile_arg)) {
-        const mi::mdl::IValue_int* x = cast<mi::mdl::IValue_int>( uvtile_vector->get_value( 0));
-        const mi::mdl::IValue_int* y = cast<mi::mdl::IValue_int>( uvtile_vector->get_value( 1));
+        const mi::mdl::IValue_int* x = as<mi::mdl::IValue_int>( uvtile_vector->get_value( 0));
+        const mi::mdl::IValue_int* y = as<mi::mdl::IValue_int>( uvtile_vector->get_value( 1));
         uvtile_x = x ? x->get_value() : 0;
-        uvtile_y = y ? y->get_value() : 1;
+        uvtile_y = y ? y->get_value() : 0;
     }
+    mi::Size frame_number = 0;
+    if( const mi::mdl::IValue_int* f = as<mi::mdl::IValue_int>( frame_arg))
+        frame_number = f->get_value();
 
     bool valid;
-    int width, height, depth;
-    get_texture_attributes(
-        this->m_transaction, tag, uvtile_x, uvtile_y, valid, width, height, depth);
+    int width, height, depth, first_frame, last_frame;
+    get_texture_attributes( this->m_transaction,
+        tag, frame_number, uvtile_x, uvtile_y, valid, width, height, depth, first_frame, last_frame);
     return value_factory->create_int( width);
 }
 
@@ -7292,7 +7339,8 @@ template<typename T>
 const mi::mdl::IValue* Call_evaluator<T>::fold_tex_height(
     mi::mdl::IValue_factory* value_factory,
     const mi::mdl::IValue* argument,
-    const mi::mdl::IValue* uvtile_arg) const
+    const mi::mdl::IValue* uvtile_arg,
+    const mi::mdl::IValue* frame_arg) const
 {
     if( is<mi::mdl::IValue_invalid_ref>( argument))
         return value_factory->create_int( 0);
@@ -7309,23 +7357,28 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_height(
     mi::Sint32 uvtile_x = 0;
     mi::Sint32 uvtile_y = 0;
     if( const mi::mdl::IValue_vector* uvtile_vector = cast<mi::mdl::IValue_vector>( uvtile_arg)) {
-        const mi::mdl::IValue_int* x = cast<mi::mdl::IValue_int>( uvtile_vector->get_value( 0));
-        const mi::mdl::IValue_int* y = cast<mi::mdl::IValue_int>( uvtile_vector->get_value( 1));
+        const mi::mdl::IValue_int* x = as<mi::mdl::IValue_int>( uvtile_vector->get_value( 0));
+        const mi::mdl::IValue_int* y = as<mi::mdl::IValue_int>( uvtile_vector->get_value( 1));
         uvtile_x = x ? x->get_value() : 0;
-        uvtile_y = y ? y->get_value() : 1;
+        uvtile_y = y ? y->get_value() : 0;
     }
+    mi::Size frame_number = 0;
+    if( const mi::mdl::IValue_int* f = as<mi::mdl::IValue_int>( frame_arg))
+        frame_number = f->get_value();
+
 
     bool valid;
-    int width, height, depth;
-    get_texture_attributes(
-        this->m_transaction, tag, uvtile_x, uvtile_y, valid, width, height, depth);
+    int width, height, depth, first_frame, last_frame;
+    get_texture_attributes( this->m_transaction,
+        tag, frame_number, uvtile_x, uvtile_y, valid, width, height, depth, first_frame, last_frame);
     return value_factory->create_int( height);
 }
 
 template<typename T>
 const mi::mdl::IValue* Call_evaluator<T>::fold_tex_depth(
     mi::mdl::IValue_factory* value_factory,
-    const mi::mdl::IValue* argument) const
+    const mi::mdl::IValue* argument,
+    const mi::mdl::IValue* frame_arg) const
 {
     if( is<mi::mdl::IValue_invalid_ref>( argument))
         return value_factory->create_int( 0);
@@ -7341,12 +7394,16 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_depth(
     DB::Tag tag( this->get_resource_tag( tex));
     mi::Sint32 uvtile_x = 0;
     mi::Sint32 uvtile_y = 0;
+    mi::Size frame_number = 0;
+    if( const mi::mdl::IValue_int* f = as<mi::mdl::IValue_int>( frame_arg))
+        frame_number = f->get_value();
+
 
     bool valid;
-    int width, height, depth;
-    get_texture_attributes(
-        this->m_transaction, tag, uvtile_x, uvtile_y, valid, width, height, depth);
-    return value_factory->create_int( height);
+    int width, height, depth, first_frame, last_frame;
+    get_texture_attributes( this->m_transaction,
+        tag, frame_number, uvtile_x, uvtile_y, valid, width, height, depth, first_frame, last_frame);
+    return value_factory->create_int( depth);
 }
 
 template<typename T>
@@ -7358,85 +7415,101 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_texture_isvalid(
         return value_factory->create_bool( false);
 
     const mi::mdl::IValue_texture* tex = as<mi::mdl::IValue_texture>( argument);
-    if( tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE) {
-        // bsdf data is always valid
-        return value_factory->create_bool( true);
-    }
+    if( tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE)
+        return value_factory->create_bool( true); // always valid
 
     DB::Tag tag( this->get_resource_tag( tex));
-    mi::Sint32 uvtile_x = 0;
-    mi::Sint32 uvtile_y = 0;
 
     bool valid;
-    int width, height, depth;
-    get_texture_attributes(
-        this->m_transaction, tag, uvtile_x, uvtile_y, valid, width, height, depth);
+    int first_frame, last_frame;
+    get_texture_attributes( this->m_transaction, tag, valid, first_frame, last_frame);
     return value_factory->create_bool( valid);
 }
 
 template<typename T>
-const mi::mdl::IValue *Call_evaluator<T>::fold_tex_width_offset(
-    mi::mdl::IValue_factory *value_factory,
-    const mi::mdl::IValue *tex,
-    const mi::mdl::IValue *offset) const
+const mi::mdl::IValue* Call_evaluator<T>::fold_tex_width_offset(
+    mi::mdl::IValue_factory* value_factory,
+    const mi::mdl::IValue* tex,
+    const mi::mdl::IValue* offset) const
 {
     // FIXME: default value currently
     return value_factory->create_int(0);
 }
 
 template<typename T>
-const mi::mdl::IValue *Call_evaluator<T>::fold_tex_height_offset(
-    mi::mdl::IValue_factory *value_factory,
-    const mi::mdl::IValue *tex,
-    const mi::mdl::IValue *offset) const
+const mi::mdl::IValue* Call_evaluator<T>::fold_tex_height_offset(
+    mi::mdl::IValue_factory* value_factory,
+    const mi::mdl::IValue* tex,
+    const mi::mdl::IValue* offset) const
 {
     // FIXME: default value currently
     return value_factory->create_int(0);
 }
 
 template<typename T>
-const mi::mdl::IValue *Call_evaluator<T>::fold_tex_depth_offset(
-    mi::mdl::IValue_factory *value_factory,
-    const mi::mdl::IValue *tex,
-    const mi::mdl::IValue *offset) const
+const mi::mdl::IValue* Call_evaluator<T>::fold_tex_depth_offset(
+    mi::mdl::IValue_factory* value_factory,
+    const mi::mdl::IValue* tex,
+    const mi::mdl::IValue* offset) const
 {
     // FIXME: default value currently
     return value_factory->create_int(0);
 }
 
 template<typename T>
-const mi::mdl::IValue *Call_evaluator<T>::fold_tex_first_frame(
-    mi::mdl::IValue_factory *value_factory,
-    const mi::mdl::IValue *tex) const
+const mi::mdl::IValue* Call_evaluator<T>::fold_tex_first_frame(
+    mi::mdl::IValue_factory* value_factory,
+    const mi::mdl::IValue* argument) const
 {
-    // FIXME: default value currently
-    return value_factory->create_int(0);
+    if( is<mi::mdl::IValue_invalid_ref>( argument))
+        return value_factory->create_int( 0);
+
+    const mi::mdl::IValue_texture* tex = as<mi::mdl::IValue_texture>( argument);
+    if( tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE)
+        return value_factory->create_int( 0);
+
+    DB::Tag tag( this->get_resource_tag( tex));
+
+    bool valid;
+    int first_frame, last_frame;
+    get_texture_attributes( this->m_transaction, tag, valid, first_frame, last_frame);
+    return value_factory->create_int( first_frame);
 }
 
 template<typename T>
-const mi::mdl::IValue *Call_evaluator<T>::fold_tex_last_frame(
-    mi::mdl::IValue_factory *value_factory,
-    const mi::mdl::IValue *tex) const
+const mi::mdl::IValue* Call_evaluator<T>::fold_tex_last_frame(
+    mi::mdl::IValue_factory* value_factory,
+    const mi::mdl::IValue* argument) const
 {
-    // FIXME: default value currently
-    return value_factory->create_int(0);
+    if( is<mi::mdl::IValue_invalid_ref>( argument))
+        return value_factory->create_int( 0);
+
+    const mi::mdl::IValue_texture* tex = as<mi::mdl::IValue_texture>( argument);
+    if( tex->get_bsdf_data_kind() != mi::mdl::IValue_texture::BDK_NONE)
+        return value_factory->create_int( 0);
+
+    DB::Tag tag( this->get_resource_tag( tex));
+
+    bool valid;
+    int first_frame, last_frame;
+    get_texture_attributes( this->m_transaction, tag, valid, first_frame, last_frame);
+    return value_factory->create_int( last_frame);
 }
 
 template<typename T>
 
-const mi::mdl::IValue *Call_evaluator<T>::fold_tex_grid_to_object_space(
-    mi::mdl::IValue_factory *value_factory,
-    const mi::mdl::IValue *tex,
-    const mi::mdl::IValue *offset) const
+const mi::mdl::IValue* Call_evaluator<T>::fold_tex_grid_to_object_space(
+    mi::mdl::IValue_factory* value_factory,
+    const mi::mdl::IValue* tex,
+    const mi::mdl::IValue* offset) const
 {
     // FIXME: default value currently
-    mi::mdl::IType_factory *tp_factory = value_factory->get_type_factory();
-    mi::mdl::IType_float const *f_tp = tp_factory->create_float();
-    mi::mdl::IType_vector const *f4_tp = tp_factory->create_vector(f_tp, 4);
-    mi::mdl::IType_matrix const *f4x4_tp = tp_factory->create_matrix(f4_tp, 4);
+    mi::mdl::IType_factory* tp_factory = value_factory->get_type_factory();
+    const mi::mdl::IType_float* f_tp = tp_factory->create_float();
+    const mi::mdl::IType_vector* f4_tp = tp_factory->create_vector( f_tp, 4);
+    const mi::mdl::IType_matrix* f4x4_tp = tp_factory->create_matrix( f4_tp, 4);
 
-    mi::mdl::IValue const *zero = value_factory->create_zero(f4x4_tp);
-    return zero;
+    return value_factory->create_zero( f4x4_tp);
 }
 
 // explicit instantiate the two necessary cases
@@ -7578,6 +7651,8 @@ Execution_context::Execution_context() : m_result(0)
     add_option(Option(MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING, false, false));
     add_option(Option(MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE, false, false));
     add_option(Option(MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, false, false));
+    add_option(Option(MDL_CTX_OPTION_USER_DATA,
+        mi::base::Handle<const mi::base::IInterface>(), true));
 }
 
 mi::Size Execution_context::get_messages_count() const
@@ -7688,7 +7763,7 @@ mi::Sint32 Execution_context::set_option(const std::string& name, const boost::a
 
     } else {
 
-        // check that the tyoe of value matches exactly
+        // check that the type of value matches exactly
         const boost::any& old_value = option.get_value();
         if (old_value.type() != value.type())
             return -2;
@@ -7742,9 +7817,76 @@ mi::mdl::IThread_context* create_thread_context( mi::mdl::IMDL* mdl, Execution_c
             = context->get_option<bool>( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS);
         options.set_option( MDL_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS,
             keep_original_resource_file_paths ? "true" : "false");
+
+        mi::base::Handle<const mi::base::IInterface> user_data(
+            context->get_interface_option<const mi::base::IInterface>(
+                MDL_CTX_OPTION_USER_DATA));
+        options.set_interface_option( MDL_OPTION_USER_DATA, user_data.get());
     }
 
     return thread_context;
+}
+
+mi::mdl::IThread_context* create_thread_context( Execution_context* context)
+{
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
+    mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
+    return create_thread_context( mdl.get(), context);
+}
+
+Execution_context* create_execution_context( mi::mdl::IThread_context* ctx)
+{
+    Execution_context* context = new Execution_context();
+
+    if( ctx) {
+
+        mi::mdl::Options& options = ctx->access_options();
+        int index = -1;
+        const char* value = nullptr;
+
+        index = options.get_option_index( MDL_OPTION_WARN);
+        value = options.get_option_value( index);
+        if( value)
+            context->set_option( MDL_CTX_OPTION_WARNING, std::string( value));
+
+        index = options.get_option_index( MDL_OPTION_OPT_LEVEL);
+        value = options.get_option_value( index);
+        if( value) {
+            STLEXT::Likely<mi::Sint32> level = STRING::lexicographic_cast_s<mi::Sint32>( value);
+            if( level.get_status())
+                context->set_option( MDL_CTX_OPTION_OPTIMIZATION_LEVEL, *level.get_ptr());
+        }
+
+        index = options.get_option_index( MDL_OPTION_RESOLVE_RESOURCES);
+        value = options.get_option_value( index);
+        if( value) {
+            bool flag = strcmp( value, "true") == 0;
+            context->set_option( MDL_CTX_OPTION_RESOLVE_RESOURCES, flag);
+        }
+
+        index = options.get_option_index( MDL_OPTION_EXPERIMENTAL_FEATURES);
+        value = options.get_option_value( index);
+        if( value) {
+            bool flag = strcmp( value, "true") == 0;
+            context->set_option( MDL_CTX_OPTION_EXPERIMENTAL, flag);
+        }
+
+        index = options.get_option_index( MDL_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS);
+        value = options.get_option_value( index);
+        if( value) {
+            bool flag = strcmp( value, "true") == 0;
+            context->set_option( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, flag);
+        }
+
+        index = options.get_option_index( MDL_OPTION_USER_DATA);
+        mi::base::Handle<const mi::base::IInterface> interface_value(
+            options.get_interface_option( index));
+        if( interface_value ) {
+            context->set_option(MDL_CTX_OPTION_USER_DATA, interface_value);
+        }
+    }
+
+    return context;
 }
 
 namespace {
@@ -7879,18 +8021,25 @@ mi::base::Uuid get_hash( mi::mdl::IMDL_resource_reader* reader)
     return convert_hash( h);
 }
 
-mi::base::Uuid get_hash(mi::mdl::IMDL_resource_set const *set)
+mi::base::Uuid get_hash( const mi::mdl::IMDL_resource_set* set)
 {
-    size_t count = set->get_count();
+    size_t elem_count = set->get_count();
     size_t overall_hash = 0;
 
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = 0; i < elem_count; ++i) {
         unsigned char mdl_hash[16];
-        bool valid_hash = set->get_resource_hash(i, mdl_hash);
-        if (!valid_hash)
-            return mi::base::Uuid{ 0,0,0,0 };
-        size_t hash = boost::hash_range(mdl_hash, mdl_hash + 16);
-        boost::hash_combine(overall_hash, hash);
+        mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(set->get_element(i));
+        size_t n_entries = elem->get_count();
+        for (size_t j = 0; j < n_entries; ++j) {
+            bool valid_hash = elem->get_resource_hash(j, mdl_hash);
+            if (!valid_hash) {
+                // Assume no partially hashed set: either all entries have one, or none
+                ASSERT( M_SCENE, i == 0 && j == 0);
+                return mi::base::Uuid{ 0,0,0,0 };
+            }
+            size_t hash = boost::hash_range(mdl_hash, mdl_hash + 16);
+            boost::hash_combine(overall_hash, hash);
+        }
     }
 
     mi::Uint32 low  = overall_hash & 0xFFFFFFFFu;
@@ -7900,9 +8049,10 @@ mi::base::Uuid get_hash(mi::mdl::IMDL_resource_set const *set)
 
 Uint64 generate_unique_id()
 {
-    boost::uuids::uuid u = boost::uuids::random_generator()();
-    std::string name = boost::uuids::to_string(u);
-    return std::hash<std::string>{}(name);
+    static boost::uuids::random_generator generator;
+    boost::uuids::uuid uuid = generator();
+    boost::hash<boost::uuids::uuid> uuid_hasher;
+    return uuid_hasher( uuid);
 }
 
 mi::Sint32 repair_call(
@@ -8070,6 +8220,27 @@ const char* stringify_mdl_version( mi::mdl::IMDL::MDL_version version)
 
     ASSERT( M_SCENE, false);
     return "unknown";
+}
+
+mi::Float32 convert_gamma_enum_to_float( mi::mdl::IValue_texture::gamma_mode gamma)
+{
+    switch( gamma) {
+        case mi::mdl::IValue_texture::gamma_default: return 0.0f;
+        case mi::mdl::IValue_texture::gamma_linear:  return 1.0f;
+        case mi::mdl::IValue_texture::gamma_srgb:    return 2.2f;
+    }
+
+    ASSERT( M_SCENE, false);
+    return 0.0f;
+}
+
+mi::mdl::IValue_texture::gamma_mode convert_gamma_float_to_enum( mi::Float32 gamma)
+{
+   if( gamma == 1.0f)
+       return  mi::mdl::IValue_texture::gamma_linear;
+   if( gamma == 2.2f)
+       return mi::mdl::IValue_texture::gamma_srgb;
+   return mi::mdl::IValue_texture::gamma_default;
 }
 
 // **********  Name parsing/splitting **************************************************************
@@ -8550,9 +8721,20 @@ std::string remove_slash_in_front_of_drive_letter( const std::string& input)
 
 // *************************************************************************************************
 
-std::string uvtile_marker_to_string( const std::string& s, mi::Sint32 u, mi::Sint32 v)
+std::string frame_uvtile_marker_to_string( std::string s, mi::Size f, mi::Sint32 u, mi::Sint32 v)
 {
     ASSERT( M_SCENE, !s.empty());
+
+    bool found = false;
+
+    std::regex frame( "<#+>");
+    std::smatch matches;
+    if( std::regex_search( s, matches, frame)) {
+        std::stringstream tmp;
+        tmp << f;
+        s.replace( matches[0].first, matches[0].second, tmp.str());
+        found = true;
+    }
 
     std::stringstream result;
 
@@ -8576,31 +8758,28 @@ std::string uvtile_marker_to_string( const std::string& s, mi::Sint32 u, mi::Sin
         return result.str();
     }
 
-    return std::string();
+    return found ? s : std::string();
 }
 
-std::string uvtile_string_to_marker( const std::string& s, const std::string& marker)
+std::string deprecated_uvtile_string_to_marker( const std::string& s, const std::string& marker)
 {
     ASSERT( M_SCENE, !s.empty() && !marker.empty());
 
     std::regex regex;
     if( marker == "<UVTILE0>" || marker == "<UVTILE1>")
-        regex = ".*(_u-?[0-9]+_v-?[0-9]+)(.*)";
+        regex = "(_u-?[0-9]+_v-?[0-9]+)";
     else if( marker == "<UDIM>")
-        regex = ".*([1-9][0-9][0-9][0-9])(.*)";
+        regex = "([1-9][0-9][0-9][0-9])";
     else
         return std::string();
 
+    std::string result( s);
     std::smatch matches;
-    if( !regex_match( s, matches, regex))
+    if( !regex_search( result, matches, regex))
         return std::string();
 
-    ASSERT( M_SCENE, matches.size() == 3);
-    auto p0 = matches.position( 1);
-    auto p1 = matches.position( 2);
-
-    std::string result( s);
-    result.replace( p0, p1-p0, marker);
+    ASSERT( M_SCENE, matches.size() == 2);
+    result.replace( matches[1].first, matches[1].second, marker);
     return result;
 }
 

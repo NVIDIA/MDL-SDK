@@ -45,6 +45,9 @@ namespace SERIAL { class Deserializer; class Serializer; }
 
 namespace MDL {
 
+class IAnnotation;
+class IAnnotation_block;
+
 class IValue : public
     mi::base::Interface_declare<0x5e629c36,0xe7e7,0x4bbc,0x87,0x86,0xbc,0x24,0x54,0xc6,0xf8,0x40>
 {
@@ -361,14 +364,18 @@ public:
 
     virtual void set_value( DB::Tag value) = 0;
 
+     /// Returns the owner module by its MDL name.
+    ///
+    /// Returns empty string (instead of \c NULL) if not available.
     virtual const char* get_unresolved_mdl_url() const = 0;
 
     virtual void set_unresolved_mdl_url( const char* url) = 0;
 
     /// Returns the MDL name of the owner module.
+    ///
+    /// Returns empty string (instead of \c NULL) if not available.
     virtual const char* get_owner_module() const = 0;
 
-    /// Set the owner module by its MDL name.
     virtual void set_owner_module( const char* module) = 0;
 
     virtual const char* get_file_path( DB::Transaction* transaction) const = 0;
@@ -385,7 +392,7 @@ public:
 
     virtual Float32 get_gamma() const = 0;
 
-    virtual void set_gamma( mi::Float32 gamma) = 0;
+    virtual const char* get_selector() const = 0;
 };
 
 class IValue_light_profile : public
@@ -496,7 +503,8 @@ public:
         DB::Tag value,
         const char* unresolved_mdl_url,
         const char* owner_module,
-        mi::Float32 gamma) const = 0;
+        mi::Float32 gamma,
+        const char* selector) const = 0;
 
     virtual IValue_light_profile* create_light_profile( DB::Tag value) const = 0;
 
@@ -531,6 +539,28 @@ public:
         return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
     }
 
+    virtual IValue* create( const IAnnotation* annotation) const = 0;
+
+    template <class T>
+    T* create( const IAnnotation* annotation) const
+    {
+        mi::base::Handle<IValue> ptr_value( create( annotation));
+        if( !ptr_value)
+            return nullptr;
+        return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
+    }
+
+    virtual IValue* create( const IType* type, const IAnnotation_block* annotation_block) const = 0;
+
+    template <class T>
+    T* create( const IType* type, const IAnnotation_block* annotation_block) const
+    {
+        mi::base::Handle<IValue> ptr_value( create( type, annotation_block));
+        if( !ptr_value)
+            return nullptr;
+        return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
+    }
+
     virtual IValue_list* create_value_list() const = 0;
 
     virtual IValue* clone( const IValue* value) const = 0;
@@ -546,9 +576,11 @@ public:
 
     virtual IValue_list* clone( const IValue_list* list) const = 0;
 
-    virtual mi::Sint32 compare( const IValue* lhs, const IValue* rhs) const = 0;
+    virtual mi::Sint32 compare(
+        const IValue* lhs, const IValue* rhs, mi::Float64 epsilon = 0.0) const = 0;
 
-    virtual mi::Sint32 compare( const IValue_list* lhs, const IValue_list* rhs) const = 0;
+    virtual mi::Sint32 compare(
+        const IValue_list* lhs, const IValue_list* rhs, mi::Float64 epsilon = 0.0) const = 0;
 
     virtual const mi::IString* dump(
         DB::Transaction* transaction,

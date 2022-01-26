@@ -204,7 +204,8 @@ void tex_lookup2D(
     mi::neuraylib::Tex_wrap_mode  wrap_u,
     mi::neuraylib::Tex_wrap_mode  wrap_v,
     const mi::Float32             crop_u[2],
-    const mi::Float32             crop_v[2])
+    const mi::Float32             crop_v[2],
+    mi::Float32                   frame)
 {
     const mi::Float32 crop_w = crop_u[1] - crop_u[0];
     const mi::Float32 crop_h = crop_v[1] - crop_v[0];
@@ -260,7 +261,8 @@ void tex_lookup_float4_2d(
     mi::neuraylib::Tex_wrap_mode wrap_u,
     mi::neuraylib::Tex_wrap_mode wrap_v,
     const mi::Float32 crop_u[2],
-    const mi::Float32 crop_v[2])
+    const mi::Float32 crop_v[2],
+    mi::Float32 frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -271,7 +273,7 @@ void tex_lookup_float4_2d(
     }
 
     Texture const &tex = self->textures[texture_idx - 1];
-    tex_lookup2D(result, tex, coord, wrap_u, wrap_v, crop_u, crop_v);
+    tex_lookup2D(result, tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame);
 }
 
 /// Implementation of \c tex::lookup_float4() for a texture_2d texture with derivatives.
@@ -284,7 +286,8 @@ void tex_lookup_deriv_float4_2d(
     mi::neuraylib::Tex_wrap_mode wrap_u,
     mi::neuraylib::Tex_wrap_mode wrap_v,
     const mi::Float32 crop_u[2],
-    const mi::Float32 crop_v[2])
+    const mi::Float32 crop_v[2],
+    mi::Float32 frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -296,7 +299,7 @@ void tex_lookup_deriv_float4_2d(
 
     mi::Float32 uv[2] = { coord->val.x, coord->val.y };
     Texture const &tex = self->textures[texture_idx - 1];
-    tex_lookup2D(result, tex, uv, wrap_u, wrap_v, crop_u, crop_v);
+    tex_lookup2D(result, tex, uv, wrap_u, wrap_v, crop_u, crop_v, frame);
 }
 
 /// Implementation of \c tex::lookup_float3() for a texture_2d texture.
@@ -308,7 +311,8 @@ void tex_lookup_float3_2d(
     mi::neuraylib::Tex_wrap_mode wrap_u,
     mi::neuraylib::Tex_wrap_mode wrap_v,
     const mi::Float32 crop_u[2],
-    const mi::Float32 crop_v[2])
+    const mi::Float32 crop_v[2],
+    mi::Float32 frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -319,7 +323,7 @@ void tex_lookup_float3_2d(
     }
 
     mi::Float32 c[4];
-    tex_lookup_float4_2d(c, self, texture_idx, coord, wrap_u, wrap_v, crop_u, crop_v);
+    tex_lookup_float4_2d(c, self, texture_idx, coord, wrap_u, wrap_v, crop_u, crop_v, frame);
 
     result[0] = c[0];
     result[1] = c[1];
@@ -336,7 +340,8 @@ void tex_lookup_deriv_float3_2d(
     mi::neuraylib::Tex_wrap_mode wrap_u,
     mi::neuraylib::Tex_wrap_mode wrap_v,
     const mi::Float32 crop_u[2],
-    const mi::Float32 crop_v[2])
+    const mi::Float32 crop_v[2],
+    mi::Float32 frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -348,7 +353,7 @@ void tex_lookup_deriv_float3_2d(
 
     mi::Float32 c[4];
     mi::Float32 uv[2] = { coord->val.x, coord->val.y };
-    tex_lookup_float4_2d(c, self, texture_idx, uv, wrap_u, wrap_v, crop_u, crop_v);
+    tex_lookup_float4_2d(c, self, texture_idx, uv, wrap_u, wrap_v, crop_u, crop_v, frame);
 
     result[0] = c[0];
     result[1] = c[1];
@@ -361,7 +366,8 @@ void tex_texel_float4_2d(
     const mi::neuraylib::Texture_handler_base *self_base,
     mi::Uint32 texture_idx,
     const mi::Sint32 coord[2],
-    const mi::Sint32 uv_tile[2])
+    const mi::Sint32 uv_tile[2],
+    float frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -390,7 +396,8 @@ void tex_lookup_float4_3d(
     mi::neuraylib::Tex_wrap_mode wrap_w,
     const mi::Float32 crop_u[2],
     const mi::Float32 crop_v[2],
-    const mi::Float32 crop_w[2])
+    const mi::Float32 crop_w[2],
+    mi::Float32 frame)
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -409,7 +416,8 @@ void tex_lookup_float3_3d(
     mi::neuraylib::Tex_wrap_mode wrap_w,
     const mi::Float32 crop_u[2],
     const mi::Float32 crop_v[2],
-    const mi::Float32 crop_w[2])
+    const mi::Float32 crop_w[2],
+    mi::Float32 frame)
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -421,7 +429,8 @@ void tex_texel_float4_3d(
     mi::Float32 result[4],
     const mi::neuraylib::Texture_handler_base *self,
     mi::Uint32 texture_idx,
-    const mi::Sint32 coord[3])
+    const mi::Sint32 coord[3],
+    float frame)
 {
     result[0] = 0.0f;
     result[1] = 0.0f;
@@ -460,7 +469,8 @@ void tex_resolution_2d(
     mi::Sint32 result[2],
     const mi::neuraylib::Texture_handler_base *self_base,
     mi::Uint32 texture_idx,
-    const mi::Sint32 uv_tile[2])
+    const mi::Sint32 uv_tile[2],
+    float frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -482,7 +492,8 @@ void tex_resolution_2d(
 void tex_resolution_3d(
     mi::Sint32 result[3],
     const mi::neuraylib::Texture_handler_base *self_base,
-    mi::Uint32 texture_idx)
+    mi::Uint32 texture_idx,
+    float frame)
 {
     result[0] = 0;
     result[1] = 0;
@@ -496,6 +507,17 @@ bool tex_texture_isvalid(
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
     return texture_idx != 0 && texture_idx - 1 < self->num_textures;
+}
+
+/// Implementation of \c frame function needed by generated code,
+/// which retrieves the first and last frame number.
+void tex_frame(
+    mi::Sint32 result[2],
+    const mi::neuraylib::Texture_handler_base *self_base,
+    mi::Uint32 texture_idx)
+{
+    result[0] = 0;
+    result[1] = 0;
 }
 
 
@@ -638,8 +660,34 @@ void df_bsdf_measurement_albedos(
 
 
 // ------------------------------------------------------------------------------------------------
+// Normal adaption (dummy functions)
+//
+// Can be enabled via backend option "use_renderer_adapt_normal".
+// ------------------------------------------------------------------------------------------------
+
+#ifndef TEX_SUPPORT_NO_DUMMY_ADAPTNORMAL
+
+// Implementation of adapt_normal().
+void adapt_normal(
+    float                                  result[3],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    float const                            normal[3])
+{
+    // just return original normal
+    result[0] = normal[0];
+    result[1] = normal[1];
+    result[2] = normal[2];
+}
+
+#endif  // TEX_SUPPORT_NO_DUMMY_ADAPTNORMAL
+
+
+// ------------------------------------------------------------------------------------------------
 // Scene data (dummy functions)
 // ------------------------------------------------------------------------------------------------
+
+#ifndef TEX_SUPPORT_NO_DUMMY_SCENEDATA
 
 /// Implementation of scene_data_isvalid().
 bool scene_data_isvalid(
@@ -844,11 +892,15 @@ void scene_data_lookup_deriv_float(
     *result = *default_value;
 }
 
+#endif  // TEX_SUPPORT_NO_DUMMY_SCENEDATA
+
 
 // ------------------------------------------------------------------------------------------------
 // Vtables
 // ------------------------------------------------------------------------------------------------
 
+// The vtable containing all texture access handlers required by the generated code
+// in "vtable" mode.
 mi::neuraylib::Texture_handler_vtable tex_vtable = {
     tex_lookup_float4_2d,
     tex_lookup_float3_2d,
@@ -861,6 +913,7 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     tex_resolution_2d,
     tex_resolution_3d,
     tex_texture_isvalid,
+    tex_frame,
     df_light_profile_power,
     df_light_profile_maximum,
     df_light_profile_isvalid,
@@ -873,6 +926,7 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     df_bsdf_measurement_sample,
     df_bsdf_measurement_pdf,
     df_bsdf_measurement_albedos,
+    adapt_normal,
     scene_data_isvalid,
     scene_data_lookup_float,
     scene_data_lookup_float2,
@@ -885,6 +939,8 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     scene_data_lookup_color,
 };
 
+// The vtable containing all texture access handlers required by the generated code
+// in "vtable" mode with derivatives.
 mi::neuraylib::Texture_handler_deriv_vtable tex_deriv_vtable = {
     tex_lookup_deriv_float4_2d,
     tex_lookup_deriv_float3_2d,
@@ -897,6 +953,7 @@ mi::neuraylib::Texture_handler_deriv_vtable tex_deriv_vtable = {
     tex_resolution_2d,
     tex_resolution_3d,
     tex_texture_isvalid,
+    tex_frame,
     df_light_profile_power,
     df_light_profile_maximum,
     df_light_profile_isvalid,
@@ -909,6 +966,7 @@ mi::neuraylib::Texture_handler_deriv_vtable tex_deriv_vtable = {
     df_bsdf_measurement_sample,
     df_bsdf_measurement_pdf,
     df_bsdf_measurement_albedos,
+    adapt_normal,
     scene_data_isvalid,
     scene_data_lookup_float,
     scene_data_lookup_float2,

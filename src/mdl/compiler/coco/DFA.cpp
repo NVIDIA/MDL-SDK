@@ -746,7 +746,11 @@ void DFA::WriteStartTab() {
 	for (Action *action = firstState->firstAction; action != NULL; action = action->next) {
 		int targetState = action->target->state->nr;
 		if (action->typ == Node::chr) {
-			fwprintf(gen, L"\tstart.set(L'%Lc', %d);\n", (wchar_t)action->sym, targetState);
+			if ((wchar_t)action->sym == L'\'') {
+				fwprintf(gen, L"\tstart.set(L'\\\'', %d);\n", targetState);
+			} else {
+				fwprintf(gen, L"\tstart.set(L'%Lc', %d);\n", (wchar_t)action->sym, targetState);
+			}
 		} else {
 			CharSet *s = tab->CharClassSet(action->sym);
 			for (CharSet::Range *r = s->head; r != NULL; r = r->next) {

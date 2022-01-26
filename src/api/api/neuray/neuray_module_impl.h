@@ -106,11 +106,7 @@ public:
 
     mi::Size get_resources_count() const;
 
-    const mi::neuraylib::IType_resource* get_resource_type(mi::Size index) const;
-
-    const char* get_resource_mdl_file_path(mi::Size index) const;
-
-    const char* get_resource_name(mi::Size index) const;
+    const mi::neuraylib::IValue_resource* get_resource( mi::Size index) const;
 
     mi::Size get_annotation_definition_count() const;
 
@@ -133,6 +129,12 @@ public:
 
     const mi::IArray* deprecated_get_function_overloads(
         const char* name, const char* param_sig) const;
+
+    const mi::neuraylib::IType_resource* deprecated_get_resource_type( mi::Size index) const;
+
+    const char* deprecated_get_resource_mdl_file_path( mi::Size index) const;
+
+    const char* deprecated_get_resource_name( mi::Size index) const;
 };
 
 } // namespace NEURAY

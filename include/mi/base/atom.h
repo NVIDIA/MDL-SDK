@@ -37,13 +37,16 @@
 #include <mi/base/types.h>
 
 // Select implementation to use
-#if defined( MI_ARCH_X86) && defined( MI_COMPILER_MSC)
+#if defined( MI_ARCH_X86) && (defined( MI_COMPILER_GCC) || defined( MI_COMPILER_ICC))
+#  define MI_ATOM32_X86GCC
+#elif (__cplusplus >= 201103L)
+#  define MI_ATOM32_STD
+#  include <atomic>
+#elif defined( MI_ARCH_X86) && defined( MI_COMPILER_MSC)
 #  define MI_ATOM32_X86MSC
 #  include <intrin.h>
 #  pragma intrinsic( _InterlockedExchangeAdd)
 #  pragma intrinsic( _InterlockedCompareExchange)
-#elif defined( MI_ARCH_X86) && (defined( MI_COMPILER_GCC) || defined( MI_COMPILER_ICC))
-#  define MI_ATOM32_X86GCC
 #else
 #  define MI_ATOM32_GENERIC
 #  include <mi/base/lock.h>
@@ -67,12 +70,12 @@ public:
     /// This constructor initializes the counter to \p value.
     Atom32( const Uint32 value) : m_value( value) { }
 
-#if defined( MI_ATOM32_GENERIC)
+#if defined( MI_ATOM32_STD) || defined( MI_ATOM32_GENERIC)
     /// The copy constructor assigns the value of \p other to the counter.
-    Atom32( const mi::base::Atom32& other) : m_value( other.m_value) { }
+    Atom32( const Atom32& other);
 
     /// Assigns the value of \p rhs to the counter.
-    mi::base::Atom32& operator=( const mi::base::Atom32& rhs);
+    Atom32& operator=( const Atom32& rhs);
 #endif
 
     /// Assigns \p rhs to the counter.
@@ -103,8 +106,13 @@ public:
     Uint32 swap( const Uint32 rhs);
 
 private:
+#if defined( MI_ATOM32_STD)
+    // The counter.
+    std::atomic_uint32_t m_value;
+#else
     // The counter.
     volatile Uint32 m_value;
+#endif
 
 #if defined( MI_ATOM32_GENERIC)
     // The lock for #m_value needed by the generic implementation.
@@ -114,45 +122,7 @@ private:
 
 #if !defined( MI_FOR_DOXYGEN_ONLY)
 
-#if defined( MI_ATOM32_X86MSC)
-
-__forceinline Uint32 Atom32::operator+=( const Uint32 rhs)
-{
-    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), rhs) + rhs;
-}
-
-__forceinline Uint32 Atom32::operator-=( const Uint32 rhs)
-{
-    return _InterlockedExchangeAdd(
-        reinterpret_cast<volatile long*>( &m_value), -static_cast<const Sint32>( rhs)) - rhs;
-}
-
-__forceinline Uint32 Atom32::operator++()
-{
-    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), 1L) + 1L;
-}
-
-__forceinline Uint32 Atom32::operator++( int)
-{
-    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), 1L);
-}
-
-__forceinline Uint32 Atom32::operator--()
-{
-    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), -1L) - 1L;
-}
-
-__forceinline Uint32 Atom32::operator--( int)
-{
-    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), -1L);
-}
-
-__forceinline Uint32 Atom32::swap( const Uint32 rhs)
-{
-    return _InterlockedExchange( reinterpret_cast<volatile long*>( &m_value), rhs);
-}
-
-#elif defined( MI_ATOM32_X86GCC) // defined( MI_ATOM32_X86MSC)
+#if defined( MI_ATOM32_X86GCC)
 
 inline Uint32 Atom32::operator+=( const Uint32 rhs)
 {
@@ -252,9 +222,96 @@ inline Uint32 Atom32::swap( const Uint32 rhs)
     return retval;
 }
 
-#elif defined( MI_ATOM32_GENERIC) // defined( MI_ATOM32_X86GCC)
+#elif defined( MI_ATOM32_STD)
 
-inline mi::base::Atom32& Atom32::operator=( const mi::base::Atom32& rhs)
+inline Atom32::Atom32( const Atom32& other) : m_value( other.m_value.load()) { }
+
+inline Atom32& Atom32::operator=( const Atom32& rhs)
+{
+    m_value = rhs.m_value.load();
+    return *this;
+}
+
+inline Uint32 Atom32::operator+=( const Uint32 rhs)
+{
+    m_value += rhs;
+    return m_value;
+}
+
+inline Uint32 Atom32::operator-=( const Uint32 rhs)
+{
+    m_value -= rhs;
+    return m_value;
+}
+
+inline Uint32 Atom32::operator++()
+{
+    return ++m_value;
+}
+
+inline Uint32 Atom32::operator++( int)
+{
+    return m_value++;
+}
+
+inline Uint32 Atom32::operator--()
+{
+    return --m_value;
+}
+
+inline Uint32 Atom32::operator--( int)
+{
+    return m_value--;
+}
+
+inline Uint32 Atom32::swap( const Uint32 rhs)
+{
+    return m_value.exchange( rhs);
+}
+
+#elif defined( MI_ATOM32_X86MSC)
+
+__forceinline Uint32 Atom32::operator+=( const Uint32 rhs)
+{
+    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), rhs) + rhs;
+}
+
+__forceinline Uint32 Atom32::operator-=( const Uint32 rhs)
+{
+    return _InterlockedExchangeAdd(
+        reinterpret_cast<volatile long*>( &m_value), -static_cast<const Sint32>( rhs)) - rhs;
+}
+
+__forceinline Uint32 Atom32::operator++()
+{
+    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), 1L) + 1L;
+}
+
+__forceinline Uint32 Atom32::operator++( int)
+{
+    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), 1L);
+}
+
+__forceinline Uint32 Atom32::operator--()
+{
+    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), -1L) - 1L;
+}
+
+__forceinline Uint32 Atom32::operator--( int)
+{
+    return _InterlockedExchangeAdd( reinterpret_cast<volatile long*>( &m_value), -1L);
+}
+
+__forceinline Uint32 Atom32::swap( const Uint32 rhs)
+{
+    return _InterlockedExchange( reinterpret_cast<volatile long*>( &m_value), rhs);
+}
+
+#elif defined( MI_ATOM32_GENERIC)
+
+inline Atom32::Atom32( const Atom32& other) : m_value( other.m_value) { }
+
+inline Atom32& Atom32::operator=( const Atom32& rhs)
 {
     m_value = rhs.m_value;
     return *this;
@@ -304,12 +361,14 @@ inline Uint32 Atom32::swap( const Uint32 rhs)
     return retval;
 }
 
-#else // MI_ATOM32_GENERIC
-#error One of MI_ATOM32_X86MSC, MI_ATOM32_X86GCC, or MI_ATOM32_GENERIC must be defined. 
+#else
+#error One of MI_ATOM32_X86GCC, MI_ATOM32_STD, MI_ATOM32_X86MSC, or MI_ATOM32_GENERIC must be \
+  defined.
 #endif
 
-#undef MI_ATOM32_X86MSC
 #undef MI_ATOM32_X86GCC
+#undef MI_ATOM32_STD
+#undef MI_ATOM32_X86MSC
 #undef MI_ATOM32_GENERIC
 
 #endif // !MI_FOR_DOXYGEN_ONLY

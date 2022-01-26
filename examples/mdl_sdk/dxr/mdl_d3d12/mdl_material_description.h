@@ -165,7 +165,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         const char* get_module_db_name() const;
 
         /// Get the database name of the material definition.
-        const char* get_material_defintion_db_name() const;
+        const char* get_material_definition_db_name() const;
 
         /// Generate and get the source code of materials that are loaded from string.
         /// MDLs that are loaded from a search path (including the GLTF support materials)
@@ -222,7 +222,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         mi::base::Handle<mi::neuraylib::IExpression_list> m_parameter_list;
         std::string m_module_db_name;
-        std::string m_material_defintion_db_name;
+        std::string m_material_definition_db_name;
 
         std::string m_qualified_module_name;
         std::string m_material_name;

@@ -68,9 +68,7 @@ mi::Uint32 get_components_per_pixel( const char* pixel_type)
 }
 
 bool copy_from_dds_to_tile(
-    const unsigned char* data,
-    mi::Uint32 x_start,
-    mi::Uint32 y_start,
+    const unsigned char* src,
     mi::Uint32 data_width,
     mi::Uint32 data_height,
     mi::neuraylib::ITile* tile)
@@ -78,18 +76,17 @@ bool copy_from_dds_to_tile(
     // Compute the rectangular region that is to be copied
     mi::Uint32 tile_width  = tile->get_resolution_x();
     mi::Uint32 tile_height = tile->get_resolution_y();
-    mi::Uint32 x_end = std::min( x_start + tile_width,  data_width);
-    mi::Uint32 y_end = std::min( y_start + tile_height, data_height);
+    mi::Uint32 x_end = std::min( tile_width,  data_width);
+    mi::Uint32 y_end = std::min( tile_height, data_height);
 
     mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( tile->get_type());
     if( bytes_per_pixel == 0)
          return false;
 
     // Copy pixel data using memcpy() for each scanline.
-    mi::Uint32 bytes_per_scanline = (x_end-x_start) * bytes_per_pixel;
-    const unsigned char* src = data + (y_start * data_width + x_start) * bytes_per_pixel;
+    mi::Uint32 bytes_per_scanline = x_end * bytes_per_pixel;
     char* dest = static_cast<char*>( tile->get_data());
-    for( mi::Uint32 y = y_start; y < y_end; ++y) {
+    for( mi::Uint32 y = 0; y < y_end; ++y) {
         memcpy( dest, src, bytes_per_scanline);
         src  += data_width * bytes_per_pixel;
         dest += tile_width * bytes_per_pixel;
@@ -99,27 +96,24 @@ bool copy_from_dds_to_tile(
 
 bool copy_from_tile_to_dds(
     const mi::neuraylib::ITile* tile,
-    unsigned char* data,
-    mi::Uint32 x_start,
-    mi::Uint32 y_start,
+    unsigned char* dest,
     mi::Uint32 data_width,
     mi::Uint32 data_height)
 {
     // Compute the rectangular region that is to be copied
     mi::Uint32 tile_width  = tile->get_resolution_x();
     mi::Uint32 tile_height = tile->get_resolution_y();
-    mi::Uint32 x_end = std::min( x_start + tile_width,  data_width);
-    mi::Uint32 y_end = std::min( y_start + tile_height, data_height);
+    mi::Uint32 x_end = std::min( tile_width,  data_width);
+    mi::Uint32 y_end = std::min( tile_height, data_height);
 
     mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( tile->get_type());
     if( bytes_per_pixel == 0)
          return false;
 
     // Copy pixel data using memcpy() for each scanline.
-    mi::Uint32 bytes_per_scanline = (x_end-x_start) * bytes_per_pixel;
+    mi::Uint32 bytes_per_scanline = x_end * bytes_per_pixel;
     const char* src = static_cast<const char*>( tile->get_data());
-    unsigned char* dest = data + (y_start * data_width + x_start) * bytes_per_pixel;
-    for( mi::Uint32 y = y_start; y < y_end; ++y) {
+    for( mi::Uint32 y = 0; y < y_end; ++y) {
         memcpy( dest, src, bytes_per_scanline);
         src  += tile_width * bytes_per_pixel;
         dest += data_width * bytes_per_pixel;

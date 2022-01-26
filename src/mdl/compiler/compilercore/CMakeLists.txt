@@ -84,6 +84,7 @@ set(PROJECT_HEADERS
     "compilercore_file_utils.h"
     "compilercore_function_instance.h"
     "compilercore_func_hash.h"
+    "compilercore_half.h"
     "compilercore_hash.h"
     "compilercore_hash_ptr.h"
     "compilercore_known_defs.h"
@@ -139,6 +140,7 @@ set(PROJECT_SOURCES
     "compilercore_file_resolution.cpp"
     "compilercore_function_instance.cpp"
     "compilercore_func_hash.cpp"
+    "compilercore_half.cpp"
     "compilercore_hash.cpp"
     "compilercore_intrinsic_eval.cpp"
     "compilercore_manifest.cpp"
@@ -223,7 +225,6 @@ set(_STANDARD_MDL
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/state.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/math.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/tex.mdl
-    ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/noise.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/df.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/scene.mdl
     ${CMAKE_CURRENT_SOURCE_DIR}/../stdmodule/builtins.mdl

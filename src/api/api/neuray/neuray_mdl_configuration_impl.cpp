@@ -64,7 +64,7 @@ Mdl_configuration_impl::Mdl_configuration_impl( mi::neuraylib::INeuray* neuray)
   , m_implicit_cast_enabled(true)
   , m_expose_names_of_let_expressions(false)
   , m_simple_glossy_bsdf_legacy_enabled(false)
-  , m_materials_are_functions(false)
+  , m_materials_are_functions(true)
 {
     const std::string& separator = HAL::Ospath::get_path_set_separator();
 
@@ -313,6 +313,13 @@ mi::Sint32 Mdl_configuration_impl::start()
 
 mi::Sint32 Mdl_configuration_impl::shutdown()
 {
+    // drop any reference to a user resolver
+    m_entity_resolver.reset();
+    if (m_mdlc_module.get_status() == MODULE_STATUS_INITIALIZED) {
+        mi::base::Handle<mi::mdl::IMDL> mdl(m_mdlc_module->get_mdl());
+        if (mdl)
+            mdl->set_external_entity_resolver(nullptr);
+    }
     return 0;
 }
 

@@ -158,6 +158,11 @@ public:
 #endif
     }
 
+#if (__cplusplus >= 201103L)
+    /// Default copy constructor.
+    Color( const Color& c) = default;
+#endif
+
     /// Constructor from underlying storage type.
     inline Color( const Color_struct& c)
     {
@@ -166,7 +171,6 @@ public:
         b = c.b;
         a = c.a;
     }
-
 
     /// Constructor initializes all vector elements to the value \p s.
     inline explicit Color( const Float32 s)
@@ -666,7 +670,7 @@ inline Color gamma_correction(
     return Color( fast_pow( color.r, f),
                   fast_pow( color.g, f),
                   fast_pow( color.b, f),
-                  color.a);
+                  fast_pow( color.a, f));
 }
 
 /// Compares the two given values elementwise for equality within the given epsilon.

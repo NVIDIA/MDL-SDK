@@ -42,6 +42,7 @@ set(PROJECT_SOURCES
     "gui/gui_material_properties.cpp"
     "lpe.cpp"
     "lpe.h"
+    "texture_support_native.h"
     "utils/enums.h"
     "utils/io.h"
     "utils/mdl.h"

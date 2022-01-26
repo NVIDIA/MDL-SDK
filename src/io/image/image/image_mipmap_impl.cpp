@@ -56,9 +56,9 @@ Mipmap_impl::Mipmap_impl()
     m_nr_of_levels = 1;
     m_nr_of_provided_levels = 1;
     m_levels.resize( m_nr_of_levels);
-    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
+    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, false, 0.0f);
     mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
-    mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
+    const mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
     m_is_cubemap = false;
@@ -68,8 +68,6 @@ Mipmap_impl::Mipmap_impl(
     Pixel_type pixel_type,
     mi::Uint32 width,
     mi::Uint32 height,
-    mi::Uint32 tile_width,
-    mi::Uint32 tile_height,
     mi::Uint32 layers,
     bool is_cubemap,
     mi::Float32 gamma)
@@ -85,7 +83,7 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.resize( m_nr_of_levels);
     m_levels[0] = new Canvas_impl(
-        pixel_type, width, height, tile_width, tile_height, layers, is_cubemap, gamma);
+        pixel_type, width, height, layers, is_cubemap, gamma);
 
     m_last_created_level = 0;
     m_is_cubemap = is_cubemap;
@@ -93,8 +91,7 @@ Mipmap_impl::Mipmap_impl(
 
 Mipmap_impl::Mipmap_impl(
     const std::string& filename,
-    mi::Uint32 tile_width,
-    mi::Uint32 tile_height,
+    const char* selector,
     bool only_first_level,
     mi::Sint32* errors)
 {
@@ -105,9 +102,9 @@ Mipmap_impl::Mipmap_impl(
     m_nr_of_levels = 1;
     m_nr_of_provided_levels = 0;
     m_levels.resize( m_nr_of_levels);
-    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
+    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, false, 0.0f);
     mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
-    mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
+    const mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
     m_is_cubemap = false;
@@ -146,8 +143,8 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.clear();
 
-    mi::Uint32 width  = image_file->get_resolution_x();
-    mi::Uint32 height = image_file->get_resolution_y();
+    const mi::Uint32 width  = image_file->get_resolution_x();
+    const mi::Uint32 height = image_file->get_resolution_y();
 
     m_nr_of_levels = 1 + mi::math::log2_int( std::min( width, height));
     m_nr_of_provided_levels = only_first_level ? 1 : image_file->get_miplevels();
@@ -158,7 +155,7 @@ Mipmap_impl::Mipmap_impl(
     m_levels.resize( m_nr_of_levels);
 
     for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
-        m_levels[i] = new Canvas_impl( filename, i, tile_width, tile_height, image_file.get());
+        m_levels[i] = new Canvas_impl( filename, selector, i, image_file.get());
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
@@ -173,8 +170,7 @@ Mipmap_impl::Mipmap_impl(
     mi::neuraylib::IReader* reader,
     const std::string& archive_filename,
     const std::string& member_filename,
-    mi::Uint32 tile_width,
-    mi::Uint32 tile_height,
+    const char* selector,
     bool only_first_level,
     mi::Sint32* errors)
 {
@@ -185,9 +181,9 @@ Mipmap_impl::Mipmap_impl(
     m_nr_of_levels = 1;
     m_nr_of_provided_levels = 0;
     m_levels.resize( m_nr_of_levels);
-    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
+    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, false, 0.0f);
     mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
-    mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
+    const mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
     m_is_cubemap = false;
@@ -224,8 +220,8 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.clear();
 
-    mi::Uint32 width  = image_file->get_resolution_x();
-    mi::Uint32 height = image_file->get_resolution_y();
+    const mi::Uint32 width  = image_file->get_resolution_x();
+    const mi::Uint32 height = image_file->get_resolution_y();
 
     m_nr_of_levels = 1 + mi::math::log2_int( std::min( width, height));
     m_nr_of_provided_levels = only_first_level ? 1 : image_file->get_miplevels();
@@ -241,9 +237,8 @@ Mipmap_impl::Mipmap_impl(
             reader,
             archive_filename,
             member_filename,
+            selector,
             i,
-            tile_width,
-            tile_height,
             image_file.get());
 
     m_is_cubemap = false;
@@ -258,9 +253,8 @@ Mipmap_impl::Mipmap_impl(
     Memory_based,
     mi::neuraylib::IReader* reader,
     const char* image_format,
+    const char* selector,
     const char* mdl_file_path,
-    mi::Uint32 tile_width,
-    mi::Uint32 tile_height,
     bool only_first_level,
     mi::Sint32* errors)
 {
@@ -271,9 +265,9 @@ Mipmap_impl::Mipmap_impl(
     m_nr_of_levels = 1;
     m_nr_of_provided_levels = 0;
     m_levels.resize( m_nr_of_levels);
-    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, 1, 1, false, 0.0f);
+    m_levels[0] = new Canvas_impl( PT_RGBA, 1, 1, 1, false, 0.0f);
     mi::base::Handle<mi::neuraylib::ITile> tile( m_levels[0]->get_tile());
-    mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
+    const mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
     tile->set_pixel( 0, 0, &pink.r);
     m_last_created_level = 0;
     m_is_cubemap = false;
@@ -305,8 +299,8 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.clear();
 
-    mi::Uint32 width  = image_file->get_resolution_x();
-    mi::Uint32 height = image_file->get_resolution_y();
+    const mi::Uint32 width  = image_file->get_resolution_x();
+    const mi::Uint32 height = image_file->get_resolution_y();
 
     m_nr_of_levels = 1 + mi::math::log2_int( std::min( width, height));
     m_nr_of_provided_levels = only_first_level ? 1 : image_file->get_miplevels();
@@ -321,10 +315,9 @@ Mipmap_impl::Mipmap_impl(
             Memory_based(),
             reader,
             image_format,
+            selector,
             mdl_file_path,
             i,
-            tile_width,
-            tile_height,
             image_file.get());
 
     m_is_cubemap = false;
@@ -336,10 +329,11 @@ Mipmap_impl::Mipmap_impl(
 Mipmap_impl::Mipmap_impl(
     std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases, bool is_cubemap)
 {
+    ASSERT( M_IMAGE, !canvases.empty());
     ASSERT( M_IMAGE, canvases[0]);
 
-    mi::Uint32 base_level_width  = canvases[0]->get_resolution_x();
-    mi::Uint32 base_level_height = canvases[0]->get_resolution_y();
+    const mi::Uint32 base_level_width  = canvases[0]->get_resolution_x();
+    const mi::Uint32 base_level_height = canvases[0]->get_resolution_y();
 
     m_nr_of_levels = 1 + mi::math::log2_int( std::min( base_level_width, base_level_height));
     m_nr_of_provided_levels = static_cast<mi::Uint32>( canvases.size());
@@ -349,8 +343,10 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.resize( m_nr_of_levels);
 
-    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
+    for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i) {
+        ASSERT( M_IMAGE, canvases[i]);
         m_levels[i] = make_handle_dup( canvases[i].get());
+    }
 
     m_is_cubemap = is_cubemap;
 }
@@ -408,7 +404,7 @@ mi::neuraylib::ICanvas* Mipmap_impl::get_level( mi::Uint32 level) //-V659 PVS
     ASSERT( M_IMAGE, m_last_created_level >= level);
 
     // destroy higher levels if needed
-    mi::Uint32 first_level_to_destroy = std::max( level+1, m_nr_of_provided_levels);
+    const mi::Uint32 first_level_to_destroy = std::max( level+1, m_nr_of_provided_levels);
     for( mi::Uint32 i = first_level_to_destroy; i <= m_last_created_level; ++i)
         m_levels[i] = nullptr;
     m_last_created_level = first_level_to_destroy - 1;
@@ -432,9 +428,9 @@ mi::Size Mipmap_impl::get_size() const
         if( canvas_internal)                // exact memory usage
             size += canvas_internal->get_size();
         else  {                                                  // approximate memory usage
-            mi::Size width  = m_levels[i]->get_resolution_x();
-            mi::Size height = m_levels[i]->get_resolution_y();
-            Pixel_type pixel_type
+            const mi::Size width  = m_levels[i]->get_resolution_x();
+            const mi::Size height = m_levels[i]->get_resolution_y();
+            const Pixel_type pixel_type
                 = convert_pixel_type_string_to_enum( m_levels[i]->get_type());
             size += width * height * get_bytes_per_pixel( pixel_type);
         }

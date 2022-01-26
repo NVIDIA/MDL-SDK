@@ -149,6 +149,11 @@ libraries. These additional libraries are:
 
     Additionally the optional *Graphic Tools* feature has to be installed.
 
+-   **DirectX Shader Compiler support**  
+    Building the DXR example on Windows 10 with an SDK older than 10.0.20348.0, requires an updated version of the DirectX Shader Compiler.  
+    Download and extract the pre-compiled x64 binaries from 
+    [github](https://github.com/microsoft/DirectXShaderCompiler/releases).  
+
 -   **Arnold SDK** *(6.0.0.0)*
     Please follow the instructions on the [Arnold Website](https://www.arnoldrenderer.com/arnold/download/) to download the Arnold SDK.
 
@@ -241,6 +246,9 @@ Required tools to build the documentation:
         and *C:/projects/thirdparty/git/MaterialX/build* respectively.
         Here, *MATERIALX_BUILD*  has to point to the build directory selected while building the MaterialX libraries using CMake.
         For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
+
+    -   **DXC_DIR** in Ungrouped Entries,  
+        for example: *C:/projects/thirdparty/dxc_2021_07_01*
 
     Note: when you installed a new Visual Studio version after installing CUDA,
     you may have to reinstall CUDA to register it correctly with Visual Studio.

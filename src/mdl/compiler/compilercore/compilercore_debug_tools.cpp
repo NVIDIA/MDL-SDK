@@ -38,11 +38,13 @@
 
 #include <dbghelp.h>
 
+
 #elif defined(__GNUC__)
 
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <signal.h>
+
 
 #endif
 
@@ -75,13 +77,19 @@ public:
 
 /// OS-specific frame capture.
 ///
-/// \param skip    number of frames to skip
-/// \param n       number of frames to capture
-/// \param frames  destination
-/// \param tmp     a temporary array of size skip + n
+/// \param skip           number of frames to skip
+/// \param n              number of frames to capture
+/// \param frames         destination
+/// \param tmp            a temporary array of size skip + n
+/// \param use_fp_unwind  true, if frame pointer based unwind should be used
 ///
 /// \return number of captured frames
-static unsigned os_capture_frames(size_t skip, size_t n, void *frames[], void *tmp[]);
+static unsigned os_capture_frames(
+    size_t skip,
+    size_t n,
+    void   *frames[],
+    void   *tmp[],
+    bool   use_fp_unwind);
 
 /// Return the OS-specific Symbol lookup interface.
 static ISymbol_lookup *os_get_symbol_lookup();
@@ -91,6 +99,9 @@ static void os_break_point();
 
 /// OS-specific printer
 int os_printf(char const *fmt, ...);
+
+
+static void os_break_point();
 
 #ifdef _MSC_VER
 // MS runtime does not support %z type modifier
@@ -116,14 +127,18 @@ static char const *reserved[] = {
     "bpf",
     "bpi",
     "bpd",
+    "bpx",
     "abort",
     "noabort",
     "expensive",
     "noexpensive",
     "size",
     "nosize",
+    "fpunwind",
+    "nofpunwind",
     "all",
     "ref",
+    "none",
     "help"
 };
 
@@ -131,18 +146,22 @@ static void show_commands() {
     os_printf("MDL memory allocator internal debugger commands:\n"
         "capture id   capture allocations for block id\n"
         "capture all  capture all allocations (Danger: slow, huge memory consumption)\n"
+        "capture none disable capturing\n"
         "depth num    sets the depth of the captured frame, default 5\n"
         "skip num     skip the first num frames when capturing, default 3\n"
         "bpa id       break into debugger if block id is allocated\n"
         "bpf id       break into debugger if block id is freed\n"
         "bpi id       break into debugger if object id's reference count is increased\n"
         "bpd id       break into debugger if object id's reference count is decreased\n"
+        "bpx          break into debugger if a wrong memory address is freed\n"
         "abort        abort after memory errors were reported (default in DEBUG mode)\n"
         "noabort      do not abort after memory errors were reported (default in RELEASE mode)\n"
         "expensive    enable expensive checks (default in DEBUG mode)\n"
         "noexpensive  disable expensive check (default in RELEASE mode)\n"
         "size         regularly dump allocated size\n"
         "nosize       do not dump allocated size\n"
+        "fpunwind     use frame pointer based unwinding if available\n"
+        "nofpunwind   do not use frame pointer based unwinding\n"
         "help         this help text\n");
 }
 
@@ -157,14 +176,18 @@ public:
         tok_bpf,
         tok_bpi,
         tok_bpd,
+        tok_bpx,
         tok_abort,
         tok_noabort,
         tok_expensive,
         tok_noexpensive,
         tok_size,
         tok_nosize,
+        tok_fpunwind,
+        tok_nofpunwind,
         tok_all,
         tok_ref,
+        tok_none,
         tok_help,
         tok_num,
         tok_error,
@@ -216,16 +239,18 @@ public:
 
             for (;;) {
                 c = next_char();
-                if (isdigit(c))
+                if (isdigit(c)) {
                     value = value * 10 + c - '0';
-                else
+                } else {
                     break;
+                }
             }
             unput();
             m_num = value;
             return tok_num;
-        } else if (c == '\0')
+        } else if (c == '\0') {
             return tok_eof;
+        }
         return c;
     }
 
@@ -244,15 +269,17 @@ public:
 private:
     /// Get the next char from input.
     char next_char() {
-        if (m_curr_pos >= m_end_pos)
+        if (m_curr_pos >= m_end_pos) {
             return '\0';
+        }
         return *m_curr_pos++;
     }
 
     /// Put one character back into the buffer.
     void unput() {
-        if (m_curr_pos < m_end_pos)
+        if (m_curr_pos < m_end_pos) {
             --m_curr_pos;
+        }
     }
 
 private:
@@ -276,14 +303,17 @@ void *DebugMallocAllocator::malloc(mi::Size size)
 
 void DebugMallocAllocator::free(void *memory)
 {
-    if (memory == NULL)
+    if (memory == NULL) {
         return;
+    }
 
     mi::base::Lock::Block block(&m_lock);
 
     Header *h = m_expensive_checks ? find_header(memory) : find_header_fast(memory);
 
     if (h == NULL) {
+        handle_breakpoint(Debug_cmd_lexer::tok_bpx, SIZE(memory));
+
         // create an error
         Free_error *err = (Free_error *)internal_malloc(sizeof(*err));
         if (err != NULL) {
@@ -298,7 +328,8 @@ void DebugMallocAllocator::free(void *memory)
                     m_num_skip_frames,
                     frame->length,
                     frame->frames,
-                    m_temp_frames);
+                    m_temp_frames,
+                    m_use_fp_unwind);
 
                 if (count > 0) {
                     frame->reason = CR_FREE;
@@ -334,8 +365,9 @@ void DebugMallocAllocator::free(void *memory)
     m_allocated_size -= h->size;
     --m_allocated_blocks;
 
-    if (m_dump_size)
+    if (m_dump_size) {
         report_size();
+    }
 
     internal_free(h);
 }
@@ -349,18 +381,21 @@ void *DebugMallocAllocator::objalloc(char const *cls_name, Size size)
 
     Header *h = (Header *)internal_malloc(size + sizeof(Header));
 
-    if (h == NULL && size != 0) {
+    if (h == NULL) {
         os_printf("*** Memory exhausted (after " PRT_SIZE "Mb).\n",
             m_allocated_size >> size_t(20));
         abort(); //-V2014
+        return NULL;
     }
 
     m_allocated_size += size;
-    if (m_allocated_size > m_max_allocated_size)
+    if (m_allocated_size > m_max_allocated_size) {
         m_max_allocated_size = m_allocated_size;
+    }
     ++m_allocated_blocks;
-    if (m_allocated_blocks > m_max_allocated_blocks)
+    if (m_allocated_blocks > m_max_allocated_blocks) {
         m_max_allocated_blocks = m_allocated_blocks;
+    }
 
     memset(h, 0xDC, sizeof(*h));
     h->magic1    =
@@ -385,11 +420,13 @@ void *DebugMallocAllocator::objalloc(char const *cls_name, Size size)
     h->num  = m_next_block_num++;
     m_last = h;
 
-    if (is_traced(h))
+    if (is_traced(h)) {
         capture_stack_frame(h, CR_ALLOC);
+    }
 
-    if (m_dump_size)
+    if (m_dump_size) {
         report_size();
+    }
 
     return (void *)(h + 1);
 }
@@ -405,8 +442,9 @@ void DebugMallocAllocator::mark_ref_counted(
         h->flags     |= BH_REF_COUNTED;
         h->ref_count  = initial;
 
-        if (is_traced(h, /*ref_mode=*/true))
+        if (is_traced(h, /*ref_mode=*/true)) {
             capture_stack_frame(h, CR_ALLOC);
+        }
     }
 }
 
@@ -418,8 +456,9 @@ void DebugMallocAllocator::inc_ref_count(void const *obj)
     if (Header *h = find_header_fast(obj)) {
         ++h->ref_count;
 
-        if (is_traced(h))
+        if (is_traced(h)) {
             capture_stack_frame(h, CR_REF_COUNT_INC);
+        }
 
         handle_breakpoint(Debug_cmd_lexer::tok_bpi, h->num);
     }
@@ -433,9 +472,9 @@ void DebugMallocAllocator::dec_ref_count(void const *obj)
     if (Header *h = find_header_fast(obj)) {
         --h->ref_count;
 
-        if (is_traced(h))
+        if (is_traced(h)) {
             capture_stack_frame(h, CR_REF_COUNT_DEC);
-
+        }
         handle_breakpoint(Debug_cmd_lexer::tok_bpd, h->num);
     }
 }
@@ -464,11 +503,17 @@ DebugMallocAllocator::DebugMallocAllocator(mi::base::IAllocator *alloc)
 , m_num_skip_frames(3)
 , m_temp_frames(NULL)
 , m_free_frames(NULL)
+#ifdef MI_PLATFORM_WINDOWS
 , m_capture_mode(CAPTURE_ALL)
+#else
+  // capture might be slow on non-Windows, so do not enable it by default
+, m_capture_mode(CAPTURE_NONE)
+#endif
 , m_had_memory_error(false)
 , m_abort_on_error(false)
 , m_expensive_checks(false)
 , m_dump_size(false)
+, m_use_fp_unwind(false)
 , m_allocated_size(0)
 , m_max_allocated_size(0)
 , m_allocated_blocks(0)
@@ -482,8 +527,9 @@ DebugMallocAllocator::DebugMallocAllocator(mi::base::IAllocator *alloc)
     m_abort_on_error = true;
 #endif
 
-    if (char const *cmd = ::getenv("NV_MDL_DEBUG"))
+    if (char const *cmd = ::getenv("NV_MDL_DEBUG")) {
         parse_commands(cmd);
+    }
 
     size_t tmp_size = m_num_captures_frames + m_num_skip_frames;
     if (tmp_size > 0) {
@@ -501,8 +547,9 @@ DebugMallocAllocator::~DebugMallocAllocator()
             max_size, m_max_allocated_blocks);
     }
 
-    if (m_temp_frames != NULL)
+    if (m_temp_frames != NULL) {
         internal_free(m_temp_frames);
+    }
 
     for (Header *n, *h = m_first; h != NULL; h = n) {
         n = h->next;
@@ -519,8 +566,9 @@ DebugMallocAllocator::~DebugMallocAllocator()
     for (Free_error *nf, *f = m_errors; f != NULL; f = nf) {
         nf = f->next;
 
-        if (f->frame != NULL)
+        if (f->frame != NULL) {
             free_frame(f->frame);
+        }
 
         internal_free(f);
     }
@@ -545,18 +593,20 @@ DebugMallocAllocator::~DebugMallocAllocator()
 // Really allocate memory.
 void *DebugMallocAllocator::internal_malloc(size_t size)
 {
-    if (m_internal_alloc.is_valid_interface())
+    if (m_internal_alloc.is_valid_interface()) {
         return m_internal_alloc->malloc(size);
+    }
     return ::malloc(size);
 }
 
 // Really free memory.
 void DebugMallocAllocator::internal_free(void *memory)
 {
-    if (m_internal_alloc.is_valid_interface())
+    if (m_internal_alloc.is_valid_interface()) {
         m_internal_alloc->free(memory);
-    else
+    } else {
         ::free(memory);
+    }
 }
 
 void DebugMallocAllocator::check_memory_leaks()
@@ -584,8 +634,9 @@ void DebugMallocAllocator::check_memory_leaks()
                 ++num_obj;
             }
         }
-        if (num_obj > 0)
+        if (num_obj > 0) {
             os_printf(PRT_SIZE " object(s) still referenced\n\n", SIZE(num_obj));
+        }
 
         size_t num_blocks = 0;
         for (Header const *h = m_first; h != NULL; h = h->next) {
@@ -601,8 +652,9 @@ void DebugMallocAllocator::check_memory_leaks()
                 ++num_blocks;
             }
         }
-        if (num_blocks >= 10)
+        if (num_blocks >= 10) {
             os_printf("...\n" PRT_SIZE " more block(s) lost.\n", SIZE(num_blocks - 10));
+        }
 
         os_printf("\n");
     }
@@ -635,25 +687,30 @@ void DebugMallocAllocator::parse_commands(char const *cmd)
                 m_capture_mode = CAPTURE_ALL;
             } else if (token == Debug_cmd_lexer::tok_ref) {
                 m_capture_mode = CAPTURE_REF;
+            } else if (token == Debug_cmd_lexer::tok_none) {
+                m_capture_mode = CAPTURE_NONE;
             } else if (token == Debug_cmd_lexer::tok_num) {
                 if (m_num_tracked < dimension_of(m_tracked_ids)) {
                     m_tracked_ids[m_num_tracked++] = lexer.get_num_value();
                 } else {
                     os_printf("DebugAllocator: cannot track more individual blocks\n");
                 }
-            } else
+            } else {
                 goto error;
+            }
             break;
         case Debug_cmd_lexer::tok_depth:
             token = lexer.get_token();
-            if (token != Debug_cmd_lexer::tok_num)
+            if (token != Debug_cmd_lexer::tok_num) {
                 goto error;
+            }
             m_num_captures_frames = lexer.get_num_value();
             break;
         case Debug_cmd_lexer::tok_skip:
             token = lexer.get_token();
-            if (token != Debug_cmd_lexer::tok_num)
+            if (token != Debug_cmd_lexer::tok_num) {
                 goto error;
+            }
             m_num_skip_frames = lexer.get_num_value();
             break;
         case Debug_cmd_lexer::tok_bpa:
@@ -666,6 +723,9 @@ void DebugMallocAllocator::parse_commands(char const *cmd)
                     goto error;
                 set_breakpoint(token, lexer.get_num_value());
             }
+            break;
+        case Debug_cmd_lexer::tok_bpx:
+            set_breakpoint(token, 0);
             break;
         case Debug_cmd_lexer::tok_abort:
             m_abort_on_error = true;
@@ -685,6 +745,12 @@ void DebugMallocAllocator::parse_commands(char const *cmd)
         case Debug_cmd_lexer::tok_nosize:
             m_dump_size = false;
             break;
+        case Debug_cmd_lexer::tok_fpunwind:
+            m_use_fp_unwind = true;
+            break;
+        case Debug_cmd_lexer::tok_nofpunwind:
+            m_use_fp_unwind = false;
+            break;
         case Debug_cmd_lexer::tok_help:
             show_commands();
             break;
@@ -694,10 +760,12 @@ error:
             goto leave;
         }
         token = lexer.get_token();
-        if (token == Debug_cmd_lexer::tok_eof)
+        if (token == Debug_cmd_lexer::tok_eof) {
             break;
-        if (token != ';')
+        }
+        if (token != ';') {
             goto error;
+        }
     }
 leave:
     return;
@@ -709,8 +777,9 @@ DebugMallocAllocator::Header *DebugMallocAllocator::find_header(void const *obj)
     Header *h = (Header *)obj;
     h -= 1;
 
-    if (h->magic1 != Header::HEADER_MAGIC || h->magic2 != Header::HEADER_MAGIC)
+    if (h->magic1 != Header::HEADER_MAGIC || h->magic2 != Header::HEADER_MAGIC) {
         return NULL;
+    }
 
     // check if this is our block
     Header *p = m_first;
@@ -719,8 +788,9 @@ DebugMallocAllocator::Header *DebugMallocAllocator::find_header(void const *obj)
             memory_corruption_detected();
             return NULL;
         }
-        if (p == h)
+        if (p == h) {
             return p;
+        }
     }
     return NULL;
 }
@@ -738,8 +808,9 @@ DebugMallocAllocator::Header *DebugMallocAllocator::find_header_fast(void const 
     Header *h = (Header *)obj;
     h -= 1;
 
-    if (h->magic1 != Header::HEADER_MAGIC || h->magic2 != Header::HEADER_MAGIC)
+    if (h->magic1 != Header::HEADER_MAGIC || h->magic2 != Header::HEADER_MAGIC) {
         return NULL;
+    }
 
     if (Header const *p = h->prev) {
         if (p->magic1 != Header::HEADER_MAGIC || p->magic2 != Header::HEADER_MAGIC) {
@@ -775,9 +846,9 @@ DebugMallocAllocator::Captured_frame *DebugMallocAllocator::get_empty_frame()
         frame = (Captured_frame *)internal_malloc(
             sizeof(Captured_frame)
             + (m_num_captures_frames - 1) * sizeof(frame->frames[0]));
-        if (frame == NULL)
+        if (frame == NULL) {
             return NULL;
-
+        }
     }
 
     frame->length = m_num_captures_frames;
@@ -799,13 +870,16 @@ bool DebugMallocAllocator::is_traced(Header const *h, bool ref_mode) const
         return (m_capture_mode == CAPTURE_REF && (h->flags & BH_REF_COUNTED));
     }
 
-    if (m_capture_mode == CAPTURE_ALL)
+    if (m_capture_mode == CAPTURE_ALL) {
         return true;
-    if (m_capture_mode == CAPTURE_REF && (h->flags & BH_REF_COUNTED))
+    }
+    if (m_capture_mode == CAPTURE_REF && (h->flags & BH_REF_COUNTED)) {
         return true;
+    }
     for (size_t i = 0; i < m_num_tracked; ++i) {
-        if (h->num == m_tracked_ids[i])
+        if (h->num == m_tracked_ids[i]) {
             return true;
+        }
     }
     return false;
 }
@@ -817,11 +891,16 @@ void DebugMallocAllocator::capture_stack_frame(
 {
     Captured_frame *frame = get_empty_frame();
 
-    if (!frame)
+    if (frame == NULL) {
         return;
+    }
 
     unsigned count = os_capture_frames(
-        m_num_skip_frames, frame->length, frame->frames, m_temp_frames);
+        m_num_skip_frames,
+        frame->length,
+        frame->frames,
+        m_temp_frames,
+        m_use_fp_unwind);
 
     if (count == 0) {
         free_frame(frame);
@@ -864,8 +943,9 @@ void DebugMallocAllocator::dump_frames(Captured_frame const *frames)
             os_printf("\n");
         }
     }
-    if (frames != NULL)
+    if (frames != NULL) {
         os_printf("\n");
+    }
 }
 
 // Set a breakpoint.
@@ -884,6 +964,15 @@ void DebugMallocAllocator::set_breakpoint(unsigned token, size_t id)
 // Check if a breakpoint must be executed.
 void DebugMallocAllocator::handle_breakpoint(unsigned token, size_t id) const
 {
+    if (token == Debug_cmd_lexer::tok_bpx) {
+        for (size_t i = 0; i < m_num_breakpoints; ++i) {
+            if (token == m_breakpoints[i].token) {
+                os_printf("*** Breakpoint on wrong free %p\n", (void *)id);
+                os_break_point();
+            }
+        }
+        return;
+    }
     for (size_t i = 0; i < m_num_breakpoints; ++i) {
         if (id == m_breakpoints[i].id && token == m_breakpoints[i].token) {
             os_printf("*** Breakpoint on block " PRT_SIZE " reached\n", SIZE(id));
@@ -1006,8 +1095,9 @@ Win32_symbol_lookup::~Win32_symbol_lookup()
 
 void Win32_symbol_lookup::write_symbol(void *Address)
 {
-    if (!m_initialized)
+    if (!m_initialized) {
         return;
+    }
 
     DWORD64 displacement;
 
@@ -1070,10 +1160,12 @@ static unsigned os_capture_frames(
     size_t skip,
     size_t n,
     void *frames[],
-    void *tmp[])
+    void *tmp[],
+    bool use_fpunwind)
 {
-    if (n == 0)
+    if (n == 0) {
         return 0;
+    }
     return RtlCaptureStackBackTrace(
         /*FramesToSkip=*/ULONG(skip),
         /*FrameToCapture=*/ULONG(n),
@@ -1089,11 +1181,13 @@ static ISymbol_lookup *os_get_symbol_lookup()
     if (win32_symbol_lookup == NULL) {
         win32_symbol_lookup = (Win32_symbol_lookup *)::malloc(sizeof(*win32_symbol_lookup));
 
-        if (win32_symbol_lookup != NULL)
-            new (win32_symbol_lookup) Win32_symbol_lookup;
+        if (win32_symbol_lookup != NULL) {
+            new (win32_symbol_lookup)Win32_symbol_lookup;
+        }
     }
     return win32_symbol_lookup;
 }
+
 
 static void os_break_point()
 {
@@ -1198,16 +1292,41 @@ char *Linux_symbol_lookup::demangle(char const *mangled, size_t len)
     return demangled;
 }
 
+static unsigned fp_backtrace(
+    void   *frames[],
+    size_t skip,
+    size_t n)
+{
+    size_t *fp = (size_t *)__builtin_frame_address(0);
+
+    size_t i;
+    for (i = 0; i < skip + n && fp != NULL; ++i) {
+        if (i >= skip) {
+            frames[i - skip] = (void *)fp[1];
+        }
+        fp = (size_t *)fp[0];
+    }
+    return i < skip ? 0u :  unsigned(i - skip);
+}
+
 static unsigned os_capture_frames(
     size_t skip,
     size_t n,
-    void *frames[],
-    void *tmp[])
+    void   *frames[],
+    void   *tmp[],
+    bool   use_fp_unwind)
 {
     int res;
 
-    if (n == 0)
+    if (n == 0) {
         return 0;
+    }
+
+#if defined(__x86_64) || defined(__aarch64__)
+    if (use_fp_unwind) {
+        return fp_backtrace(frames, skip, n);
+    }
+#endif
     if (skip > 0) {
         res = backtrace(tmp, int(skip + n));
         if (res > 0) {
@@ -1216,8 +1335,9 @@ static unsigned os_capture_frames(
         }
     } else {
         res = backtrace(frames, int(n));
-        if (res > 0)
+        if (res > 0) {
             return unsigned(res);
+        }
     }
     return 0;
 }
@@ -1229,20 +1349,21 @@ static ISymbol_lookup *os_get_symbol_lookup()
     return &linux_symbol_lookup;
 }
 
+
 static void os_break_point()
 {
 #if defined(__GNUC__) && (defined(__i386__) || defined(__x86_64))
     __asm__ __volatile__("int3");
 #else
-    // poor unix way
-    raise(SIGINT);
+    // default unix way
+    raise(SIGTRAP);
 #endif
 }
 
 int os_printf(char const *fmt, ...)
 {
     va_list va;
-    
+
     va_start(va, fmt);
     int res = vfprintf(stderr, fmt, va);
     va_end(va);
@@ -1256,3 +1377,4 @@ int os_printf(char const *fmt, ...)
 } // mi
 
 #endif  // DEBUG
+

@@ -1545,12 +1545,14 @@ void Archive_extractor::extract(
         return;
     }
 
-    size_t l = strlen(archive_name);
-    if (l < 4 || strcmp(&archive_name[l - 4], ".mdr") != 0) {
-        error(
-            INVALID_MDL_ARCHIVE_NAME,
-            Error_params(m_alloc).add(archive_name));
-        return;
+    {
+        size_t l = strlen(archive_name);
+        if (l < 4 || strcmp(&archive_name[l - 4], ".mdr") != 0) {
+            error(
+                INVALID_MDL_ARCHIVE_NAME,
+                Error_params(m_alloc).add(archive_name));
+            return;
+        }
     }
 
     string arc_name(archive_name, m_alloc);
@@ -2118,10 +2120,10 @@ void Manifest_parser::error()
 
 // Open a container file.
 MDL_zip_container_archive *MDL_zip_container_archive::open(
-    IAllocator                     *alloc,
-    char const                     *path,
+    IAllocator                    *alloc,
+    char const                    *path,
     MDL_zip_container_error_code  &err,
-    bool                            with_manifest)
+    bool                          with_manifest)
 {
     MDL_zip_container_header header_info = header_supported_read_version;
     zip_t* za = MDL_zip_container::open(alloc, path, err, header_info);

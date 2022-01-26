@@ -53,8 +53,8 @@ namespace neuraylib {
 ///
 /// A database element stored in a given scope is only visible in this scope and all child scopes.
 /// For example, a database element stored in the global scope is visible in all scopes. This
-/// visibility concept for database scopes and elements is similar to scopes and the lifetime of
-/// stack variables in programming languages.
+/// visibility concept for database elements is similar to visibility of stack variables in
+/// programming languages.
 ///
 /// Any database element can exist in multiple versions (at most one version per scope). In this
 /// case the scope at hand does not just determine the visibility itself but also determines which

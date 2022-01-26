@@ -458,6 +458,11 @@ public:
     /// The default constructor leaves the vector elements uninitialized.
     inline Matrix() { }
 
+#if (__cplusplus >= 201103L)
+    /// Default copy constructor.
+    Matrix( const Matrix<T,ROW,COL>& other ) = default;
+#endif
+
     /// Constructor from underlying storage type.
     inline Matrix( const Matrix_struct<T,ROW,COL>& other)
     {

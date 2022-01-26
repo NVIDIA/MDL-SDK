@@ -107,12 +107,11 @@ std::wstring utf8_to_wchar(
 /// Convert the given wchar string input into a multibyte char string output.
 std::string wchar_to_mbs(
     const wchar_t* str);
+#endif
 
 /// Converts a wchar_t * string into an utf8 encoded string.
 std::string wchar_to_utf8(
     const wchar_t* str);
-
-#endif
 
 /// Parse and get a token list.
 /// A convenient function for getting a token list.
@@ -163,7 +162,7 @@ int compare_case_insensitive(
     const char* s1,
     const char* s2,
     size_t n);
-    
+
 
 /// create a formated string.
 /// \param  format  printf-like format string

@@ -28,7 +28,7 @@
 
 #include "pch.h"
 
-#include "mdl_elements_annotation_definition_proxy.h"
+#include "i_mdl_elements_annotation_definition_proxy.h"
 #include "i_mdl_elements_utilities.h"
 
 

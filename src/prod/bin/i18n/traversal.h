@@ -62,7 +62,7 @@ namespace i18n
             m_context = context;
         }
         void handle_module(const mi::neuraylib::IModule* module);
-        void handle_material_definition(const mi::neuraylib::IMaterial_definition* o);
+        void handle_material_definition(const mi::neuraylib::IFunction_definition* o);
         void handle_function_definition(const mi::neuraylib::IFunction_definition* o);
         void handle_annotation_block(const mi::neuraylib::IAnnotation_block* ablock);
         void handle_annotation_list(const mi::neuraylib::IAnnotation_list* o);

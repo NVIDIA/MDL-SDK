@@ -32,7 +32,6 @@ set(PROJECT_NAME examples-mdl_sdk-execution_native)
 # collect sources
 set(PROJECT_SOURCES
     "example_execution_native.cpp"
-    "texture_support.h"
     )
 
 # create target from template
@@ -56,7 +55,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
 # -------------------------------------------------------------------------------------------------
-# Create installion rules to copy the build directory
+# Create installation rules to copy the build directory
 # -------------------------------------------------------------------------------------------------
 add_target_install(
     TARGET ${PROJECT_NAME}

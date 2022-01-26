@@ -190,7 +190,7 @@ public:
 
 public:
     IType_error const            * const error_type;
-    IType_auto const       * const auto_type;
+    IType_auto const             * const auto_type;
     IType_bool const             * const bool_type;
     IType_vector const           * const bool2_type;
     IType_vector const           * const bool3_type;

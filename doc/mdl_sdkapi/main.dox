@@ -100,9 +100,7 @@ them, assertions, and configurations.
             which comprises classes such as
             #mi::neuraylib::IModule,
             #mi::neuraylib::IFunction_definition,
-            #mi::neuraylib::IMaterial_definition,
-            #mi::neuraylib::IFunction_call,
-            #mi::neuraylib::IMaterial_instance, and
+            #mi::neuraylib::IFunction_call, and
             #mi::neuraylib::ICompiled_material.
           - \ref mi_neuray_misc "Miscellaneous",
             which comprises classes such as
@@ -112,6 +110,7 @@ them, assertions, and configurations.
             #mi::neuraylib::ITexture.
       - \ref mi_neuray_mdl_compiler "MDL compiler"
           - \subpage mi_neuray_compiler
+      - \ref mi_neuray_plugins "Extensions and Plugins"
       - \ref mi_neuray_mdl_sdk_misc "Miscellaneous Interfaces"
 
 \section mi_neuray_contents_related Related Pages

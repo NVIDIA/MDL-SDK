@@ -603,28 +603,28 @@ Definition *Definition_table::enter_definition(
         new_def = m_builder.create<Def_error>(
             symbol, cast<Type_error>(type), loc, m_curr_scope, outer, ++m_next_definition_id);
         break;
-    case mi::mdl::hlsl::Definition::DK_TYPE:
+    case Definition::DK_TYPE:
         new_def = m_builder.create<Def_type>(
             symbol, type, loc, m_curr_scope, outer, ++m_next_definition_id);
         break;
-    case mi::mdl::hlsl::Definition::DK_FUNCTION:
+    case Definition::DK_FUNCTION:
         new_def = m_builder.create<Def_function>(
             symbol, cast<Type_function>(type), semantics,
             loc, m_curr_scope, outer, ++m_next_definition_id);
         break;
-    case mi::mdl::hlsl::Definition::DK_VARIABLE:
+    case Definition::DK_VARIABLE:
         new_def = m_builder.create<Def_variable>(
             symbol, type, loc, m_curr_scope, outer, ++m_next_definition_id);
         break;
-    case mi::mdl::hlsl::Definition::DK_MEMBER:
+    case Definition::DK_MEMBER:
         new_def = m_builder.create<Def_member>(
             symbol, type, loc, m_curr_scope, outer, ++m_next_definition_id);
         break;
-    case mi::mdl::hlsl::Definition::DK_PARAMETER:
+    case Definition::DK_PARAMETER:
         new_def = m_builder.create<Def_param>(
             symbol, type, loc, m_curr_scope, outer, ++m_next_definition_id);
         break;
-    case mi::mdl::hlsl::Definition::DK_OPERATOR:
+    case Definition::DK_OPERATOR:
         new_def = m_builder.create<Def_operator>(
             symbol, type, loc, m_curr_scope, outer, ++m_next_definition_id);
         break;
@@ -649,7 +649,7 @@ Def_type *Definition_table::enter_type_definition(
     Location const *loc)
 {
     return cast<Def_type>(
-        enter_definition(mi::mdl::hlsl::Definition::DK_TYPE, symbol, type, Def_function::DS_UNKNOWN, loc));
+        enter_definition(Definition::DK_TYPE, symbol, type, Def_function::DS_UNKNOWN, loc));
 }
 
 // Enter a new function definition.
@@ -660,17 +660,17 @@ Def_function *Definition_table::enter_function_definition(
     Location const          *loc)
 {
     return cast<Def_function>(
-        enter_definition(mi::mdl::hlsl::Definition::DK_FUNCTION, symbol, type, semantics, loc));
+        enter_definition(Definition::DK_FUNCTION, symbol, type, semantics, loc));
 }
 
-/// Enter a new variable definition.
+// Enter a new variable definition.
 Def_variable *Definition_table::enter_variable_definition(
     Symbol         *symbol,
     Type           *type,
     Location const *loc)
 {
     return cast<Def_variable>(enter_definition(
-        mi::mdl::hlsl::Definition::DK_VARIABLE, symbol, type, Def_function::DS_UNKNOWN, loc));
+        Definition::DK_VARIABLE, symbol, type, Def_function::DS_UNKNOWN, loc));
 }
 
 // Enter a new parameter definition.
@@ -680,7 +680,7 @@ Def_param *Definition_table::enter_parameter_definition(
     Location const *loc)
 {
     return cast<Def_param>(enter_definition(
-        mi::mdl::hlsl::Definition::DK_PARAMETER, symbol, type, Def_function::DS_UNKNOWN, loc));
+        Definition::DK_PARAMETER, symbol, type, Def_function::DS_UNKNOWN, loc));
 }
 
 // Enter a new member definition.
@@ -691,7 +691,7 @@ Def_member *Definition_table::enter_member_definition(
 {
     return cast<Def_member>(
         enter_definition(
-            mi::mdl::hlsl::Definition::DK_MEMBER,
+            Definition::DK_MEMBER,
             symbol,
             type,
             Def_function::DS_UNKNOWN,
@@ -706,13 +706,12 @@ Def_operator *Definition_table::enter_operator_definition(
 {
     return cast<Def_operator>(
         enter_definition(
-            mi::mdl::hlsl::Definition::DK_OPERATOR,
+            Definition::DK_OPERATOR,
             symbol,
             type,
             Def_function::DS_UNKNOWN,
             /*loc=*/NULL));
 }
-
 
 // Enter an error definition for the given symbol.
 Definition *Definition_table::enter_error(

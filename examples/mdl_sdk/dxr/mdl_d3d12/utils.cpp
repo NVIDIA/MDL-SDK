@@ -321,14 +321,14 @@ std::string evaluate_dred()
 
 // ------------------------------------------------------------------------------------------------
 
-std::string print_nested_exceotion(const std::exception& e)
+std::string print_nested_exception(const std::exception& e)
 {
     std::string message = e.what();
     try {
         std::rethrow_if_nested(e);
     }
     catch (const std::exception& nested) {
-        message += "\n               nested: " + print_nested_exceotion(nested);
+        message += "\n               nested: " + print_nested_exception(nested);
     }
     return message;
 }
@@ -372,14 +372,14 @@ void log_error(
     const std::string& file, int line)
 {
     print("[MDL_D3D12] [ERROR]   ",
-        message + " " + print_nested_exceotion(exception), file, line);
+        message + " " + print_nested_exception(exception), file, line);
 }
 
 // ------------------------------------------------------------------------------------------------
 
 void log_error(const std::exception& exception, const std::string& file, int line)
 {
-    print("[MDL_D3D12] [ERROR]   ", print_nested_exceotion(exception), file, line);
+    print("[MDL_D3D12] [ERROR]   ", print_nested_exception(exception), file, line);
 }
 
 // ------------------------------------------------------------------------------------------------

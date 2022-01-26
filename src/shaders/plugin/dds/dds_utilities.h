@@ -57,16 +57,13 @@ mi::Uint32 get_components_per_pixel( const char* pixel_type);
 ///
 /// The size of the rectangle is given by the size of the tile.
 ///
-/// \param data     The DDS data to read the pixels from.
-/// \param x        The x coordinate of lower left corner of the rectangle in the DDS data.
-/// \param y        The y coordinate of lower left corner of the rectangle in the DDS data.
+/// \param src      The DDS data to read the pixels from.
 /// \param w        The width of the rectangle in the DDS data.
 /// \param h        The height of the rectangle in the DDS data.
 /// \param tile     The tile to write the pixels to.
 /// \return         \c true in case of success, \c false otherwise.
 bool copy_from_dds_to_tile(
-    const unsigned char* data, mi::Uint32 x, mi::Uint32 y, mi::Uint32 w, mi::Uint32 h,
-    mi::neuraylib::ITile* tile);
+    const unsigned char* src, mi::Uint32 w, mi::Uint32 h, mi::neuraylib::ITile* tile);
 
 /// Copies a rectangular region of pixels from a neuray API tile to DDS data.
 ///
@@ -75,15 +72,12 @@ bool copy_from_dds_to_tile(
 /// The size of the rectangle is given by the size of the tile.
 ///
 /// \param tile     The tile to read the pixels from.
-/// \param data     The DDS data to write the pixels to.
-/// \param x        The x coordinate of lower left corner of the rectangle in the DDS data.
-/// \param y        The y coordinate of lower left corner of the rectangle in the DDS data.
+/// \param dest     The DDS data to write the pixels to.
 /// \param w        The width of the rectangle in the DDS data.
 /// \param h        The height of the rectangle in the DDS data.
 /// \return         \c true in case of success, \c false otherwise.
 bool copy_from_tile_to_dds(
-    const mi::neuraylib::ITile* tile,
-    unsigned char* data, mi::Uint32 x, mi::Uint32 y, mi::Uint32 w, mi::Uint32 h);
+    const mi::neuraylib::ITile* tile, unsigned char* dest, mi::Uint32 w, mi::Uint32 h);
 
 } // namespace DDS
 

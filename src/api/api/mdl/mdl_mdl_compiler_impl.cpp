@@ -352,7 +352,7 @@ const mi::IString* Mdl_compiler_impl::deprecated_uvtile_marker_to_string(
     if( !marker)
         return nullptr;
 
-    const std::string& result = MDL::uvtile_marker_to_string( marker, u, v);
+    const std::string& result = MDL::frame_uvtile_marker_to_string( marker, 0, u, v);
     return result.empty() ? nullptr : new NEURAY::String_impl( result.c_str());
 }
 
@@ -362,7 +362,7 @@ const mi::IString* Mdl_compiler_impl::deprecated_uvtile_string_to_marker(
    if( !str || !marker)
         return nullptr;
 
-    const std::string& result = MDL::uvtile_string_to_marker( str, marker);
+    const std::string& result = MDL::deprecated_uvtile_string_to_marker( str, marker);
     return result.empty() ? nullptr : new NEURAY::String_impl( result.c_str());
 }
 

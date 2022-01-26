@@ -114,14 +114,14 @@ public:
         bool class_compilation,
         const mi::neuraylib::ITarget_code* target_code,
         const char* material_instance_db_name,
-        const char* material_defintion_db_name,
+        const char* material_definition_db_name,
         Section_material_resource_handler* resource_handler)
         : m_class_compilation(class_compilation)
         , m_string_table()
         , m_string_table_inv()
         , m_string_max_value_length(0)
         , m_material_instance_db_name(material_instance_db_name)
-        , m_material_defintion_db_name(material_defintion_db_name)
+        , m_material_definition_db_name(material_definition_db_name)
         , m_resource_handler(resource_handler)
     {
         mi::Size string_count = target_code->get_string_constant_count();
@@ -189,7 +189,7 @@ public:
     /// get the database name of the material definition that is currently bound
     const char* get_material_definition_db_name() const
     {
-        return m_material_defintion_db_name.c_str();
+        return m_material_definition_db_name.c_str();
     }
 
     // --------------------------------------------------------------------------------------------
@@ -239,7 +239,7 @@ private:
     std::unordered_map<std::string, mi::Uint32> m_string_table_inv;
     size_t m_string_max_value_length;
     std::string m_material_instance_db_name;
-    std::string m_material_defintion_db_name;
+    std::string m_material_definition_db_name;
     Section_material_resource_handler* m_resource_handler;
     std::unordered_map<std::string, Argument_block_field_info> m_argument_block_infos;
 };
@@ -1126,14 +1126,29 @@ public:
         bool changed = false;
         if (m_has_soft_range || m_has_hard_range)
         {
-            if (Control::slider(
-                get_name(), get_tooltip_function(),
-                value, &get_default(),
-                (get_unused() || !get_enabled())
-                ? Control::Flags::Disabled : Control::Flags::None,
-                m_range_min, m_range_max))
+            // in case we have infinity as a boundary we go with the drag
+            if (m_range_min == std::numeric_limits<TTCTValue>::min() ||
+                m_range_max == std::numeric_limits<TTCTValue>::max())
             {
-                changed = true;
+                changed = Control::drag(
+                    get_name(), get_tooltip_function(),
+                    value, &get_default(),
+                    (get_unused() || !get_enabled())
+                    ? Control::Flags::Disabled : Control::Flags::None);
+            }
+            // otherwise, with reasonable ranges we can use a slider
+            else
+            {
+                changed = Control::slider(
+                    get_name(), get_tooltip_function(),
+                    value, &get_default(),
+                    (get_unused() || !get_enabled())
+                    ? Control::Flags::Disabled : Control::Flags::None,
+                    m_range_min, m_range_max);
+            }
+
+            if (changed)
+            {
                 // update local or argument block
                 changed = !m_has_hard_range;
                 if (m_has_hard_range)
@@ -1736,8 +1751,8 @@ public:
         if (child_value)
         {
             // handle material instances and functions calls
-            base::Handle<mi::neuraylib::IMaterial_instance> mati(
-                access->get_interface<mi::neuraylib::IMaterial_instance>());
+            base::Handle<mi::neuraylib::IFunction_call> mati(
+                access->get_interface<mi::neuraylib::IFunction_call>());
             base::Handle<mi::neuraylib::IFunction_call> fc(
                 access->get_interface<mi::neuraylib::IFunction_call>());
 
@@ -2139,15 +2154,15 @@ void Section_material::bind_material(
     char* argument_block,
     Section_material_resource_handler* resource_handler)
 {
-    mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
-        transaction->access<const mi::neuraylib::IMaterial_instance>(
+    mi::base::Handle<const mi::neuraylib::IFunction_call> material_instance(
+        transaction->access<const mi::neuraylib::IFunction_call>(
             material_instance_db_name));
 
     Parameter_context* parameter_context = new Parameter_context(
         argument_block_layout != nullptr && argument_block != nullptr,
         target_code,
         material_instance_db_name,
-        material_instance->get_material_definition(),
+        material_instance->get_function_definition(),
         resource_handler);
 
     // iterate over all parameters exposed in the compiled material
@@ -2169,8 +2184,8 @@ void Section_material::bind_material(
         parameter_context->add_argument_block_info(info.name, info);
     }
 
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> mat_definition(
-        transaction->access<const mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> mat_definition(
+        transaction->access<const mi::neuraylib::IFunction_definition>(
             parameter_context->get_material_definition_db_name()));
 
     mi::base::Handle<const mi::neuraylib::IAnnotation_block> mat_annotations(
@@ -2348,12 +2363,12 @@ Section_material::IParameter_node* Section_material::create(
         }
         else
         {
-            mi::base::Handle<const mi::neuraylib::IMaterial_instance> mat_inst(
-                transaction->access<const mi::neuraylib::IMaterial_instance>(call_db_name));
+            mi::base::Handle<const mi::neuraylib::IFunction_call> mat_inst(
+                transaction->access<const mi::neuraylib::IFunction_call>(call_db_name));
 
-            mi::base::Handle<const mi::neuraylib::IMaterial_definition> mat_definition(
-                transaction->access<const mi::neuraylib::IMaterial_definition>(
-                    mat_inst->get_material_definition()));
+            mi::base::Handle<const mi::neuraylib::IFunction_definition> mat_definition(
+                transaction->access<const mi::neuraylib::IFunction_definition>(
+                    mat_inst->get_function_definition()));
 
             params = mat_inst->get_arguments();
             param_defaults = mat_definition->get_defaults();

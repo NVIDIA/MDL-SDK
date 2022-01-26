@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright 2021 NVIDIA Corporation. All rights reserved.
+ * Copyright 2022 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -147,7 +147,7 @@ export annotation dimension(float dimension);
 export annotation dimension(float2 dimension);
 export annotation dimension(float3 dimension);
 
-const string COPYRIGHT = "Copyright 2021 NVIDIA Corporation. All rights reserved.";
+const string COPYRIGHT = "Copyright 2022 NVIDIA Corporation. All rights reserved.";
 
 //group Texturing functions
 

@@ -38,6 +38,7 @@
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/texture/i_texture.h>
 
+#include "neuray_expression_impl.h"
 #include "neuray_transaction_impl.h"
 #include "neuray_value_impl.h"
 
@@ -241,14 +242,27 @@ const char* Value_texture::get_file_path() const
 
 mi::Float32 Value_texture::get_gamma() const
 {
+    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag texture_tag = m_value->get_value();
-    if (texture_tag.is_valid()) {
-        Transaction_impl* transaction_impl = static_cast<Transaction_impl*>(m_transaction.get());
-        DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-        DB::Access<TEXTURE::Texture> tex(texture_tag, db_transaction);
-        return tex->get_gamma();
-    }
-    return m_value->get_gamma();
+    if( !texture_tag || db_transaction->get_class_id( texture_tag) != TEXTURE::ID_TEXTURE)
+       return m_value->get_gamma();
+
+    DB::Access<TEXTURE::Texture> tex( texture_tag, db_transaction);
+    return tex->get_gamma();
+}
+
+const char* Value_texture::get_selector() const
+{
+    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
+    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
+    DB::Tag texture_tag = m_value->get_value();
+    if( !texture_tag || db_transaction->get_class_id( texture_tag) != TEXTURE::ID_TEXTURE)
+       return nullptr;
+
+    DB::Access<TEXTURE::Texture> tex( texture_tag, db_transaction);
+    m_cached_selector = tex->get_selector( db_transaction);
+    return !m_cached_selector.empty() ? m_cached_selector.c_str() : nullptr;
 }
 
 const char* Value_light_profile::get_value() const
@@ -530,6 +544,26 @@ mi::neuraylib::IValue* Value_factory::create(
     return create( result_int.get(), /*owner*/ nullptr);
 }
 
+mi::neuraylib::IValue* Value_factory::create(
+    const mi::neuraylib::IAnnotation* annotation) const
+{
+    mi::base::Handle<const MDL::IAnnotation> annotation_int( get_internal_annotation( annotation));
+    mi::base::Handle<MDL::IValue> result_int( m_vf->create( annotation_int.get()));
+    return create( result_int.get(), /*owner*/ nullptr);
+}
+
+mi::neuraylib::IValue* Value_factory::create(
+    const mi::neuraylib::IType* type,
+    const mi::neuraylib::IAnnotation_block* annotation_block) const
+{
+    mi::base::Handle<const MDL::IType> type_int( get_internal_type( type));
+    mi::base::Handle<const MDL::IAnnotation_block> annotation_block_int(
+        get_internal_annotation_block( annotation_block));
+    mi::base::Handle<MDL::IValue> result_int( m_vf->create(
+        type_int.get(), annotation_block_int.get()));
+    return create( result_int.get(), /*owner*/ nullptr);
+}
+
 mi::neuraylib::IValue_list* Value_factory::create_value_list() const
 {
     mi::base::Handle<MDL::IValue_list> result_int( m_vf->create_value_list());
@@ -552,19 +586,23 @@ mi::neuraylib::IValue_list* Value_factory::clone(
 }
 
 mi::Sint32 Value_factory::compare(
-    const mi::neuraylib::IValue* lhs, const mi::neuraylib::IValue* rhs) const
+    const mi::neuraylib::IValue* lhs,
+    const mi::neuraylib::IValue* rhs,
+    const mi::Float64 epsilon) const
 {
     mi::base::Handle<const MDL::IValue> lhs_int( get_internal_value( lhs));
     mi::base::Handle<const MDL::IValue> rhs_int( get_internal_value( rhs));
-    return m_vf->compare( lhs_int.get(), rhs_int.get());
+    return m_vf->compare( lhs_int.get(), rhs_int.get(), epsilon);
 }
 
 mi::Sint32 Value_factory::compare(
-    const mi::neuraylib::IValue_list* lhs, const mi::neuraylib::IValue_list* rhs) const
+    const mi::neuraylib::IValue_list* lhs,
+    const mi::neuraylib::IValue_list* rhs,
+    const mi::Float64 epsilon) const
 {
     mi::base::Handle<const MDL::IValue_list> lhs_int( get_internal_value_list( lhs));
     mi::base::Handle<const MDL::IValue_list> rhs_int( get_internal_value_list( rhs));
-    return m_vf->compare( lhs_int.get(), rhs_int.get());
+    return m_vf->compare( lhs_int.get(), rhs_int.get(), epsilon);
 }
 
 const mi::IString* Value_factory::dump(

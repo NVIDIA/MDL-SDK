@@ -54,17 +54,15 @@ namespace MI {
 namespace TEXTURE {
 
 Texture::Texture()
-: m_volume_data{}
-, m_image{}
-, m_gamma{0.f}
-, m_compression{TEXTURE_NO_COMPRESSION}
+  : m_gamma( 0.f),
+    m_compression{ TEXTURE_NO_COMPRESSION}
 {
 }
 
 void Texture::set_image( DB::Tag image)
 {
     m_image = image;
-    m_volume_data = DB::Tag{};
+    m_volume_data = DB::Tag();
 }
 
 DB::Tag Texture::get_image() const
@@ -75,7 +73,7 @@ DB::Tag Texture::get_image() const
 void Texture::set_volume_data( DB::Tag vol)
 {
     m_volume_data = vol;
-    m_image = DB::Tag{};
+    m_image = DB::Tag();
 }
 
 DB::Tag Texture::get_volume_data() const
@@ -94,16 +92,20 @@ mi::Float32 Texture::get_gamma() const
 }
 
 mi::Float32 Texture::get_effective_gamma(
-    DB::Transaction* transaction,
-    mi::Uint32 uvtile_id) const
+    DB::Transaction* transaction, mi::Size frame_id, mi::Size uvtile_id) const
 {
-    if( m_gamma != 0.0 || !m_image)
-      return m_gamma;
+    if( !m_image || m_gamma != 0.0)
+        return m_gamma;
+
+    if( transaction->get_class_id( m_image) != DBIMAGE::ID_IMAGE)
+        return m_gamma;
 
     DB::Access<DBIMAGE::Image> image( m_image, transaction);
-    mi::base::Handle<const IMAGE::IMipmap> mipmap( image->get_mipmap( transaction, uvtile_id));
+    mi::base::Handle<const IMAGE::IMipmap> mipmap(
+        image->get_mipmap( transaction, frame_id, uvtile_id));
     if( !mipmap)
         return m_gamma;
+
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
     return canvas->get_gamma();
 }
@@ -118,12 +120,21 @@ Texture_compression Texture::get_compression() const
     return m_compression;
 }
 
+std::string Texture::get_selector( DB::Transaction* transaction) const
+{
+    if( m_image && transaction->get_class_id( m_image) == DBIMAGE::ID_IMAGE) {
+        DB::Access<DBIMAGE::Image> image( m_image, transaction);
+        return image->get_selector();
+    } else
+        return std::string();
+}
+
 const SERIAL::Serializable* Texture::serialize( SERIAL::Serializer* serializer) const
 {
     Scene_element_base::serialize( serializer);
 
-    serializer->write( m_volume_data);
     serializer->write( m_image);
+    serializer->write( m_volume_data);
     serializer->write( m_gamma);
     serializer->write( static_cast<Uint>( m_compression));
     return this + 1;
@@ -133,8 +144,8 @@ SERIAL::Serializable *Texture::deserialize( SERIAL::Deserializer* deserializer)
 {
     Scene_element_base::deserialize( deserializer);
 
-    deserializer->read( &m_volume_data);
     deserializer->read( &m_image);
+    deserializer->read( &m_volume_data);
     deserializer->read( &m_gamma);
     Uint value;
     deserializer->read( &value);
@@ -192,15 +203,23 @@ DB::Tag load_mdl_texture(
     bool shared_proxy,
     mi::Float32 gamma)
 {
-    if( !image_set || image_set->get_length() == 0)
-        return DB::Tag( 0);
+    if( !image_set)
+        return DB::Tag();
+
+    mi::Size n = image_set->get_length();
+    if( n == 0)
+        return DB::Tag();
+
+    for( mi::Size f = 0; f < n; ++f)
+        if( image_set->get_frame_length( f) == 0)
+            return DB::Tag();
 
     std::string identifier;
     if( image_set->is_mdl_container()) {
         identifier = image_set->get_container_filename() + std::string( "_")
-            + image_set->get_container_membername( 0);
+            + image_set->get_container_membername( 0, 0);
     } else {
-        identifier = image_set->get_resolved_filename( 0);
+        identifier = image_set->get_resolved_filename( 0, 0);
         if( identifier.empty()) {
             identifier = "without_name";
             // Never share the proxy for memory-based resources.
@@ -208,9 +227,14 @@ DB::Tag load_mdl_texture(
         }
     }
 
+    const char* selector = image_set->get_selector();
+    if( !selector)
+        selector = "";
+
     std::string db_texture_name = shared_proxy ? "MI_default_" : "";
-    db_texture_name += "texture_" + identifier + "_" +
-        std::string( STRING::lexicographic_cast_s<std::string>( gamma));
+    db_texture_name += "texture_" + identifier
+        + "_" + std::string( STRING::lexicographic_cast_s<std::string>( gamma))
+        + "_" + selector;
     if( !shared_proxy)
         db_texture_name
             = MDL::DETAIL::generate_unique_db_name( transaction, db_texture_name.c_str());
@@ -219,10 +243,11 @@ DB::Tag load_mdl_texture(
     if( texture_tag)
         return texture_tag;
 
-    DB::Privacy_level privacy_level = transaction->get_scope()->get_level();
+    const DB::Privacy_level privacy_level = transaction->get_scope()->get_level();
 
     std::string db_image_name = shared_proxy ? "MI_default_" : "";
-    db_image_name += "image_" + identifier;
+    db_image_name += "image_" + identifier
+        + "_" + selector;
     if( !shared_proxy)
         db_image_name = MDL::DETAIL::generate_unique_db_name( transaction, db_image_name.c_str());
 
@@ -246,3 +271,4 @@ DB::Tag load_mdl_texture(
 } // namespace TEXTURE
 
 } // namespace MI
+

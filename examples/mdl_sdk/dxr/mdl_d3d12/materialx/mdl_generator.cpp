@@ -144,7 +144,11 @@ bool Mdl_generator::generate(Mdl_generator_result& inout_result) const
     // Initialize search paths.
     for (const mx::FilePath& path : mtlx_search_path)
     {
-        generator_context.registerSourceCodeSearchPath(path / "libraries");
+        for (const auto folder : mtlx_library_folders)
+        {
+            if (folder.size() > 0)
+                generator_context.registerSourceCodeSearchPath(path / folder);
+        }
     }
 
     // Initialize color management.

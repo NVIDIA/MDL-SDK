@@ -238,6 +238,8 @@ public:
     ///                   index, or \c GM_GAMMA_UNKNOWN if \p index is out of range.
     mi::neuraylib::ITarget_code::Gamma_mode get_texture_gamma(Size index) const override;
 
+    const char* get_texture_selector( Size index) const override;
+
     /// Returns the texture shape of a given texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
@@ -719,6 +721,7 @@ public:
     /// \param name                  the name of the DB element this index refers to.
     /// \param mdl_url               the mdl url.
     /// \param gamma                 texture gamma
+    /// \param selector              texture selector
     /// \param shape                 the texture shape of the texture
     /// \param sema                  the semantic of the texture, typically \c DS_UNKNOWN.
     void add_texture_index(
@@ -726,6 +729,7 @@ public:
         const std::string& name,
         const std::string& mdl_url,
         float gamma,
+        const std::string& selector,
         Texture_shape shape,
         mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind);
 
@@ -818,6 +822,7 @@ public:
     /// Called from the back-end to restore an instance of this class.
     bool deserialize(
         mi::mdl::ICode_generator* code_gen,
+        DB::Transaction* transaction,
         const mi::neuraylib::IBuffer* buffer,
         mi::neuraylib::IMdl_execution_context* context);
 
@@ -916,10 +921,12 @@ private:
             std::string const &mdl_url,
             std::string const &owner,
             float gamma,
+            std::string const &selector,
             Texture_shape shape,
             mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
         : Resource_info(db_name, mdl_url, owner)
         , m_gamma(gamma)
+        , m_selector(selector)
         , m_texture_shape(shape)
         , m_df_data_kind(df_data_kind)
         {
@@ -937,6 +944,10 @@ private:
         /// Get the texture gamma
         float get_gamma() const { return m_gamma; }
 
+        /// Get the selector (or \c NULL).
+        const char* get_selector() const
+        { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
+
         /// Get the texture shape of the texture.
         Texture_shape get_texture_shape() const { return m_texture_shape; }
 
@@ -949,9 +960,17 @@ private:
         MI::SERIAL::Serializable* deserialize(
             MI::SERIAL::Deserializer* deserializer) override;
 
+        /// Variant of the above. If a transaction is available, used DF textures are created in the
+        /// DB one-the-fly.
+        SERIAL::Serializable* deserialize(
+            SERIAL::Deserializer* deserializer, DB::Transaction* transaction);
+
     private:
         /// Texture gamma.
         float m_gamma;
+
+        /// Texture selector.
+        std::string m_selector;
 
         /// The shape of the texture.
         mi::neuraylib::ITarget_code::Texture_shape m_texture_shape;

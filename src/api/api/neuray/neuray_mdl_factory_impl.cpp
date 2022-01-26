@@ -97,7 +97,19 @@ mi::neuraylib::IExpression_factory* Mdl_factory_impl::create_expression_factory(
 
 mi::neuraylib::IMdl_execution_context* Mdl_factory_impl::create_execution_context()
 {
-    return new Mdl_execution_context_impl();
+    return new Mdl_execution_context_impl( /*internal context*/ nullptr);
+}
+
+mi::neuraylib::IMdl_execution_context* Mdl_factory_impl::clone(
+    const mi::neuraylib::IMdl_execution_context* context)
+{
+    if( !context)
+        return create_execution_context();
+
+    MDL::Execution_context default_context;
+    const MDL::Execution_context* mdl_context = unwrap_context( context, default_context);
+
+    return new Mdl_execution_context_impl( new MDL::Execution_context( *mdl_context));
 }
 
 mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
@@ -105,6 +117,7 @@ mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
     const char* file_path,
     mi::neuraylib::IType_texture::Shape shape,
     mi::Float32 gamma,
+    const char* selector,
     bool shared,
     mi::Sint32* errors)
 {
@@ -122,7 +135,7 @@ mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
 
     MDL::IType_texture::Shape int_shape = ext_shape_to_int_shape( shape);
     mi::base::Handle<MDL::IValue_texture> result( MDL::Mdl_module::create_texture(
-        db_transaction, file_path, int_shape, gamma, shared, errors));
+        db_transaction, file_path, int_shape, gamma, selector, shared, errors));
     if( !result)
         return nullptr;
 

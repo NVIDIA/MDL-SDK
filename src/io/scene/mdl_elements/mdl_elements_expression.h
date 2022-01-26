@@ -450,11 +450,21 @@ public:
         DB::Transaction* transaction,
         bool copy_immutable_calls) const;
 
-    mi::Sint32 compare( const IExpression* lhs, const IExpression* rhs) const
-    { return compare_static( lhs, rhs); }
+    mi::Sint32 compare(
+        const IExpression* lhs,
+        const IExpression* rhs,
+        mi::Uint32 flags,
+        mi::Float64 epsilon,
+        DB::Transaction* transaction) const
+    { return compare_static( lhs, rhs, flags, epsilon, transaction); }
 
-    mi::Sint32 compare( const IExpression_list* lhs, const IExpression_list* rhs) const
-    { return compare_static( lhs, rhs); }
+    mi::Sint32 compare(
+        const IExpression_list* lhs,
+        const IExpression_list* rhs,
+        mi::Uint32 flags,
+        mi::Float64 epsilon,
+        DB::Transaction* transaction) const
+    { return compare_static( lhs, rhs, flags, epsilon, transaction); }
 
     const mi::IString* dump(
         DB::Transaction* transaction,
@@ -532,9 +542,19 @@ public:
 
     // internal methods
 
-    static mi::Sint32 compare_static( const IExpression* lhs, const IExpression* rhs);
+    static mi::Sint32 compare_static(
+        const IExpression* lhs,
+        const IExpression* rhs,
+        mi::Uint32 flags,
+        mi::Float64 epsilon,
+        DB::Transaction* transaction);
 
-    static mi::Sint32 compare_static( const IExpression_list* lhs, const IExpression_list* rhs);
+    static mi::Sint32 compare_static(
+        const IExpression_list* lhs,
+        const IExpression_list* rhs,
+        mi::Uint32 flags,
+        mi::Float64 epsilon,
+        DB::Transaction* transaction);
 
 private:
     static void dump_static(

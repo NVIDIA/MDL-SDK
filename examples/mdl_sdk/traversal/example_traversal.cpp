@@ -156,8 +156,8 @@ int MAIN_UTF8(int argc, char* argv[])
                 << material_name << "\n";
 
             // Access the material definition
-            mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-                transaction->access<mi::neuraylib::IMaterial_definition>(
+            mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+                transaction->access<mi::neuraylib::IFunction_definition>(
                     material_name.c_str()));
 
             // assuming the material has parameters without defaults

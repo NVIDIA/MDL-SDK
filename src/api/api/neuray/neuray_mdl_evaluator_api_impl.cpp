@@ -514,11 +514,11 @@ public:
                     expr->get_interface<MDL::IExpression_parameter>());
                 size_t index = param->get_index();
 
-                mi::base::Handle<MDL::IExpression const> expr(
+                mi::base::Handle<MDL::IExpression const> arg(
                     get_parameter_argument(index));
 
-                if (expr.is_valid_interface())
-                    return evaluate(expr.get());
+                if (arg.is_valid_interface())
+                    return evaluate(arg.get());
                 set_error(EC_PARAMETER);
                 return m_value_fact.create_bad();
             }
@@ -1136,9 +1136,6 @@ Mdl_evaluator_api_impl::~Mdl_evaluator_api_impl()
     m_neuray = nullptr;
 }
 
-// Evaluate the given (constant) expression.
-/// Evaluates if a material instance parameter is enabled (i.e. the enable_if condition
-/// computes true).
 mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_material_parameter_enabled(
     mi::neuraylib::ITransaction             *trans,
     mi::neuraylib::IValue_factory           *fact,
@@ -1210,8 +1207,6 @@ mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_material_parameter_
     return fact->create_bool(mi::mdl::cast<mi::mdl::IValue_bool>(res)->get_value());
 }
 
-// Evaluates if a function call parameter is enabled (i.e. the enable_if condition
-// computes true).
 mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_function_parameter_enabled(
     mi::neuraylib::ITransaction             *trans,
     mi::neuraylib::IValue_factory           *fact,

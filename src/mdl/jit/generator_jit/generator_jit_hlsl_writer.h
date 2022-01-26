@@ -155,7 +155,8 @@ private:
     hlsl::Def_function *get_definition(llvm::Function * func);
 
     /// Generate HLSL AST for the given function.
-    void translate_function(llvm::hlsl::ASTFunction const *ast_func);
+    void translate_function(
+        llvm::hlsl::StructuredFunction const *ast_func);
 
     /// Translate a region into HLSL AST.
     hlsl::Stmt *translate_region(llvm::hlsl::Region const *region);

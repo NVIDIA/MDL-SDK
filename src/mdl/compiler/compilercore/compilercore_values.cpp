@@ -3306,11 +3306,11 @@ size_t Value_factory::IValue_hash::operator() (IValue const *value) const
     case IValue::VK_STRUCT:
         {
             IValue_compound const *c = cast<IValue_compound>(value);
-            size_t h = 0;
+            size_t ch = 0;
             for (size_t i = 0, size = c->get_component_count(); i < size; ++i) {
-                h = h * 5 + operator()(c->get_value(i));
+                ch = ch * 5 + operator()(c->get_value(i));
             }
-            return h;
+            return ch ^ h;
         }
     }
     return 0;

@@ -33,6 +33,11 @@
 #include <cstddef>
 
 namespace mi {
+
+namespace base {
+    class IInterface;
+}
+
 namespace mdl {
 
 /// Helper struct for easily returning data and size of a binary option.
@@ -90,6 +95,13 @@ public:
     ///                binary option.
     virtual BinaryOptionData get_binary_option(int index) const = 0;
 
+    /// Get the value of the interface option at index.
+    ///
+    /// \param index   The index of the interface option.
+    ///
+    /// \returns       The value of the option or NULL if the option is not an interface option.
+    virtual mi::base::IInterface const *get_interface_option(int index) const = 0;
+
     /// Get the default value of the option at index.
     ///
     /// \param index   The index of the option.
@@ -139,6 +151,20 @@ public:
     ///
     /// \returns       True on success and false on failure.
     virtual bool set_binary_option(char const *name, char const *data, size_t size) = 0;
+
+    /// Set an interface option.
+    ///
+    /// It is only possible to set options that are actually present,
+    /// as indicated by the above getter methods.
+    /// If the name of an option was not found, this function returns false.
+    /// In addition, this function may return false because the particular option is not a
+    /// binary option.
+    ///
+    /// \param name    The name of the interface option.
+    /// \param value   The interface value of the option.
+    ///
+    /// \returns       True on success and false on failure.
+    virtual bool set_interface_option(char const *name, mi::base::IInterface const *value) = 0;
 
     /// Reset all options to their default values.
     virtual void reset_to_defaults() = 0;

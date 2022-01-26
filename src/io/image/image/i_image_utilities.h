@@ -47,8 +47,8 @@ typedef const Container_based_helper* Container_based;
 struct Memory_based_helper {};
 typedef const Memory_based_helper* Memory_based;
 
-const mi::Uint32 default_tile_width  = 64;
-const mi::Uint32 default_tile_height = 64;
+constexpr mi::Uint32 default_tile_width  = 64;
+constexpr mi::Uint32 default_tile_height = 64;
 
 /// The supported pixel types.
 enum Pixel_type {
@@ -136,6 +136,25 @@ inline bool has_alpha( Pixel_type pixel_type);
 /// The default gamma value is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
 inline mi::Float32 get_default_gamma( Pixel_type pixel_type);
 
+/// Indicates whether \p selector is a valid RGBA channel selector.
+bool is_valid_rgba_channel( const char* selector);
+
+/// Returns the channel index for a valid RGBA channel selector (or -1 for invalid ones).
+mi::Size get_channel_index( const char* selector);
+
+/// Returns the pixel type of a channel.
+///
+/// Invalid pixel type/selector combinations are:
+/// - \p pixel_type is not an RGB or RGBA pixel type
+/// - \p selector is not an RGBA selector
+///
+/// \param pixel_type   The pixel type of the mipmap/canvas/tile.
+/// \param selector     The RGBA channel selector.
+/// \return             Returns PT_UNDEF for invalid pixel type/selector combinations.
+///                     Otherwise, returns PT_SINT8 or PT_FLOAT32, depending on
+///                     \p pixel_type.
+Pixel_type get_pixel_type_for_channel( Pixel_type pixel_type, const char* selector);
+
 template <Pixel_type>
 struct Pixel_type_traits {
 };
@@ -148,126 +167,126 @@ struct Pixel_type_traits<PT_SINT8>
     /// not trivial without breaking user code since the API boundary uses strings instead of enums
     /// to encode pixel type names.
     typedef mi::Uint8 Base_type;
-    static const int s_components_per_pixel = 1;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = false;
+    static constexpr int s_components_per_pixel = 1;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = false;
 };
 
 template <>
 struct Pixel_type_traits<PT_SINT32>
 {
     typedef mi::Sint32 Base_type;
-    static const int s_components_per_pixel = 1;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 1;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_FLOAT32>
 {
     typedef mi::Float32 Base_type;
-    static const int s_components_per_pixel = 1;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 1;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_FLOAT32_2>
 {
     typedef mi::Float32 Base_type;
-    static const int s_components_per_pixel = 2;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 2;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_FLOAT32_3>
 {
     typedef mi::Float32 Base_type;
-    static const int s_components_per_pixel = 3;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 3;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_FLOAT32_4>
 {
     typedef mi::Float32 Base_type;
-    static const int s_components_per_pixel = 4;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 4;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_RGB>
 {
     typedef mi::Uint8 Base_type;
-    static const int s_components_per_pixel = 3;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = false;
+    static constexpr int s_components_per_pixel = 3;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = false;
 };
 
 template <>
 struct Pixel_type_traits<PT_RGBA>
 {
     typedef mi::Uint8 Base_type;
-    static const int s_components_per_pixel = 4;
-    static const bool s_has_alpha = true;
-    static const bool s_linear = false;
+    static constexpr int s_components_per_pixel = 4;
+    static constexpr bool s_has_alpha = true;
+    static constexpr bool s_linear = false;
 };
 
 template <>
 struct Pixel_type_traits<PT_RGBE>
 {
     typedef mi::Uint8 Base_type;
-    static const int s_components_per_pixel = 4;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 4;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_RGBEA>
 {
     typedef mi::Uint8 Base_type;
-    static const int s_components_per_pixel = 5;
-    static const bool s_has_alpha = true;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 5;
+    static constexpr bool s_has_alpha = true;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_RGB_16>
 {
     typedef mi::Uint16 Base_type;
-    static const int s_components_per_pixel = 3;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = false;
+    static constexpr int s_components_per_pixel = 3;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = false;
 };
 
 template <>
 struct Pixel_type_traits<PT_RGBA_16>
 {
     typedef mi::Uint16 Base_type;
-    static const int s_components_per_pixel = 4;
-    static const bool s_has_alpha = true;
-    static const bool s_linear = false;
+    static constexpr int s_components_per_pixel = 4;
+    static constexpr bool s_has_alpha = true;
+    static constexpr bool s_linear = false;
 };
 
 template <>
 struct Pixel_type_traits<PT_RGB_FP>
 {
     typedef mi::Float32 Base_type;
-    static const int s_components_per_pixel = 3;
-    static const bool s_has_alpha = false;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 3;
+    static constexpr bool s_has_alpha = false;
+    static constexpr bool s_linear = true;
 };
 
 template <>
 struct Pixel_type_traits<PT_COLOR>
 {
     typedef mi::Float32 Base_type;
-    static const int s_components_per_pixel = 4;
-    static const bool s_has_alpha = true;
-    static const bool s_linear = true;
+    static constexpr int s_components_per_pixel = 4;
+    static constexpr bool s_has_alpha = true;
+    static constexpr bool s_linear = true;
 };
 
 inline int get_components_per_pixel( Pixel_type pixel_type)
@@ -383,6 +402,65 @@ inline mi::Float32 get_default_gamma( Pixel_type pixel_type)
         case PT_COLOR:     return Pixel_type_traits<PT_COLOR    >::s_linear ? 1.0f : 2.2f;
         default:           return 1.0f;
     }
+}
+
+inline bool is_valid_rgba_channel( const char* selector)
+{
+    if( !selector)
+        return false;
+    if( (    selector[0] == 'R'
+          || selector[0] == 'G'
+          || selector[0] == 'B'
+          || selector[0] == 'A')
+        && selector[1] == '\0')
+        return true;
+    return false;
+}
+
+inline mi::Size get_channel_index( const char* selector)
+{
+    if( !selector || !selector[0] || selector[1])
+        return static_cast<mi::Size>( -1);
+
+    if( selector[0] == 'R') return 0;
+    if( selector[0] == 'G') return 1;
+    if( selector[0] == 'B') return 2;
+    if( selector[0] == 'A') return 3;
+
+    return static_cast<mi::Size>( -1);
+}
+
+inline Pixel_type get_pixel_type_for_channel( Pixel_type pixel_type, const char* selector)
+{
+    if( !is_valid_rgba_channel( selector))
+        return PT_UNDEF;
+
+    switch( pixel_type) {
+
+        case PT_SINT8:
+        case PT_SINT32:
+        case PT_FLOAT32:
+        case PT_FLOAT32_2:
+        case PT_FLOAT32_3:
+        case PT_FLOAT32_4:
+            return PT_UNDEF;
+
+        case PT_RGB:
+        case PT_RGBA:
+            return PT_SINT8;
+
+        case PT_RGBE:
+        case PT_RGBEA:
+        case PT_RGB_16:
+        case PT_RGBA_16:
+        case PT_RGB_FP:
+        case PT_COLOR:
+            return PT_FLOAT32;
+
+        case PT_UNDEF:
+            return PT_UNDEF; }
+
+    return PT_UNDEF;
 }
 
 } // namespace IMAGE

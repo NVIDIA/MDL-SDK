@@ -65,6 +65,140 @@ Code_generator_jit *Code_generator_jit::create_code_generator(
     return builder.create<Code_generator_jit>(alloc, mdl, mdl->get_jitted_code());
 }
 
+/// Create the default JIT code generator options.
+static void fill_default_cg_options(
+    Options_impl &options)
+{
+    options.add_option(
+        MDL_JIT_OPTION_OPT_LEVEL,
+        "2",
+        "The optimization level of the JIT code generator");
+    options.add_option(
+        MDL_JIT_OPTION_FAST_MATH,
+        "true",
+        "Enables unsafe math optimizations of the JIT code generator");
+    options.add_option(
+        MDL_JIT_OPTION_INLINE_AGGRESSIVELY,
+        "false",
+        "Instructs the JIT code generator to aggressively inline functions");
+    options.add_option(
+        MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY,
+        "true",
+        "Enable strict evaluation of the ternary operator on the DAG");
+    options.add_option(
+        MDL_JIT_OPTION_DISABLE_EXCEPTIONS,
+        "false",
+        "Disable exception handling in the generated code");
+    options.add_option(
+        MDL_JIT_OPTION_ENABLE_RO_SEGMENT,
+        "false",
+        "Enable the creation of a read-only data segment");
+    options.add_option(
+        MDL_JIT_OPTION_WRITE_BITCODE,
+        "false",
+        "Generate LLVM bitcode instead of LLVM IR code");
+    options.add_option(
+        MDL_JIT_OPTION_LINK_LIBDEVICE,
+        "true",
+        "Link libdevice into PTX module");
+    options.add_option(
+        MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE,
+        "none",
+        "Defines the libbsdf version to link into the ouput.");
+    options.add_option(
+        MDL_JIT_OPTION_USE_BITANGENT,
+        "false",
+        "Use bitangent instead of tangent_u, tangent_v in the generated MDL core state");
+    options.add_option(
+        MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE,
+        "false",
+        "Include the uniform state in the generated MDL core state");
+    options.add_option(
+        MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE,
+        "vtable",
+        "The mode for texture lookup functions on GPU (vtable, direct_call or optix_cp)");
+    options.add_option(
+        MDL_JIT_OPTION_MAP_STRINGS_TO_IDS,
+        "false",
+        "Map string constants to identifiers");
+    options.add_option(
+        MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES,
+        "false",
+        "The generated code should use texture lookup functions with derivative parameters "
+        "for the texture coordinates");
+    options.add_option(
+        MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU,
+        "true",
+        "Use built-in resource handler on CPU");
+    options.add_option(
+        MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA,
+        "false",
+        "HLSL: Pass an extra user defined resource data struct to resource callbacks");
+    options.add_option(
+        MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS,
+        "false",
+        "Use a renderer provided function to adapt microfacet roughness");
+    options.add_option(
+        MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL,
+        "false",
+        "Use a renderer provided function to adapt normals");
+    options.add_option(
+        MDL_JIT_OPTION_ENABLE_AUXILIARY,
+        "false",
+        "Enable code generation for auxiliary functions on DFs");
+    options.add_option(
+        MDL_JIT_OPTION_SCENE_DATA_NAMES,
+        "",
+        "Comma-separated list of names for which scene data may be available in the renderer "
+        "(use \"*\" to enforce that the renderer runtime is asked for all scene data names)");
+    options.add_option(
+        MDL_JIT_OPTION_VISIBLE_FUNCTIONS,
+        "",
+        "Comma-separated list of names of functions which will be visible in the generated code "
+        "(empty string means no special restriction).");
+
+    options.add_binary_option(
+        MDL_JIT_BINOPTION_LLVM_STATE_MODULE,
+        "Use this user-specified LLVM implementation for the MDL state module");
+    options.add_binary_option(
+        MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE,
+        "Link and optimize this user-specified LLVM renderer module with the generated code");
+}
+
+// Constructor.
+Code_generator_thread_context::Code_generator_thread_context(
+    IAllocator         *alloc,
+    Options_impl const *options)
+: Base(alloc)
+, m_msg_list(alloc, /*owner_fname=*/"")
+, m_options(alloc, *options)
+{
+}
+
+/// Access code generator messages of last operation.
+Messages_impl const &Code_generator_thread_context::access_messages() const
+{
+    return m_msg_list;
+}
+
+// Access code generator messages of last operation.
+Messages_impl &Code_generator_thread_context::access_messages()
+{
+    return m_msg_list;
+}
+
+// Access code generator options for the invocation.
+Options_impl const &Code_generator_thread_context::access_options() const
+{
+    return m_options;
+}
+
+// Access code generator options for the invocation.
+Options_impl &Code_generator_thread_context::access_options()
+{
+    return m_options;
+}
+
 // Constructor.
 Code_generator_jit::Code_generator_jit(
     IAllocator  *alloc,
@@ -74,106 +208,19 @@ Code_generator_jit::Code_generator_jit(
 , m_builder(alloc)
 , m_jitted_code(mi::base::make_handle_dup(jitted_code))
 {
-    m_options.add_option(
-        MDL_JIT_OPTION_OPT_LEVEL,
-        "2",
-        "The optimization level of the JIT code generator");
-    m_options.add_option(
-        MDL_JIT_OPTION_FAST_MATH,
-        "true",
-        "Enables unsafe math optimizations of the JIT code generator");
-    m_options.add_option(
-        MDL_JIT_OPTION_INLINE_AGGRESSIVELY,
-        "false",
-        "Instructs the JIT code generator to aggressively inline functions");
-    m_options.add_option(
-        MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY,
-        "true",
-        "Enable strict evaluation of the ternary operator on the DAG");
-    m_options.add_option(
-        MDL_JIT_OPTION_DISABLE_EXCEPTIONS,
-        "false",
-        "Disable exception handling in the generated code");
-    m_options.add_option(
-        MDL_JIT_OPTION_ENABLE_RO_SEGMENT,
-        "false",
-        "Enable the creation of a read-only data segment");
-    m_options.add_option(
-        MDL_JIT_OPTION_WRITE_BITCODE,
-        "false",
-        "Generate LLVM bitcode instead of LLVM IR code");
-    m_options.add_option(
-        MDL_JIT_OPTION_LINK_LIBDEVICE,
-        "true",
-        "Link libdevice into PTX module");
-    m_options.add_option(
-        MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE,
-        "none",
-        "Defines the libbsdf version to link into the ouput.");    
-    m_options.add_option(
-        MDL_JIT_OPTION_USE_BITANGENT,
-        "false",
-        "Use bitangent instead of tangent_u, tangent_v in the generated MDL core state");
-    m_options.add_option(
-        MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE,
-        "false",
-        "Include the uniform state in the generated MDL core state");
-    m_options.add_option(
-        MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE,
-        "vtable",
-        "The mode for texture lookup functions on GPU (vtable, direct_call or optix_cp)");
-    m_options.add_option(
-        MDL_JIT_OPTION_MAP_STRINGS_TO_IDS,
-        "false",
-        "Map string constants to identifiers");
-    m_options.add_option(
-        MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES,
-        "false",
-        "The generated code should use texture lookup functions with derivative parameters "
-        "for the texture coordinates");
-    m_options.add_option(
-        MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU,
-        "true",
-        "Use built-in resource handler on CPU");
-    m_options.add_option(
-        MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA,
-        "false",
-        "HLSL: Pass an extra user defined resource data struct to resource callbacks");
-    m_options.add_option(
-        MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS,
-        "false",
-        "Use a renderer provided function to adapt microfacet roughness");
-    m_options.add_option(
-        MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL,
-        "false",
-        "Use a renderer provided function to adapt normals");
-    m_options.add_option(
-        MDL_JIT_OPTION_ENABLE_AUXILIARY,
-        "false",
-        "Enable code generation for auxiliary functions on DFs");
-    m_options.add_option(
-        MDL_JIT_OPTION_SCENE_DATA_NAMES,
-        "",
-        "Comma-separated list of names for which scene data may be available in the renderer "
-        "(use \"*\" to enforce that the renderer runtime is asked for all scene data names)");
-    m_options.add_option(
-        MDL_JIT_OPTION_VISIBLE_FUNCTIONS,
-        "",
-        "Comma-separated list of names of functions which will be visible in the generated code "
-        "(empty string means no special restriction).");
-
-    m_options.add_binary_option(
-        MDL_JIT_BINOPTION_LLVM_STATE_MODULE,
-        "Use this user-specified LLVM implementation for the MDL state module");
-    m_options.add_binary_option(
-        MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE,
-        "Link and optimize this user-specified LLVM renderer module with the generated code");
+    fill_default_cg_options(m_options);
 }
 
 // Get the name of the target language.
 char const *Code_generator_jit::get_target_language() const
 {
     return "executable";
+}
+
+// Creates a new thread context.
+Code_generator_thread_context *Code_generator_jit::create_thread_context()
+{
+    return m_builder.create<Code_generator_thread_context>(m_builder.get_allocator(), &m_options);
 }
 
 // Acquires a const interface.
@@ -188,24 +235,33 @@ mi::base::IInterface const *Code_generator_jit::get_interface(
 
 // Compile a whole module.
 IGenerated_code_executable *Code_generator_jit::compile(
-    IModule const    *module,
-    IModule_cache    *module_cache,
-    Compilation_mode mode)
+    IModule const                  *module,
+    IModule_cache                  *module_cache,
+    Compilation_mode               mode,
+    ICode_generator_thread_context *ctx)
 {
     Generated_code_jit *result = m_builder.create<Generated_code_jit>(
         m_builder.get_allocator(),
         m_jitted_code.get(),
         module->get_filename());
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     switch (mode) {
     case CM_NATIVE:
-        result->compile_module_to_llvm(module, module_cache, m_options);
+        result->compile_module_to_llvm(module, module_cache, options);
         break;
     case CM_HLSL:
         result->compile_module_to_hlsl(module, module_cache, m_options);
         break;
     default:
-        result->compile_module_to_ptx(module, module_cache, m_options);
+        result->compile_module_to_ptx(module, module_cache, options);
         break;
     }
 
@@ -214,14 +270,16 @@ IGenerated_code_executable *Code_generator_jit::compile(
 
 // Compile a lambda function using the JIT into an environment (shader) of a scene.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_environment(
-    ILambda_function const    *ilambda,
-    IModule_cache             *module_cache,
-    ICall_name_resolver const *resolver)
+    ILambda_function const         *ilambda,
+    IModule_cache                  *module_cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx)
 {
     return compile_into_generic_function(
         ilambda,
         module_cache,
         resolver,
+        ctx,
         /*num_texture_spaces=*/ 0,
         /*num_texture_results=*/ 0,
         /*transformer=*/ NULL);
@@ -264,6 +322,7 @@ public:
             m_lambda.map_tex_resource(
                 tex->get_kind(),
                 tex->get_string_value(),
+                tex->get_selector(),
                 tex->get_gamma_mode(),
                 tex->get_bsdf_data_kind(),
                 shape,
@@ -276,7 +335,8 @@ public:
         } else {
             m_lambda.map_tex_resource(
                 v->get_kind(),
-                NULL,
+                /*res_url=*/NULL,
+                /*res_sel=*/NULL,
                 IValue_texture::gamma_default,
                 IValue_texture::BDK_NONE,
                 IType_texture::TS_2D,
@@ -366,13 +426,14 @@ private:
 
 // Compile a lambda function using the JIT into a constant function.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function(
-    ILambda_function const     *ilambda,
-    IModule_cache              *cache,
-    ICall_name_resolver const  *resolver,
+    ILambda_function const         *ilambda,
+    IModule_cache                  *cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
     ILambda_resource_attribute *attr,
-    Float4_struct const        world_to_object[4],
-    Float4_struct const        object_to_world[4],
-    int                        object_id)
+    Float4_struct const            world_to_object[4],
+    Float4_struct const            object_to_world[4],
+    int                            object_id)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
     if (lambda == NULL) {
@@ -402,6 +463,14 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
     Const_function_enumerator enumerator(attr, *const_cast<Lambda_function *>(lambda));
     lambda->enumerate_resources(*resolver, enumerator, body);
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
 
@@ -422,13 +491,13 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
         LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
-        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
+        /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_NO_STATE,
         /*num_texture_spaces=*/0,
         /*num_texture_results=*/0,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag,
         /*enable_debug=*/false);
 
@@ -465,11 +534,12 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
 // Compile a lambda switch function having several roots using the JIT into a
 // function computing one of the root expressions.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_function(
-    ILambda_function const    *ilambda,
-    IModule_cache             *cache,
-    ICall_name_resolver const *resolver,
-    unsigned                  num_texture_spaces,
-    unsigned                  num_texture_results)
+    ILambda_function const         *ilambda,
+    IModule_cache                  *cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
     if (lambda == NULL) {
@@ -481,9 +551,17 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
         return NULL;
     }
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     // automatically activate deactivate the option if the state is set
     bool uses_ustate = lambda->is_uniform_state_set();
-    m_options.set_option(
+    options.set_option(
         MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, uses_ustate ? "false" : "true");
 
     IAllocator        *alloc = get_allocator();
@@ -512,9 +590,9 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag, /*enable_debug=*/false);
 
     // Enable the read-only data segment
@@ -564,13 +642,14 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
 // Compile a lambda switch function having several roots using the JIT into a
 // function computing one of the root expressions for execution on the GPU.
 IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for_gpu(
-    ICode_cache               *code_cache,
-    ILambda_function const    *ilambda,
-    IModule_cache             *module_cache,
-    ICall_name_resolver const *resolver,
-    unsigned                  num_texture_spaces,
-    unsigned                  num_texture_results,
-    unsigned                  sm_version)
+    ICode_cache                    *code_cache,
+    ILambda_function const         *ilambda,
+    IModule_cache                  *module_cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results,
+    unsigned                       sm_version)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
     if (lambda == NULL) {
@@ -582,9 +661,17 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         return NULL;
     }
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     // automatically activate deactivate the option if the state is set
     bool uses_ustate = lambda->is_uniform_state_set();
-    m_options.set_option(
+    options.set_option(
         MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, uses_ustate ? "false" : "true");
 
     IAllocator        *alloc = get_allocator();
@@ -615,21 +702,21 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         // the key
         hasher.update(lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE);
-        hasher.update(m_options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
-        hasher.update(m_options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
-        hasher.update(m_options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
-        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
-        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
-        hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
-        hasher.update(m_options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
-        hasher.update(m_options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
+        hasher.update(options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
+        hasher.update(options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
+        hasher.update(options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
+        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
+        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
+        hasher.update(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
+        hasher.update(options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
+        hasher.update(options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
 
         hasher.final(cache_key);
 
@@ -637,7 +724,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
 
         if (entry != NULL) {
             // found a hit
-            fill_code_from_cache(code, entry);
+            fill_code_from_cache(*ctx, code, entry);
             return code;
         }
     }
@@ -661,9 +748,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag, /*enable_debug=*/false);
 
     // Enable the read-only data segment
@@ -714,12 +801,13 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
 
 // Compile a lambda function into a generic function using the JIT.
 IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_function(
-    ILambda_function const    *ilambda,
-    IModule_cache             *cache,
-    ICall_name_resolver const *resolver,
-    unsigned                  num_texture_spaces,
-    unsigned                  num_texture_results,
-    ILambda_call_transformer  *transformer)
+    ILambda_function const         *ilambda,
+    IModule_cache                  *cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results,
+    ILambda_call_transformer       *transformer)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
     if (lambda == NULL) {
@@ -731,8 +819,16 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         return NULL;
     }
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     // automatically activate deactivate the option if the state is set
-    m_options.set_option(
+    options.set_option(
         MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, lambda->is_uniform_state_set() ? "false" : "true");
 
     IAllocator        *alloc = get_allocator();
@@ -758,14 +854,14 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
-        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
+        /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag, /*enable_debug=*/false);
 
     // Enable the read-only data segment
@@ -818,12 +914,13 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
 
 // Compile a lambda function into a LLVM-IR using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
-    ILambda_function const    *ilambda,
-    IModule_cache             *cache,
-    ICall_name_resolver const *resolver,
-    unsigned                  num_texture_spaces,
-    unsigned                  num_texture_results,
-    bool                      enable_simd)
+    ILambda_function const         *ilambda,
+    IModule_cache                  *cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results,
+    bool                           enable_simd)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
     if (lambda == NULL) {
@@ -836,8 +933,16 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
         return NULL;
     }
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     // automatically activate deactivate the option if the state is set
-    m_options.set_option(
+    options.set_option(
         MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, lambda->is_uniform_state_set() ? "false" : "true");
 
     IAllocator        *alloc = get_allocator();
@@ -860,13 +965,13 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
         LLVM_code_generator::TL_NATIVE,
         enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR,
         /*sm_version=*/0,
-        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
+        /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag, /*enable_debug=*/false);
 
     // enable name mangling
@@ -893,10 +998,11 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
     if (func != NULL) {
         llvm::Module *module = func->getParent();
 
-        if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE))
+        if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
             code_gen.llvm_bc_compile(module, code->access_src_code());
-        else
+        } else {
             code_gen.llvm_ir_compile(module, code->access_src_code());
+        }
         code_gen.fill_function_info(code);
 
         // it's now save to drop this module
@@ -928,16 +1034,26 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
 
 // Compile a distribution function into native code using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cpu(
-    IDistribution_function const *idist_func,
-    IModule_cache                *cache,
-    ICall_name_resolver const    *resolver,
-    unsigned                     num_texture_spaces,
-    unsigned                     num_texture_results)
+    IDistribution_function const   *idist_func,
+    IModule_cache                  *cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
+
     // always expect the uniform state to be part of the MDL SDK state structure
-    m_options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
+    options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
 
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -961,13 +1077,13 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
         LLVM_code_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
-        /*has_tex_handler=*/m_options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
+        /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag, /*enable_debug=*/false);
 
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
@@ -1009,19 +1125,28 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
 
 // Compile a distribution function into a PTX or HLSL using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gpu(
-    IDistribution_function const *idist_func,
-    IModule_cache                *cache,
-    ICall_name_resolver const    *resolver,
-    unsigned                     num_texture_spaces,
-    unsigned                     num_texture_results,
-    unsigned                     sm_version,
-    Compilation_mode             comp_mode,
-    bool                         llvm_ir_output)
+    IDistribution_function const   *idist_func,
+    IModule_cache                  *cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results,
+    unsigned                       sm_version,
+    Compilation_mode               comp_mode,
+    bool                           llvm_ir_output)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
 
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     // always expect the uniform state to be part of the MDL SDK state structure
-    m_options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
+    options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
 
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -1066,9 +1191,9 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
         Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag, /*enable_debug=*/false);
 
     // enable name mangling
@@ -1088,7 +1213,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 
     if (module != NULL) {
         if (llvm_ir_output) {
-            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
+            if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 code_gen.llvm_bc_compile(module, code->access_src_code());
             } else {
                 code_gen.llvm_ir_compile(module, code->access_src_code());
@@ -1133,8 +1258,9 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
 
 // Fill a code object from a code cache entry.
 void Code_generator_jit::fill_code_from_cache(
-    Generated_code_source    *code,
-    ICode_cache::Entry const *entry)
+    ICode_generator_thread_context &ctx,
+    Generated_code_source          *code,
+    ICode_cache::Entry const       *entry)
 {
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -1145,12 +1271,14 @@ void Code_generator_jit::fill_code_from_cache(
 
     // only add a captured arguments layout, if it's non-empty
     if (entry->arg_layout_size != 0) {
+        Options_impl &options = impl_cast<Options_impl>(ctx.access_options());
+
         mi::base::Handle<Generated_code_value_layout> layout(
             builder.create<Generated_code_value_layout>(
                 alloc,
                 entry->arg_layout,
                 entry->arg_layout_size,
-                m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS)));
+                options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS)));
         code->add_captured_arguments_layout(layout.get());
     }
 
@@ -1250,15 +1378,16 @@ void Code_generator_jit::enter_code_into_cache(
 
 // Compile a lambda function into PTX or HLSL using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_into_source(
-    ICode_cache               *code_cache,
-    ILambda_function const    *ilambda,
-    IModule_cache             *module_cache,
-    ICall_name_resolver const *resolver,
-    unsigned                  num_texture_spaces,
-    unsigned                  num_texture_results,
-    unsigned                  sm_version,
-    Compilation_mode          comp_mode,
-    bool                      llvm_ir_output)
+    ICode_cache                    *code_cache,
+    ILambda_function const         *ilambda,
+    IModule_cache                  *module_cache,
+    ICall_name_resolver const      *resolver,
+    ICode_generator_thread_context *ctx,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results,
+    unsigned                       sm_version,
+    Compilation_mode               comp_mode,
+    bool                           llvm_ir_output)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
     if (lambda == NULL) {
@@ -1270,6 +1399,14 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         // there must be at least one root or a body
         return NULL;
     }
+
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
 
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -1311,21 +1448,21 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE);
         hasher.update(num_texture_spaces);
         hasher.update(num_texture_results);
-        hasher.update(m_options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
-        hasher.update(m_options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
-        hasher.update(m_options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
-        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
-        hasher.update(m_options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
-        hasher.update(m_options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
-        hasher.update(m_options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
-        hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
-        hasher.update(m_options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
+        hasher.update(options.get_string_option(MDL_CG_OPTION_INTERNAL_SPACE));
+        hasher.update(options.get_bool_option(MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT));
+        hasher.update(options.get_float_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT));
+        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MIN));
+        hasher.update(options.get_float_option(MDL_CG_OPTION_WAVELENGTH_MAX));
+        hasher.update(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
+        hasher.update(options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
+        hasher.update(options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
+        hasher.update(options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
 
         if (code_kind == IGenerated_code_executable::CK_HLSL) {
             hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA));
@@ -1337,13 +1474,13 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
 
         if (entry != NULL) {
             // found a hit
-            fill_code_from_cache(code, entry);
+            fill_code_from_cache(*ctx, code, entry);
             return code;
         }
     }
 
     // automatically activate deactivate the option if the state is set
-    m_options.set_option(
+    options.set_option(
         MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, lambda->is_uniform_state_set() ? "false" : "true");
 
     Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
@@ -1372,9 +1509,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE,
         num_texture_spaces,
         num_texture_results,
-        m_options,
+        options,
         /*incremental=*/false,
-        get_state_mapping(),
+        get_state_mapping(options),
         &res_manag, /*enable_debug=*/false);
 
     // enable name mangling
@@ -1402,7 +1539,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         llvm::Module *module = func->getParent();
 
         if (llvm_ir_output) {
-            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
+            if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 code_gen.llvm_bc_compile(module, code->access_src_code());
             } else {
                 code_gen.llvm_ir_compile(module, code->access_src_code());
@@ -1481,14 +1618,23 @@ unsigned char const *Code_generator_jit::get_libbsdf_multiscatter_data(
 
 // Create a link unit.
 Link_unit_jit *Code_generator_jit::create_link_unit(
-    Compilation_mode mode,
-    bool             enable_simd,
-    unsigned         sm_version,
-    unsigned         num_texture_spaces,
-    unsigned         num_texture_results)
+    ICode_generator_thread_context *ctx,
+    Compilation_mode               mode,
+    bool                           enable_simd,
+    unsigned                       sm_version,
+    unsigned                       num_texture_spaces,
+    unsigned                       num_texture_results)
 {
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
+
     // link units always expect the uniform state to be included in the MDL SDK state
-    m_options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
+    options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
 
     Link_unit_jit::Target_kind target_kind;
     Type_mapper::Type_mapping_mode tm_mode;
@@ -1526,15 +1672,16 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
         sm_version,
         num_texture_spaces,
         num_texture_results,
-        &m_options,
-        get_state_mapping(),
+        &options,
+        get_state_mapping(options),
         /*enable_debug=*/false
     );
 }
 
 // Compile a link unit into a LLVM-IR using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_unit(
-    ILink_unit const *iunit)
+    ICode_generator_thread_context *ctx,
+    ILink_unit const               *iunit)
 {
     if (iunit == NULL) {
         return NULL;
@@ -1543,6 +1690,14 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
     if (num_funcs == 0) {
         return NULL;
     }
+
+    mi::base::Handle<Code_generator_thread_context> tmp;
+    if (ctx == NULL) {
+        tmp = mi::base::make_handle(create_thread_context());
+        ctx = tmp.get();
+    }
+
+    Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
 
     Link_unit_jit const &unit = *impl_cast<Link_unit_jit>(iunit);
 
@@ -1596,7 +1751,7 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
             unit->hlsl_compile(module, code->access_src_code());
         } else {
             MDL_ASSERT(unit.get_target_kind() == Link_unit_jit::TK_LLVM_IR);
-            if (m_options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
+            if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 unit->llvm_bc_compile(module, code->access_src_code());
             } else {
                 unit->llvm_ir_compile(module, code->access_src_code());
@@ -1638,15 +1793,16 @@ IGenerated_code_value_layout *Code_generator_jit::create_value_layout() const
 }
 
 // Calculate the state mapping mode from options.
-unsigned Code_generator_jit::get_state_mapping() const
+unsigned Code_generator_jit::get_state_mapping(
+    Options_impl const &options)
 {
     unsigned res = 0;
 
-    if (m_options.get_bool_option(MDL_JIT_OPTION_USE_BITANGENT)) {
+    if (options.get_bool_option(MDL_JIT_OPTION_USE_BITANGENT)) {
         res |= Type_mapper::SM_USE_BITANGENT;
     }
 
-    if (m_options.get_bool_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE)) {
+    if (options.get_bool_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE)) {
         res |= Type_mapper::SM_INCLUDE_UNIFORM_STATE;
     }
 
@@ -1837,9 +1993,9 @@ void Link_unit_jit::update_resource_tag_map(
     for (size_t i = 0, n = lambda->get_resource_entries_count(); i < n; ++i) {
         Resource_tag_tuple const *e = lambda->get_resource_entry(i);
 
-        int old_tag = find_resource_tag(e->m_kind, e->m_url);
+        int old_tag = find_resource_tag(e->m_kind, e->m_url, e->m_selector);
         if (old_tag == 0) {
-            add_resource_tag_mapping(e->m_kind, e->m_url, e->m_tag);
+            add_resource_tag_mapping(e->m_kind, e->m_url, e->m_selector, e->m_tag);
         } else {
             MDL_ASSERT(old_tag == e->m_tag && "Tag mismatch in resource table");
         }
@@ -1849,14 +2005,16 @@ void Link_unit_jit::update_resource_tag_map(
 // Find the assigned tag for a resource in the resource map.
 int Link_unit_jit::find_resource_tag(
     Resource_tag_tuple::Kind kind,
-    char const               *url) const
+    char const               *url,
+    char const               *sel) const
 {
     // linear search
     for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
-        if (e.m_kind== kind && strcmp(e.m_url, url) == 0)
+        if (e.m_kind== kind && strcmp(e.m_url, url) == 0 && strcmp(e.m_selector, sel) == 0) {
             return e.m_tag;
+        }
     }
     return 0;
 }
@@ -1865,11 +2023,13 @@ int Link_unit_jit::find_resource_tag(
 void Link_unit_jit::add_resource_tag_mapping(
     Resource_tag_tuple::Kind kind,
     char const               *url,
+    char const               *sel,
     int                      tag)
 {
     url = url != NULL ? Arena_strdup(m_arena, url) : NULL;
+    sel = sel != NULL ? Arena_strdup(m_arena, sel) : NULL;
 
-    m_resource_tag_map.push_back(Resource_tag_tuple(kind, url, tag));
+    m_resource_tag_map.push_back(Resource_tag_tuple(kind, url, sel, tag));
 }
 
 // Access messages.

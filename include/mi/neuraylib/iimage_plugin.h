@@ -46,12 +46,21 @@ class IReader;
 
 class IPlugin_api; class ITile;
 
+/**
+    \if MDL_SDK_API
+    \defgroup mi_neuray_plugins Extensions and Plugins
+    \ingroup mi_neuray
+
+    Various ways to extend the \NeurayApiName, for example, image plugins.
+    \endif
+*/
+
 /** \addtogroup mi_neuray_plugins
 @{
 */
 
 /// Type of image plugins
-#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v28"
+#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v30"
 
 /// Abstract interface for image plugins.
 ///
@@ -189,24 +198,6 @@ public:
     /// \return        The number of layers of the image.
     virtual Uint32 get_layers_size( Uint32 level = 0) const = 0;
 
-    /// Returns the size of a tile in x direction.
-    ///
-    /// This method indicates the native tile size of the image file (if any). However, #read()
-    /// and #write() must be able to handle arbitrary tiles.
-    ///
-    /// \param level   The mipmap level (always 0 if the image is not a mipmap).
-    /// \return        The size of a tile in x direction.
-    virtual Uint32 get_tile_resolution_x( Uint32 level = 0) const = 0;
-
-    /// Returns the size of a tile in y direction.
-    ///
-    /// This method indicates the native tile size of the image file (if any). However, #read()
-    /// and #write() must be able to handle arbitrary tiles.
-    ///
-    /// \param level   The mipmap level (always 0 if the image is not a mipmap).
-    /// \return        The size of a tile in y direction.
-    virtual Uint32 get_tile_resolution_y( Uint32 level = 0) const = 0;
-
     /// Returns number of miplevels.
     virtual Uint32 get_miplevels() const = 0;
 
@@ -220,39 +211,24 @@ public:
 
     /// Read pixels from the image file into a tile.
     ///
-    /// Border tiles are passed as full tiles and the method must fill the pixel data for areas that
-    /// are visible in the image. The tile size may be arbitrary, and in particular, not the same
-    /// as indicated by #get_tile_resolution_x() and #get_tile_resolution_y().
-    ///
     /// This method will never be called if this instance was obtained from
     /// #mi::neuraylib::IImage_plugin::open_for_writing().
     ///
-    /// \param tile  The tile to read the data into.
-    /// \param x     The x position of the lower left corner of the tile.
-    /// \param y     The y position of the lower left corner of the tile.
     /// \param z     The z layer (for 3d textures or cubemaps).
     /// \param level The mipmap level (always 0 if the image is not a mipmap).
-    /// \return      \c true if the tile was successfully read, \c false otherwise.
-    virtual bool read(
-        ITile* tile, Uint32 x, Uint32 y, Uint32 z, Uint32 level = 0) const = 0;
+    /// \return      The tile with the read data, or \c nullptr in case of failures.
+    virtual ITile* read( Uint32 z, Uint32 level = 0) const = 0;
 
     /// Write pixels from a tile into the image file.
-    ///
-    /// Border tiles are passed as full tiles but only contain valid pixel data in areas that are
-    /// visible in the image. The tile size may be arbitrary, and in particular, not the same
-    /// as indicated by #get_tile_resolution_x() and #get_tile_resolution_y().
     ///
     /// This method will never be called if this instance was obtained from
     /// #mi::neuraylib::IImage_plugin::open_for_reading().
     ///
     /// \param tile  The tile to read the data from.
-    /// \param x     The x position of the lower left corner of the tile.
-    /// \param y     The y position of the lower left corner of the tile.
     /// \param z     The z layer (for 3d textures or cubemaps).
     /// \param level The mipmap level (always 0 if the image is not a mipmap).
     /// \return      \c true if the tile was successfully written, \c false otherwise.
-    virtual bool write(
-        const ITile* tile, Uint32 x, Uint32 y, Uint32 z, Uint32 level = 0) = 0;
+    virtual bool write( const ITile* tile, Uint32 z, Uint32 level = 0) = 0;
 };
 
 /*@}*/ // end group mi_neuray_plugins

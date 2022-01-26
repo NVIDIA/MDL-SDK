@@ -30,11 +30,9 @@
 
 #include "freeimage_utilities.h"
 
-#ifndef MI_ARCH_ARM_64
-#  if defined(MI_COMPILER_GCC)
-#    include <x86intrin.h>
-#  endif
-#endif  // ifndef MI_ARCH_ARM_64
+#if defined(MI_ARCH_X86_64) && defined(MI_COMPILER_GCC)
+#  include <x86intrin.h>
+#endif
 
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/iwriter.h>
@@ -196,23 +194,23 @@ static char* get_scanline( FIBITMAP* bitmap, mi::Uint32 y)
 
 // Rotate p_val32 by p_nBits bits to the left
 #ifndef ROL32
-#if defined(_MSC_VER) || defined(MI_COMPILER_ICC) || (defined(MI_COMPILER_GCC) && !defined(MI_COMPILER_CLANG) && !defined(MI_ARCH_ARM_64))
+#if defined(_MSC_VER) || defined(MI_COMPILER_ICC) || (defined(MI_COMPILER_GCC) && !defined(MI_COMPILER_CLANG) && defined(MI_ARCH_X86_64))
 #define ROL32(p_val32,p_nBits) _rotl(p_val32,p_nBits)
 #else
+// #error
 #define ROL32(p_val32,p_nBits) (((p_val32)<<(p_nBits))|((p_val32)>>(32-(p_nBits))))
 #endif
 #endif
 
-bool copy_from_bitmap_to_tile(
-    FIBITMAP* bitmap, mi::Uint32 x_start, mi::Uint32 y_start, mi::neuraylib::ITile* tile)
+bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
 {
     // Compute the rectangular region that is to be copied
     const mi::Uint32 tile_width  = tile->get_resolution_x();
     const mi::Uint32 tile_height = tile->get_resolution_y();
     const mi::Uint32 bitmap_width  = FreeImage_GetWidth( bitmap);
     const mi::Uint32 bitmap_height = FreeImage_GetHeight( bitmap);
-    const mi::Uint32 x_end = std::min( x_start + tile_width,  bitmap_width);
-    const mi::Uint32 y_end = std::min( y_start + tile_height, bitmap_height);
+    const mi::Uint32 x_end = std::min( tile_width,  bitmap_width);
+    const mi::Uint32 y_end = std::min( tile_height, bitmap_height);
 
     const char* const pixel_type = tile->get_type();
 
@@ -236,11 +234,11 @@ bool copy_from_bitmap_to_tile(
 
         if (bytes_per_pixel == 4)
         {
-            for (mi::Uint32 y = y_start; y < y_end; ++y) {
-                mi::Uint32* const __restrict dest = static_cast<mi::Uint32*>(tile->get_data()) + y*tile_width + x_start;
-                const mi::Uint32* const __restrict src = reinterpret_cast<const mi::Uint32*>(src_start + y*pitch + x_start*4);
+            for (mi::Uint32 y = 0; y < y_end; ++y) {
+                mi::Uint32* const __restrict dest = static_cast<mi::Uint32*>(tile->get_data()) + y*tile_width;
+                const mi::Uint32* const __restrict src = reinterpret_cast<const mi::Uint32*>(src_start + y*pitch);
                 mi::Uint32 x = 0;
-                const mi::Uint32 xe = x_end-x_start;
+                const mi::Uint32 xe = x_end;
 #if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
                 if(ssse3_supported)
                 {
@@ -259,10 +257,10 @@ bool copy_from_bitmap_to_tile(
         else
         {
             char* __restrict dest = static_cast<char*>(tile->get_data());
-            for (mi::Uint32 y = y_start; y < y_end; ++y) {
-                const char* __restrict src = src_start + y*pitch + x_start * 3;
+            for (mi::Uint32 y = 0; y < y_end; ++y) {
+                const char* __restrict src = src_start + y*pitch;
                 mi::Uint32 x = 0;
-                const mi::Uint32 xe = x_end - x_start;
+                const mi::Uint32 xe = x_end;
 #if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
                 if(ssse3_supported)
                 {
@@ -300,7 +298,7 @@ bool copy_from_bitmap_to_tile(
                     dest[1] = src[FI_RGBA_GREEN];
                     dest[2] = src[FI_RGBA_BLUE];
                 }
-                dest += (x_start + tile_width - x_end) * 3;
+                dest += (tile_width - x_end) * 3;
             }
         }
 
@@ -321,17 +319,19 @@ bool copy_from_bitmap_to_tile(
         // Copy pixel data using memcpy() for each scanline (or all at once if everything fits).
         const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
         assert( bytes_per_pixel > 0);
-        const mi::Uint32 bytes_per_scanline = (x_end-x_start) * bytes_per_pixel;
+        const mi::Uint32 bytes_per_scanline = x_end * bytes_per_pixel;
         char* __restrict dest = static_cast<char*>( tile->get_data());
-        const char* const __restrict src_start = static_cast<char*>(static_cast<void*>(FreeImage_GetBits(bitmap)));
-        const size_t pitch = FreeImage_GetPitch(bitmap);
-        if ((x_start == 0) && (tile_width * bytes_per_pixel == pitch))
-            memcpy(dest, src_start + y_start*pitch, (y_end - y_start)*bytes_per_scanline);
-        else
-        for( mi::Uint32 y = y_start; y < y_end; ++y) {
-            const char* const __restrict src = src_start + y*pitch + x_start * bytes_per_pixel;
-            memcpy( dest, src, bytes_per_scanline);
-            dest += tile_width * bytes_per_pixel;
+        const char* const __restrict src_start
+            = static_cast<char*>( static_cast<void*>( FreeImage_GetBits( bitmap)));
+        const size_t pitch = FreeImage_GetPitch( bitmap);
+        if( tile_width * bytes_per_pixel == pitch)
+            memcpy( dest, src_start, y_end * bytes_per_scanline);
+        else {
+            for( mi::Uint32 y = 0; y < y_end; ++y) {
+                const char* const __restrict src = src_start + y*pitch;
+                memcpy( dest, src, bytes_per_scanline);
+                dest += tile_width * bytes_per_pixel;
+            }
         }
         return true;
 
@@ -339,16 +339,15 @@ bool copy_from_bitmap_to_tile(
         return false;
 }
 
-bool copy_from_tile_to_bitmap(
-    const mi::neuraylib::ITile* tile, FIBITMAP* bitmap, mi::Uint32 x_start, mi::Uint32 y_start)
+bool copy_from_tile_to_bitmap( const mi::neuraylib::ITile* tile, FIBITMAP* bitmap)
 {
     // Compute the rectangular region that is to be copied
     const mi::Uint32 tile_width  = tile->get_resolution_x();
     const mi::Uint32 tile_height = tile->get_resolution_y();
     const mi::Uint32 bitmap_width  = FreeImage_GetWidth( bitmap);
     const mi::Uint32 bitmap_height = FreeImage_GetHeight( bitmap);
-    const mi::Uint32 x_end = std::min( x_start + tile_width,  bitmap_width);
-    const mi::Uint32 y_end = std::min( y_start + tile_height, bitmap_height);
+    const mi::Uint32 x_end = std::min( tile_width,  bitmap_width);
+    const mi::Uint32 y_end = std::min( tile_height, bitmap_height);
 
     const char* const pixel_type = tile->get_type();
 
@@ -358,9 +357,9 @@ bool copy_from_tile_to_bitmap(
         const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
         assert( bytes_per_pixel == 3 || bytes_per_pixel == 4);
         const char* src = static_cast<const char*>( tile->get_data());
-        for( mi::Uint32 y = y_start; y < y_end; ++y) {
-            char* dest = get_scanline( bitmap, y) + x_start * bytes_per_pixel;
-            for( mi::Uint32 x = x_start; x < x_end; ++x) {
+        for( mi::Uint32 y = 0; y < y_end; ++y) {
+            char* dest = get_scanline( bitmap, y);
+            for( mi::Uint32 x = 0; x < x_end; ++x) {
                 dest[FI_RGBA_RED]   = src[0];
                 dest[FI_RGBA_GREEN] = src[1];
                 dest[FI_RGBA_BLUE]  = src[2];
@@ -369,7 +368,7 @@ bool copy_from_tile_to_bitmap(
                 src  += bytes_per_pixel;
                 dest += bytes_per_pixel;
             }
-            src += (x_start + tile_width - x_end) * bytes_per_pixel;
+            src += (tile_width - x_end) * bytes_per_pixel;
         }
         return true;
 
@@ -383,17 +382,20 @@ bool copy_from_tile_to_bitmap(
         // Copy pixel data using memcpy() for each scanline (or all at once if everything fits).
         const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
         assert( bytes_per_pixel > 0);
-        const mi::Uint32 bytes_per_scanline = (x_end-x_start) * bytes_per_pixel;
+        const mi::Uint32 bytes_per_scanline = x_end * bytes_per_pixel;
         const char* __restrict src = static_cast<const char*>( tile->get_data());
-        char* const __restrict dest_start = static_cast<char*>(static_cast<void*>(FreeImage_GetBits(bitmap)));
-        const size_t pitch = FreeImage_GetPitch(bitmap);
-        if ((x_start == 0) && (tile_width * bytes_per_pixel == pitch))
-            memcpy(dest_start + y_start*pitch, src, (y_end - y_start)*bytes_per_scanline);
-        else
-        for( mi::Uint32 y = y_start; y < y_end; ++y) {
-            char* const __restrict dest = dest_start + y*pitch + x_start * bytes_per_pixel;
-            memcpy( dest, src, bytes_per_scanline);
-            src += tile_width * bytes_per_pixel;
+        char* const __restrict dest_start
+            = static_cast<char*>( static_cast<void*>( FreeImage_GetBits( bitmap)));
+        const size_t pitch = FreeImage_GetPitch( bitmap);
+
+        if( tile_width * bytes_per_pixel == pitch)
+            memcpy( dest_start, src, y_end * bytes_per_scanline);
+        else {
+            for( mi::Uint32 y = 0; y < y_end; ++y) {
+                char* const __restrict dest = dest_start + y*pitch;
+                memcpy( dest, src, bytes_per_scanline);
+                src += tile_width * bytes_per_pixel;
+            }
         }
         return true;
 

@@ -53,9 +53,11 @@ enum Material_slot {
     SLOT_SURFACE_SCATTERING,              ///< Slot surface.scattering
     SLOT_SURFACE_EMISSION_EDF_EMISSION,   ///< Slot surface.emission.emission
     SLOT_SURFACE_EMISSION_INTENSITY,      ///< Slot surface.emission.intensity
+    SLOT_SURFACE_EMISSION_MODE,           ///< Slot surface.emission.mode 
     SLOT_BACKFACE_SCATTERING,             ///< Slot backface.scattering
     SLOT_BACKFACE_EMISSION_EDF_EMISSION,  ///< Slot backface.emission.emission
     SLOT_BACKFACE_EMISSION_INTENSITY,     ///< Slot backface.emission.intensity
+    SLOT_BACKFACE_EMISSION_MODE,          ///< Slot backface.emission.mode 
     SLOT_IOR,                             ///< Slot ior
     SLOT_VOLUME_SCATTERING,               ///< Slot volume.scattering
     SLOT_VOLUME_ABSORPTION_COEFFICIENT,   ///< Slot volume.absorption_coefficient
@@ -64,12 +66,17 @@ enum Material_slot {
     SLOT_GEOMETRY_CUTOUT_OPACITY,         ///< Slot geometry.cutout_opacity
     SLOT_GEOMETRY_NORMAL,                 ///< Slot geometry.normal
     SLOT_HAIR,                            ///< Slot hair
+    SLOT_FIRST = SLOT_THIN_WALLED,        ///< First slot
+    SLOT_LAST  = SLOT_HAIR,               ///< Last slot
     SLOT_FORCE_32_BIT = 0xffffffffU
 };
 
 mi_static_assert( sizeof( Material_slot) == sizeof( mi::Uint32));
 
 /// The compiled material's opacity.
+///
+/// See #mi::neuraylib::ICompiled_material::get_opacity() and
+/// #mi::neuraylib::ICompiled_material::get_surface_opacity().
 enum Material_opacity {
     OPACITY_OPAQUE,                     ///< material is opaque
     OPACITY_TRANSPARENT,                ///< material is transparent
@@ -324,11 +331,11 @@ public:
     ///
     /// \param[out] cutout_opacity  get the cutout_opacity value of the material
     ///
-    /// \returns true of success, false if the value is not a constant, but depends on parameters
-    ///          or complex user expressions
+    /// \return \c true in case of success, \c false if the value is not a constant, but depends on
+    ///          parameters or complex user expressions
     virtual bool get_cutout_opacity( Float32* cutout_opacity) const = 0;
 
-    /// Returns true, if the compiled material is valid, false otherwise.
+    /// Returns \c true, if the compiled material is valid, \c false otherwise.
     ///
     /// \param context     In case of failure, the execution context can be checked for error
     ///                    messages. Can be \c NULL.

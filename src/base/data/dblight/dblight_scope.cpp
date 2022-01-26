@@ -47,7 +47,8 @@ namespace DBLIGHT {
 Scope_impl::Scope_impl(Database_impl* database)
   : m_database(database)
   , m_refcount(1)
-  , m_transaction(0)
+  , m_transaction(nullptr)
+  , m_transaction_count(0)
 {
 }
 

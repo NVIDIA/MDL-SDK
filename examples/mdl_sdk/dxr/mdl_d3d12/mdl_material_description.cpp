@@ -62,7 +62,7 @@ Mdl_material_description::Mdl_material_description(const std::string& unique_mat
     , m_loader(nullptr)
     , m_parameter_list(nullptr)
     , m_module_db_name("")
-    , m_material_defintion_db_name("")
+    , m_material_definition_db_name("")
     , m_qualified_module_name("")
     , m_material_name("")
     , m_name_in_scene("")
@@ -189,7 +189,7 @@ bool Mdl_material_description::load_material_definition(
 
     if (m_is_loaded)
     {
-        m_material_defintion_db_name = m_module_db_name + "::" + m_material_name;
+        m_material_definition_db_name = m_module_db_name + "::" + m_material_name;
 
         // reflect changed imports
         sdk.get_library()->update_module_dependencies(m_module_db_name);
@@ -271,9 +271,9 @@ const char* Mdl_material_description::get_module_db_name() const
 
 // ------------------------------------------------------------------------------------------------
 
-const char* Mdl_material_description::get_material_defintion_db_name() const
+const char* Mdl_material_description::get_material_definition_db_name() const
 {
-    return m_is_loaded ? m_material_defintion_db_name.c_str() : nullptr;
+    return m_is_loaded ? m_material_definition_db_name.c_str() : nullptr;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -346,10 +346,10 @@ bool Mdl_material_description::load_material_definition_mdle(
 
     // check if the mdle contains a material
     std::string material_db_name = m_module_db_name + "::" + m_material_name;
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_defintion(
-        sdk.get_transaction().access<const mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        sdk.get_transaction().access<const mi::neuraylib::IFunction_definition>(
             material_db_name.c_str()));
-    if (!material_defintion)
+    if (!material_definition)
     {
         log_warning(
             "The referenced MDLE file does not contain a material: " +
@@ -394,8 +394,8 @@ bool Mdl_material_description::load_material_definition_mdl(
     std::string material_definition_db_name = m_module_db_name + "::" + m_material_name;
 
     // check if the module contains the requested material
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> definition(
-        sdk.get_transaction().access<const mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> definition(
+        sdk.get_transaction().access<const mi::neuraylib::IFunction_definition>(
             material_definition_db_name.c_str()));
     if (!definition)
     {
@@ -918,6 +918,10 @@ void Mdl_material_description::parameterize_gltf_support_material(
             static_cast<mi::Sint32>(m_parameters.alpha_mode));
         add_float(m_parameter_list.get(), "alpha_cutoff", m_parameters.alpha_cutoff);
 
+        // general extensions
+        add_float(m_parameter_list.get(), "emissive_strength",
+            m_parameters.emissive_strength.emissive_strength);
+
         // model dependent parameters
         switch (m_parameters.pbr_model)
             {
@@ -1038,8 +1042,8 @@ bool Mdl_material_description::load_material_definition_loader(
     }
 
     // get the first material in the module
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        sdk.get_transaction().access<const mi::neuraylib::IMaterial_definition>(module->get_material(0)));
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        sdk.get_transaction().access<const mi::neuraylib::IFunction_definition>(module->get_material(0)));
     m_material_name = material_definition->get_mdl_simple_name();
 
     // set the name in the scene graph and on the GUI

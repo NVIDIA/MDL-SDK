@@ -96,7 +96,7 @@ Bsdf_measurement::Bsdf_measurement()
 mi::Sint32 Bsdf_measurement::reset_file( DB::Transaction* transaction, const std::string& original_filename)
 {
     SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
-    std::string resolved_filename
+    const std::string resolved_filename
         = m_path_module->search( PATH::RESOURCE, original_filename.c_str());
 #if 0
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO,
@@ -117,11 +117,11 @@ mi::Sint32 Bsdf_measurement::reset_file( DB::Transaction* transaction, const std
 
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> reflection;
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> transmission;
-    bool success = import_from_file( resolved_filename, reflection, transmission);
+    const bool success = import_from_file( resolved_filename, reflection, transmission);
     if( !success)
         return -3;
 
-    mi::base::Uuid impl_hash{0,0,0,0};
+    const mi::base::Uuid impl_hash{0,0,0,0};
     reset_shared( transaction, reflection.get(), transmission.get(), impl_hash);
 
     m_original_filename = original_filename;
@@ -144,11 +144,11 @@ mi::Sint32 Bsdf_measurement::reset_reader(
 {
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> reflection;
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> transmission;
-    bool success = import_from_reader( reader, reflection, transmission);
+    const bool success = import_from_reader( reader, reflection, transmission);
     if( !success)
         return -3;
 
-    mi::base::Uuid impl_hash{0,0,0,0};
+    const mi::base::Uuid impl_hash{0,0,0,0};
     reset_shared( transaction, reflection.get(), transmission.get(), impl_hash);
 
     m_original_filename.clear();
@@ -177,7 +177,7 @@ mi::Sint32 Bsdf_measurement::reset_mdl(
 {
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> reflection;
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data> transmission;
-    bool success = import_from_reader( reader, reflection, transmission);
+    const bool success = import_from_reader( reader, reflection, transmission);
     if( !success)
         return -3;
 
@@ -216,7 +216,7 @@ void Bsdf_measurement::set_reflection(
 
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> transmission(
         get_transmission<mi::neuraylib::IBsdf_isotropic_data>( transaction));
-    mi::base::Uuid impl_hash{0,0,0,0};
+    const mi::base::Uuid impl_hash{0,0,0,0};
     reset_shared( transaction, reflection, transmission.get(), impl_hash);
 }
 
@@ -241,7 +241,7 @@ void Bsdf_measurement::set_transmission(
 
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> reflection(
         get_reflection<mi::neuraylib::IBsdf_isotropic_data>( transaction));
-    mi::base::Uuid impl_hash{0,0,0,0};
+    const mi::base::Uuid impl_hash{0,0,0,0};
     reset_shared( transaction, reflection.get(), transmission, impl_hash);
 }
 
@@ -528,9 +528,9 @@ void Bsdf_measurement_impl::serialize_bsdf_data(
     if( !exists)
         return;
 
-    mi::Uint32 resolution_theta   = bsdf_data->get_resolution_theta();
-    mi::Uint32 resolution_phi     = bsdf_data->get_resolution_phi();
-    mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
+    const mi::Uint32 resolution_theta   = bsdf_data->get_resolution_theta();
+    const mi::Uint32 resolution_phi     = bsdf_data->get_resolution_phi();
+    const mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
 
     SERIAL::write(serializer, resolution_theta);
     SERIAL::write(serializer, resolution_phi);
@@ -587,7 +587,7 @@ mi::neuraylib::IBsdf_isotropic_data* import_data_from_reader( mi::neuraylib::IRe
         return nullptr;
     if( type_uint32 > 1)
         return nullptr;
-    mi::neuraylib::Bsdf_type type
+    const mi::neuraylib::Bsdf_type type
         = type_uint32 == 0 ? mi::neuraylib::BSDF_SCALAR : mi::neuraylib::BSDF_RGB;
 
     // resolution_theta
@@ -711,10 +711,10 @@ namespace {
 
 bool export_to_file(mi::neuraylib::IWriter* writer, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data)
 {
-    mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
-    mi::Uint32 resolution_theta   = bsdf_data->get_resolution_theta();
-    mi::Uint32 resolution_phi     = bsdf_data->get_resolution_phi();
-    mi::Uint32 type_uint32        = type == mi::neuraylib::BSDF_SCALAR ? 0 : 1;
+    const mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
+    const mi::Uint32 resolution_theta   = bsdf_data->get_resolution_theta();
+    const mi::Uint32 resolution_phi     = bsdf_data->get_resolution_phi();
+    const mi::Uint32 type_uint32        = type == mi::neuraylib::BSDF_SCALAR ? 0 : 1;
 
     if( !writer->write( reinterpret_cast<const char*>( &type_uint32), 4))
         return false;
@@ -819,7 +819,7 @@ DB::Tag load_mdl_bsdf_measurement(
         return tag;
 
     Bsdf_measurement* bsdfm = new Bsdf_measurement();
-    mi::Sint32 result = bsdfm->reset_mdl( transaction,
+    const mi::Sint32 result = bsdfm->reset_mdl( transaction,
         reader, filename, container_filename, container_membername, mdl_file_path, impl_hash);
     ASSERT( M_BSDF_MEASUREMENT, result == 0 || result == -3);
     if( result == -3)

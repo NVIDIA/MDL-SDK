@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright 2021 NVIDIA Corporation. All rights reserved.
+ * Copyright 2022 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-mdl 1.4;
+mdl 1.7;
 
 //@ignore volume_coefficient
 
@@ -419,6 +419,7 @@ export struct anisotropy_return
 float4x4 compute_cylindric_transform(
     uniform float4x4 projection_transform,
     float3 t_normal_3,
+    float3 g_normal_3,
     float3 pos,
     uniform bool infinite = false,
     uniform bool normalized = false
@@ -429,13 +430,15 @@ float4x4 compute_cylindric_transform(
 ]]
 {
     float4 t_normal = projection_transform*float4(t_normal_3.x,t_normal_3.y,t_normal_3.z,0);
+    float4 g_normal = projection_transform*float4(g_normal_3.x,g_normal_3.y,g_normal_3.z,0);
 
     float4 t_pos2 =float4(pos.x,pos.y,pos.z,1.);
     float4 t_pos = projection_transform*t_pos2;
 
     // make normal pointing to the 'outside' of the projector geometry body
     // (to avoid potentially different uvs on front and backface)
-    if ((t_pos.x * t_normal.x + t_pos.y * t_normal.y + t_pos.z * t_normal.z) < 0.0f)
+    //use geometry_normal to avoid random flipping if normals are already pertubed
+    if ((t_pos.x * g_normal.x + t_pos.y * g_normal.y + t_pos.z * g_normal.z) < 0.0f)
         t_normal = -t_normal;
 
     float3 uv_coord(0.);
@@ -529,7 +532,7 @@ float4x4 compute_spheric_transform(
 }
 
 uniform float4x4 compute_cubic_transform(
-    uniform float4x4 projection_transform, float3 t_normal_3, float3 pos
+    uniform float4x4 projection_transform, float3 t_normal_3, float3 g_normal_3, float3 pos
 )
 [[
     anno::description("Utility function for coordinate_projection()"),
@@ -537,8 +540,12 @@ uniform float4x4 compute_cubic_transform(
 ]]
 {
     float4 t_normal =  projection_transform*float4(t_normal_3.x,t_normal_3.y,t_normal_3.z,0);
+    float4 g_normal =  projection_transform*float4(g_normal_3.x,g_normal_3.y,g_normal_3.z,0);
     float4 t_position = projection_transform*float4(pos.x,pos.y,pos.z,1);
-    if ((t_position.x * t_normal.x + t_position.y * t_normal.y + t_position.z * t_normal.z) < 0.0f)
+
+    //flip for backside to avoid different uv on front and back.
+    //use geometry_normal to avoid random flipping if normals are already pertubed
+    if ((t_position.x * g_normal.x + t_position.y * g_normal.y + t_position.z * g_normal.z) < 0.0f)
         t_normal = -t_normal;
     // Find out on which cube face is the intersection point
     //transform is then planar, but based on a rotated/flipped coordsys
@@ -653,43 +660,47 @@ export texture_coordinate_info coordinate_projection(
 {
     float3 int_pos;
     float3 normal;
+    float3 g_normal;
     switch (coordinate_system) {
     case texture_coordinate_object:
         int_pos = state::transform_point(state::coordinate_internal,state::coordinate_object,state::position());
         normal = state::transform_normal(state::coordinate_internal,state::coordinate_object,state::normal());
+        g_normal = state::transform_normal(state::coordinate_internal,state::coordinate_object,state::geometry_normal());
         break;
     case texture_coordinate_world:
         int_pos = state::transform_point(state::coordinate_internal,state::coordinate_world,state::position());
         normal = state::transform_normal(state::coordinate_internal,state::coordinate_world,state::normal());
+        g_normal = state::transform_normal(state::coordinate_internal,state::coordinate_world,state::geometry_normal());
         break;
     case texture_coordinate_uvw:
         int_pos = state::texture_coordinate(texture_space);
         normal = state::transform_normal(state::coordinate_internal,state::coordinate_object,state::normal());
+        g_normal = state::transform_normal(state::coordinate_internal,state::coordinate_object,state::geometry_normal());
         break;
     }
     float4x4 finaltransform;
     switch (projection_type) {
     case projection_cylindrical:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos);
+        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos);
         break;
     case projection_spherical:
         finaltransform = compute_spheric_transform(projection_transform,int_pos);
         break;
     case projection_tri_planar:
     case projection_cubic:
-        finaltransform = compute_cubic_transform(projection_transform,normal,int_pos);
+        finaltransform = compute_cubic_transform(projection_transform,normal,g_normal,int_pos);
         break;
     case projection_infinite_cylindrical:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos, true);
+        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos, true);
         break;
     case projection_spherical_normalized:
         finaltransform = compute_spheric_transform(projection_transform,int_pos,true);
         break;
     case projection_cylindrical_normalized:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos, false, true);
+        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos, false, true);
         break;
     case projection_infinite_cylindrical_normalized:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,int_pos, true, true);
+        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos, true, true);
         break;
     case projection_planar:
     default:
@@ -864,7 +875,16 @@ export texture_return file_texture(
         [[
             anno::description("Deprecated, use wrap_mode=tex::wrap_clip. Defines wrap_clamp behavior. If true, a lookup outside [0,1] results in black/transparent"),
             anno::hidden()
-        ]]
+        ]],
+    uniform float animation_start_time = 0.
+        [[ anno::description("When to start playing first frame of the animation ") ]],
+
+    uniform int2 animation_crop  = int2(0, 0)
+        [[ anno::description("If the texture is an animation, the range of frames to be played can be specified.") ]],
+    uniform tex::wrap_mode animation_wrap = tex::wrap_repeat
+        [[ anno::description("Defines what to do outside of regular animation time") ]],
+    uniform float animation_fps = 30
+        [[ anno::description("Framerate to use for animation playback") ]]
 )
 [[
     anno::description("General texturing function for 2D bitmap texture stored in a file"),
@@ -873,6 +893,34 @@ export texture_return file_texture(
 {
     color color_result;
     float mono_result;
+
+
+    float frame = 0.0;
+    if(animation_crop != int2(0,0)) //only if we have an animation
+    {
+        frame = (::state::animation_time()-animation_start_time) * animation_fps ; //start playing at first frame of the animation
+        switch ( animation_wrap) {
+            case tex::wrap_repeat:
+                frame=frame>0?  math::fmod(frame,animation_crop.y-animation_crop.x)+animation_crop.x:
+                                math::fmod(frame,animation_crop.y-animation_crop.x)+animation_crop.y;
+                break;
+            case tex::wrap_mirrored_repeat:
+                float animation_crop_2y = 2.0*animation_crop.y;
+                frame=frame>0?  math::fmod(frame,(animation_crop.y-animation_crop.x)*2.0)+animation_crop.x:
+                                math::fmod(frame,(animation_crop.y-animation_crop.x)*2.0)+animation_crop_2y-animation_crop.x;
+                if(frame>animation_crop.y)
+                    frame = animation_crop_2y-frame;
+                break;
+            case tex::wrap_clamp:
+                frame = math::clamp( frame+animation_crop.x, animation_crop.x, animation_crop.y);
+                break;
+            case tex::wrap_clip:
+                frame += animation_crop.x;
+                if(frame < animation_crop.x || frame > animation_crop.y) return texture_return(color(0.,0.,0.),0.0);
+                break;
+        }
+    }
+
     if (clip) {
         if (wrap_u == tex::wrap_clamp && (uvw.position.x < 0. || uvw.position.x > 1.)) {
             return texture_return(color(0.),0);
@@ -886,21 +934,21 @@ export texture_return file_texture(
         float3 float3_scale = float3(color_scale);
         float3 float3_offset = float3(color_offset);
 
-        float4 result = tex::lookup_float4(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v) *
+        float4 result = tex::lookup_float4(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v,frame) *
             float4(float3_scale.x,float3_scale.y,float3_scale.z,1) + float4(float3_offset.x,float3_offset.y,float3_offset.z,0);
         color_result = color(result.x,result.y, result.z);
         mono_result= math::average(float3_offset + float3_scale * result.w);
         break;
     case mono_average:
-        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v)*color_scale + color_offset;
+        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v,frame)*color_scale + color_offset;
         mono_result = math::average(color_result);
         break;
     case mono_luminance:
-        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v)*color_scale + color_offset;
+        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v,frame)*color_scale + color_offset;
         mono_result = math::luminance(color_result);
         break;
     case mono_maximum:
-        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v)*color_scale + color_offset;
+        color_result = tex::lookup_color(texture, float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v,frame)*color_scale + color_offset;
         mono_result = math::max_value(color_result);
         break;
     }
@@ -2290,53 +2338,53 @@ int2 texremapu( int2 texres, int2 crop_ofs, float2 tex, tex::wrap_mode wrap_u, t
                  texremapu(texres.y, crop_ofs.y, int(tex.y), wrap_v));
 }
 
-float texel_average(uniform texture_2d texture, int2 coord)
+float texel_average(uniform texture_2d texture, int2 coord, float frame)
 {
-    return math::average(tex::texel_color(texture, coord));
+    return math::average(tex::texel_color(texture, coord, int2(0,0), frame));
 }
 
-float texel_alpha(uniform texture_2d texture, int2 coord)
+float texel_alpha(uniform texture_2d texture, int2 coord, float frame)
 {
-    return tex::texel_float4(texture, coord).w;
+    return tex::texel_float4(texture, coord, int2(0,0), frame).w;
 }
-float texel_luminance(uniform texture_2d texture, int2 coord)
+float texel_luminance(uniform texture_2d texture, int2 coord, float frame)
 {
-    return math::luminance(tex::texel_color(texture, coord));
+    return math::luminance(tex::texel_color(texture, coord, int2(0,0), frame));
 }
-float texel_maximum(uniform texture_2d texture, int2 coord)
+float texel_maximum(uniform texture_2d texture, int2 coord, float frame)
 {
-    return math::max_value(tex::texel_color(texture, coord));
+    return math::max_value(tex::texel_color(texture, coord, int2(0,0), frame));
 }
-float texel_lookup(uniform texture_2d texture, int2 coord, uniform mono_mode bump_source)
+float texel_lookup(uniform texture_2d texture, int2 coord, uniform mono_mode bump_source, float frame)
 {
     switch (bump_source){
     case mono_average:
-        return  texel_average(texture, coord);
+        return  texel_average(texture, coord, frame);
     case mono_alpha:
-        return  texel_alpha(texture, coord);
+        return  texel_alpha(texture, coord, frame);
     case mono_luminance:
-        return  texel_luminance(texture, coord);
+        return  texel_luminance(texture, coord, frame);
     case mono_maximum:
-        return  texel_maximum(texture, coord);
+        return  texel_maximum(texture, coord, frame);
     }
 }
-float4 texels_lookup(uniform texture_2d texture, int y, int x0, int x1, int x2, int x3, uniform mono_mode bump_source)
+float4 texels_lookup(uniform texture_2d texture, int y, int x0, int x1, int x2, int x3, uniform mono_mode bump_source, float frame)
 {
     return float4(
-        texel_lookup(texture, int2(x0, y), bump_source),
-        texel_lookup(texture, int2(x1, y), bump_source),
-        texel_lookup(texture, int2(x2, y), bump_source),
-        texel_lookup(texture, int2(x3, y), bump_source));
+        texel_lookup(texture, int2(x0, y), bump_source, frame),
+        texel_lookup(texture, int2(x1, y), bump_source, frame),
+        texel_lookup(texture, int2(x2, y), bump_source, frame),
+        texel_lookup(texture, int2(x3, y), bump_source, frame));
 }
 
 
-float interpolate_texspace_l( uniform texture_2d texture, float4 st, int4 texi, uniform mono_mode bump_source)
+float interpolate_texspace_l( uniform texture_2d texture, float4 st, int4 texi, uniform mono_mode bump_source, float frame)
 {
     return
-        texel_lookup(texture, int2(texi.x, texi.y),bump_source) * st.z +
-        texel_lookup(texture, int2(texi.z, texi.y),bump_source) * st.y +
-        texel_lookup(texture, int2(texi.x, texi.w),bump_source) * st.w +
-        texel_lookup(texture, int2(texi.z, texi.w),bump_source) * st.x;
+        texel_lookup(texture, int2(texi.x, texi.y),bump_source, frame) * st.z +
+        texel_lookup(texture, int2(texi.z, texi.y),bump_source, frame) * st.y +
+        texel_lookup(texture, int2(texi.x, texi.w),bump_source, frame) * st.w +
+        texel_lookup(texture, int2(texi.z, texi.w),bump_source, frame) * st.x;
 }
 
 // cubic b-spline evaluation and derivative
@@ -2392,7 +2440,16 @@ export float3 file_bump_texture(
             anno::hidden()
         ]],
     uniform bool b_spline = false
-         [[ anno::description("Use b-Spline interpolation for smooth result") ]]
+         [[ anno::description("Use b-Spline interpolation for smooth result") ]],
+    uniform float animation_start_time = 0.
+        [[ anno::description("When to start playing first frame of the animation ") ]],
+
+    uniform int2 animation_crop  = int2(0, 0)
+        [[ anno::description("If the texture is an animation, the range of frames to be played can be specified.") ]],
+    uniform tex::wrap_mode animation_wrap = tex::wrap_repeat
+        [[ anno::description("Defines what to do outside of regular animation time") ]],
+    uniform float animation_fps = 30
+        [[ anno::description("Framerate to use for animation playback") ]]
 )
 [[
     anno::description("Computes a normal based on a heightfield-style bump texture"),
@@ -2403,6 +2460,32 @@ export float3 file_bump_texture(
     if (width == 0 || height == 0 || // avoid division by zero in texremapu for invalid resource
         factor == 0.0f)
         return normal;
+
+    float frame = 0.0;
+    if(animation_crop != int2(0,0)) //only if we have an animation
+    {
+        frame = (::state::animation_time()-animation_start_time) * animation_fps ; //start playing at first frame of the animation
+        switch ( animation_wrap) {
+            case tex::wrap_repeat:
+                frame=frame>0?  math::fmod(frame,animation_crop.y-animation_crop.x)+animation_crop.x:
+                                math::fmod(frame,animation_crop.y-animation_crop.x)+animation_crop.y;
+                break;
+            case tex::wrap_mirrored_repeat:
+                float animation_crop_2y = 2.0*animation_crop.y;
+                frame=frame>0?  math::fmod(frame,(animation_crop.y-animation_crop.x)*2.0)+animation_crop.x:
+                                math::fmod(frame,(animation_crop.y-animation_crop.x)*2.0)+animation_crop_2y-animation_crop.x;
+                if(frame>animation_crop.y)
+                    frame = animation_crop_2y-frame;
+                break;
+            case tex::wrap_clamp:
+                frame = math::clamp( frame+animation_crop.x, animation_crop.x, animation_crop.y);
+                break;
+            case tex::wrap_clip:
+                frame += animation_crop.x;
+                if(frame < animation_crop.x || frame > animation_crop.y) return normal;
+                break;
+        }
+    }
 
     float2 bump_texspace;
     {
@@ -2439,17 +2522,17 @@ export float3 file_bump_texture(
         v *= v*v*(v*(v*6.0f-15.0f)+10.0f);
         float4 st(u*v, u*(1.0f-v), (1.0f-u)*(1.0f-v), (1.0f-u)*v);
         bump_texspace = float2(
-            (interpolate_texspace_l(texture, st, int4(texi2.x,texi1.y,texi3.x,texi2.y),bump_source)
-           - interpolate_texspace_l(texture, st, int4(texi0.x,texi1.y,texi1.x,texi2.y),bump_source)) * (-factor),
-            (interpolate_texspace_l(texture, st, int4(texi1.x,texi2.y,texi2.x,texi3.y),bump_source)
-           - interpolate_texspace_l(texture, st, int4(texi1.x,texi0.y,texi2.x,texi1.y),bump_source)) * (-factor));
+            (interpolate_texspace_l(texture, st, int4(texi2.x,texi1.y,texi3.x,texi2.y),bump_source, frame)
+           - interpolate_texspace_l(texture, st, int4(texi0.x,texi1.y,texi1.x,texi2.y),bump_source, frame)) * (-factor),
+            (interpolate_texspace_l(texture, st, int4(texi1.x,texi2.y,texi2.x,texi3.y),bump_source, frame)
+           - interpolate_texspace_l(texture, st, int4(texi1.x,texi0.y,texi2.x,texi1.y),bump_source, frame)) * (-factor));
     }
     else
     {
-        float4 texels0 = texels_lookup(texture, texi0.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
-        float4 texels1 = texels_lookup(texture, texi1.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
-        float4 texels2 = texels_lookup(texture, texi2.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
-        float4 texels3 = texels_lookup(texture, texi3.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source);
+        float4 texels0 = texels_lookup(texture, texi0.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source, frame);
+        float4 texels1 = texels_lookup(texture, texi1.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source, frame);
+        float4 texels2 = texels_lookup(texture, texi2.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source, frame);
+        float4 texels3 = texels_lookup(texture, texi3.y, texi0.x, texi1.x, texi2.x, texi3.x, bump_source, frame);
 
         value_deriv w_u = compute_spline_weights(u);
         value_deriv w_v = compute_spline_weights(v);
@@ -2510,13 +2593,47 @@ export float3 tangent_space_normal_texture(
         [[
             anno::description("Offset applied to the value red from the texture file. Can be used to adapt to different normal map formats"),
             anno::unused()
-        ]]
+        ]],
+    uniform float animation_start_time = 0.
+        [[ anno::description("When to start playing first frame of the animation ") ]],
+    uniform int2 animation_crop  = int2(0, 0)
+        [[ anno::description("If the texture is an animation, the range of frames to be played can be specified.") ]],
+    uniform tex::wrap_mode animation_wrap = tex::wrap_repeat
+        [[ anno::description("Defines what to do outside of regular animation time") ]],
+    uniform float animation_fps = 30
+        [[ anno::description("Framerate to use for animation playback") ]]
 )
 [[
     anno::description("Interprets the color values of a bitmap as a vector in tangent space"),
     anno::noinline()
 ]]
 {
+    float frame = 0.0;
+    if(animation_crop != int2(0,0)) //only if we have an animation
+    {
+        frame = (::state::animation_time()-animation_start_time) * animation_fps ; //start playing at first frame of the animation
+        switch ( animation_wrap) {
+            case tex::wrap_repeat:
+                frame=frame>0?  math::fmod(frame,animation_crop.y-animation_crop.x)+animation_crop.x:
+                                math::fmod(frame,animation_crop.y-animation_crop.x)+animation_crop.y;
+                break;
+            case tex::wrap_mirrored_repeat:
+                float animation_crop_2y = 2.0*animation_crop.y;
+                frame=frame>0?  math::fmod(frame,(animation_crop.y-animation_crop.x)*2.0)+animation_crop.x:
+                                math::fmod(frame,(animation_crop.y-animation_crop.x)*2.0)+animation_crop_2y-animation_crop.x;
+                if(frame>animation_crop.y)
+                    frame = animation_crop_2y-frame;
+                break;
+            case tex::wrap_clamp:
+                frame = math::clamp( frame+animation_crop.x, animation_crop.x, animation_crop.y);
+                break;
+            case tex::wrap_clip:
+                frame += animation_crop.x;
+                if(frame < animation_crop.x || frame > animation_crop.y) return state::normal();
+                break;
+        }
+    }
+
     if (tex::width(texture) == 0 || tex::height(texture) == 0 || // avoid division by zero in texremapu for invalid resource
         factor == 0.0f)
         return state::normal();
@@ -2561,7 +2678,7 @@ export float3 tangent_space_normal_texture(
         transformed_tangent_v=-transformed_tangent_v;
 
     float3 tangent_space_normal =
-        (tex::lookup_float3(texture,float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v,  crop_u, crop_v) - float3(0.5)) * (2.0 * factor);
+        (tex::lookup_float3(texture,float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v, frame) - float3(0.5)) * (2.0 * factor);
 
     return math::normalize(
         transformed_tangent_u * tangent_space_normal.x +
@@ -5184,4 +5301,26 @@ export volume_coefficients lookup_volume_coefficients(
     return volume_coefficients(
         scattering_coefficient: scattering_multiplier * density_val + scattering_offset * density_multiplier,
         absorption_coefficient: absorption_multiplier * density_val + absorption_offset * density_multiplier);
+}
+
+export color blackbody_emission(
+    float temperature1 = 6500.0f
+        [[
+            anno::description("First correlated color temperature")
+        ]],
+    float temperature2 = temperature1
+        [[
+            anno::description("Second correlated color temperature")
+        ]],
+    float blend_value = 0.0f
+        [[
+            anno::description("Blend value between first and second color temperature")
+        ]]
+    )
+[[
+    anno::description("Color of a black body emitter"),
+    anno::noinline()
+]]
+{
+    return math::blackbody(math::lerp(temperature1, temperature2, math::saturate(blend_value)));
 }

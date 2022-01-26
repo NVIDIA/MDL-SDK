@@ -3316,7 +3316,7 @@ private:
     State_subset_mode m_state_mode;
 
     /// The internal space for which to compile.
-    char const *m_internal_space;
+    string m_internal_space;
 
     /// If true, occurrences of the functions state::meters_per_scene_unit() and
     /// state::scene_units_per_meter() will be folded using \c m_meters_per_scene_unit.
@@ -3379,15 +3379,19 @@ private:
     /// List of functions exported by the module.
     Exported_function_list m_exported_func_list;
 
+    vector<char>::Type m_user_state_store;
+
     /// A user-specified LLVM implementation of the state module.
     BinaryOptionData m_user_state_module;
+
+    vector<char>::Type m_renderer_store;
 
     /// A user-specified LLVM renderer module.
     BinaryOptionData m_renderer_module;
 
     /// User specified comma-separated list of names of functions which will be visible in the
     /// generated code.
-    char const *m_visible_functions;
+    string m_visible_functions;
 
     /// The LLVM function pass manager for the current module.
     std::unique_ptr<llvm::legacy::FunctionPassManager> m_func_pass_manager;

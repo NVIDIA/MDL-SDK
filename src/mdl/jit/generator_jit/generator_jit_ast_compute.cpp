@@ -65,7 +65,7 @@ namespace hlsl {
 // The dominator tree over the limit graph.
 typedef DomTreeBase<Region> LGDominatorTree;
 
-class ASTFunction;
+class StructuredFunction;
 class RegionContext;
 
 
@@ -175,8 +175,12 @@ class RegionBuilder
 {
     friend class IfContext;
 
-    /// A backedge.
+    /// A backedge inside a region.
     struct BackEdge {
+        /// Constructor.
+        ///
+        /// \param S  the source region
+        /// \param D  the destination region
         BackEdge(Region const *S, Region const *D) : src(S), dst(D) {}
 
         Region const *src;
@@ -186,8 +190,12 @@ class RegionBuilder
     /// Less operator for Backedges.
     struct EdgeLess {
         bool operator()(BackEdge const &a, BackEdge const &b) const {
-            if (a.src < b.src) return true;
-            if (a.src == b.src) return a.dst < b.dst;
+            if (a.src < b.src) {
+                return true;
+            }
+            if (a.src == b.src) {
+                return a.dst < b.dst;
+            }
             return false;
         }
     };
@@ -212,7 +220,7 @@ public:
         LoopInfo             &loop_info);
 
     /// Build regions for a function.
-    ASTFunction *buildRegions();
+    StructuredFunction *buildRegions();
 
     WorkList::iterator nodes_begin() {
         return m_work_list.begin();
@@ -296,7 +304,7 @@ private:
 
 private:
     /// The processed function.
-    ASTFunction &m_func;
+    StructuredFunction &m_func;
 
     /// The current work list.
     WorkList m_work_list;
@@ -363,10 +371,12 @@ public:
     /// Return the set {B_break, B_continue}.
     BlockSet getRegularExitTargets() const {
         BlockSet res;
-        if (m_breakTarget != nullptr)
+        if (m_breakTarget != nullptr) {
             res.insert(m_breakTarget);
-        if (m_continueTarget != nullptr)
+        }
+        if (m_continueTarget != nullptr) {
             res.insert(m_continueTarget);
+        }
         return res;
     }
 
@@ -378,12 +388,15 @@ public:
     /// Return the set {B_break, B_continue, B_exit}
     BlockSet getAnticipatedExitTargets() const {
         BlockSet res;
-        if (m_breakTarget != nullptr)
+        if (m_breakTarget != nullptr) {
             res.insert(m_breakTarget);
-        if (m_continueTarget != nullptr)
+        }
+        if (m_continueTarget != nullptr) {
             res.insert(m_continueTarget);
-        if (m_exitBlock != nullptr)
+        }
+        if (m_exitBlock != nullptr) {
             res.insert(m_exitBlock);
+        }
         return res;
     }
 
@@ -418,11 +431,11 @@ public:
     /// Creates a new IfContext instance.
     ///
     /// \param ctx     current context
-    /// \param func    the current (AST) function
+    /// \param func    the current (structured) function
     /// \param BB      the entry block
     static IfContext *create(
         RegionContext const &ctx,
-        ASTFunction         &func,
+        StructuredFunction  &func,
         BasicBlock         *BB);
 
     /// Check if the current if-region has a single exit block, if not, try to insert one.
@@ -454,7 +467,7 @@ private:
     /// \param elseCtx    the region context for the else branch
     /// \param elseBlock  the else block if any
     IfContext(
-        ASTFunction         &func,
+        StructuredFunction  &func,
         BasicBlock          *entry,
         BasicBlock          *exit,
         RegionContext const &thenCtx,
@@ -496,16 +509,16 @@ private:
     ConstantInt *get_constant(int i);
 
 private:
-    ASTFunction   &m_func;
+    StructuredFunction &m_func;
 
-    BasicBlock    *m_entry;
-    BasicBlock    *m_exit;
+    BasicBlock         *m_entry;
+    BasicBlock         *m_exit;
 
-    RegionContext m_thenContext;
-    RegionContext m_elseContext;
+    RegionContext      m_thenContext;
+    RegionContext      m_elseContext;
 
-    BasicBlock    *m_thenBlock;
-    BasicBlock    *m_elseBlock;
+    BasicBlock         *m_thenBlock;
+    BasicBlock         *m_elseBlock;
 };
 
 /// Computes the extended dominance frontier, stopping at regular exits.
@@ -524,8 +537,9 @@ static BlockSet computeDominanceFrontierExt(
 
     if (regularExitTargets.contains(BB)) {
         // the start block is a regular exit target, return empty set
-        if (usedRegularExitTargets != nullptr)
+        if (usedRegularExitTargets != nullptr) {
             usedRegularExitTargets->insert(BB);
+        }
         return domFrontier;
     }
 
@@ -540,13 +554,15 @@ static BlockSet computeDominanceFrontierExt(
         worklist.pop();
 
         for (BasicBlock *succ : successors(curBlock)) {
-            if (!seen.insert(succ))
+            if (!seen.insert(succ)) {
                 continue;
+            }
 
             // a regular exit target?
             if (regularExitTargets.contains(succ)) {
-                if (usedRegularExitTargets != nullptr)
+                if (usedRegularExitTargets != nullptr) {
                     usedRegularExitTargets->insert(succ);
+                }
                 continue;
             }
 
@@ -568,11 +584,12 @@ static BlockSet computeDominanceFrontierExt(
 /// exits of the given region context.
 static bool reachable(
     RegionContext const &ctx,
-    BasicBlock *a,
-    BasicBlock *b)
+    BasicBlock          *a,
+    BasicBlock          *b)
 {
-    if (a == b)
+    if (a == b) {
         return true;
+    }
 
     // do a depth-first-search for b starting at a
     std::stack<BasicBlock *> worklist;
@@ -585,8 +602,9 @@ static bool reachable(
         worklist.pop();
 
         for (BasicBlock *succ : successors(curBlock)) {
-            if (succ == b)
+            if (succ == b) {
                 return true;
+            }
 
             // don't allow regular exits or blocks we have already seen
             if (!ctx.isRegularExitTarget(succ) && seen.insert(succ)) {
@@ -633,16 +651,16 @@ struct GraphTraits<Inverse<hlsl::Region *> > {
 };
 
 template<>
-struct GraphTraits<hlsl::ASTFunction *> : public GraphTraits<hlsl::Region *> {
-    typedef hlsl::ASTFunction                       GraphType;
-    typedef hlsl::Region                            NodeType;
-    typedef hlsl::ASTFunction::RegionList::iterator ChildIteratorType;
+struct GraphTraits<hlsl::StructuredFunction *> : public GraphTraits<hlsl::Region *> {
+    typedef hlsl::StructuredFunction                       GraphType;
+    typedef hlsl::Region                                   NodeType;
+    typedef hlsl::StructuredFunction::RegionList::iterator ChildIteratorType;
 
     // Return the entry node of the graph
     static NodeType *getEntryNode(GraphType *G) { return G->front(); }
 
     // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
-    typedef hlsl::ASTFunction::RegionList::iterator nodes_iterator;
+    typedef hlsl::StructuredFunction::RegionList::iterator nodes_iterator;
 
     static nodes_iterator nodes_begin(GraphType *G) {
         return G->begin();
@@ -678,7 +696,7 @@ llvm::Loop *Region::get_loop() {
 
 
 // Constructor.
-ASTFunction::ASTFunction(
+StructuredFunction::StructuredFunction(
     Function             &func,
     mi::mdl::Type_mapper &type_mapper,
     DominatorTree        &domTree,
@@ -694,8 +712,9 @@ ASTFunction::ASTFunction(
     // create a Block region for every basic block
     for (BasicBlock &BB : m_func) {
         // no predecessors, but not entry block? -> skip unreachable block
-        if (&BB != entry_block && pred_begin(&BB) == pred_end(&BB))
+        if (&BB != entry_block && pred_begin(&BB) == pred_end(&BB)) {
             continue;
+        }
 
         createBasicRegion(&BB);
     }
@@ -703,15 +722,17 @@ ASTFunction::ASTFunction(
     // now connect them
     for (BasicBlock &BB : m_func) {
         // no predecessors, but not entry block? -> skip unreachable block
-        if (&BB != entry_block && pred_begin(&BB) == pred_end(&BB))
+        if (&BB != entry_block && pred_begin(&BB) == pred_end(&BB)) {
             continue;
+        }
 
         Region *curr = m_mapping[&BB];
 
         for (BasicBlock *p_bb : predecessors(&BB)) {
             Region *pred = m_mapping[p_bb];
-            if (pred)  // not an unreachable block?
+            if (pred != nullptr) { // not an unreachable block?
                 curr->add_pred(pred);
+            }
         }
         for (BasicBlock *s_bb : successors(&BB)) {
             Region *succ = m_mapping[s_bb];
@@ -724,7 +745,8 @@ ASTFunction::ASTFunction(
 }
 
 // Destructor.
-ASTFunction::~ASTFunction() {
+StructuredFunction::~StructuredFunction()
+{
     while (!m_region_list.empty()) {
         Region *n = m_region_list.front();
         m_region_list.pop_front();
@@ -733,30 +755,36 @@ ASTFunction::~ASTFunction() {
 }
 
 // Get the LLVM loop for a given basic block.
-Loop *ASTFunction::getLoopFor(BasicBlock const *BB) const
+Loop *StructuredFunction::getLoopFor(
+    BasicBlock const *BB) const
 {
     return m_loop_info.getLoopFor(BB);
 }
 
 // Returns true iff A dominates B.
-bool ASTFunction::dominates(BasicBlock *A, BasicBlock *B) const
+bool StructuredFunction::dominates(
+    BasicBlock *A,
+    BasicBlock *B) const
 {
     return m_domTree.dominates(A, B);
 }
 
 // Get top-most region for a basic block.
-Region *ASTFunction::getTopRegion(BasicBlock *bb)
+Region *StructuredFunction::getTopRegion(
+    BasicBlock *bb)
 {
     Region *cur_node = m_mapping[bb];
 
-    while (RegionComplex *owner = cur_node->getOwnerRegion())
+    while (RegionComplex *owner = cur_node->getOwnerRegion()) {
         cur_node = owner;
+    }
 
     return cur_node;
 }
 
 // Create a new Basic node in the graph.
-Region *ASTFunction::createBasicRegion(BasicBlock *BB)
+Region *StructuredFunction::createBasicRegion(
+    BasicBlock *BB)
 {
     Region *n = new RegionBlock(this, ++m_node_id, BB);
     m_region_list.push_back(n);
@@ -766,7 +794,8 @@ Region *ASTFunction::createBasicRegion(BasicBlock *BB)
 }
 
 // Create a new Invalid node in the graph.
-Region *ASTFunction::createInvalidRegion(Region *head)
+Region *StructuredFunction::createInvalidRegion(
+    Region *head)
 {
     Region *n = new RegionInvalid(this, ++m_node_id, head);
     m_region_list.push_back(n);
@@ -775,7 +804,7 @@ Region *ASTFunction::createInvalidRegion(Region *head)
 }
 
 // Create a new Sequence node in the graph.
-RegionSequence *ASTFunction::createSequenceRegion(
+RegionSequence *StructuredFunction::createSequenceRegion(
     Region                  *head,
     ArrayRef<Region *> const &tail)
 {
@@ -786,7 +815,7 @@ RegionSequence *ASTFunction::createSequenceRegion(
 }
 
 // Create a new IfThen node in the graph.
-RegionIfThen *ASTFunction::createIfThenRegion(
+RegionIfThen *StructuredFunction::createIfThenRegion(
     Region         *head,
     Region         *then,
     TerminatorInst *terminator,
@@ -799,7 +828,7 @@ RegionIfThen *ASTFunction::createIfThenRegion(
 }
 
 // Create a new IfThenElse node in the graph.
-RegionIfThenElse *ASTFunction::createIfThenElseRegion(
+RegionIfThenElse *StructuredFunction::createIfThenElseRegion(
     Region         *head,
     Region         *then_node,
     Region         *else_node,
@@ -813,7 +842,7 @@ RegionIfThenElse *ASTFunction::createIfThenElseRegion(
 }
 
 // Create a new natural loop node in the graph.
-RegionNaturalLoop *ASTFunction::createNaturalLoopRegion(Region *head)
+RegionNaturalLoop *StructuredFunction::createNaturalLoopRegion(Region *head)
 {
     RegionNaturalLoop *n = new RegionNaturalLoop(this, ++m_node_id, head);
     m_region_list.push_back(n);
@@ -822,7 +851,7 @@ RegionNaturalLoop *ASTFunction::createNaturalLoopRegion(Region *head)
 }
 
 // Create a new Break region in the graph.
-RegionBreak *ASTFunction::createBreakRegion()
+RegionBreak *StructuredFunction::createBreakRegion()
 {
     RegionBreak *n = new RegionBreak(this, ++m_node_id);
     m_region_list.push_back(n);
@@ -831,7 +860,7 @@ RegionBreak *ASTFunction::createBreakRegion()
 }
 
 // Create a new Continue region in the graph.
-RegionContinue *ASTFunction::createContinueRegion()
+RegionContinue *StructuredFunction::createContinueRegion()
 {
     RegionContinue *n = new RegionContinue(this, ++m_node_id);
     m_region_list.push_back(n);
@@ -840,7 +869,7 @@ RegionContinue *ASTFunction::createContinueRegion()
 }
 
 // Create a new Return region in the graph.
-RegionReturn *ASTFunction::createReturnRegion(
+RegionReturn *StructuredFunction::createReturnRegion(
     Region     *head,
     ReturnInst *return_inst)
 {
@@ -851,7 +880,7 @@ RegionReturn *ASTFunction::createReturnRegion(
 }
 
 // Create a new Switch node in the graph.
-RegionSwitch *ASTFunction::createSwitchRegion(
+RegionSwitch *StructuredFunction::createSwitchRegion(
     Region *head, ArrayRef<Region *> const &cases, Region *def_case)
 {
     RegionSwitch *n = new RegionSwitch(this, ++m_node_id, head, cases, def_case);
@@ -861,14 +890,14 @@ RegionSwitch *ASTFunction::createSwitchRegion(
 }
 
 // Delete a node.
-void ASTFunction::dropRegion(Region *r)
+void StructuredFunction::dropRegion(Region *r)
 {
     m_region_list.remove(r);
     delete r;
 }
 
 // Recalculate the dominance tree for the function.
-void ASTFunction::updateDomTree()
+void StructuredFunction::updateDomTree()
 {
     m_domTree.recalculate(m_func);
 }
@@ -879,7 +908,7 @@ RegionBuilder::RegionBuilder(
     mi::mdl::Type_mapper &type_mapper,
     DominatorTree        &domTree,
     LoopInfo             &loop_info)
-: m_func(* new ASTFunction(func, type_mapper, domTree, loop_info))
+: m_func(* new StructuredFunction(func, type_mapper, domTree, loop_info))
 #ifdef DUMP_REGIONGRAPHS
 , m_dump_id(0)
 #endif
@@ -1055,7 +1084,7 @@ Region *RegionBuilder::discoverRegion(
 }
 
 // Build regions for a function.
-ASTFunction *RegionBuilder::buildRegions()
+StructuredFunction *RegionBuilder::buildRegions()
 {
     RegionContext ctx;
 
@@ -1073,7 +1102,7 @@ ASTFunction *RegionBuilder::buildRegions()
 // Creates a new IfContext instance.
 IfContext *IfContext::create(
     RegionContext const &ctx,
-    ASTFunction         &func,
+    StructuredFunction  &func,
     BasicBlock          *BB)
 {
     BranchInst *branchInst = llvm::cast<llvm::BranchInst>(BB->getTerminator());
@@ -1355,8 +1384,9 @@ bool IfContext::handleProperRegions(
         // incoming blocks
         for (Instruction &inst : *fusedBlock) {
             PHINode *phi = llvm::dyn_cast<PHINode>(&inst);
-            if (phi == nullptr)
+            if (phi == nullptr) {
                 break;  // end of phi list at beginning of block
+            }
 
             Value *undef = UndefValue::get(phi->getType());
             for (BasicBlock *pred : predecessors(fusedBlock)) {
@@ -1414,10 +1444,12 @@ bool IfContext::handleProperRegions(
     }
 
     // set the exit block, in the available child regions
-    if (m_thenBlock != nullptr)
+    if (m_thenBlock != nullptr) {
         m_thenContext.setExitBlock(oExitBlock);
-    if (m_elseBlock != nullptr)
+    }
+    if (m_elseBlock != nullptr) {
         m_elseContext.setExitBlock(oExitBlock);
+    }
 
     // return whether we ran into the fused-block case
     return exitSet.size() > 1;
@@ -1444,8 +1476,8 @@ Region *IfContext::createIfRegion(
             m_elseBlock);
     }
 
-    ASTFunction &func = builder.m_func;
-    Region      *head = func.getTopRegion(m_entry);
+    StructuredFunction &func = builder.m_func;
+    Region             *head = func.getTopRegion(m_entry);
 
     if (thenRegion == nullptr || elseRegion == nullptr) {
         return func.createIfThenRegion(
@@ -1461,28 +1493,28 @@ Region *IfContext::createIfRegion(
 // ----------------------------------------------------------------------------
 
 // Constructor.
-ASTComputePass::ASTComputePass(mi::mdl::Type_mapper &type_mapper)
+StructuredControlFlowPass::StructuredControlFlowPass(mi::mdl::Type_mapper &type_mapper)
 : ModulePass(ID)
 , m_type_mapper(type_mapper)
 {
 }
 
 // Destructor.
-ASTComputePass::~ASTComputePass()
+StructuredControlFlowPass::~StructuredControlFlowPass()
 {
-    for (auto it : m_ast_function_map) {
+    for (auto it : m_structured_function_map) {
         delete it.second;
     }
 }
 
-void ASTComputePass::getAnalysisUsage(AnalysisUsage &usage) const
+void StructuredControlFlowPass::getAnalysisUsage(AnalysisUsage &usage) const
 {
     usage.addRequired<DominatorTreeWrapperPass>();
     usage.addRequired<LoopInfoWrapperPass>();
     usage.setPreservesAll();
 }
 
-bool ASTComputePass::runOnModule(Module &M)
+bool StructuredControlFlowPass::runOnModule(Module &M)
 {
     for (Function &func : M.functions()) {
         if (func.isDeclaration())
@@ -1494,17 +1526,17 @@ bool ASTComputePass::runOnModule(Module &M)
             getAnalysis<DominatorTreeWrapperPass>(func).getDomTree(),
             getAnalysis<LoopInfoWrapperPass>(func).getLoopInfo());
 
-        m_ast_function_map[&func] = RB.buildRegions();
+        m_structured_function_map[&func] = RB.buildRegions();
     }
     return false;
 }
 
-char ASTComputePass::ID = 0;
+char StructuredControlFlowPass::ID = 0;
 
 //------------------------------------------------------------------------------
 Pass *createASTComputePass(mi::mdl::Type_mapper &type_mapper)
 {
-    return new ASTComputePass(type_mapper);
+    return new StructuredControlFlowPass(type_mapper);
 }
 
 unsigned RegionBuilder::dumpRegion(FILE *file, Region const *region)
@@ -1517,11 +1549,11 @@ unsigned RegionBuilder::dumpRegion(FILE *file, Region const *region)
 }
 
 // Dump an edge.
-void dumpEdge(
-    FILE *file,
+static void dumpEdge(
+    FILE                     *file,
     ArrayRef<unsigned> const &sources,
-    unsigned target,
-    char const *label=nullptr)
+    unsigned                 target,
+    char const               *label = nullptr)
 {
     for (unsigned source : sources) {
         fprintf(file, "n%u -> n%u", source, target);
@@ -1532,17 +1564,19 @@ void dumpEdge(
 }
 
 // Dump an edge.
-void dumpEdgeToRegion(
-    FILE *file,
+static void dumpEdgeToRegion(
+    FILE                     *file,
     ArrayRef<unsigned> const &sources,
-    Region *target_region,
-    char const *label=nullptr)
+    Region                   *target_region,
+    char const               *label = nullptr)
 {
     dumpEdge(file, sources, unsigned(target_region->getEntryRegionBlock()->get_id()), label);
 }
 
 // Dump a sub graph.
-std::vector<unsigned> RegionBuilder::dumpSubGraph(FILE *file, Region const *region)
+std::vector<unsigned> RegionBuilder::dumpSubGraph(
+    FILE         *file,
+    Region const *region)
 {
     typedef std::vector<unsigned> ExitSet;
     ExitSet res;
@@ -1593,8 +1627,9 @@ std::vector<unsigned> RegionBuilder::dumpSubGraph(FILE *file, Region const *regi
             ExitSet b = dumpSubGraph(file, r->getThen());
             dumpEdgeToRegion(file, a, r->getThen(), "then");
             res = a;
-            if (!r->getThen()->is_jump())
+            if (!r->getThen()->is_jump()) {
                 res.insert(res.end(), b.begin(), b.end());
+            }
         }
         break;
 
@@ -1630,7 +1665,9 @@ std::vector<unsigned> RegionBuilder::dumpSubGraph(FILE *file, Region const *regi
 }
 
 // Dump the current graph.
-void RegionBuilder::dumpRegionGraph(char const *suffix, bool with_subgraphs)
+void RegionBuilder::dumpRegionGraph(
+    char const *suffix,
+    bool       with_subgraphs)
 {
 #ifdef DUMP_REGIONGRAPHS
     char buf[16];
@@ -1739,8 +1776,9 @@ static void fillUpPhis(BasicBlock *bb, PHINode *reference_phi)
         // add all missing blocks
         for (auto pair : visited_map) {
             // already handled? -> skip
-            if (pair.second == visit_id)
+            if (pair.second == visit_id) {
                 continue;
+            }
 
             phi->addIncoming(UndefValue::get(phi->getType()), pair.first);
         }
@@ -1867,7 +1905,10 @@ void UnswitchPass::getAnalysisUsage(AnalysisUsage &usage) const
 }
 
 // Fixes the PHI nodes in the given block, when the predecessor old_pred is replaced by new_pred.
-void UnswitchPass::fixPhis(BasicBlock *bb, BasicBlock *old_pred, BasicBlock *new_pred)
+void UnswitchPass::fixPhis(
+    BasicBlock *bb,
+    BasicBlock *old_pred,
+    BasicBlock *new_pred)
 {
     for (PHINode &phi : bb->phis()) {
         int idx = phi.getBasicBlockIndex(old_pred);

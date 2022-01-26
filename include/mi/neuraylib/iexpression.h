@@ -675,6 +675,30 @@ public:
     /// and material instances in call expressions, are not copied, but shared.
     virtual IExpression_list* clone( const IExpression_list* expression_list) const = 0;
 
+    /// Various options for the comparison of expressions or expression lists.
+    ///
+    /// \see The \p flags parameter of #compare()
+    enum Comparison_options {
+        /// Default comparison options.
+        DEFAULT_COMPARISON_OPTIONS      = 0,
+        /// This option indicates that call expressions should be compared for equality, not for
+        /// identity. That is, the comparison is not done via
+        /// #mi::neuraylib::IExpression::get_value(), but by traversing into the referenced
+        /// function call, i.e., comparing the function definition reference and the arguments.
+        /// This option is useful if you want to decide wether an argument is \em semantically equal
+        /// to the corresponding default parameter.
+        DEEP_CALL_COMPARISONS           = 1,
+        /// This option indicates that all type aliases should be skipped before types of
+        /// expression are compared. Defaults and argument might sometimes differ in explicit type
+        /// modifiers, therefore this option is useful if you want to decide wether an argument is
+        /// \em semantically equal to the corresponding default parameter.
+        SKIP_TYPE_ALIASES               = 2,
+        // Undocumented, for alignment only
+        COMPARISON_OPTIONS_FORCE_32_BIT = 0xffffffffU
+    };
+
+    mi_static_assert( sizeof( Comparison_options) == sizeof( mi::Uint32));
+
     /// Compares two instances of #mi::neuraylib::IExpression.
     ///
     /// The comparison operator for instances of #mi::neuraylib::IExpression is defined as follows:
@@ -683,18 +707,34 @@ public:
     /// - Otherwise, the types of \p lhs and \p rhs are compared. If they are different, the result
     ///   is determined by that comparison.
     /// - Next, the kind of the expressions are compared. If they are different, the result is
-    ///   determined by \c operator< on the #mi::neuraylib::IExpression::Kind values.
+    ///   determined by \c operator< on the #mi::neuraylib::IExpression::Kind values. Note that
+    ///   setting #SKIP_TYPE_ALIASES in \p flags modifies this behavior.
     /// - Finally, the expressions are compared as follows:
     ///   - For constants the results is defined by comparing their values.
-    ///   - For calls the result is defined by \c strcmp() on the names of the referenced DB
-    ///     elements.
+    ///   - For calls, the result is defined by comparison of the call reference (unless
+    ///     #DEEP_CALL_COMPARISONS is set in \p flags). Note that the representation of this call
+    ///     reference is an internal implementation detail, and the comparison result might have
+    ///     the opposite sign as \c strcmp() on the strings returned by
+    ///     #mi::neuraylib::IExpression_call::get_call().
     ///   - For parameter and temporary references, the results is defined by \c operator<() on the
     ///     indices.
+    ///   - For indirect calls, first the definition reference is compared. Note that the
+    ///     representation of this definition reference is an internal implementation detail, and
+    ///     the comparison result might have the opposite sign as \c strcmp() on the strings
+    ///     returned by #mi::neuraylib::IExpression_direct_call::get_definition(). If both indirect
+    ///     call reference the same definition, then the result is defined by comparison of the
+    ///     arguments.
     ///
     /// \param lhs          The left-hand side operand for the comparison.
     /// \param rhs          The right-hand side operand for the comparison.
+    /// \param flags        A bitmask of flags of type #Comparison_options.
+    /// \param epsilon      Maximum difference for floating point values to consider them as equal.
     /// \return             -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
-    virtual Sint32 compare( const IExpression* lhs, const IExpression* rhs) const = 0;
+    virtual Sint32 compare(
+        const IExpression* lhs,
+        const IExpression* rhs,
+        Uint32 flags = 0,
+        Float64 epsilon = 0.0) const = 0;
 
     /// Compares two instances of #mi::neuraylib::IExpression_list.
     ///
@@ -710,8 +750,14 @@ public:
     ///
     /// \param lhs          The left-hand side operand for the comparison.
     /// \param rhs          The right-hand side operand for the comparison.
+    /// \param flags        A bitmask of flags of type #Comparison_options.
+    /// \param epsilon      Maximum difference for floating point values to consider them as equal.
     /// \return             -1 if \c lhs < \c rhs, 0 if \c lhs == \c rhs, and +1 if \c lhs > \c rhs.
-    virtual Sint32 compare( const IExpression_list* lhs, const IExpression_list* rhs) const = 0;
+    virtual Sint32 compare(
+        const IExpression_list* lhs,
+        const IExpression_list* rhs,
+        Uint32 flags = 0,
+        Float64 epsilon = 0.0) const = 0;
 
     /// Returns a textual representation of an expression.
     ///
@@ -787,7 +833,7 @@ public:
     ///                     of the cast-operator function into the database. If the name is already
     ///                     taken by another DB element, this string will be used as the base for
     ///                     generating a unique name. If NULL, a unique name is generated.
-    /// \param force_cast   If true, the cast will be created even if the types are
+    /// \param force_cast   If \c true, the cast will be created even if the types are
     ///                     identical. Please note that a cast cannot be forced for
     ///                     incompatible types.
     /// \param errors       An optional pointer to an #mi::Sint32 to which an error code will be

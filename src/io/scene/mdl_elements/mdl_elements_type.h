@@ -192,11 +192,11 @@ public:
 
     static mi::Sint32 compare_static( const IType_list* lhs, const IType_list* rhs);
 
-    static std::string get_type_name( const IType* type, bool include_aliased_type = true);
+    static std::string get_type_name_static( const IType* type, bool include_aliased_type = true);
 
-    /// Similar to get_type_name(), except that aliases are skipped and the "enum" and "struct"
-    /// keywords are omitted.
-    static std::string get_serialization_type_name( const IType* type);
+    std::string get_type_name( const IType* type, bool include_aliased_type) override;
+
+    std::string get_serialization_type_name( const IType* type) override;
 
     mi::Uint32 destroy_enum_type( const IType_enum* e_type);
 

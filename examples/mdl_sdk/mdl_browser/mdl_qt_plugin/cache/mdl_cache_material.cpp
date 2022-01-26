@@ -35,13 +35,13 @@ bool Mdl_cache_material::update(mi::neuraylib::INeuray* neuray,
                                 const mi::base::IInterface* module)
 {
     // Access the material definition
-    const mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        transaction->access<mi::neuraylib::IMaterial_definition>(
+    const mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        transaction->access<mi::neuraylib::IFunction_definition>(
             (std::string("mdl") + get_qualified_name()).c_str()));
 
     if (!material_definition)
     {
-        std::cerr << "[Mdl_cache_material] update: Failed to get material defintion: "
+        std::cerr << "[Mdl_cache_material] update: Failed to get material definition: "
                   << get_qualified_name() << "\n";
         return false;
     }

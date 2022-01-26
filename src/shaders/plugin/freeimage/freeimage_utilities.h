@@ -72,12 +72,9 @@ const char* convert_freeimage_pixel_type_to_neuray_pixel_type( FIBITMAP* bitmap,
 /// The size of the rectangle is given by the size of the tile.
 ///
 /// \param bitmap   The FreeImage bitmap to read the pixels from.
-/// \param x        The x coordinate of lower left corner of the rectangle in the bitmap.
-/// \param y        The y coordinate of lower left corner of the rectangle in the bitmap.
 /// \param tile     The tile to write the pixels to.
 /// \return         \c true in case of success, \c false otherwise.
-bool copy_from_bitmap_to_tile(
-    FIBITMAP* bitmap, mi::Uint32 x, mi::Uint32 y, mi::neuraylib::ITile* tile);
+bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile);
 
 /// Copies a rectangular region of pixels from a neuray API tile to a FreeImage bitmap.
 ///
@@ -90,11 +87,8 @@ bool copy_from_bitmap_to_tile(
 ///
 /// \param tile     The tile to read the pixels from.
 /// \param bitmap   The FreeImage bitmap to write the pixels to.
-/// \param x        The x coordinate of lower left corner of the rectangle in the bitmap.
-/// \param y        The y coordinate of lower left corner of the rectangle in the bitmap.
 /// \return         \c true in case of success, \c false otherwise.
-bool copy_from_tile_to_bitmap(
-    const mi::neuraylib::ITile* tile, FIBITMAP* bitmap, mi::Uint32 x, mi::Uint32 y);
+bool copy_from_tile_to_bitmap( const mi::neuraylib::ITile* tile, FIBITMAP* bitmap);
 
 } // namespace FREEIMAGE
 

@@ -40,13 +40,14 @@
 #include <mi/mdl/mdl_types.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/data/db/i_db_access.h>
+#include <io/image/image/i_image.h>
+#include <io/image/image/i_image_mipmap.h>
 #include <io/scene/mdl_elements/mdl_elements_detail.h> // DETAIL::Type_binder
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_compiled_material.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_call.h>
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
-#include <io/scene/mdl_elements/mdl_elements_utilities.h>
 #include <io/scene/texture/i_texture.h>
 #include <render/mdl/runtime/i_mdlrt_resource_handler.h>
 #include <render/mdl/backends/backends_target_code.h>
@@ -88,6 +89,7 @@ public:
     ///                     resolved, the unresolved mdl url of the texture otherwise
     /// \param owner_module the owner module name of the texture
     /// \param gamma        the gamma value of the texture
+    /// \param selector     the selector of the texture
     /// \param type         the type of the texture
     /// \param df_data_kind the \c DF data kind of the texture
     virtual void register_texture(
@@ -96,6 +98,7 @@ public:
         char const                                 *name,
         char const                                 *owner_module,
         float                                      gamma,
+        char const                                 *selector,
         mi::neuraylib::ITarget_code::Texture_shape type,
         mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind) = 0;
 
@@ -158,6 +161,39 @@ public:
     ///                   to more than one call to a link unit add function.
     virtual size_t get_body_bsdf_measurement_count() const = 0;
 };
+
+
+namespace // anonymous
+{
+    // used for a workaround
+    bool get_first_tile(DB::Transaction* transaction,
+        DB::Tag tag,
+        mi::Size& first_frame,
+        mi::Sint32& first_uvtile_u,
+        mi::Sint32& first_uvtile_v)
+    {
+        if (!tag || transaction->get_class_id(tag) != TEXTURE::ID_TEXTURE)
+            return false;
+
+        DB::Access<TEXTURE::Texture> db_texture(tag, transaction);
+        tag = db_texture->get_image();
+
+        if (!tag || transaction->get_class_id(tag) != DBIMAGE::ID_IMAGE)
+            return false;
+
+        DB::Access<DBIMAGE::Image> db_image(tag, transaction);
+        if (!db_image->is_valid())
+            return false;
+
+        first_frame = (int)db_image->get_frame_number(0);
+
+        mi::Sint32 res = db_image->get_uvtile_uv(0, 0, first_uvtile_u, first_uvtile_v);
+        if (res != 0)
+            return false;
+
+        return true;
+    }
+}
 
 /// Helper class to enumerate resources in lambda functions.
 class Function_enumerator : public mi::mdl::ILambda_resource_enumerator {
@@ -238,7 +274,7 @@ public:
         if (m_register.get_texture_count() == 0) {
             // index 0 is always the only invalid texture index
             m_register.register_texture(
-                0, false, "", "", 0.0f,
+                0, false, "", "", 0.0f, "",
                 mi::neuraylib::ITarget_code::Texture_shape_invalid,
                 mi::mdl::IValue_texture::BDK_NONE);
         }
@@ -268,9 +304,24 @@ public:
                 is_resolved = tag_value != 0;
             }
 
-            MI::MDL::get_texture_attributes(
-                m_db_transaction, DB::Tag(tag_value), /*uvtile_x*/ 0, /*uvtile_y*/ 0,
-                valid, width, height, depth);
+            // TODO
+            // We are currently fetching the first frame and it's uv tiles as a workaround.
+            // The texture attributes and also the uv-tiles for a frame depend
+            // on the frame, so using width, height, and depth is wrong.
+            mi::Size first_frame_number;
+            mi::Sint32 first_uvtile_u;
+            mi::Sint32 first_uvtile_v;
+            int first_frame, last_frame;
+            if (get_first_tile(
+                m_db_transaction, DB::Tag(tag_value), first_frame_number, first_uvtile_u, first_uvtile_v))
+            {
+                MI::MDL::get_texture_attributes(
+                    m_db_transaction, DB::Tag(tag_value), first_frame_number,
+                    first_uvtile_u, first_uvtile_v, valid, width, height, depth, first_frame, last_frame);
+            }
+            else {
+                valid = false;
+            }
 
             if (valid || m_keep_unresolved_resources) {
                 if (!name)
@@ -278,6 +329,7 @@ public:
 
                 mi::mdl::IValue_texture::gamma_mode gamma_mode = tex->get_gamma_mode();
                 mi::mdl::IType_texture::Shape shape = tex->get_type()->get_shape();
+                const char* selector = tex->get_selector();
 
                 bool new_entry = true;
                 size_t tex_idx;
@@ -285,7 +337,8 @@ public:
                     std::string resource_key =
                         std::string(name) + '_' +
                         std::to_string(unsigned(gamma_mode)) + '_' +
-                        std::to_string(unsigned(shape));
+                        std::to_string(unsigned(shape)) + "_" +
+                        selector;
                     Resource_index_map::const_iterator it(m_resource_index_map->find(resource_key));
                     if (it == m_resource_index_map->end()) {
                         // new entry
@@ -313,12 +366,14 @@ public:
                         name,
                         /*owner_module=*/"",
                         gamma,
+                        selector,
                         get_texture_shape(tex->get_type()),
                         tex->get_bsdf_data_kind());
                 }
                 m_lambda->map_tex_resource(
                     tex->get_kind(),
                     tex->get_string_value(),
+                    selector,
                     gamma_mode,
                     tex->get_bsdf_data_kind(),
                     shape,
@@ -332,6 +387,7 @@ public:
                     m_additional_lambda->map_tex_resource(
                         tex->get_kind(),
                         tex->get_string_value(),
+                        selector,
                         gamma_mode,
                         tex->get_bsdf_data_kind(),
                         shape,
@@ -349,7 +405,8 @@ public:
         // invalid textures are always mapped to zero in the MDL SDK
         m_lambda->map_tex_resource(
             v->get_kind(),
-            NULL,
+            /*res_url=*/NULL,
+            /*res_sel=*/NULL,
             mi::mdl::IValue_texture::gamma_default,
             mi::mdl::IValue_texture::BDK_NONE,
             mi::mdl::IType_texture::TS_2D,
@@ -362,7 +419,8 @@ public:
         if (m_additional_lambda != NULL) {
             m_additional_lambda->map_tex_resource(
                 v->get_kind(),
-                NULL,
+                /*res_url=*/NULL,
+                /*res_sel=*/NULL,
                 mi::mdl::IValue_texture::gamma_default,
                 mi::mdl::IValue_texture::BDK_NONE,
                 mi::mdl::IType_texture::TS_2D,
@@ -1346,7 +1404,8 @@ public:
     {
         for (size_t i = 0, n = compiled_material->get_resource_entries_count(); i < n; ++i) {
             MI::MDL::Resource_tag_tuple const *e = compiled_material->get_resource_entry(i);
-            lambda->set_resource_tag(e->m_kind, e->m_url.c_str(), e->m_tag);
+            lambda->set_resource_tag(
+                e->m_kind, e->m_mdl_file_path.c_str(), e->m_selector.c_str(), e->m_tag.get_uint());
         }
     }
 
@@ -1423,16 +1482,19 @@ public:
             std::string const                          &owner_module,
             bool                                       is_resolved,
             float                                      gamma,
+            std::string const                          &selector,
             mi::neuraylib::ITarget_code::Texture_shape type,
             mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind)
         : Res_entry(index, name, owner_module, is_resolved)
         , m_gamma(gamma)
+        , m_selector(selector)
         , m_type(type)
         , m_df_data_kind(df_data_kind)
         {
         }
 
         float                                       m_gamma;
+        std::string                                 m_selector;
         mi::neuraylib::ITarget_code::Texture_shape  m_type;
         mi::mdl::IValue_texture::Bsdf_data_kind     m_df_data_kind;
     };
@@ -1467,6 +1529,7 @@ public:
     ///                     resolved, the unresolved mdl url of the texture otherwise
     /// \param owner_module the owner module name of the texture
     /// \param gamma        the gamma value of the texture
+    /// \param selector     the selector of the texture
     /// \param type         the type of the texture
     void register_texture(
         size_t                                     index,
@@ -1474,11 +1537,20 @@ public:
         char const                                 *name,
         char const                                 *owner_module,
         float                                      gamma,
+        char const                                 *selector,
         mi::neuraylib::ITarget_code::Texture_shape type,
         mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind) override
     {
         m_texture_table.push_back(
-            Texture_entry(index, name, owner_module, is_resolved, gamma, type, df_data_kind));
+            Texture_entry(
+                index,
+                name,
+                owner_module,
+                is_resolved,
+                gamma,
+                selector,
+                type,
+                df_data_kind));
 
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_texture_count != ~0ull)
@@ -1647,8 +1719,9 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
             entry.m_is_resolved ? entry.m_name : "",
             !entry.m_is_resolved ? entry.m_name : "",
             entry.m_gamma,
+            entry.m_selector,
             entry.m_type,
-            entry.m_df_data_kind); 
+            entry.m_df_data_kind);
     }
 
     typedef Target_code_register::Resource_table RT;
@@ -2619,30 +2692,30 @@ mi::Sint32 Link_unit::add_material(
         switch (field_int_type->get_kind())
         {
             // DF types that are supported
-            case mi::neuraylib::IType::TK_BSDF:
-            case mi::neuraylib::IType::TK_HAIR_BSDF:
-            case mi::neuraylib::IType::TK_EDF:
-            //case mi::neuraylib::IType::TK_VDF:
+            case MDL::IType::TK_BSDF:
+            case MDL::IType::TK_HAIR_BSDF:
+            case MDL::IType::TK_EDF:
+            //case MDL::IType::TK_VDF:
             {
                 // set infos that are passed back
                 switch (field_int_type->get_kind())
                 {
-                    case mi::neuraylib::IType::TK_BSDF:
+                    case MDL::IType::TK_BSDF:
                         function_descriptions[i].distribution_kind =
                             mi::neuraylib::ITarget_code::DK_BSDF;
                         break;
 
-                    case mi::neuraylib::IType::TK_HAIR_BSDF:
+                    case MDL::IType::TK_HAIR_BSDF:
                         function_descriptions[i].distribution_kind =
                             mi::neuraylib::ITarget_code::DK_HAIR_BSDF;
                         break;
 
-                    case mi::neuraylib::IType::TK_EDF:
+                    case MDL::IType::TK_EDF:
                         function_descriptions[i].distribution_kind =
                             mi::neuraylib::ITarget_code::DK_EDF;
                         break;
 
-                    //case mi::neuraylib::IType::TK_VDF:
+                    //case MDL::IType::TK_VDF:
                     //    function_descriptions[i].distribution_kind =
                     //        mi::neuraylib::ITarget_code::DK_VDF;
                     //    break;
@@ -3123,7 +3196,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
            (strcmp(value, "fixed_1") == 0) ||
            (strcmp(value, "fixed_2") == 0) ||
            (strcmp(value, "fixed_4") == 0) ||
-           (strcmp(value, "fixed_8") == 0) || 
+           (strcmp(value, "fixed_8") == 0) ||
            (strcmp(value, "pointer") == 0 && m_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL))
         {
             jit_options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, value);
@@ -3209,8 +3282,8 @@ mi::Sint32 Mdl_llvm_backend::set_option(
     }
 
     if (strcmp(name, "use_renderer_adapt_normal") == 0) {
-        // TODO: currently only supported for HLSL backend
-        if (m_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL)
+        // TODO: currently not supported for GLSL backend
+        if (m_kind == mi::neuraylib::IMdl_backend_api::MB_GLSL)
             return -1;
         if (strcmp(value, "off") == 0) {
             value = "false";
@@ -3372,32 +3445,35 @@ mi::Sint32 Mdl_llvm_backend::set_option_binary(
     return -1;
 }
 
-void Mdl_llvm_backend::update_jit_options(
-    const char             *internal_space,
-    MDL::Execution_context *context)
+void Mdl_llvm_backend::update_jit_context_options(
+    mi::mdl::ICode_generator_thread_context &cg_ctx,
+    const char                              *internal_space,
+    MDL::Execution_context                  *context) const
 {
-    if (internal_space == NULL) {
+    mi::mdl::Options &cg_opts = cg_ctx.access_options();
+
+    if (internal_space == nullptr) {
         const std::string internal_space_obj =
             context->get_option<std::string>(MDL_CTX_OPTION_INTERNAL_SPACE);
-        m_jit->access_options().set_option(
+        cg_opts.set_option(
             MDL_CG_OPTION_INTERNAL_SPACE, internal_space_obj.c_str());
     } else {
-        m_jit->access_options().set_option(MDL_CG_OPTION_INTERNAL_SPACE, internal_space);
+        cg_opts.set_option(MDL_CG_OPTION_INTERNAL_SPACE, internal_space);
     }
-    m_jit->access_options().set_option(
+    cg_opts.set_option(
         MDL_CG_OPTION_FOLD_METERS_PER_SCENE_UNIT,
         get_context_option<bool>(context, MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT)
         ? "true" : "false");
     char buf[32];
     snprintf(buf, sizeof(buf), "%f",
         get_context_option<float>(context, MDL_CTX_OPTION_METERS_PER_SCENE_UNIT));
-    m_jit->access_options().set_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT, buf);
+    cg_opts.set_option(MDL_CG_OPTION_METERS_PER_SCENE_UNIT, buf);
     snprintf(buf, sizeof(buf), "%f",
         get_context_option<float>(context, MDL_CTX_OPTION_WAVELENGTH_MIN));
-    m_jit->access_options().set_option(MDL_CG_OPTION_WAVELENGTH_MIN, buf);
+    cg_opts.set_option(MDL_CG_OPTION_WAVELENGTH_MIN, buf);
     snprintf(buf, sizeof(buf), "%f",
         get_context_option<float>(context, MDL_CTX_OPTION_WAVELENGTH_MAX));
-    m_jit->access_options().set_option(MDL_CG_OPTION_WAVELENGTH_MAX, buf);
+    cg_opts.set_option(MDL_CG_OPTION_WAVELENGTH_MAX, buf);
 }
 
 mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
@@ -3453,7 +3529,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     DB::Access<MDL::Mdl_module> module(
         function_definition->get_module(transaction), transaction);
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
-    update_jit_options(code_dag->get_internal_space(), context);
+    mi::base::Handle<mi::mdl::ICode_generator_thread_context> cg_ctx(
+        m_jit->create_thread_context());
+
+    update_jit_context_options(*cg_ctx.get(), code_dag->get_internal_space(), context);
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
@@ -3463,6 +3542,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
                 lambda.get(),
                 &module_cache,
                 &resolver,
+                cg_ctx.get(),
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_enable_simd));
@@ -3475,6 +3555,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
                 lambda.get(),
                 &module_cache,
                 &resolver,
+                cg_ctx.get(),
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
@@ -3487,7 +3568,8 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
             m_jit->compile_into_environment(
                 lambda.get(),
                 &module_cache,
-                &resolver));
+                &resolver,
+                cg_ctx.get()));
         break;
     default:
         break;
@@ -3585,8 +3667,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         builder.enumerate_resource_arguments(lambda.get(), compiled_material, enumerator);
     }
 
+    mi::base::Handle<mi::mdl::ICode_generator_thread_context> cg_ctx(
+        m_jit->create_thread_context());
+
     // ... and compile
-    update_jit_options(compiled_material->get_internal_space(), context);
+    update_jit_context_options(*cg_ctx.get(), compiled_material->get_internal_space(), context);
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
@@ -3596,6 +3681,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 lambda.get(),
                 &module_cache,
                 &resolver,
+                cg_ctx.get(),
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_enable_simd));
@@ -3608,6 +3694,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 lambda.get(),
                 &module_cache,
                 &resolver,
+                cg_ctx.get(),
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
@@ -3621,6 +3708,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 lambda.get(),
                 &module_cache,
                 &resolver,
+                cg_ctx.get(),
                 m_num_texture_spaces,
                 m_num_texture_results,
                 /*transformer=*/NULL));
@@ -3748,7 +3836,10 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     }
 
     // ... and compile
-    update_jit_options(compiled_material->get_internal_space(), context);
+    mi::base::Handle<mi::mdl::ICode_generator_thread_context> cg_ctx(
+        m_jit->create_thread_context());
+
+    update_jit_context_options(*cg_ctx.get(), compiled_material->get_internal_space(), context);
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
@@ -3759,6 +3850,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
                 dist_func.get(),
                 &module_cache,
                 &resolver,
+                cg_ctx.get(),
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
@@ -3772,6 +3864,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
                 dist_func.get(),
                 &module_cache,
                 &resolver,
+                cg_ctx.get(),
                 m_num_texture_spaces,
                 m_num_texture_results));
         break;
@@ -3840,7 +3933,10 @@ mi::Uint8 const *Mdl_llvm_backend::get_device_library(
 mi::mdl::ILink_unit *Mdl_llvm_backend::create_link_unit(
     MDL::Execution_context* context)
 {
-    update_jit_options(NULL, context);
+    mi::base::Handle<mi::mdl::ICode_generator_thread_context> cg_ctx(
+        m_jit->create_thread_context());
+
+    update_jit_context_options(*cg_ctx.get(), NULL, context);
 
     if (m_jit.is_valid_interface()) {
         mi::mdl::ICode_generator_jit::Compilation_mode comp_mode;
@@ -3867,6 +3963,7 @@ mi::mdl::ILink_unit *Mdl_llvm_backend::create_link_unit(
         }
 
         return m_jit->create_link_unit(
+            cg_ctx.get(),
             comp_mode,
             get_enable_simd(),
             get_sm_version(),
@@ -3880,10 +3977,13 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
     Link_unit const *lu,
     MDL::Execution_context* context)
 {
-    update_jit_options(lu->get_internal_space(), context);
+    mi::base::Handle<mi::mdl::ICode_generator_thread_context> cg_ctx(
+        m_jit->create_thread_context());
+
+    update_jit_context_options(*cg_ctx.get(), lu->get_internal_space(), context);
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code(
-        m_jit->compile_unit(mi::base::make_handle(lu->get_compilation_unit()).get()));
+        m_jit->compile_unit(cg_ctx.get(), mi::base::make_handle(lu->get_compilation_unit()).get()));
 
     if (!code.is_valid_interface()) {
         MDL::add_context_error(context,
@@ -3977,11 +4077,20 @@ DB::Tag Df_data_helper::store_texture(
     const float *data,
     const std::string& tex_name)
 {
-    mi::base::Handle<Df_data_canvas> canvas(new Df_data_canvas(rx, ry, rz, data));
+    std::vector<mi::base::Handle<mi::neuraylib::ITile>> tiles(rz);
+    mi::Uint32 offset = rx * ry;
+    for (mi::Size i = 0; i < rz; ++i)
+        tiles[i] = new Df_data_tile(rx, ry, &data[i*offset]);
+
+    SYSTEM::Access_module<IMAGE::Image_module> image_module(false);
+    mi::base::Handle<mi::neuraylib::ICanvas> canvas(image_module->create_canvas(tiles, 1.0f));
+
+    std::vector<mi::base::Handle<mi::neuraylib::ICanvas>> canvases(1);
+    canvases[0] = canvas;
+    mi::base::Handle<IMAGE::IMipmap> mipmap(image_module->create_mipmap(canvases));
 
     DBIMAGE::Image *img = new DBIMAGE::Image();
-    Df_image_set set(canvas.get());
-    img->reset_image_set(m_transaction, &set, mi::base::Uuid{0,0,0,0});
+    img->set_mipmap(m_transaction, mipmap.get(), mi::base::Uuid{0,0,0,0});
     std::string img_name = tex_name + "_img";
     DB::Tag img_tag = m_transaction->store_for_reference_counting(img, img_name.c_str());
 
@@ -4007,7 +4116,8 @@ void Df_data_helper::Df_data_tile::get_pixel(
     mi::Float32* floats) const
 {
     mi::Uint32 p = ((y_offset * m_resolution_x) + x_offset);
-    floats[0] = m_data[p];
+    floats[0] = floats[1] = floats[2] = m_data[p];
+    floats[3] = 1.0f;
 }
 
 void Df_data_helper::Df_data_tile::set_pixel(
@@ -4016,6 +4126,7 @@ void Df_data_helper::Df_data_tile::set_pixel(
     const  mi::Float32* floats)
 {
     // pixel data cannot be changed.
+    ASSERT( M_BACKENDS, false);
     return;
 }
 
@@ -4042,108 +4153,8 @@ const void* Df_data_helper::Df_data_tile::get_data() const
 void* Df_data_helper::Df_data_tile::get_data()
 {
     // pixel data cannot be changed.
+    ASSERT( M_BACKENDS, false);
     return nullptr;
-}
-
-mi::Uint32 Df_data_helper::Df_data_canvas::get_resolution_x() const
-{
-    return m_tiles[0]->get_resolution_x();
-}
-
-mi::Uint32 Df_data_helper::Df_data_canvas::get_resolution_y() const
-{
-    return m_tiles[0]->get_resolution_y();
-}
-
-const char* Df_data_helper::Df_data_canvas::get_type() const
-{
-    return "Float32";
-}
-
-mi::Uint32 Df_data_helper::Df_data_canvas::get_layers_size() const
-{
-    return m_tiles.size();
-}
-
-mi::Float32 Df_data_helper::Df_data_canvas::get_gamma() const
-{
-    return 1.0f;
-}
-
-void Df_data_helper::Df_data_canvas::set_gamma(mi::Float32)
-{
-    // gamma cannot be changed.
-}
-
-const mi::neuraylib::ITile* Df_data_helper::Df_data_canvas::get_tile(mi::Uint32 layer) const
-{
-    if (layer >= m_tiles.size())
-        return nullptr;
-
-    m_tiles[layer]->retain();
-    return m_tiles[layer].get();
-}
-
-mi::neuraylib::ITile* Df_data_helper::Df_data_canvas::get_tile(mi::Uint32 layer)
-{
-    if (layer >= m_tiles.size())
-        return nullptr;
-
-    m_tiles[layer]->retain();
-    return m_tiles[layer].get();
-}
-
-mi::Size Df_data_helper::Df_image_set::get_length() const {
-    return  1;
-}
-
-bool Df_data_helper::Df_image_set::is_uvtile() const {
-    return false;
-}
-
-bool Df_data_helper::Df_image_set::is_mdl_container() const {
-    return false;
-}
-
-void Df_data_helper::Df_image_set::get_uv_mapping(mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const {
-    u = 0; v = 0;
-}
-
-const char* Df_data_helper::Df_image_set::get_original_filename() const {
-    return "";
-}
-
-const char* Df_data_helper::Df_image_set::get_container_filename() const {
-    return "";
-}
-
-const char* Df_data_helper::Df_image_set::get_mdl_file_path() const {
-    return "";
-}
-
-const char* Df_data_helper::Df_image_set::get_resolved_filename(mi::Size i) const {
-    return "";
-}
-
-const char* Df_data_helper::Df_image_set::get_container_membername(mi::Size i) const {
-    return "";
-}
-
-mi::neuraylib::IReader* Df_data_helper::Df_image_set::open_reader(mi::Size i) const {
-    return nullptr;
-}
-
-mi::neuraylib::ICanvas* Df_data_helper::Df_image_set::get_canvas(mi::Size i) const
-{
-    if (i == 0) {
-        m_canvas->retain();
-        return m_canvas.get();
-    }
-    return nullptr;
-}
-
-const char* Df_data_helper::Df_image_set::get_image_format() const {
-    return "";
 }
 
 } // namespace BACKENDS

@@ -57,8 +57,10 @@ public:
         : m_name(name, alloc)
         , m_value(non_null(value), alloc)
         , m_def_value(non_null(def_value), alloc)
+        , m_value_interface(NULL)
         , m_desc(non_null(description), alloc)
         , m_is_binary(false)
+        , m_is_interface(false)
         , m_is_modified(false)
         {
         }
@@ -73,10 +75,34 @@ public:
         : m_name(name, alloc)
         , m_value(non_null(data), size, alloc)
         , m_def_value("", alloc)
+        , m_value_interface(NULL)
         , m_desc(non_null(description), alloc)
         , m_is_binary(true)
+        , m_is_interface(false)
         , m_is_modified(false)
         {
+        }
+
+        /// Constructor for interface options.
+        Option(
+            IAllocator *alloc,
+            char const *name,
+            const mi::base::IInterface *value,
+            char const *description)
+        : m_name(name, alloc)
+        , m_value("", alloc)
+        , m_def_value("", alloc)
+        , m_value_interface(mi::base::make_handle_dup(value))
+        , m_desc(non_null(description), alloc)
+        , m_is_binary(false)
+        , m_is_interface(true)
+        , m_is_modified(false)
+        {
+        }
+
+        ~Option()
+        {
+            m_value_interface = NULL;
         }
 
         /// Get the name of the option.
@@ -93,6 +119,15 @@ public:
         {
             if (m_value.empty()) return BinaryOptionData(NULL, 0);
             return BinaryOptionData(m_value.c_str(), m_value.size());
+        }
+
+        /// Get the interface value of the option.
+        mi::base::IInterface const *get_interface_value() const
+        {
+            if (!m_value_interface)
+                return NULL;
+            m_value_interface->retain();
+            return m_value_interface.get();
         }
 
         /// Get the default value of the option.
@@ -129,15 +164,28 @@ public:
             m_is_modified = true;
         }
 
+        /// Set a new interface value.
+        ///
+        /// \param value  the new value
+        void set_interface_value(mi::base::IInterface const *value)
+        {
+            m_value_interface = mi::base::make_handle_dup(value);
+            m_is_modified = true;
+        }
+
         /// Reset to defaults.
         void reset_to_defaults()
         {
             m_value = m_def_value;
+            m_value_interface.reset();
             m_is_modified = false;
         }
 
         /// Returns true if this is a binary option.
         bool is_binary() const { return m_is_binary; }
+
+        /// Returns true if this is an IInterface option.
+        bool is_interface() const { return m_is_interface; }
 
         /// Returns true if this option was modified.
         bool is_modified() const { return m_is_modified; }
@@ -156,11 +204,17 @@ public:
         /// The default value of this option.
         string m_def_value;
 
+        /// The value of this option in case it is an IInterface.
+        mi::base::Handle<mi::base::IInterface const> m_value_interface;
+
         /// The description of this option
         string m_desc;
 
         /// True, if this option is a binary option.
         bool m_is_binary;
+
+        /// True, if this option is an IInterface option.
+        bool m_is_interface;
 
         /// True, if this option was set by the user.
         bool m_is_modified;
@@ -198,6 +252,13 @@ public:
     ///
     /// \returns            The data of the binary option.
     BinaryOptionData get_binary_option(int index) const MDL_FINAL;
+
+    /// Get the value of the interface option at index.
+    ///
+    /// \param index   The index of the interface option.
+    ///
+    /// \returns       The value of the option or NULL if the option is not an interface option.
+    mi::base::IInterface const *get_interface_option(int index) const MDL_FINAL;
 
     /// Get the default value of the option at index.
     ///
@@ -249,6 +310,20 @@ public:
     /// \returns            True on success and false on failure.
     bool set_binary_option(char const *name, char const *data, size_t size) MDL_FINAL;
 
+    /// Set an interface option.
+    ///
+    /// It is only possible to set options that are actually present,
+    /// as indicated by the above getter methods.
+    /// If the name of an option was not found, this function returns false.
+    /// In addition, this function may return false because the particular option is not a
+    /// binary option.
+    ///
+    /// \param name    The name of the interface option.
+    /// \param value   The interface value of the option.
+    ///
+    /// \returns       True on success and false on failure.
+    bool set_interface_option(char const *name, mi::base::IInterface const *value) MDL_FINAL;
+
     /// Reset all options to their default values.
     void reset_to_defaults() MDL_FINAL;
 
@@ -264,6 +339,12 @@ public:
     /// \param name         The name of the option.
     /// \param description  The description of this option.
     void add_binary_option(char const *name, char const *description);
+
+    /// Add a new interface option.
+    ///
+    /// \param name         The name of the option.
+    /// \param description  The description of this option.
+    void add_interface_option(char const *name, char const *description);
 
     /// Get a string option.
     ///
@@ -324,8 +405,15 @@ public:
 public:
     /// Constructor.
     ///
-    /// \param alloc  the allocator to allocate from.
+    /// \param alloc  the allocator to allocate from
     explicit Options_impl(IAllocator *alloc);
+
+    /// Copy-like constructor.
+    ///
+    /// \param alloc  the allocator to allocate from
+    explicit Options_impl(
+        IAllocator         *alloc,
+        Options_impl const &other);
 
     /// Destructor.
     virtual ~Options_impl();

@@ -53,16 +53,19 @@ namespace neuraylib {
 @{
 */
 
-/// A wrapper around the interfaces for MDL material and function definitions.
+/// A wrapper around the interface for MDL material and function definitions.
 ///
-/// The purpose of the MDL definition wrapper is to simplify working with MDL material and function
-/// definitions. The key benefit is the unified treatment of material and function definitions
-/// which avoids duplication of code. For example, a GUI editor for the arguments can be
-/// essentially identical for materials and functions.
+/// The purpose of the MDL definition wrapper is to simplify common working with MDL material and
+/// function definitions. The key benefit is that it wraps API call sequences occurring in typical
+/// tasks into one single method call, e.g., instance creation or obtaining the default values (as
+/// long as their type is not too complex).
 ///
-/// See #mi::neuraylib::IMaterial_definition and #mi::neuraylib::IFunction_definition for
-/// the underlying interfaces. See also #mi::neuraylib::Argument_editor for a similar wrapper
-/// for MDL material instances and function calls.
+/// \note The definition wrapper does not expose the full functionality of the underlying
+/// interface, but provides access to it via #get_scene_element().
+///
+/// See #mi::neuraylib::IFunction_definition for the underlying interface. See also
+/// #mi::neuraylib::Argument_editor for a similar wrapper for MDL material instances and function
+/// calls.
 class Definition_wrapper
 {
 public:
@@ -94,13 +97,15 @@ public:
     ///                 after the operation has finished. Can be \c NULL.
     ///
     /// \return \c True, if the definition is valid, \c false otherwise.
-    bool is_valid_definition(IMdl_execution_context* context) const;
+    bool is_valid_definition( IMdl_execution_context* context) const;
 
     /// Indicates whether the definition wrapper acts on a material definition or on a function
     /// definition.
     ///
-    /// \return    Either #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION, or
+    /// \return    If \ref mi_mdl_materials_are_functions is enabled:
     ///            #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
+    ///            returns \c false. Otherwise:  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION,
+    ///            or #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
     ///            returns \c false.
     Element_type get_type() const;
 
@@ -135,8 +140,6 @@ public:
     const IType_list* get_parameter_types() const;
 
     /// Returns the return type.
-    ///
-    /// \return         The return type in case of function definitions, otherwise \c NULL.
     const IType* get_return_type() const;
 
     /// Returns the resolved file name of the thumbnail image for this MDL definition.
@@ -212,12 +215,9 @@ public:
     const IAnnotation_list* get_parameter_annotations() const;
 
     /// Returns the annotations of the return type.
-    ///
-    /// \return             The annotations of the returns type in case of a function definition,
-    ///                     otherwise \c NULL.
     const IAnnotation_block* get_return_annotations() const;
 
-    /// Returns the enable_if conditions of all parameters.
+    /// Returns the \c enable_if conditions of all parameters.
     ///
     /// \note Not all parameters have a condition. Hence, the indices in the returned expression
     ///       list do not necessarily coincide with the parameter indices of this definition.
@@ -225,20 +225,20 @@ public:
     ///       its index.
     const IExpression_list* get_enable_if_conditions() const;
 
-    /// Returns the number of other parameters whose enable_if condition might depend on the
+    /// Returns the number of other parameters whose \c enable_if condition might depend on the
     /// argument of the given parameter.
     ///
     /// \param index    The index of the parameter.
-    /// \return         The number of other parameters whose enable_if condition depends on this
+    /// \return         The number of other parameters whose \c enable_if condition depends on this
     ///                 parameter argument.
     Size get_enable_if_users( Size index) const;
 
-    /// Returns the index of a parameter whose enable_if condition might depend on the
+    /// Returns the index of a parameter whose \c enable_if condition might depend on the
     /// argument of the given parameter.
     ///
     /// \param index    The index of the parameter.
     /// \param u_index  The index of the enable_if user.
-    /// \return         The index of a parameter whose enable_if condition depends on this
+    /// \return         The index of a parameter whose \c enable_if condition depends on this
     ///                 parameter argument, or ~0 if indexes are out of range.
     Size get_enable_if_user( Size index, Size u_index) const;
 
@@ -249,10 +249,11 @@ public:
     /// Creates an instance of the material or function definition.
     ///
     /// \param arguments   If not \c NULL, then these arguments are used for the material instance
-    ///                    or function call (all parameters without default need to be present). If
-    ///                    \c NULL, then the default for a parameter is used, or the argument is
-    ///                    default-constructed for parameters without default. Must not be \c NULL
-    ///                    in case of \ref mi_neuray_mdl_template_like_function_definitions.
+    ///                    or function call. If an argument is missing, then the default for that
+    ///                    parameter is used. If there is no default, range annotations are used to
+    ///                    obtain a suitable value, or the argument is default-constructed as last
+    ///                    resort. Must not be \c NULL (or missing any arguments) in case of \ref
+    ///                    mi_neuray_mdl_template_like_function_definitions.
     /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
     ///                    -  0: Success. If \p arguments is \c NULL, then the method always
@@ -274,10 +275,11 @@ public:
     /// Creates an instance of the material or function definition.
     ///
     /// \param arguments   If not \c NULL, then these arguments are used for the material instance
-    ///                    or function call (all parameters without default need to be present). If
-    ///                    \c NULL, then the default for a parameter is used, or the argument is
-    ///                    default-constructed for parameters without default. Must not be \c NULL
-    ///                    in case of \ref mi_neuray_mdl_template_like_function_definitions.
+    ///                    or function call. If an argument is missing, then the default for that
+    ///                    parameter is used. If there is no default, range annotations are used to
+    ///                    obtain a suitable value, or the argument is default-constructed as last
+    ///                    resort. Must not be \c NULL (or missing any arguments) in case of \ref
+    ///                    mi_neuray_mdl_template_like_function_definitions.
     /// \param[out] errors An optional pointer to an #mi::Sint32 to which an error code will be
     ///                    written. The error codes have the following meaning:
     ///                    -  0: Success. If \p arguments is \c NULL, then the method always
@@ -300,7 +302,7 @@ public:
     T* create_instance( const IExpression_list* arguments = 0, Sint32* errors = 0) const
     {
         IScene_element* ptr_iscene_element = create_instance( arguments, errors);
-        if ( !ptr_iscene_element)
+        if(  !ptr_iscene_element)
             return 0;
         T* ptr_T = static_cast<T*>( ptr_iscene_element->get_interface( typename T::IID()));
         ptr_iscene_element->release();
@@ -360,17 +362,19 @@ inline bool Definition_wrapper::is_valid() const
 }
 
 
-inline bool Definition_wrapper::is_valid_definition(IMdl_execution_context* context) const
+inline bool Definition_wrapper::is_valid_definition( IMdl_execution_context* context) const
 {
-    if (m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
+    if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
-        base::Handle<const IMaterial_definition> md(m_access->get_interface<IMaterial_definition>());
-        return md->is_valid(context);
+        base::Handle<const IMaterial_definition> md(
+            m_access->get_interface<IMaterial_definition>());
+        return md->is_valid( context);
     }
-    else if (m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
-        base::Handle<const IFunction_definition> fd(m_access->get_interface<IFunction_definition>());
-        return fd->is_valid(context);
+        base::Handle<const IFunction_definition> fd(
+            m_access->get_interface<IFunction_definition>());
+        return fd->is_valid( context);
     }
     else
         return false;
@@ -535,14 +539,14 @@ inline const IType* Definition_wrapper::get_return_type() const
 
 inline const char* Definition_wrapper::get_thumbnail() const
 {
-    if (m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
+    if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_thumbnail();
 
     }
-    else if (m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -772,6 +776,8 @@ inline IScene_element* Definition_wrapper::create_instance(
 
         base::Handle<const IType_list> parameter_types( md->get_parameter_types());
         base::Handle<const IExpression_list> defaults( md->get_defaults());
+        base::Handle<const IAnnotation_list> parameter_annotations(
+             md->get_parameter_annotations());
         base::Handle<IValue_factory> vf( m_mdl_factory->create_value_factory( m_transaction.get()));
         base::Handle<IExpression_factory> ef(
             m_mdl_factory->create_expression_factory( m_transaction.get()));
@@ -783,7 +789,9 @@ inline IScene_element* Definition_wrapper::create_instance(
             base::Handle<const IExpression> default_( defaults->get_expression( name));
             if( !default_) {
                 base::Handle<const IType> type( parameter_types->get_type( i));
-                base::Handle<IValue> value( vf->create( type.get()));
+                base::Handle<const IAnnotation_block> block(
+                    parameter_annotations->get_annotation_block( name));
+                base::Handle<IValue> value( vf->create( type.get(), block.get()));
                 base::Handle<IExpression> expr( ef->create_constant( value.get()));
                 local_arguments->add_expression( name, expr.get());
             }
@@ -810,6 +818,8 @@ inline IScene_element* Definition_wrapper::create_instance(
 
         base::Handle<const IType_list> parameter_types( fd->get_parameter_types());
         base::Handle<const IExpression_list> defaults( fd->get_defaults());
+        base::Handle<const IAnnotation_list> parameter_annotations(
+            fd->get_parameter_annotations());
         base::Handle<IValue_factory> vf( m_mdl_factory->create_value_factory( m_transaction.get()));
         base::Handle<IExpression_factory> ef(
             m_mdl_factory->create_expression_factory( m_transaction.get()));
@@ -821,7 +831,9 @@ inline IScene_element* Definition_wrapper::create_instance(
             base::Handle<const IExpression> default_( defaults->get_expression( name));
             if( !default_) {
                 base::Handle<const IType> type( parameter_types->get_type( i));
-                base::Handle<IValue> value( vf->create( type.get()));
+                base::Handle<const IAnnotation_block> block(
+                    parameter_annotations->get_annotation_block( name));
+                base::Handle<IValue> value( vf->create( type.get(), block.get()));
                 base::Handle<IExpression> expr( ef->create_constant( value.get()));
                 local_arguments->add_expression( name, expr.get());
             }

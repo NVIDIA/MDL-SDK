@@ -620,6 +620,12 @@ public:
 
     //@}
 
+    virtual std::string get_type_name( const IType* type, bool include_aliased_type = true) = 0;
+
+    /// Similar to get_type_name(), except that aliases are skipped and the "enum" and "struct"
+    /// keywords are omitted.
+    virtual std::string get_serialization_type_name( const IType* type) = 0;
+
     /// Re-creates a types based on the string created by #get_serialization_type_name().
     ///
     /// For enums and structs, the corresponding module must have been loaded, such that these

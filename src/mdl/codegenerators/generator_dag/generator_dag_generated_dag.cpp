@@ -36,6 +36,7 @@
 #include <mdl/compiler/compilercore/compilercore_mdl.h>
 #include <mdl/compiler/compilercore/compilercore_visitor.h>
 #include <mdl/compiler/compilercore/compilercore_hash.h>
+#include <mdl/compiler/compilercore/compilercore_analysis.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 
 #include <mdl/compiler/stdmodule/enums.h>
@@ -839,10 +840,19 @@ int Resource_tagger::get_resource_tag(
 
     // for now, linear search
     char const *url = res->get_string_value();
+    char const *sel = "";
+
+    if (IValue_texture const *tex = as<IValue_texture>(res)) {
+        sel = tex->get_selector();
+    }
+
     for (size_t i = 0, n = m_resource_tag_map.size(); i < n; ++i) {
         Resource_tag_tuple const &e = m_resource_tag_map[i];
 
-        if (e.m_kind == kind && strcmp(e.m_url, url) == 0) {
+        if (e.m_kind == kind &&
+            strcmp(e.m_url,      url) == 0 &&
+            strcmp(e.m_selector, sel) == 0)
+        {
             return e.m_tag;
         }
     }
@@ -1045,8 +1055,8 @@ void Generated_code_dag::gen_function_annotations(
             break;
     }
     if (annotations != NULL) {
-        int annotation_count = annotations->get_annotation_count();
-        for (int k = 0; k < annotation_count; ++k)
+        size_t annotation_count = annotations->get_annotation_count();
+        for (size_t k = 0; k < annotation_count; ++k)
             func.add_annotation(
                 dag_builder.annotation_to_dag(annotations->get_annotation(k)));
     }
@@ -1060,8 +1070,8 @@ void Generated_code_dag::gen_anno_decl_annotations(
 {
     IAnnotation_block const *annotations = decl->get_annotations();
     if (annotations != NULL) {
-        int annotation_count = annotations->get_annotation_count();
-        for (int k = 0; k < annotation_count; ++k)
+        size_t annotation_count = annotations->get_annotation_count();
+        for (size_t k = 0; k < annotation_count; ++k)
             anno.add_annotation(
                 dag_builder.annotation_to_dag(annotations->get_annotation(k)));
     }
@@ -1079,8 +1089,8 @@ void Generated_code_dag::gen_function_return_annotations(
             cast<IDeclaration_function>(decl)->get_return_annotations();
 
         if (annotations != NULL) {
-            int annotation_count = annotations->get_annotation_count();
-            for (int k = 0; k < annotation_count; ++k)
+            size_t annotation_count = annotations->get_annotation_count();
+            for (size_t k = 0; k < annotation_count; ++k)
                 func.add_return_annotation(
                     dag_builder.annotation_to_dag(annotations->get_annotation(k)));
         }
@@ -1103,8 +1113,8 @@ void Generated_code_dag::gen_function_parameter_annotations(
             IDeclaration_type_struct const *s_decl = cast<IDeclaration_type_struct>(decl);
 
             if (IAnnotation_block const *annotations = s_decl->get_annotations(k)) {
-                int annotation_count = annotations->get_annotation_count();
-                for (int l = 0; l < annotation_count; ++l) {
+                size_t annotation_count = annotations->get_annotation_count();
+                for (size_t l = 0; l < annotation_count; ++l) {
                     IAnnotation const *anno = annotations->get_annotation(l);
 
                     if (IAnnotation_enable_if const *ei = as<IAnnotation_enable_if>(anno)) {
@@ -1136,8 +1146,8 @@ void Generated_code_dag::gen_function_parameter_annotations(
             IParameter const *parameter = fun_decl->get_parameter(k);
 
             if (IAnnotation_block const *annotations = parameter->get_annotations()) {
-                int annotation_count = annotations->get_annotation_count();
-                for (int l = 0; l < annotation_count; ++l) {
+                size_t annotation_count = annotations->get_annotation_count();
+                for (size_t l = 0; l < annotation_count; ++l) {
                     IAnnotation const *anno = annotations->get_annotation(l);
 
                     if (IAnnotation_enable_if const *ei = as<IAnnotation_enable_if>(anno)) {
@@ -1172,8 +1182,8 @@ void Generated_code_dag::gen_annotation_parameter_annotations(
 {
     IParameter const *parameter = decl->get_parameter(k);
     if (IAnnotation_block const *annotations = parameter->get_annotations()) {
-        int annotation_count = annotations->get_annotation_count();
-        for (int l = 0; l < annotation_count; ++l) {
+        size_t annotation_count = annotations->get_annotation_count();
+        for (size_t l = 0; l < annotation_count; ++l) {
             IAnnotation const *anno = annotations->get_annotation(l);
 
             param.add_annotation(dag_builder.annotation_to_dag(anno));
@@ -1187,8 +1197,8 @@ void Generated_code_dag::gen_module_annotations(
     IDeclaration_module const *decl)
 {
     if (IAnnotation_block const *annotations = decl->get_annotations()) {
-        int annotation_count = annotations->get_annotation_count();
-        for (int k = 0; k < annotation_count; ++k) {
+        size_t annotation_count = annotations->get_annotation_count();
+        for (size_t k = 0; k < annotation_count; ++k) {
             m_module_annotations.push_back(
                 dag_builder.annotation_to_dag(annotations->get_annotation(k)));
         }
@@ -1783,15 +1793,15 @@ void Generated_code_dag::compile_material(
             Module_scope scope(dag_builder, orig_module.get());
 
             if (IAnnotation_block const *annotations = proto_decl->get_annotations()) {
-                int annotation_count = annotations->get_annotation_count();
-                for (int k = 0; k < annotation_count; ++k) {
+                size_t annotation_count = annotations->get_annotation_count();
+                for (size_t k = 0; k < annotation_count; ++k) {
                     IAnnotation const *anno = annotations->get_annotation(k);
                     mat.add_annotation(dag_builder.annotation_to_dag(anno));
                 }
             }
             if (IAnnotation_block const *annotations = proto_decl->get_return_annotations()) {
-                int annotation_count = annotations->get_annotation_count();
-                for (int k = 0; k < annotation_count; ++k) {
+                size_t annotation_count = annotations->get_annotation_count();
+                for (size_t k = 0; k < annotation_count; ++k) {
                     IAnnotation const *anno = annotations->get_annotation(k);
                     mat.add_return_annotation(dag_builder.annotation_to_dag(anno));
                 }
@@ -1912,8 +1922,8 @@ void Generated_code_dag::compile_material(
                 if (IAnnotation_block const *annotations = orig_mat_param->get_annotations()) {
                     Parameter_info &param = mat.get_parameter(k);
 
-                    int annotation_count = annotations->get_annotation_count();
-                    for (int l = 0; l < annotation_count; ++l) {
+                    size_t annotation_count = annotations->get_annotation_count();
+                    for (size_t l = 0; l < annotation_count; ++l) {
                         IAnnotation const *anno = annotations->get_annotation(l);
 
                         if (IAnnotation_enable_if const *ei = as<IAnnotation_enable_if>(anno)) {
@@ -1948,8 +1958,8 @@ void Generated_code_dag::compile_material(
 
                 // retrieve the parameter annotation from the prototype declaration
                 if (IAnnotation_block const *annotations = parameter->get_annotations()) {
-                    int annotation_count = annotations->get_annotation_count();
-                    for (int l = 0; l < annotation_count; ++l) {
+                    size_t annotation_count = annotations->get_annotation_count();
+                    for (size_t l = 0; l < annotation_count; ++l) {
                         IAnnotation const *anno = annotations->get_annotation(l);
 
                         if (IAnnotation_enable_if const *ei = as<IAnnotation_enable_if>(anno)) {
@@ -2063,7 +2073,7 @@ private:
 
         IType const *type = def->get_type();
 
-        if (!DAG_builder::is_user_type(type)) {
+        if (!is_user_type(type)) {
             return;
         }
 
@@ -2330,8 +2340,8 @@ void Generated_code_dag::compile_type(
                     User_type_info::Entity_info ent(alloc);
 
                     if (IAnnotation_block const *field_annos = s_decl->get_annotations(i)) {
-                        int annotation_count = field_annos->get_annotation_count();
-                        for (int k = 0; k < annotation_count; ++k) {
+                        size_t annotation_count = field_annos->get_annotation_count();
+                        for (size_t k = 0; k < annotation_count; ++k) {
                            ent.add_annotation(
                                 dag_builder.annotation_to_dag(field_annos->get_annotation(k)));
                         }
@@ -2350,8 +2360,8 @@ void Generated_code_dag::compile_type(
                     User_type_info::Entity_info ent(alloc);
 
                     if (IAnnotation_block const *value_annos = e_decl->get_annotations(i)) {
-                        int annotation_count = value_annos->get_annotation_count();
-                        for (int k = 0; k < annotation_count; ++k) {
+                        size_t annotation_count = value_annos->get_annotation_count();
+                        for (size_t k = 0; k < annotation_count; ++k) {
                             ent.add_annotation(
                                 dag_builder.annotation_to_dag(value_annos->get_annotation(k)));
                         }
@@ -2368,8 +2378,8 @@ void Generated_code_dag::compile_type(
     }
 
     if (annotations != NULL) {
-        int annotation_count = annotations->get_annotation_count();
-        for (int k = 0; k < annotation_count; ++k) {
+        size_t annotation_count = annotations->get_annotation_count();
+        for (size_t k = 0; k < annotation_count; ++k) {
             user_type.add_annotation(
                 dag_builder.annotation_to_dag(annotations->get_annotation(k)));
         }
@@ -2420,8 +2430,8 @@ void Generated_code_dag::compile_constant(
     }
 
     if (annotations != NULL) {
-        int annotation_count = annotations->get_annotation_count();
-        for (int k = 0; k < annotation_count; ++k) {
+        size_t annotation_count = annotations->get_annotation_count();
+        for (size_t k = 0; k < annotation_count; ++k) {
             con.add_annotation(
                 dag_builder.annotation_to_dag(annotations->get_annotation(k)));
         }
@@ -3371,9 +3381,15 @@ void Generated_code_dag::Material_instance::add_resource_tag(
     size_t l = m_resource_tag_map.size();
     m_resource_tag_map.resize(l + 1);
 
-    ISymbol const *shared = m_sym_tab.get_shared_symbol(res->get_string_value());
+    ISymbol const *shared_value = m_sym_tab.get_shared_symbol(res->get_string_value());
+    char const    *shared_sel   = NULL;
+
+    if (IValue_texture const *tex = as<IValue_texture>(res)) {
+        ISymbol const *shared_selector = m_sym_tab.get_shared_symbol(tex->get_selector());
+        shared_sel                     = shared_selector->get_name();
+    }
     m_resource_tag_map[l] = Resource_tag_tuple(
-        kind_from_value(res), shared->get_name(), tag);
+        kind_from_value(res), shared_value->get_name(), shared_sel, tag);
 }
 
 // Create a call.
@@ -6540,9 +6556,16 @@ void Generated_code_dag::add_resource_tag(
     size_t l = m_resource_tag_map.size();
     m_resource_tag_map.resize(l + 1);
 
-    ISymbol const *shared = m_sym_tab.get_shared_symbol(res->get_string_value());
+    ISymbol const *shared_value = m_sym_tab.get_shared_symbol(res->get_string_value());
+    char const    *shared_sel   = NULL;
+
+    if (IValue_texture const *tex = as<IValue_texture>(res)) {
+        ISymbol const *shared_selector = m_sym_tab.get_shared_symbol(tex->get_selector());
+        shared_sel = shared_selector->get_name();
+    }
+
     m_resource_tag_map[l] = Resource_tag_tuple(
-        kind_from_value(res), shared->get_name(), tag);
+        kind_from_value(res), shared_value->get_name(), shared_sel, tag);
 }
 
 // Serialize this code DAG.
@@ -6609,6 +6632,7 @@ void Generated_code_dag::serialize(
 
         dag_serializer.write_byte(e.m_kind);
         dag_serializer.write_cstring(e.m_url);
+        dag_serializer.write_cstring(e.m_selector);
         dag_serializer.write_db_tag(e.m_tag);
     }
 
@@ -7264,11 +7288,18 @@ Generated_code_dag const *Generated_code_dag::deserialize(
     code->m_resource_tag_map.clear();
     for (size_t i = 0; i < n_entries; ++i) {
         Resource_tag_tuple::Kind kind = Resource_tag_tuple::Kind(dag_deserializer.read_byte());
-        string url(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
-        unsigned tag     = dag_deserializer.read_db_tag();
+        string value(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
+        string selector(dag_deserializer.read_cstring(), dag_deserializer.get_allocator());
+        unsigned tag = dag_deserializer.read_db_tag();
 
-        ISymbol const *shared = code->m_sym_tab.get_shared_symbol(url.c_str());
-        code->m_resource_tag_map.push_back(Resource_tag_tuple(kind, shared->get_name(), tag));
+        ISymbol const *shared_value = code->m_sym_tab.get_shared_symbol(value.c_str());
+        char const    *shared_sel   = "";
+
+        if (!selector.empty()) {
+            shared_sel = code->m_sym_tab.get_shared_symbol(selector.c_str())->get_name();
+        }
+        code->m_resource_tag_map.push_back(
+            Resource_tag_tuple(kind, shared_value->get_name(), shared_sel, tag));
     }
 
     DEC_SCOPE(); DOUT(("DAG END\n\n"));

@@ -4,17 +4,24 @@
 /*
    zipconf.h -- platform specific include file
 
-   This file was hand generated based on ../cmake-zipconf.h.in.
+   This file was generated automatically by CMake
+   based on ../cmake-zipconf.h.in.
  */
 
-#define LIBZIP_VERSION "1.5.1"
+#define LIBZIP_VERSION "1.8.0"
 #define LIBZIP_VERSION_MAJOR 1
-#define LIBZIP_VERSION_MINOR 5
-#define LIBZIP_VERSION_MICRO 1
+#define LIBZIP_VERSION_MINOR 8
+#define LIBZIP_VERSION_MICRO 0
 
 #define ZIP_STATIC
 
-#include <stdint.h>
+#define _Nullable
+#define _Nonnull
+
+#if !defined(__STDC_FORMAT_MACROS)
+#define __STDC_FORMAT_MACROS 1
+#endif
+#include <inttypes.h>
 
 typedef int8_t zip_int8_t;
 typedef uint8_t zip_uint8_t;

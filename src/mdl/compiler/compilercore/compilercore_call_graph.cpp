@@ -329,11 +329,12 @@ void Call_graph::create_root_set()
 // Replace all declarations by definite definitions in the call-graph.
 void Call_graph::skip_declarations()
 {
-    for (Definition_call_map::iterator it = m_call_nodes.begin(), end = m_call_nodes.end();
-        it != end;
-        ++it)
+    for (Definition_call_map::iterator
+            node_it = m_call_nodes.begin(), node_end = m_call_nodes.end();
+        node_it != node_end;
+        ++node_it)
     {
-        Call_node *node = it->second;
+        Call_node *node = node_it->second;
 
         for (Callee_iterator it = node->callee_begin(), end = node->callee_end(); it != end; ++it)
         {
@@ -475,14 +476,14 @@ void Dumper::node_name(Call_node const *n)
     m_printer->print(buf);
 }
 
-void Dumper::node(Call_node const *n, char const *color)
+void Dumper::node(Call_node const *node, char const *color)
 {
     bool use_box_shape = false;
 
     m_printer->print("  ");
-    node_name(n);
+    node_name(node);
     m_printer->print(" [label=\"");
-    Definition const *def = n->get_definition();
+    Definition const *def = node->get_definition();
 
     Definition::Kind kind = def->get_kind();
     if (kind != Definition::DK_FUNCTION && kind != Definition::DK_CONSTRUCTOR) {

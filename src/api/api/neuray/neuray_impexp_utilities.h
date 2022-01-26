@@ -134,7 +134,17 @@ public:
         const char* message,
         const char* argument);
 
-    /// Creates an instance of #mi::neuraylib::IReader for the given URI.
+    /// Creates random-access reader for the given URI.
+    ///
+    /// Convenience function used by Impexp_utilities, Import_api_impl, and Mdl_impexp_api_impl.
+    ///
+    /// \param path            The path to be handled by the reader.
+    /// \return                A reader for the URI, or \c NULL in case of errors, e.g., the URI is
+    ///                        invalid, or the URI is valid, but the file denoted by the URI could
+    ///                        not be opened.
+    static mi::neuraylib::IReader* create_reader( const std::string& path);
+
+    /// Creates random-access reader for the given URI.
     ///
     /// Convenience function used by Impexp_utilities and Import_api_impl.
     ///
@@ -144,10 +154,9 @@ public:
     /// \return                A reader for the URI, or \c NULL in case of errors, e.g., the URI is
     ///                        invalid, or the URI is valid, but the file denoted by the URI could
     ///                        not be opened.
-    static mi::neuraylib::IReader* create_reader(
-        const std::string& uri, std::string& path);
+    static mi::neuraylib::IReader* create_reader( const std::string& uri, std::string& path);
 
-    /// Creates an instance of #mi::neuraylib::IReader for the given data.
+    /// Creates random-access reader for the given data.
     ///
     /// Convenience function used by Import_api_impl.
     ///
@@ -157,7 +166,17 @@ public:
     ///                        not copy the data.
     static mi::neuraylib::IReader* create_reader( const char* data, mi::Size length);
 
-    /// Creates an instance of #mi::neuraylib::IWriter for the given URI.
+    /// Creates random-access writer for the given path.
+    ///
+    /// Convenience function used by Impexp_utilities, Export_api_impl, and Mdl_impexp_api_impl.
+    ///
+    /// \param path            The path to be handled by the writer.
+    /// \return                A writer for the URI, or \c NULL in case of errors, e.g., the URI is
+    ///                        invalid, or the URI is valid, but the file denoted by the URI could
+    ///                        not be opened.
+    static mi::neuraylib::IWriter* create_writer( const std::string& path);
+
+    /// Creates random-access writer for the given URI.
     ///
     /// Convenience function used by Impexp_utilities and Export_api_impl.
     ///
@@ -167,8 +186,7 @@ public:
     /// \return                A writer for the URI, or \c NULL in case of errors, e.g., the URI is
     ///                        invalid, or the URI is valid, but the file denoted by the URI could
     ///                        not be opened.
-    static mi::neuraylib::IWriter* create_writer(
-        const std::string& uri, std::string& path);
+    static mi::neuraylib::IWriter* create_writer( const std::string& uri, std::string& path);
 
     /// Creates an instance of #mi::neuraylib::IImport_result_ext from an instance of
     /// #mi::neuraylib::IImport_result.

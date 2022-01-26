@@ -93,14 +93,6 @@ public:
     /// Get the MDL code cache.
     virtual mi::mdl::ICode_cache *get_code_cache() const = 0;
 
-    /// Check if a file name matches a file mask in UTF-8 encoding.
-    ///
-    /// \param file_mask  the file mask
-    /// \param file_name  the file name
-    ///
-    /// \note supports only [0-9], [0-9]+, and -? regex so far
-    virtual bool utf8_match(char const *file_mask, char const *file_name) const = 0;
-
     /// Configures, whether casts for compatible types should be inserted by the integration
     /// when needed.
     virtual void set_implicit_cast_enabled(bool value) = 0;

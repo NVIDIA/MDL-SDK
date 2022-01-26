@@ -1167,10 +1167,11 @@ size_t Generated_code_source::Source_res_manag::get_resource_index(
     char const                 *url,
     int                        tag,
     IType_texture::Shape,
-    IValue_texture::gamma_mode)
+    IValue_texture::gamma_mode,
+    char const                 *selector)
 {
     if (!m_resource_attr_map.empty()) {
-        Resource_tag_tuple key(kind, url, tag);
+        Resource_tag_tuple key(kind, url, selector, tag);
 
         Resource_attr_map::const_iterator it(m_resource_attr_map.find(key));
         if (it != m_resource_attr_map.end()) {
@@ -1848,10 +1849,11 @@ size_t Generated_code_lambda_function::Lambda_res_manag::get_resource_index(
     char const                 *url,
     int                        tag,
     IType_texture::Shape       shape,
-    IValue_texture::gamma_mode gamma_mode)
+    IValue_texture::gamma_mode gamma_mode,
+    char const                 *selector)
 {
     if (m_resource_map != NULL) {
-        Resource_tag_tuple key(kind, url, tag);
+        Resource_tag_tuple key(kind, url, selector, tag);
         Resource_attr_map::const_iterator it(m_resource_map->find(key));
         if (it != m_resource_map->end()) {
             mi::mdl::Resource_attr_entry const &e = it->second;
@@ -1906,7 +1908,7 @@ size_t Generated_code_lambda_function::Lambda_res_manag::get_string_index(
     IValue_string const *s)
 {
     if (m_resource_map != NULL) {
-        Resource_tag_tuple k(kind_from_value(s), s->get_value(), /*tag=*/0);
+        Resource_tag_tuple k(kind_from_value(s), s->get_value(), /*selector=*/NULL, /*tag=*/0);
         Resource_attr_map::const_iterator it(m_resource_map->find(k));
         if (it != m_resource_map->end()) {
             mi::mdl::Resource_attr_entry const &e = it->second;
@@ -1928,15 +1930,15 @@ size_t Generated_code_lambda_function::Lambda_res_manag::get_string_index(
 struct Resource_index_pair
 {
     Resource_index_pair(
-        Resource_tag_tuple const& val,
+        Resource_tag_tuple const           &val,
         size_t index, IType_texture::Shape shape,
-        IValue_texture::gamma_mode gamma_mode)
+        IValue_texture::gamma_mode         gamma_mode)
     : val(val), index(index), shape(shape), gamma_mode(gamma_mode)
     {}
 
-    Resource_tag_tuple val;
-    size_t index;
-    IType_texture::Shape shape;
+    Resource_tag_tuple         val;
+    size_t                     index;
+    IType_texture::Shape       shape;
     IValue_texture::gamma_mode gamma_mode;
 };
 
@@ -1965,8 +1967,10 @@ void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attr
         Resource_tag_tuple const& val = it->first;
         Resource_attr_entry const& e = it->second;
         if (val.m_kind == Resource_tag_tuple::RK_BAD ||
-                val.m_kind == Resource_tag_tuple::RK_INVALID_REF)
+            val.m_kind == Resource_tag_tuple::RK_INVALID_REF)
+        {
             continue;
+        }
         IType_texture::Shape shape = IType_texture::TS_2D;
         IValue_texture::gamma_mode gamma_mode = IValue_texture::gamma_default;
 
@@ -2011,7 +2015,8 @@ void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attr
             val.m_url,
             val.m_tag,
             sorted_resources[i].shape,
-            sorted_resources[i].gamma_mode);
+            sorted_resources[i].gamma_mode,
+            val.m_selector);
     }
 }
 

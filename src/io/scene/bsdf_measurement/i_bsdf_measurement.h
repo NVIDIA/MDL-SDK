@@ -45,7 +45,7 @@ namespace BSDFM {
 class Bsdf_measurement_impl;
 
 /// The class ID for the #Bsdf_measurement class.
-static const SERIAL::Class_id ID_BSDF_MEASUREMENT = 0x5f427364; // '_Bsd'
+static constexpr SERIAL::Class_id ID_BSDF_MEASUREMENT = 0x5f427364; // '_Bsd'
 
 // The DB proxy class for the scene element light profile.
 //
@@ -265,7 +265,7 @@ private:
 };
 
 /// The class ID for the #Bsdf_measurement class.
-static const SERIAL::Class_id ID_BSDF_MEASUREMENT_IMPL = 0x5f427369; // '_Bsi'
+static constexpr SERIAL::Class_id ID_BSDF_MEASUREMENT_IMPL = 0x5f427369; // '_Bsi'
 
 // The DB implementation class for the scene element light profile.
 //

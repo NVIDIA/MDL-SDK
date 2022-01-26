@@ -57,7 +57,8 @@
 #include <mdl/compiler/compilercore/compilercore_code_cache.h>
 #include <mdl/compiler/compilercore/compilercore_errors.h>
 
-#ifdef DEBUG
+// Enable the MDL debug allocator in DEBUG builds
+#if defined(DEBUG)
 #define USE_MDL_DEBUG_ALLOCATOR
 #endif
 
@@ -255,7 +256,7 @@ bool Mdlc_module_impl::init()
 
 void Mdlc_module_impl::exit()
 {
-    
+
     if (m_mdl) {
         m_mdl->release();
         m_mdl = nullptr;
@@ -335,11 +336,6 @@ mi::mdl::ICode_cache *Mdlc_module_impl::get_code_cache() const
     if (m_code_cache)
         m_code_cache->retain();
     return m_code_cache;
-}
-
-bool Mdlc_module_impl::utf8_match(char const *file_mask, char const *file_name) const
-{
-    return mi::mdl::utf8_match(file_mask, file_name);
 }
 
 void Mdlc_module_impl::set_implicit_cast_enabled(bool value)

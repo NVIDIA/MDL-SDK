@@ -40,6 +40,7 @@
 #define ERR_DECL ((IDeclaration *)1)
 
 $namespace=mi::mdl
+$tokenPrefix=TOK_
 
 COMPILER mdl
 
@@ -147,7 +148,7 @@ COMPILER mdl
     // Check if the lookahead token is a comma.
     bool see_comma()
     {
-        return la->kind == _COMMA;
+        return la->kind == TOK_COMMA;
     }
 
     // Skip square brackets.
@@ -155,13 +156,13 @@ COMPILER mdl
     {
         for(;;) {
             x = scanner->Peek();
-            if (x->kind == _LEFT_SQUARE_BRACKET) {
+            if (x->kind == TOK_LEFT_SQUARE_BRACKET) {
                 if (!skip_square_brackets(x))
                     return false;
-            } else if (x->kind == _RIGHT_SQUARE_BRACKET) {
+            } else if (x->kind == TOK_RIGHT_SQUARE_BRACKET) {
                 x = scanner->Peek();
                 return true;
-            } else if (x->kind == _EOF) {
+            } else if (x->kind == TOK_EOF) {
                 break;
             }
         }
@@ -171,82 +172,82 @@ COMPILER mdl
     // Skip a type.
     bool skip_type(Token *&x)
     {
-        if ((x->kind == _UNIFORM) || (x->kind == _VARYING)) {
+        if ((x->kind == TOK_UNIFORM) || (x->kind == TOK_VARYING)) {
             x = scanner->Peek();
         }
 
-        if (x->kind == _AUTO) {
+        if (x->kind == TOK_AUTO) {
             x = scanner->Peek();
             return true;
         }
 
         switch (x->kind) {
-        case _SCOPE:
+        case TOK_SCOPE:
             x = scanner->Peek();
             return skip_type(x);
-        case _IDENT:
+        case TOK_IDENT:
             x = scanner->Peek();
-            if (x->kind == _SCOPE) {
+            if (x->kind == TOK_SCOPE) {
                 x = scanner->Peek();
                 return skip_type(x);
-            } else if (x->kind == _LEFT_SQUARE_BRACKET) {
+            } else if (x->kind == TOK_LEFT_SQUARE_BRACKET) {
                 return skip_square_brackets(x);
             }
             return true;
-        case _BOOL:
-        case _BOOL2:
-        case _BOOL3:
-        case _BOOL4:
-        case _INT:
-        case _INT2:
-        case _INT3:
-        case _INT4:
-        case _FLOAT:
-        case _FLOAT2:
-        case _FLOAT3:
-        case _FLOAT4:
-        case _FLOAT2X2:
-        case _FLOAT2X3:
-        case _FLOAT2X4:
-        case _FLOAT3X2:
-        case _FLOAT3X3:
-        case _FLOAT3X4:
-        case _FLOAT4X2:
-        case _FLOAT4X3:
-        case _FLOAT4X4:
-        case _DOUBLE:
-        case _DOUBLE2:
-        case _DOUBLE3:
-        case _DOUBLE4:
-        case _DOUBLE2X2:
-        case _DOUBLE2X3:
-        case _DOUBLE2X4:
-        case _DOUBLE3X2:
-        case _DOUBLE3X3:
-        case _DOUBLE3X4:
-        case _DOUBLE4X2:
-        case _DOUBLE4X3:
-        case _DOUBLE4X4:
-        case _COLOR:
-        case _STRING:
-        case _BSDF:
-        case _EDF:
-        case _VDF:
-        case _LIGHT_PROFILE:
-        case _TEXTURE_2D:
-        case _TEXTURE_3D:
-        case _TEXTURE_CUBE:
-        case _TEXTURE_PTEX:
-        case _BSDF_MEASUREMENT:
-        case _INTENSITY_MODE:
-        case _MATERIAL:
-        case _MATERIAL_EMISSION:
-        case _MATERIAL_GEOMETRY:
-        case _MATERIAL_SURFACE:
-        case _MATERIAL_VOLUME:
-        case _HAIR_BSDF:
+        case TOK_BOOL:
+        case TOK_BOOL2:
+        case TOK_BOOL3:
+        case TOK_BOOL4:
+        case TOK_INT:
+        case TOK_INT2:
+        case TOK_INT3:
+        case TOK_INT4:
+        case TOK_FLOAT:
+        case TOK_FLOAT2:
+        case TOK_FLOAT3:
+        case TOK_FLOAT4:
+        case TOK_FLOAT2X2:
+        case TOK_FLOAT2X3:
+        case TOK_FLOAT2X4:
+        case TOK_FLOAT3X2:
+        case TOK_FLOAT3X3:
+        case TOK_FLOAT3X4:
+        case TOK_FLOAT4X2:
+        case TOK_FLOAT4X3:
+        case TOK_FLOAT4X4:
+        case TOK_DOUBLE:
+        case TOK_DOUBLE2:
+        case TOK_DOUBLE3:
+        case TOK_DOUBLE4:
+        case TOK_DOUBLE2X2:
+        case TOK_DOUBLE2X3:
+        case TOK_DOUBLE2X4:
+        case TOK_DOUBLE3X2:
+        case TOK_DOUBLE3X3:
+        case TOK_DOUBLE3X4:
+        case TOK_DOUBLE4X2:
+        case TOK_DOUBLE4X3:
+        case TOK_DOUBLE4X4:
+        case TOK_COLOR:
+        case TOK_STRING:
+        case TOK_BSDF:
+        case TOK_EDF:
+        case TOK_VDF:
+        case TOK_LIGHT_PROFILE:
+        case TOK_TEXTURE_2D:
+        case TOK_TEXTURE_3D:
+        case TOK_TEXTURE_CUBE:
+        case TOK_TEXTURE_PTEX:
+        case TOK_BSDF_MEASUREMENT:
+        case TOK_INTENSITY_MODE:
+        case TOK_MATERIAL:
+        case TOK_MATERIAL_EMISSION:
+        case TOK_MATERIAL_GEOMETRY:
+        case TOK_MATERIAL_SURFACE:
+        case TOK_MATERIAL_VOLUME:
+        case TOK_HAIR_BSDF:
             x = scanner->Peek();
-            if (x->kind == _LEFT_SQUARE_BRACKET)
+            if (x->kind == TOK_LEFT_SQUARE_BRACKET)
                 return skip_square_brackets(x);
             return true;
         default:
@@ -260,10 +261,10 @@ COMPILER mdl
     {
         scanner->ResetPeek();
         Token *x = la;
-        if (x->kind == _EXPORT) {
+        if (x->kind == TOK_EXPORT) {
             x = scanner->Peek();
         }
-        return (x->kind == _IMPORT) || (x->kind == _USING);
+        return (x->kind == TOK_IMPORT) || (x->kind == TOK_USING);
     }
 
     // Check for ident '='
@@ -271,11 +272,11 @@ COMPILER mdl
     {
         scanner->ResetPeek();
         Token *x = la;
-        if (x->kind != _IDENT) {
+        if (x->kind != TOK_IDENT) {
             return false;
         }
         x = scanner->Peek();
-        return x->kind == _EQUAL;
+        return x->kind == TOK_EQUAL;
     }
 
     // If we see a type followed by an identifier during lookahead,
@@ -286,7 +287,7 @@ COMPILER mdl
         Token *x = la;
         if (!skip_type(x))
             return false;
-        return (x->kind == _IDENT) || (x->kind == _ANNOTATION_BLOCK_BEGIN);
+        return (x->kind == TOK_IDENT) || (x->kind == TOK_ANNOTATION_BLOCK_BEGIN);
     }
 
     /// Check for C-style cast: We have already seen '(' expr '), check for start(postfix_expr)
@@ -294,87 +295,87 @@ COMPILER mdl
     {
         scanner->ResetPeek();
         Token *x = la;
-        if (x->kind != _LEFT_PARENTHESIS)
+        if (x->kind != TOK_LEFT_PARENTHESIS)
             return false;
         x = scanner->Peek();
         if (!skip_type(x))
             return false;
-        if (x->kind != _RIGHT_PARENTHESIS)
+        if (x->kind != TOK_RIGHT_PARENTHESIS)
             return false;
         x = scanner->Peek();
 
         switch (x->kind) {
         // start of unary expression
-        case _TILDE:
-        case _BANG:
-        case _PLUS:
-        case _MINUS:
-        case _INC_OP:
-        case _DEC_OP:
-        case _CAST:
+        case TOK_TILDE:
+        case TOK_BANG:
+        case TOK_PLUS:
+        case TOK_MINUS:
+        case TOK_INC_OP:
+        case TOK_DEC_OP:
+        case TOK_CAST:
         // start of primary expression (subset of unary)
-        case _TRUE:
-        case _FALSE:
-        case _INTEGER_LITERAL:
-        case _FLOATING_LITERAL:
-        case _FRACT_LITERAL:
-        case _STRING_LITERAL:
-        case _SCOPE:
-        case _BOOL:
-        case _BOOL2:
-        case _BOOL3:
-        case _BOOL4:
-        case _INT:
-        case _INT2:
-        case _INT3:
-        case _INT4:
-        case _FLOAT:
-        case _FLOAT2:
-        case _FLOAT3:
-        case _FLOAT4:
-        case _FLOAT2X2:
-        case _FLOAT2X3:
-        case _FLOAT2X4:
-        case _FLOAT3X2:
-        case _FLOAT3X3:
-        case _FLOAT3X4:
-        case _FLOAT4X2:
-        case _FLOAT4X3:
-        case _FLOAT4X4:
-        case _DOUBLE:
-        case _DOUBLE2:
-        case _DOUBLE3:
-        case _DOUBLE4:
-        case _DOUBLE2X2:
-        case _DOUBLE2X3:
-        case _DOUBLE2X4:
-        case _DOUBLE3X2:
-        case _DOUBLE3X3:
-        case _DOUBLE3X4:
-        case _DOUBLE4X2:
-        case _DOUBLE4X3:
-        case _DOUBLE4X4:
-        case _COLOR:
-        case _STRING:
-        case _BSDF:
-        case _EDF:
-        case _VDF:
-        case _LIGHT_PROFILE:
-        case _TEXTURE_2D:
-        case _TEXTURE_3D:
-        case _TEXTURE_CUBE:
-        case _TEXTURE_PTEX:
-        case _BSDF_MEASUREMENT:
-        case _INTENSITY_MODE:
-        case _MATERIAL:
-        case _MATERIAL_EMISSION:
-        case _MATERIAL_GEOMETRY:
-        case _MATERIAL_SURFACE:
-        case _MATERIAL_VOLUME:
-        case _HAIR_BSDF:
-        case _IDENT:
+        case TOK_TRUE:
+        case TOK_FALSE:
+        case TOK_INTEGER_LITERAL:
+        case TOK_FLOATING_LITERAL:
+        case TOK_FRACT_LITERAL:
+        case TOK_STRING_LITERAL:
+        case TOK_SCOPE:
+        case TOK_BOOL:
+        case TOK_BOOL2:
+        case TOK_BOOL3:
+        case TOK_BOOL4:
+        case TOK_INT:
+        case TOK_INT2:
+        case TOK_INT3:
+        case TOK_INT4:
+        case TOK_FLOAT:
+        case TOK_FLOAT2:
+        case TOK_FLOAT3:
+        case TOK_FLOAT4:
+        case TOK_FLOAT2X2:
+        case TOK_FLOAT2X3:
+        case TOK_FLOAT2X4:
+        case TOK_FLOAT3X2:
+        case TOK_FLOAT3X3:
+        case TOK_FLOAT3X4:
+        case TOK_FLOAT4X2:
+        case TOK_FLOAT4X3:
+        case TOK_FLOAT4X4:
+        case TOK_DOUBLE:
+        case TOK_DOUBLE2:
+        case TOK_DOUBLE3:
+        case TOK_DOUBLE4:
+        case TOK_DOUBLE2X2:
+        case TOK_DOUBLE2X3:
+        case TOK_DOUBLE2X4:
+        case TOK_DOUBLE3X2:
+        case TOK_DOUBLE3X3:
+        case TOK_DOUBLE3X4:
+        case TOK_DOUBLE4X2:
+        case TOK_DOUBLE4X3:
+        case TOK_DOUBLE4X4:
+        case TOK_COLOR:
+        case TOK_STRING:
+        case TOK_BSDF:
+        case TOK_EDF:
+        case TOK_VDF:
+        case TOK_LIGHT_PROFILE:
+        case TOK_TEXTURE_2D:
+        case TOK_TEXTURE_3D:
+        case TOK_TEXTURE_CUBE:
+        case TOK_TEXTURE_PTEX:
+        case TOK_BSDF_MEASUREMENT:
+        case TOK_INTENSITY_MODE:
+        case TOK_MATERIAL:
+        case TOK_MATERIAL_EMISSION:
+        case TOK_MATERIAL_GEOMETRY:
+        case TOK_MATERIAL_SURFACE:
+        case TOK_MATERIAL_VOLUME:
+        case TOK_HAIR_BSDF:
+        case TOK_IDENT:
             return true;
-        case _LEFT_PARENTHESIS:
+        case TOK_LEFT_PARENTHESIS:
             // while '(' is a start of a primary expression, do not treat it as a c-style cast
             // here:
             // (t)(f) *is* legal
@@ -390,11 +391,11 @@ COMPILER mdl
     {
         scanner->ResetPeek();
         Token *x = la;
-        if (x->kind == _COMMA)
+        if (x->kind == TOK_COMMA)
             x = scanner->Peek();
-        if (x->kind == _IDENT) {
+        if (x->kind == TOK_IDENT) {
             x = scanner->Peek();
-            return x->kind == _COLON;
+            return x->kind == TOK_COLON;
         } else {
             return false;
         }
@@ -404,11 +405,11 @@ COMPILER mdl
     bool is_anno_block_end()
     {
         scanner->ResetPeek();
-        if (la->kind == _RIGHT_SQUARE_BRACKET) {
+        if (la->kind == TOK_RIGHT_SQUARE_BRACKET) {
             int line = la->line;
             int col  = la->col;
             Token *x = scanner->Peek();
-            if (x->kind != _RIGHT_SQUARE_BRACKET)
+            if (x->kind != TOK_RIGHT_SQUARE_BRACKET)
                 return false;
             return line == x->line && col + 1 == x->col;
         }
@@ -419,9 +420,9 @@ COMPILER mdl
     bool is_array_constructor()
     {
         scanner->ResetPeek();
-        if (la->kind == _LEFT_SQUARE_BRACKET) {
+        if (la->kind == TOK_LEFT_SQUARE_BRACKET) {
             Token *x = scanner->Peek();
-            if (x->kind == _RIGHT_SQUARE_BRACKET)
+            if (x->kind == TOK_RIGHT_SQUARE_BRACKET)
                 return true;
         }
         return false;
@@ -431,11 +432,11 @@ COMPILER mdl
     bool is_clone()
     {
         scanner->ResetPeek();
-        if (la->kind == _LEFT_PARENTHESIS) {
+        if (la->kind == TOK_LEFT_PARENTHESIS) {
             Token *x = scanner->Peek();
-            if (x->kind == _STAR) {
+            if (x->kind == TOK_STAR) {
                 x = scanner->Peek();
-                if (x->kind == _RIGHT_PARENTHESIS)
+                if (x->kind == TOK_RIGHT_PARENTHESIS)
                     return true;
             }
         }
@@ -447,10 +448,10 @@ COMPILER mdl
     {
         scanner->ResetPeek();
         Token *x = la;
-        if (x->kind != _SCOPE)
+        if (x->kind != TOK_SCOPE)
             return false;
         x = scanner->Peek();
-        return x->kind == _IDENT;
+        return x->kind == TOK_IDENT;
     }
 
     // Check if we see '::' and '..'.
@@ -458,10 +459,10 @@ COMPILER mdl
     {
         scanner->ResetPeek();
         Token *x = la;
-        if (x->kind != _SCOPE)
+        if (x->kind != TOK_SCOPE)
             return false;
         x = scanner->Peek();
-        return x->kind == _DOTDOT;
+        return x->kind == TOK_DOTDOT;
     }
 
     // Create a simple name from a token.

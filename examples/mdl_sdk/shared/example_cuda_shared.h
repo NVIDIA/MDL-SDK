@@ -88,7 +88,7 @@ struct Mbsdf
     }
 
     void Add(mi::neuraylib::Mbsdf_part part,
-             const uint2& angular_resolution, 
+             const uint2& angular_resolution,
              unsigned num_channels)
     {
         unsigned part_idx = static_cast<unsigned>(part);
@@ -586,7 +586,7 @@ private:
         mi::Size                           texture_index,
         std::vector<Texture>              &textures);
 
-    // Prepare the mbsdf identified by the mbsdf_index for use by the bsdf measurement access 
+    // Prepare the mbsdf identified by the mbsdf_index for use by the bsdf measurement access
     // functions on the GPU.
     bool prepare_mbsdf(
         mi::neuraylib::ITransaction       *transaction,
@@ -594,7 +594,7 @@ private:
         mi::Size                           mbsdf_index,
         std::vector<Mbsdf>                &mbsdfs);
 
-    // Prepare the mbsdf identified by the mbsdf_index for use by the bsdf measurement access 
+    // Prepare the mbsdf identified by the mbsdf_index for use by the bsdf measurement access
     // functions on the GPU.
     bool prepare_lightprofile(
         mi::neuraylib::ITransaction       *transaction,
@@ -687,19 +687,14 @@ bool Material_gpu_context::prepare_texture(
         transaction->access<mi::neuraylib::ITexture>(code_ptx->get_texture(texture_index)));
     mi::base::Handle<const mi::neuraylib::IImage> image(
         transaction->access<mi::neuraylib::IImage>(texture->get_image()));
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
     mi::Uint32 tex_width = canvas->get_resolution_x();
     mi::Uint32 tex_height = canvas->get_resolution_y();
     mi::Uint32 tex_layers = canvas->get_layers_size();
-    char const *image_type = image->get_type();
+    char const *image_type = image->get_type(0, 0);
 
-    if (image->is_uvtile()) {
-        std::cerr << "The example does not support uvtile textures!" << std::endl;
-        return false;
-    }
-
-    if (canvas->get_tiles_size_x() != 1 || canvas->get_tiles_size_y() != 1) {
-        std::cerr << "The example does not support tiled images!" << std::endl;
+    if (image->is_uvtile() || image->is_animated()) {
+        std::cerr << "The example does not support uvtile and/or animated textures!" << std::endl;
         return false;
     }
 
@@ -707,11 +702,11 @@ bool Material_gpu_context::prepare_texture(
     // is pre-applied here (all images are converted to linear space).
 
     // Convert to linear color space if necessary
-    if (texture->get_effective_gamma() != 1.0f) {
+    if (texture->get_effective_gamma(0, 0) != 1.0f) {
         // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
         mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
             image_api->convert(canvas.get(), "Color"));
-        gamma_canvas->set_gamma(texture->get_effective_gamma());
+        gamma_canvas->set_gamma(texture->get_effective_gamma(0, 0));
         image_api->adjust_gamma(gamma_canvas.get(), 1.0f);
         canvas = gamma_canvas;
     } else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0) {
@@ -773,7 +768,7 @@ bool Material_gpu_context::prepare_texture(
         m_all_texture_arrays->push_back(device_tex_array);
     } else if (m_enable_derivatives) {
         // mipmapped textures use CUDA mipmapped arrays
-        mi::Uint32 num_levels = image->get_levels();
+        mi::Uint32 num_levels = image->get_levels(0, 0);
         cudaExtent extent = make_cudaExtent(tex_width, tex_height, 0);
         cudaMipmappedArray_t device_tex_miparray;
         check_cuda_success(cudaMallocMipmappedArray(
@@ -861,9 +856,9 @@ bool Material_gpu_context::prepare_texture(
     return true;
 }
 
-namespace 
+namespace
 {
-    bool prepare_mbsdfs_part(mi::neuraylib::Mbsdf_part part, Mbsdf& mbsdf_cuda_representation, 
+    bool prepare_mbsdfs_part(mi::neuraylib::Mbsdf_part part, Mbsdf& mbsdf_cuda_representation,
                              const mi::neuraylib::IBsdf_measurement* bsdf_measurement)
     {
         mi::base::Handle<const mi::neuraylib::Bsdf_isotropic_data> dataset;
@@ -930,11 +925,11 @@ namespace
                 // BSDFs are symmetric: f(w_in, w_out) = f(w_out, w_in)
                 // take the average of both measurements
 
-                // area of two the surface elements (the ones we are averaging) 
+                // area of two the surface elements (the ones we are averaging)
                 const float mu = (sintheta1_sqd - sintheta0_sqd) * s_phi * 0.5f;
                 sintheta0_sqd = sintheta1_sqd;
 
-                // offset for both the thetas into the measurement data (select row in the volume) 
+                // offset for both the thetas into the measurement data (select row in the volume)
                 const unsigned int offset_phi  = (t_in * res.x + t_out) * res.y;
                 const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
 
@@ -979,7 +974,7 @@ namespace
 
             albedo_data[t_in] = sum_theta;
 
-            // normalize CDF for theta 
+            // normalize CDF for theta
             for (unsigned int t_out = 0; t_out < res.x; ++t_out)
             {
                 const unsigned int idx = t_in * res.x + t_out;
@@ -1044,7 +1039,7 @@ namespace
             : cudaCreateChannelDesc<float>());
 
         // Allocate a 3D array on the GPU (phi_delta x theta_out x theta_in)
-        cudaExtent extent = make_cudaExtent(res.y, res.x, res.x); 
+        cudaExtent extent = make_cudaExtent(res.y, res.x, res.x);
         check_cuda_success(cudaMalloc3DArray(&device_mbsdf_data, &channel_desc, extent, 0));
 
         // prepare and copy
@@ -1070,7 +1065,7 @@ namespace
         memset(&texDescr, 0, sizeof(cudaTextureDesc));
         texDescr.normalizedCoords = 1;
         texDescr.filterMode = cudaFilterModeLinear;
-        texDescr.addressMode[0] = cudaAddressModeClamp;   
+        texDescr.addressMode[0] = cudaAddressModeClamp;
         texDescr.addressMode[1] = cudaAddressModeClamp;
         texDescr.addressMode[2] = cudaAddressModeClamp;
         texDescr.readMode = cudaReadModeElementType;
@@ -1126,7 +1121,7 @@ bool Material_gpu_context::prepare_lightprofile(
     // phi-mayor: [res.x x res.y]
     const float* data = lprof_nr->get_data();
 
-    // -------------------------------------------------------------------------------------------- 
+    // --------------------------------------------------------------------------------------------
     // compute total power
     // compute inverse CDF data for sampling
     // sampling will work on cells rather than grid nodes (used for evaluation)
@@ -1191,7 +1186,7 @@ bool Material_gpu_context::prepare_lightprofile(
     check_cuda_success(cuMemcpyHtoD(cdf_data_obj, cdf_data, cdf_data_size * sizeof(float)));
     delete[] cdf_data;
 
-    // -------------------------------------------------------------------------------------------- 
+    // --------------------------------------------------------------------------------------------
     // prepare evaluation data
     //  - use a 2d texture that allows bilinear interpolation
     // Copy data to GPU array
@@ -1368,6 +1363,7 @@ public:
         bool enable_derivatives,
         bool fold_ternary_on_df,
         bool enable_auxiliary,
+        bool use_adapt_normal,
         const std::string& df_handle_mode);
 
     // Loads an MDL module and returns the module DB.
@@ -1412,7 +1408,7 @@ public:
     // Generates CUDA PTX target code for the current link unit.
     mi::base::Handle<const mi::neuraylib::ITarget_code> generate_cuda_ptx();
 
-    typedef std::vector<mi::base::Handle<mi::neuraylib::IMaterial_definition const> >
+    typedef std::vector<mi::base::Handle<mi::neuraylib::IFunction_definition const> >
         Material_definition_list;
 
     // Get the list of used material definitions.
@@ -1445,13 +1441,13 @@ public:
 
 private:
     // Creates an instance of the given material.
-    mi::neuraylib::IMaterial_instance* create_material_instance(
+    mi::neuraylib::IFunction_call* create_material_instance(
         const std::string& qualified_module_name,
         const std::string& material_db_name);
 
     // Compiles the given material instance in the given compilation modes.
     mi::neuraylib::ICompiled_material* compile_material_instance(
-        mi::neuraylib::IMaterial_instance* material_instance,
+        mi::neuraylib::IFunction_call* material_instance,
         bool class_compilation);
 
 private:
@@ -1479,6 +1475,7 @@ Material_compiler::Material_compiler(
         bool enable_derivatives,
         bool fold_ternary_on_df,
         bool enable_auxiliary,
+        bool use_adapt_normal,
         const std::string& df_handle_mode)
     : m_mdl_impexp_api(mdl_impexp_api, mi::base::DUP_INTERFACE)
     , m_be_cuda_ptx(mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX))
@@ -1523,7 +1520,7 @@ Material_compiler::Material_compiler(
     // selected using "handles". The contribution of each of those parts has to be evaluated during
     // rendering. This option controls how many parts are evaluated with each call into the
     // generated "evaluate" and "auxiliary" functions and how the data is passed.
-    // The CUDA backend supports pointers, which means an externally managed buffer of arbitrary 
+    // The CUDA backend supports pointers, which means an externally managed buffer of arbitrary
     // size is used to transport the contributions of each part.
     check_success(m_be_cuda_ptx->set_option("df_handle_slot_mode", df_handle_mode.c_str()) == 0);
 
@@ -1533,6 +1530,12 @@ Material_compiler::Material_compiler(
     // you may provide scene data. The example runtime functions always return the
     // default values, which is the same as not supporting any scene data.
     //     m_be_cuda_ptx->set_option("scene_data_names", "*");
+
+    if (use_adapt_normal) {
+        // Option "use_renderer_adapt_normal": Default is "off".
+        // If enabled, the renderer can adapt the normal of BSDFs before use.
+        check_success(m_be_cuda_ptx->set_option("use_renderer_adapt_normal", "on") == 0);
+    }
 
     // force experimental to true for now
     m_context->set_option("experimental", true);
@@ -1557,14 +1560,14 @@ std::string Material_compiler::load_module(const std::string& mdl_module_name)
 }
 
 // Creates an instance of the given material.
-mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
+mi::neuraylib::IFunction_call* Material_compiler::create_material_instance(
     const std::string& qualified_module_name,
     const std::string& material_db_name)
 {
     // Create a material instance from the material definition
     // with the default arguments.
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        m_transaction->access<mi::neuraylib::IMaterial_definition>(
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        m_transaction->access<mi::neuraylib::IFunction_definition>(
             material_db_name.c_str()));
     if (!material_definition) {
         // material with given name does not exist
@@ -1582,8 +1585,8 @@ mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
     m_material_defs.push_back(material_definition);
 
     mi::Sint32 result;
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        material_definition->create_material_instance(0, &result));
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        material_definition->create_function_call(0, &result));
     check_success(result == 0);
 
     material_instance->retain();
@@ -1592,14 +1595,16 @@ mi::neuraylib::IMaterial_instance* Material_compiler::create_material_instance(
 
 // Compiles the given material instance in the given compilation modes.
 mi::neuraylib::ICompiled_material *Material_compiler::compile_material_instance(
-    mi::neuraylib::IMaterial_instance* material_instance,
+    mi::neuraylib::IFunction_call* material_instance,
     bool class_compilation)
 {
     mi::Uint32 flags = class_compilation
         ? mi::neuraylib::IMaterial_instance::CLASS_COMPILATION
         : mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
+    mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance2(
+        material_instance->get_interface<const mi::neuraylib::IMaterial_instance>());
     mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
-        material_instance->create_compiled_material(flags, m_context.get()));
+        material_instance2->create_compiled_material(flags, m_context.get()));
     check_success(print_messages(m_context.get()));
 
     m_compiled_materials.push_back(compiled_material);
@@ -1676,7 +1681,7 @@ bool Material_compiler::add_material(
         return false;
 
     // Load the given module and create a material instance
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
         create_material_instance(qualified_module_name, material_db_name));
     if (!material_instance)
         return false;
@@ -1752,10 +1757,10 @@ std::string generate_func_array_ptx(
     // Iterate over all target codes
     for (size_t tc_index = 0, num = target_codes.size(); tc_index < num; ++tc_index)
     {
-        mi::base::Handle<const mi::neuraylib::ITarget_code> const &target_code = 
+        mi::base::Handle<const mi::neuraylib::ITarget_code> const &target_code =
             target_codes[tc_index];
 
-        // in case of multiple target codes, we need to address the functions by a pair of 
+        // in case of multiple target codes, we need to address the functions by a pair of
         // target_code_index and function_index.
         // the elements in the resulting function array can then be index by offset + func_index.
         if(!tc_offsets.empty())
@@ -1784,7 +1789,7 @@ std::string generate_func_array_ptx(
             mi::Size ab_index = target_code->get_callable_function_argument_block_index(func_index);
             ab_indices += to_string(ab_index == mi::Size(~0) ? 0 : (ab_index + 1));
             f_count++;
-            
+
             // Add prototype declaration
             src += target_code->get_callable_function_prototype(
                 func_index, mi::neuraylib::ITarget_code::SL_PTX);
@@ -1799,7 +1804,7 @@ std::string generate_func_array_ptx(
         src, std::string("mdl_target_code_offsets"), unsigned(target_codes.size()), tc_offsets);
 
     // infos per function
-    src += std::string(".visible .const .align 4 .u32 mdl_functions_count = ") 
+    src += std::string(".visible .const .align 4 .u32 mdl_functions_count = ")
         + to_string(f_count) + ";\n";
     print_array_func(src, std::string("mdl_functions"), f_count, function_names);
     print_array_u32(src, std::string("mdl_arg_block_indices"), f_count, ab_indices);

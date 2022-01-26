@@ -1,6 +1,6 @@
 /*
   zip_get_file_comment.c -- get file comment
-  Copyright (C) 2006-2014 Dieter Baron and Thomas Klausner
+  Copyright (C) 2006-2021 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -42,8 +42,8 @@ zip_get_file_comment(zip_t *za, zip_uint64_t idx, int *lenp, int flags) {
     const char *s;
 
     if ((s = zip_file_get_comment(za, idx, &len, (zip_flags_t)flags)) != NULL) {
-	if (lenp)
-	    *lenp = (int)len;
+        if (lenp)
+            *lenp = (int)len;
     }
 
     return s;

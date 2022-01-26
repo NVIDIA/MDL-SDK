@@ -1,6 +1,6 @@
 /*
-  zip_filerange_crc.c -- compute CRC32 for a range of a file
-  Copyright (C) 2008-2016 Dieter Baron and Thomas Klausner
+  zip_random_uwp.c -- fill the user's buffer with random stuff (UWP version)
+  Copyright (C) 2017-2021 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -31,44 +31,52 @@
   IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-
-#include <stdio.h>
-
 #include "zipint.h"
 
+#ifdef HAVE_CRYPTO
+#include "zip_crypto.h"
+#endif
 
-int
-_zip_filerange_crc(zip_source_t *src, zip_uint64_t start, zip_uint64_t len, uLong *crcp, zip_error_t *error) {
-    Bytef buf[BUFSIZE];
-    zip_int64_t n;
+#ifndef HAVE_SECURE_RANDOM
 
-    *crcp = crc32(0L, Z_NULL, 0);
+#include <bcrypt.h>
+#include <ntstatus.h>
+#include <windows.h>
 
-    if (start > ZIP_INT64_MAX) {
-	zip_error_set(error, ZIP_ER_SEEK, EFBIG);
-	return -1;
+ZIP_EXTERN bool
+zip_secure_random(zip_uint8_t *buffer, zip_uint16_t length) {
+    BCRYPT_ALG_HANDLE hAlg = NULL;
+    NTSTATUS hr = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_RNG_ALGORITHM, MS_PRIMITIVE_PROVIDER, 0);
+    if (hr != STATUS_SUCCESS || hAlg == NULL) {
+        return false;
     }
-
-    if (zip_source_seek(src, (zip_int64_t)start, SEEK_SET) != 0) {
-	_zip_error_set_from_source(error, src);
-	return -1;
+    hr = BCryptGenRandom(&hAlg, buffer, length, 0);
+    BCryptCloseAlgorithmProvider(&hAlg, 0);
+    if (hr != STATUS_SUCCESS) {
+        return false;
     }
-
-    while (len > 0) {
-	n = (zip_int64_t)(len > BUFSIZE ? BUFSIZE : len);
-	if ((n = zip_source_read(src, buf, (zip_uint64_t)n)) < 0) {
-	    _zip_error_set_from_source(error, src);
-	    return -1;
-	}
-	if (n == 0) {
-	    zip_error_set(error, ZIP_ER_EOF, 0);
-	    return -1;
-	}
-
-	*crcp = crc32(*crcp, buf, (uInt)n);
-
-	len -= (zip_uint64_t)n;
-    }
-
-    return 0;
+    return true;
 }
+
+#endif
+
+#ifndef HAVE_RANDOM_UINT32
+#include <stdlib.h>
+
+zip_uint32_t
+zip_random_uint32(void) {
+    static bool seeded = false;
+
+    zip_uint32_t value;
+
+    if (zip_secure_random((zip_uint8_t *)&value, sizeof(value))) {
+        return value;
+    }
+
+    if (!seeded) {
+        srand((unsigned int)time(NULL));
+    }
+
+    return (zip_uint32_t)rand();
+}
+#endif

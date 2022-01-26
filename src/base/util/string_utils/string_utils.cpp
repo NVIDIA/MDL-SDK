@@ -185,7 +185,7 @@ string to_upper(
 // utility to convert from UTF8 to wide chars
 #define BOM8A ((unsigned char)0xEF)
 #define BOM8B ((unsigned char)0xBB)
-#define BOM8C ((unsigned char)0xBF) 
+#define BOM8C ((unsigned char)0xBF)
 
 // Convert the given char input of UTF-8 format into a wchar.
 wstring utf8_to_wchar(
@@ -245,6 +245,7 @@ string wchar_to_mbs(
 
     return result;
 }
+#endif
 
 // Converts a wchar_t * string into an utf8 encoded string.
 string wchar_to_utf8(const wchar_t *src)
@@ -319,8 +320,6 @@ string wchar_to_utf8(const wchar_t *src)
     }
     return res;
 }
-
-#endif
 
 // Parse and split a string to get a token list.
 void split(

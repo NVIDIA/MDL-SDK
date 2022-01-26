@@ -80,23 +80,19 @@ public:
         void                          *data,
         mi::mdl::IType_texture::Shape shape) override;
 
-    /// Handle tex::width(texture_2d, int2) and tex::height(texture_2d, int2)
+    /// Handle tex::width(texture_2d, int2, float) and tex::height(texture_2d, int2, float)
     void tex_resolution_2d(
         int           result[2],
         void const    *tex_data,
-        int const     uv_tile[2]) const override;
+        int const     uv_tile[2],
+        float         frame) const override;
 
-    /// Handle tex::width(texture_*) (not for udim textures)
-    int tex_width(
-        void const    *tex_data) const override;
-
-    /// Handle tex::height(texture_*) (not for udim textures)
-    int tex_height(
-        void const    *tex_data) const override;
-
-    /// Handle tex::depth(texture_*)
-    int tex_depth(
-        void const    *tex_data) const override;
+    /// Handle tex::width(texture_3d, float), tex::height(texture_3d, float), and
+    /// tex::depth(texture_3d, float
+    void tex_resolution_3d(
+        int           result[3],
+        void const    *tex_data,
+        float         frame) const override;
 
     /// Handle tex::lookup_float(texture_2d, ...)
     float tex_lookup_float_2d(
@@ -106,7 +102,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const override;
+        float const   crop_v[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float(texture_2d, ...) with derivatives.
     float tex_lookup_deriv_float_2d(
@@ -116,7 +113,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const override;
+        float const        crop_v[2],
+        float              frame) const override;
 
     /// Handle tex::lookup_float(texture_3d, ...)
     float tex_lookup_float_3d(
@@ -128,7 +126,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const override;
+        float const   crop_w[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float(texture_cube, ...)
     float tex_lookup_float_cube(
@@ -151,7 +150,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const override;
+        float const   crop_v[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float2(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_float2_2d(
@@ -162,7 +162,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const override;
+        float const        crop_v[2],
+        float              frame) const override;
 
     /// Handle tex::lookup_float2(texture_3d, ...)
     void tex_lookup_float2_3d(
@@ -175,7 +176,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const override;
+        float const   crop_w[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float2(texture_cube, ...)
     void tex_lookup_float2_cube(
@@ -200,7 +202,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const override;
+        float const   crop_v[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float3(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_float3_2d(
@@ -211,7 +214,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const override;
+        float const        crop_v[2],
+        float              frame) const override;
 
     /// Handle tex::lookup_float3(texture_3d, ...)
     void tex_lookup_float3_3d(
@@ -224,7 +228,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const override;
+        float const   crop_w[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float3(texture_cube, ...)
     void tex_lookup_float3_cube(
@@ -249,7 +254,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const override;
+        float const   crop_v[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float4(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_float4_2d(
@@ -260,7 +266,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const override;
+        float const        crop_v[2],
+        float              frame) const override;
 
     /// Handle tex::lookup_float4(texture_3d, ...)
     void tex_lookup_float4_3d(
@@ -273,7 +280,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const override;
+        float const   crop_w[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_float4(texture_cube, ...)
     void tex_lookup_float4_cube(
@@ -298,7 +306,8 @@ public:
         Tex_wrap_mode wrap_u,
         Tex_wrap_mode wrap_v,
         float const   crop_u[2],
-        float const   crop_v[2]) const override;
+        float const   crop_v[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_color(texture_2d, ...) with derivatives.
     void tex_lookup_deriv_color_2d(
@@ -309,7 +318,8 @@ public:
         Tex_wrap_mode      wrap_u,
         Tex_wrap_mode      wrap_v,
         float const        crop_u[2],
-        float const        crop_v[2]) const override;
+        float const        crop_v[2],
+        float              frame) const override;
 
     /// Handle tex::lookup_color(texture_3d, ...)
     void tex_lookup_color_3d(
@@ -322,7 +332,8 @@ public:
         Tex_wrap_mode wrap_w,
         float const   crop_u[2],
         float const   crop_v[2],
-        float const   crop_w[2]) const override;
+        float const   crop_w[2],
+        float         frame) const override;
 
     /// Handle tex::lookup_color(texture_cube, ...)
     void tex_lookup_color_cube(
@@ -343,7 +354,8 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const override;
+        int const     uv_tile[2],
+        float         frame) const override;
 
     /// Handle tex::texel_float2(texture_2d, ...)
     void tex_texel_float2_2d(
@@ -351,7 +363,8 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const override;
+        int const     uv_tile[2],
+        float         frame) const override;
 
     /// Handle tex::texel_float3(texture_2d, ...)
     void tex_texel_float3_2d(
@@ -359,7 +372,8 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const override;
+        int const     uv_tile[2],
+        float         frame) const override;
 
     /// Handle tex::texel_float4(texture_2d, ...)
     void tex_texel_float4_2d(
@@ -367,7 +381,8 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const override;
+        int const     uv_tile[2],
+        float         frame) const override;
 
     /// Handle tex::texel_color(texture_2d, ...)
     void tex_texel_color_2d(
@@ -375,47 +390,58 @@ public:
         void const    *tex_data,
         void          *thread_data,
         int const     coord[2],
-        int const     uv_tile[2]) const override;
+        int const     uv_tile[2],
+        float         frame) const override;
 
     /// Handle tex::texel_float(texture_3d, ...).
     float tex_texel_float_3d(
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const override;
+        int const     coord[3],
+        float         frame) const override;
 
     /// Handle tex::texel_float2(texture_3d, ...).
     void tex_texel_float2_3d(
         float         result[2],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const override;
+        int const     coord[3],
+        float         frame) const override;
 
     /// Handle tex::texel_float3(texture_3d, ...).
     void tex_texel_float3_3d(
         float         result[3],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const override;
+        int const     coord[3],
+        float         frame) const override;
 
     /// Handle tex::texel_float4(texture_3d, ...).
     void tex_texel_float4_3d(
         float         result[4],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const override;
+        int const     coord[3],
+        float         frame) const override;
 
     /// Handle tex::texel_color(texture_3d, ...).
     void tex_texel_color_3d(
         float         rgb[3],
         void const    *tex_data,
         void          *thread_data,
-        int const     coord[3]) const override;
+        int const     coord[3],
+        float         frame) const override;
 
     /// Handle tex::texture_isvalid().
     ///
     /// \param tex_data  the read-only shared texture data pointer
     bool tex_isvalid(
         void const *tex_data) const override;
+
+    /// Handle tex::first_frame() and tex::last_frame()
+    void tex_frame(
+        int           result[2],
+        void const    *tex_data) const override;
 
     /// Initializes a light profile data helper object from a given light profile tag.
     ///

@@ -66,28 +66,19 @@ public:
 
     mi::Uint32 get_layers_size( mi::Uint32 level) const;
 
-    mi::Uint32 get_tile_resolution_x( mi::Uint32 level) const;
-
-    mi::Uint32 get_tile_resolution_y( mi::Uint32 level) const;
-
     mi::Uint32 get_miplevels() const;
 
     bool get_is_cubemap() const;
 
     mi::Float32 get_gamma() const;
 
-    /// Does nothing and returns always \false.
-    bool read(
-        mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
+    /// Does nothing and returns always \nullptr.
+    mi::neuraylib::ITile* read(
         mi::Uint32 z,
         mi::Uint32 level) const;
 
     bool write(
         const mi::neuraylib::ITile* tile,
-        mi::Uint32 x,
-        mi::Uint32 y,
         mi::Uint32 z,
         mi::Uint32 level);
 

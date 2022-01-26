@@ -140,6 +140,9 @@ private:
     /// True if position should be printed.
     bool m_show_positions;
 
+    /// True if resource table should be printed.
+    bool m_show_resource_table;
+
     /// The MDL compiler interface.
     mi::base::Handle<mi::mdl::IMDL> m_imdl;
 

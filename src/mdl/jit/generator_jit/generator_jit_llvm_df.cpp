@@ -4810,10 +4810,11 @@ void LLVM_code_generator::translate_distribution_function_init(
         // call state::adapt_normal(normal), if requested
         if (m_use_renderer_adapt_normal) {
             llvm::Function *adapt_normal = get_internal_function(m_int_func_state_adapt_normal);
-            llvm::Value *args[] = {
-                ctx.get_state_parameter(),
-                normal
-            };
+            llvm::SmallVector<llvm::Value *, 3> args;
+            args.push_back(ctx.get_state_parameter());
+            if (target_uses_resource_data_parameter())
+                args.push_back(ctx.get_resource_data_parameter());
+            args.push_back(normal);
             normal = call_rt_func(ctx, adapt_normal, args);
         }
 

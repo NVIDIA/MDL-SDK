@@ -46,11 +46,28 @@ namespace neuraylib {
 */
 class IMdl_execution_context;
 
+/// Options for repairing function calls.
+///
+/// \see #mi::neuraylib::IFunction_call::repair().
+enum Mdl_repair_options{
+    MDL_REPAIR_DEFAULT           = 0,           ///< Default mode, do not alter any inputs.
+    MDL_REMOVE_INVALID_ARGUMENTS = 1, ///< Remove an invalid call attached to an argument.
+    MDL_REPAIR_INVALID_ARGUMENTS = 2, ///< Attempt to repair invalid calls attached to an argument.
+    MDL_REPAIR_OPTIONS_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
+};
+
+mi_static_assert( sizeof( Mdl_repair_options) == sizeof( Uint32));
+
 /// This interface represents a function call.
 ///
 /// A function call is an instance of a formal function definition, with a fixed set of arguments
 /// (possibly the defaults of the function definition). Function calls can be created from
 /// function definitions using #mi::neuraylib::IFunction_definition::create_function_call().
+///
+/// \note This interface also supports material instances, which are considered as a special kind
+///       of function calls, namely function calls with the return type \c "material". See \ref
+///       mi_mdl_materials_are_functions for details. The interface
+///       #mi::neuraylib::IMaterial_instance should only be used to create compiled materials.
 ///
 /// \see #mi::neuraylib::IFunction_definition, #mi::neuraylib::Argument_editor
 class IFunction_call : public
@@ -74,11 +91,8 @@ public:
 
     /// Indicates whether the call represents a material instance.
     ///
-    /// If materials-are-functions is enabled, then this method returns \c true iff
-    /// #mi::neuraylib::IFunction_call::get_interface<mi::neuraylib::IMaterial_instance>()
-    /// succeeds. Otherwise, this method always returns \c false.
-    ///
-    /// \see #mi::neuraylib::IMdl_configuration::set_materials_are_functions().
+    /// If \ref mi_mdl_materials_are_functions is disabled, then this method returns always
+    /// \c false.
     virtual bool is_material() const = 0;
 
     /// Indicates whether this call is an instance of the array constructor.
@@ -182,13 +196,46 @@ public:
     ///                           varying.
     virtual Sint32 set_argument( const char* name, const IExpression* argument) = 0;
 
+    /// Resets the argument at \p index.
+    ///
+    /// If the function definition has a default for this parameter (and it does not violate a
+    /// potential uniform requirement), then a clone of it is used as new argument. Otherwise, a
+    /// constant expression is created, observing range annotations if present (see the overload of
+    /// #mi::neuraylib::IValue_factory::create() with two arguments).
+    ///
+    /// \param index        The index of the argument.
+    /// \return
+    ///                     -   0: Success.
+    ///                     -  -2: Parameter \p index does not exist.
+    ///                     -  -4: The function call is immutable (because it appears in a default
+    ///                            of a function or material definition).
+    ///                     -  -9: The function call is not valid (see #is_valid()).
+    virtual Sint32 reset_argument( Size index) = 0;
+
+    /// Resets an argument identified by name
+    ///
+    /// If the function definition has a default for this parameter (and it does not violate a
+    /// potential uniform requirement), then a clone of it is used as new argument. Otherwise, a
+    /// constant expression is created, observing range annotations if present (see the overload of
+    /// #mi::neuraylib::IValue_factory::create() with two arguments).
+    ///
+    /// \param name         The name of the parameter.
+    /// \return
+    ///                     -   0: Success.
+    ///                     -  -1: Invalid parameters (\c NULL pointer).
+    ///                     -  -2: Parameter \p name does not exist.
+    ///                     -  -4: The function call is immutable (because it appears in a default
+    ///                            of a function or material definition).
+    ///                     -  -9: The function call is not valid (see #is_valid()).
+    virtual Sint32 reset_argument( const char* name) = 0;
+
     /// Indicates, if this function call acts as a default argument of a material or function
     /// definition.
     ///
     /// Defaults are immutable, their arguments cannot be changed and they cannot be used
     /// in call expressions.
     ///
-    /// \return true, if this function call is a default, false otherwise.
+    /// \return \c true, if this function call is a default, \c false otherwise.
     virtual bool is_default() const = 0;
 
     /// Returns \c true if this function call and all its arguments point to valid
@@ -196,7 +243,7 @@ public:
     ///
     /// Material and function definitions can become invalid due to a module reload.
     ///
-    /// \see #mi::neuraylib::IModule::reload(), #mi::neuraylib::IMaterial_instance::repair()
+    /// \see #mi::neuraylib::IModule::reload(), #mi::neuraylib::IFunction_call::repair()
     ///
     /// \param context  Execution context that can be queried for error messages
     ///                 after the operation has finished. Can be \c NULL.

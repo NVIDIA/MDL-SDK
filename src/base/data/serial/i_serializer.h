@@ -127,12 +127,6 @@
 #include <mi/neuraylib/iserializer.h>
 #include <mi/neuraylib/ideserializer.h>
 
-namespace mi {
-namespace math {
-    class Color;
-} // namespace math
-} // namespace mi
-
 #include "i_serial_serializable.h"
 
 namespace MI {
@@ -447,7 +441,7 @@ void write(S*, const mi::math::Matrix_struct<T,R,C>&);
 void write(Serializer*, const char* value);
 template <typename S, typename = enable_if_serializer_t<S>> void write(S*, const std::string& value);
 template <typename S, typename = enable_if_serializer_t<S>> void write(S*, const mi::base::Uuid& value);
-template <typename S, typename = enable_if_serializer_t<S>> void write(S*, const mi::math::Color& value);
+template <typename S, typename = enable_if_serializer_t<S>> void write(S*, const mi::math::Color_struct& value);
 template <typename T, Size DIM, typename S, typename = enable_if_serializer_t<S>>
 void write(S* serial,const mi::math::Vector_struct<T,DIM>& value);
 template <typename T, Size DIM, typename S, typename = enable_if_serializer_t<S>>
@@ -483,7 +477,7 @@ template <typename T, Size R, Size C, typename D, typename = enable_if_deseriali
 void read(Deserializer* deser, char** value_pointer);
 template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, std::string* value_pointer);
 template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, mi::base::Uuid*);
-template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, mi::math::Color* value_pointer);
+template <typename D, typename = enable_if_deserializer_t<D>> void read(D*, mi::math::Color_struct* value_pointer);
 template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Vector_struct<T,DIM>* value_type);
 template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Bbox_struct<T,DIM>* value_type);
 template <typename T, Size DIM, typename D, typename = enable_if_deserializer_t<D>> void read(D* deser, mi::math::Bbox<T,DIM>* value_type);

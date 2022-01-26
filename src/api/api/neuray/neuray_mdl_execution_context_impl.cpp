@@ -132,9 +132,9 @@ private:
 };
 
 
-Mdl_execution_context_impl::Mdl_execution_context_impl()
+Mdl_execution_context_impl::Mdl_execution_context_impl( MDL::Execution_context* context)
 {
-    m_context = new MDL::Execution_context();
+    m_context = context ? context : new MDL::Execution_context();
 }
 
 Mdl_execution_context_impl::~Mdl_execution_context_impl()
@@ -332,6 +332,19 @@ MDL::Execution_context* unwrap_context(
     Mdl_execution_context_impl* context_impl
         = static_cast<Mdl_execution_context_impl*>(context);
     MDL::Execution_context& wrapped_context = context_impl->get_context();
+    return &wrapped_context;
+}
+
+const MDL::Execution_context* unwrap_context(
+    const mi::neuraylib::IMdl_execution_context* context,
+    const MDL::Execution_context& default_context)
+{
+    if( !context)
+        return &default_context;
+
+    const Mdl_execution_context_impl* context_impl
+        = static_cast<const Mdl_execution_context_impl*>(context);
+    const MDL::Execution_context& wrapped_context = context_impl->get_context();
     return &wrapped_context;
 }
 

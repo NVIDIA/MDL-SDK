@@ -125,6 +125,68 @@ public:
     virtual IInput_stream *open(IThread_context *ctx) const = 0;
 };
 
+/// An interface describing an ordered set of mappings for one element of a sequence.
+class IMDL_resource_element : public
+    mi::base::Interface_declare<0x6a6ddebe,0x5748,0x4cfd,0xb8,0x61,0x5f,0x16,0x6a,0x8c,0x7f,0xcd,
+    mi::base::IInterface>
+{
+public:
+    /// Get the frame number of this element (inside the sequence).
+    virtual size_t get_frame_number() const = 0;
+
+    /// Get the number of entries for this element.
+    virtual size_t get_count() const = 0;
+
+    /// Get the i'th MDL URL of the ordered set for this element.
+    ///
+    /// \param i the index
+    ///
+    /// \returns the i'th MDL URL of the set or NULL if the index is out of range.
+    virtual char const *get_mdl_url(
+        size_t i) const = 0;
+
+    /// Get the i'th file name of the ordered set for this element.
+    ///
+    /// \param i  the index
+    ///
+    /// \returns the i'th file name of the set or NULL if the index is out of range.
+    ///
+    /// \note If this resource is inside an MDL archive, the returned name
+    ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
+    virtual char const *get_filename(
+        size_t i) const = 0;
+
+    /// If the ordered set for the element represents an UDIM mapping, returns it.
+    ///
+    /// \param[in]  i      the index inside the resource set
+    /// \param[out] u      the u coordinate if valid
+    /// \param[out] v      the v coordinate if valid
+    ///
+    /// \returns true if an u, v mapping exists, false otherwise
+    virtual bool get_udim_mapping(
+        size_t i,
+        int &u,
+        int &v) const = 0;
+
+    /// Opens a reader for the i'th entry of the ordered set for the given element.
+    ///
+    /// \param i the index
+    ///
+    /// \returns an reader for the i'th entry of the set or NULL if the index is out of range.
+    virtual IMDL_resource_reader *open_reader(
+        size_t i) const = 0;
+
+    /// Get the resource hash value for the i'th entry in the set for this element if any.
+    ///
+    /// \param[in]  i     the index
+    /// \param[out] hash  the hash value if exists
+    ///
+    /// \return true if this entry has a hash, false otherwise
+    virtual bool get_resource_hash(
+        size_t i,
+        unsigned char hash[16]) const = 0;
+};
+
 /// An interface describing an ordered set of resolved resources.
 ///
 /// While most resources in MDL can be mapped to exactly one entity, some resources
@@ -147,54 +209,40 @@ public:
     ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
     virtual char const *get_filename_mask() const = 0;
 
-    /// Get the number of resolved entities.
-    virtual size_t get_count() const = 0;
+    /// Indicates whether this resource set has a sequence marker.
+    virtual bool has_sequence_marker() const = 0;
 
-    /// Get the i'th MDL URL of the ordered set.
-    ///
-    /// \param i  the index
-    ///
-    /// \returns the i'th MDL URL of the set or NULL if the index is out of range.
-    virtual char const *get_mdl_url(size_t i) const = 0;
-
-    /// Get the i'th file name of the ordered set.
-    ///
-    /// \param i  the index
-    ///
-    /// \returns the i'th file name of the set or NULL if the index is out of range.
-    ///
-    /// \note If this resource is inside an MDL archive, the returned name
-    ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
-    virtual char const *get_filename(size_t i) const = 0;
-
-    /// If the ordered set represents an UDIM mapping, returns it, otherwise NULL.
-    ///
-    /// \param[in]  i  the index
-    /// \param[out] u  the u coordinate
-    /// \param[out] v  the v coordinate
-    ///
-    /// \returns true if a mapping is available, false otherwise
-    virtual bool get_udim_mapping(size_t i, int &u, int &v) const = 0;
-
-    /// Opens a reader for the i'th entry.
-    ///
-    /// \param i  the index
-    ///
-    /// \returns an reader for the i'th entry of the set or NULL if the index is out of range.
-    virtual IMDL_resource_reader *open_reader(size_t i) const = 0;
-
-    /// Get the UDIM mode for this set.
+    /// Get the UDIM mode for the whole set.
     virtual UDIM_mode get_udim_mode() const = 0;
 
-    /// Get the resource hash value for the i'th file in the set if any.
+    /// Get the number of existing resolved entity elements.
     ///
-    /// \param[in]  i     the index
-    /// \param[out] hash  the hash value if exists
+    /// \note This might be less then the number of frames in the detected range.
+    virtual size_t get_count() const = 0;
+
+    /// Get the i'th element of the resolved entities.
     ///
-    /// \return true if this entry has a hash, false otherwise
-    virtual bool get_resource_hash(
-        size_t i,
-        unsigned char hash[16]) const = 0;
+    /// Resource elements are sorted by increasing frame numbers.
+    virtual IMDL_resource_element const *get_element(
+        size_t i) const = 0;
+
+    /// Get the first existing frame number.
+    ///
+    /// \note This number is only valid, if get_count() > 0
+    virtual size_t get_first_frame() const = 0;
+
+    /// Get the last existing frame number.
+    ///
+    /// \note This number is only valid, if get_count() > 0
+    virtual size_t get_last_frame() const = 0;
+
+    /// Get the frame with given frame number of the resolved entities.
+    ///
+    /// \param frame  the frame number
+    ///
+    /// \return frame should be in [get_first_frame(), get_last_frame()]
+    virtual IMDL_resource_element const *get_frame(
+        size_t frame) const = 0;
 };
 
 /// An interface for resolving MDL entities.
@@ -227,14 +275,16 @@ public:
     /// \param owner_name        if non-NULL, the absolute name of the owner
     /// \param pos               if non-NULL, the position of the import statement for error
     ///                          messages
+    /// \param ctx               The thread context or NULL.
     ///
     /// \return the set of resolved resources or NULL if this name could not be resolved,
     ///         \see IMDL_resource_set for a description
     virtual IMDL_resource_set *resolve_resource_file_name(
-        char const     *file_path,
-        char const     *owner_file_path,
-        char const     *owner_name,
-        Position const *pos) = 0;
+        char const      *file_path,
+        char const      *owner_file_path,
+        char const      *owner_name,
+        Position const  *pos,
+        IThread_context *ctx) = 0;
 
     /// Resolve a module name.
     ///
@@ -243,13 +293,15 @@ public:
     /// \param owner_name        if non-NULL, the absolute name of the owner
     /// \param pos               if non-NULL, the position of the import statement for error
     ///                          messages
+    /// \param ctx               The thread context or NULL.
     ///
     /// \return the absolute module name or NULL if this name could not be resolved
     virtual IMDL_import_result *resolve_module(
-        char const     *module_name,
-        char const     *owner_file_path,
-        char const     *owner_name,
-        Position const *pos) = 0;
+        char const      *module_name,
+        char const      *owner_file_path,
+        char const      *owner_name,
+        Position const  *pos,
+        IThread_context *ctx) = 0;
 
     /// Access messages of last resolver operation.
     virtual Messages const &access_messages() const = 0;

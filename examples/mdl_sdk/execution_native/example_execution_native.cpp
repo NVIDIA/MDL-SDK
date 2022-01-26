@@ -36,10 +36,10 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "example_shared.h"
-#include "texture_support.h"
-#include <vector>
+#include "texture_support_native.h"
 
 // Command line options structure.
 struct Options {
@@ -119,15 +119,15 @@ void create_material_instance(
             material_simple_name.c_str(), module_name.c_str());
 
     // Get the material definition from the database
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        transaction->access<mi::neuraylib::IMaterial_definition>(material_db_name.c_str()));
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        transaction->access<mi::neuraylib::IFunction_definition>(material_db_name.c_str()));
     if (!material_definition)
         exit_failure("Accessing definition '%s' failed.", material_db_name.c_str());
 
     // Create a material instance from the material definition with the default arguments.
     mi::Sint32 result;
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        material_definition->create_material_instance(0, &result));
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        material_definition->create_function_call(0, &result));
     if (result != 0)
         exit_failure("Instantiating '%s' failed.", material_db_name.c_str());
 
@@ -279,7 +279,7 @@ mi::neuraylib::ICanvas *bake_expression_native_with_derivs(
     mi::Uint32                                  width,
     mi::Uint32                                  height)
 {
-    // Create a canvas (with only one tile)
+    // Create a canvas
     mi::base::Handle<mi::neuraylib::ICanvas> canvas(
         image_api->create_canvas("Rgb_fp", width, height));
 
@@ -382,16 +382,11 @@ bool prepare_textures(
                 target_code->get_texture(i)));
         mi::base::Handle<const mi::neuraylib::IImage> image(
             transaction->access<mi::neuraylib::IImage>(texture->get_image()));
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
-        char const *image_type = image->get_type();
+        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
+        char const *image_type = image->get_type(0, 0);
 
-        if (image->is_uvtile()) {
-            std::cerr << "The example does not support uvtile textures!" << std::endl;
-            return false;
-        }
-
-        if (canvas->get_tiles_size_x() != 1 || canvas->get_tiles_size_y() != 1) {
-            std::cerr << "The example does not support tiled images!" << std::endl;
+        if (image->is_uvtile() || image->is_animated()) {
+            std::cerr << "The example does not support uvtile and/or animated textures!" << std::endl;
             return false;
         }
 
@@ -399,11 +394,11 @@ bool prepare_textures(
         // is pre-applied here (all images are converted to linear space).
 
         // Convert to linear color space if necessary
-        if (texture->get_effective_gamma() != 1.0f) {
+        if (texture->get_effective_gamma(0, 0) != 1.0f) {
             // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
             mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
                 image_api->convert(canvas.get(), "Color"));
-            gamma_canvas->set_gamma(texture->get_effective_gamma());
+            gamma_canvas->set_gamma(texture->get_effective_gamma(0, 0));
             image_api->adjust_gamma(gamma_canvas.get(), 1.0f);
             canvas = gamma_canvas;
         }

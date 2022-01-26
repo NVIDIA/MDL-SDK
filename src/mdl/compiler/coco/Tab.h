@@ -50,6 +50,17 @@ class BitArray;
 
 class Tab {
 public:
+	enum DDT_Flags {
+		DDT_TRACE_AUTOMATON     = 0, // trace automaton
+		DDT_LIST_SETS           = 1, // list first/follow sets
+		DDT_PRINT_SYNTAX_GRAPH  = 2, // print syntax graph
+		DDT_TRACE_COMP_FIRST    = 3, // trace computation of first sets
+		DDT_PRINT_ANY_SYNC_SETS = 4, // print ANY and SYNC sets
+		DDT_LIST_SYMBOL_TABLE   = 6, // list symbol table
+		DDT_LIST_XREF_TABLE     = 7, // list cross reference table
+		DDP_PRINT_STATS         = 8,  // print statistics
+	};
+
 	Position *semDeclPos;       // position of global semantic declarations
 	CharSet *ignored;           // characters ignored by the scanner
 	bool ddt[10];                  // debug and test switches

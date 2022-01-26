@@ -226,7 +226,10 @@ class Processor:
                     done = False
 
                     def fixup_base(base):
-                        if not base: base = ""
+                        if not base:
+                            base = ""
+                        if base.startswith("base::"): #FIXME: remove
+                            base = "mi::" + base
                         if base.startswith("neuraylib::"): #FIXME: remove
                             base = "mi::" + base
                         if base != "" and not (base.startswith("mi::") or base.startswith("nv::")):

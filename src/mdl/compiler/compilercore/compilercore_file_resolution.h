@@ -55,9 +55,77 @@ class Error_params;
 class Type_factory;
 class Value_factory;
 
-#define UDIM_MARI_MARKER    "<UDIM>"
-#define UDIM_ZBRUSH_MARKER  "<UVTILE0>"
-#define UDIM_MUDBOX_MARKER  "<UVTILE1>"
+class MDL_resource_set;
+
+#define UDIM_MARI_MARKER        "<UDIM>"
+#define UDIM_MARI_MARKER_SIZE   6
+#define UDIM_ZBRUSH_MARKER      "<UVTILE0>"
+#define UDIM_ZBRUSH_MARKER_SIZE 9
+#define UDIM_MUDBOX_MARKER      "<UVTILE1>"
+#define UDIM_MUDBOX_MARKER_SIZE 9
+
+/// Helper class containing marker info.
+///
+/// It represents a string prefix <marker1> infix <marker2> postfix.
+class Marker_info {
+    friend class File_resolver;
+public:
+    enum Marker_kind {
+        MK_NONE  = 0,
+        MK_FRAME = 1,
+        MK_UDIM  = 2
+    };
+
+    /// Get the frame marker offset if any.
+    size_t get_length(unsigned part) const { return part_len[part]; }
+
+    /// Get the UDIM marker offset if any.
+    Marker_kind get_marker_kind(unsigned index) const {
+        return Marker_kind(marker_kinds[index]);
+    }
+
+    /// Get the maximum number of frame index digits.
+    size_t get_max_frame_digits() const { return max_frame_digits; }
+
+    /// Check if a sequence marker was found.
+    bool has_sequence_marker() const {
+        return marker_kinds[0] == MK_FRAME || marker_kinds[1] == MK_FRAME;
+    }
+
+    /// Get the UDIM mode.
+    UDIM_mode get_udim_mode() const { return UDIM_mode(udim_mode); }
+
+    /// Check if a marker was found.
+    bool has_marker() const { return marker_kinds[0] != MK_NONE; }
+
+    /// Clear the marker info.
+    void clear() {
+        part_len[0] = part_len[1] = part_len[2] = 0;
+        max_frame_digits = 0;
+        marker_kinds[0] = marker_kinds[1] = MK_NONE;
+        udim_mode = NO_UDIM;
+    }
+
+public:
+    /// Default constructor, creates a "no marker" info.
+    Marker_info()
+    {
+        clear();
+    }
+
+private:
+    /// The lengths of prefix, infix, and postfix
+    unsigned part_len[3];
+
+    /// maximum length of the frame marker if any.
+    unsigned max_frame_digits;
+
+    /// The mode of the two possible markers
+    unsigned char marker_kinds[2];
+
+    /// The UDIM mode.
+    unsigned char udim_mode;
+};
 
 /// Implements file resolution.
 class File_resolver {
@@ -76,13 +144,15 @@ public:
     ///                                This may be NULL or "" for the top-level import.
     /// \param owner_filename          Absolute filename of the owner MDL module.
     ///                                This may be NULL or "" for the top-level import.
+    /// \param ctx                     The thread context or NULL.
     /// \returns                       An import result interface or NULL
     ///                                if the module does not exist.
     IMDL_import_result *resolve_import(
-        Position const &pos,
-        char const     *import_name,
-        char const     *owner_name,
-        char const     *owner_filename);
+        Position const  &pos,
+        char const      *import_name,
+        char const      *owner_name,
+        char const      *owner_filename,
+        IThread_context *ctx);
 
     /// Resolve a resource (file) name to the corresponding absolute file path.
     ///
@@ -90,13 +160,15 @@ public:
     /// \param[in]  file_name       The (possible relative) resource name.
     /// \param[in]  owner_name      The absolute name of the owner MDL module.
     /// \param[in]  owner_filename  Absolute filename of the owner MDL module.
+    /// \param ctx                  The thread context or NULL.
     ///
     /// \returns                    The resource set or NULL if the resource does not exist.
     IMDL_resource_set *resolve_resource(
-        Position const &pos,
-        char const     *import_name,
-        char const     *owner_name,
-        char const     *owner_filename);
+        Position const  &pos,
+        char const      *import_name,
+        char const      *owner_name,
+        char const      *owner_filename,
+        IThread_context *ctx);
 
     /// Open an input stream to the modules source.
     /// \param  module_name             The absolute module name.
@@ -321,15 +393,15 @@ private:
     ///
     /// \param canonical_file_mask  The canonical file path (maybe regex) to resolve (SLASH).
     /// \param is_resource          True if the file path describes a resource.
-    /// \param file_path            Used to report the filepath of error messages
-    /// \param udim_mode            If != NO_UDIM the returned file path is a mask.
+    /// \param file_path            Used to report the file path of error messages.
+    /// \param file_mask_is_regex   If true the canonical file path is a regex.
     ///
     /// \return                     The resolved file path, or \c "" in case of failures.
     string consider_search_paths(
         string const &canonical_file_mask,
         bool         is_resource,
         char const   *file_path,
-        UDIM_mode    udim_mode);
+        bool         file_mask_is_regex);
 
     /// Checks whether the resolved file system location passes the consistency checks in the
     /// MDL spec.
@@ -392,17 +464,17 @@ private:
 
     /// Search the given path in all MDL search paths and return the absolute path if found.
     ///
-    /// \param file_mask    the path to search (maybe a regex)
-    /// \param is_resource  true if search in extra resource path
-    /// \param front_path   if non-NULL, search this MDL path first
-    /// \param udim_mode    if != NO_UDIM the returned value is a file mask
+    /// \param file_mask           the path to search (maybe a regex)
+    /// \param is_resource         true if search in extra resource path
+    /// \param front_path          if non-NULL, search this MDL path first
+    /// \param file_mask_is_regex  if true the path to search is a regex
     ///
     /// \return the absolute path or mask if found
     string search_mdl_path(
         char const *file_mask,
         bool       in_resource_path,
         char const *front_path,
-        UDIM_mode  udim_mode);
+        bool       file_mask_is_regex);
 
     /// Check if the given file name (UTF8 encoded) names a file on the file system or inside
     /// an archive.
@@ -413,6 +485,16 @@ private:
         char const *fname,
         bool       is_regex) const;
 
+    /// Parse markers in a file name.
+    ///
+    /// \param[in]  file_name   a file name
+    /// \param[out] info        the marker info
+    ///
+    /// \return the computed mask
+    string parse_marker(
+        char const *file_name,
+        Marker_info &info);
+
     /// Resolve a MDL file name
     ///
     /// \param[out] abs_file_name    the resolved absolute file name (on file system)
@@ -421,7 +503,7 @@ private:
     /// \param[in]  owner_name       the absolute name of the owner
     /// \param[in]  owner_file_path  the file path of the owner
     /// \param[in]  pos              the position of the import statement
-    /// \param[out] udim_mode        if != NO_UDIM the returned absolute file name is a file mask
+    /// \param[out] info             computed marker info
     string resolve_filename(
         string         &abs_file_name,
         char const     *file_path,
@@ -429,7 +511,7 @@ private:
         char const     *module_file_system_path,
         char const     *module_name,
         Position const *pos,
-        UDIM_mode      &udim_mode);
+        Marker_info    &info);
 
     /// The resolver resolves a module.
     void mark_module_search(char const *module_name);
@@ -598,64 +680,63 @@ private:
     bool m_owns_container;
 };
 
-/// Implementation of the IMDL_resource_set interface.
-class MDL_resource_set : public Allocator_interface_implement<IMDL_resource_set>
+//Implementation of the IMDL_resource_element interface.
+class MDL_resource_element : public Allocator_interface_implement<IMDL_resource_element>
 {
-    typedef Allocator_interface_implement<IMDL_resource_set> Base;
+    typedef Allocator_interface_implement<IMDL_resource_element> Base;
     friend class Allocator_builder;
+    friend class MDL_resource_set;
 public:
-    /// Get the MDL URL mask of the ordered set.
+    /// Get the frame number of this element (inside the sequence).
     ///
-    /// \returns the MDL URL mask of the set
-    char const *get_mdl_url_mask() const MDL_FINAL;
+    /// \note This can be called for any frame number, even outside the existing range.
+    size_t get_frame_number() const MDL_FINAL;
 
-    /// Get the file name mask of the ordered set.
+    /// Get the number of entries for this element.
     ///
-    /// \param i  the index
-    ///
-    /// \returns the file name mask of the set
-    ///
-    /// \note If this resource is inside an MDL archive, the returned name
-    ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
-    char const *get_filename_mask() const MDL_FINAL;
-
-    /// Get the number of resolved file names.
+    /// \note This can be called for any frame number, even outside the existing range.
     size_t get_count() const MDL_FINAL;
 
-    /// Get the i'th MDL url of the ordered set.
+    /// Get the i'th MDL URL of the ordered set for this element.
     ///
-    /// \param i  the index
+    /// \param i the index
     ///
-    /// \returns the i'th MDL url of the set or NULL if the index is out of range.
-    char const *get_mdl_url(size_t i) const MDL_FINAL;
+    /// \returns the i'th MDL URL of the set or NULL if the index is out of range.
+    char const *get_mdl_url(
+        size_t i) const MDL_FINAL;
 
-    /// Get the i'th file name of the ordered set.
+    /// Get the i'th file name of the ordered set for this element.
     ///
     /// \param i  the index
     ///
     /// \returns the i'th file name of the set or NULL if the index is out of range.
-    char const *get_filename(size_t i) const MDL_FINAL;
+    ///
+    /// \note If this resource is inside an MDL archive, the returned name
+    ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
+    char const *get_filename(
+        size_t i) const MDL_FINAL;
 
-    /// If the ordered set represents an UDIM mapping, returns it, otherwise NULL.
+    /// If the ordered set for the element represents an UDIM mapping, returns it.
     ///
-    /// \param[in]  i  the index
-    /// \param[out] u  the u coordinate
-    /// \param[out] v  the v coordinate
+    /// \param[in]  i      the index inside the resource set
+    /// \param[out] u      the u coordinate if valid
+    /// \param[out] v      the v coordinate if valid
     ///
-    /// \returns true if a mapping is available, false otherwise
-    bool get_udim_mapping(size_t i, int &u, int &v) const MDL_FINAL;
+    /// \returns true if an u, v mapping exists, false otherwise
+    bool get_udim_mapping(
+        size_t i,
+        int    &u,
+        int    &v) const MDL_FINAL;
 
-    /// Opens a reader for the i'th entry.
+    /// Opens a reader for the i'th entry of the ordered set for the given element.
     ///
-    /// \param i  the index
+    /// \param i the index
     ///
     /// \returns an reader for the i'th entry of the set or NULL if the index is out of range.
-    IMDL_resource_reader *open_reader(size_t i) const MDL_FINAL;
+    IMDL_resource_reader *open_reader(
+        size_t i) const MDL_FINAL;
 
-    /// Get the UDIM mode for this set.
-    UDIM_mode get_udim_mode() const MDL_FINAL;
-
-    /// Get the resource hash value for the i'th file in the set if any.
+    /// Get the resource hash value for the i'th entry in the set for this element if any.
     ///
     /// \param[in]  i     the index
     /// \param[out] hash  the hash value if exists
@@ -665,98 +746,61 @@ public:
         size_t i,
         unsigned char hash[16]) const MDL_FINAL;
 
-    /// Create a resource set from a file mask.
+    /// Increments the reference count.
     ///
-    /// \param alloc      the allocator
-    /// \param url        the absolute MDL url
-    /// \param filename   the file name
-    /// \param udim_mode  the UDIM mode
-    static MDL_resource_set *from_mask(
-        IAllocator *alloc,
-        char const *url,
-        char const *file_mask,
-        UDIM_mode  udim_mode);
+    /// Increments the reference count of the object referenced through this interface
+    /// and returns the new reference count. The operation is thread-safe.
+    Uint32 retain() const MDL_FINAL;
+
+    /// Decrements the reference count.
+    ///
+    /// Decrements the reference count of the object referenced through this interface
+    /// and returns the new reference count. If the reference count dropped to
+    /// zero, the object will be deleted. The operation is thread-safe.
+    Uint32 release() const MDL_FINAL;
 
 private:
-    /// Create a resource set from a file mask describing files on disk.
+    /// Add a new entry to the resource element.
     ///
-    /// \param alloc      the allocator
-    /// \param url        the absolute MDL url
-    /// \param filename   the file name
-    /// \param udim_mode  the UDIM mode
-    static MDL_resource_set *from_mask_file(
-        IAllocator *alloc,
-        char const *url,
-        char const *file_mask,
-        UDIM_mode  udim_mode);
-
-    /// Parse a file name and enter it into a resource set.
+    /// \param url       the absolute MDL URL of this entry
+    /// \param filename  the filename of this entry
+    /// \param u         the u coordinate of this entry
+    /// \param v         the v coordinate of this entry
     ///
-    /// \param s          the resource set
-    /// \param name       the file name of one UDIM part
-    /// \param ofs        offset inside name where the u,v info is found
-    /// \param url        the already (already updated) url name of the entry
-    /// \param prefix     the (directory or archive name) prefix
-    /// \param sep        the separator to be used between prefix and file name
-    /// \param udim_mode  the UDIM mode
-    /// \param hash       if non-NULL, the hash value of the resource file
-    static void parse_u_v(
-        MDL_resource_set *s,
-        char const       *name,
-        size_t           ofs,
-        char const       *url,
-        string const     &prefix,
-        char             sep,
-        UDIM_mode        udim_mode,
-        unsigned char    hash[16]);
+    /// \return  the index of the new entry
+    size_t add_entry(
+        char const          *url,
+        char const          *filename,
+        int                 u,
+        int                 v,
+        unsigned char const hash[16]);
 
-    /// Create a resource set from a file mask describing files on a container.
-    ///
-    /// \param alloc            the allocator
-    /// \param url              the absolute MDL url
-    /// \param arc_name         the container name
-    /// \param container_kind   the kind of container
-    /// \param filename         the file name
-    /// \param udim_mode        the UDIM mode
-    static MDL_resource_set *from_mask_container(
-        IAllocator        *alloc,
-        char const        *url,
-        char const        *container_name,
-        File_handle::Kind container_kind,
-        char const        *file_mask,
-        UDIM_mode         udim_mode);
-
-private:
+public:
     /// Constructor from one file name/url pair (typical case).
     ///
-    /// \param alloc     the allocator
+    /// \param parent    the parent set
     /// \param url       the absolute MDL url
     /// \param filename  the file name
     /// \param hash      the resource hash value if any
-    MDL_resource_set(
-        IAllocator          *alloc,
+    MDL_resource_element(
+        MDL_resource_set    &parent,
         char const          *url,
         char const          *filename,
         unsigned char const hash[16]);
 
-    /// Empty constructor from masks.
+    /// Constructor of an empty element.
     ///
-    /// \param alloc      the allocator
-    /// \param udim_mode  the UDIM mode
-    MDL_resource_set(
-        IAllocator *alloc,
-        UDIM_mode  udim_mode,
-        char const *url_mask,
-        char const *filename_mask);
+    /// \param parent     the parent set
+    /// \param frame     the frame number of this element
+    MDL_resource_element(
+        MDL_resource_set &parent,
+        size_t           frame);
 
 private:
-    /// The arena for allocation data.
-    Memory_arena m_arena;
-
-    /// An entry inside the resource file set;
-    struct Resource_entry {
+    /// An entry inside the resource element.
+    struct Resource_tile {
         /// Constructor.
-        Resource_entry(
+        Resource_tile(
             char const          *url,
             char const          *filename,
             int                 u,
@@ -780,19 +824,213 @@ private:
         bool       has_hash;
     };
 
-    typedef Arena_vector<Resource_entry>::Type Entry_vec;
+    typedef Arena_vector<Resource_tile>::Type Entry_vec;
+
+    /// The parent set.
+    MDL_resource_set &m_parent;
 
     /// The file name list.
     Entry_vec m_entries;
 
-    /// The UDIM mode.
-    UDIM_mode m_udim_mode;
+    /// The frame number of this element.
+    size_t m_frame;
+};
+
+/// Implementation of the IMDL_resource_set interface.
+class MDL_resource_set : public Allocator_interface_implement<IMDL_resource_set>
+{
+    typedef Allocator_interface_implement<IMDL_resource_set> Base;
+    friend class Allocator_builder;
+    friend class MDL_resource_element;
+public:
+    /// Get the MDL URL mask of the ordered set.
+    ///
+    /// \returns the MDL URL mask of the set
+    char const *get_mdl_url_mask() const MDL_FINAL;
+
+    /// Get the file name mask of the ordered set.
+    ///
+    /// \param i  the index
+    ///
+    /// \returns the file name mask of the set
+    ///
+    /// \note If this resource is inside an MDL archive, the returned name
+    ///       uses the format 'MDL_ARCHIVE_FILENAME:RESOURCE_FILENAME'.
+    char const *get_filename_mask() const MDL_FINAL;
+
+
+    /// Indicates whether the resource set has a sequence marker.
+    bool has_sequence_marker() const MDL_FINAL;
+
+    /// Get the UDIM mode for the whole set.
+    UDIM_mode get_udim_mode() const MDL_FINAL;
+
+    /// Get the number of existing resolved entity elements.
+    ///
+    /// \note This might be less then the number of frames in the detected range.
+    size_t get_count() const MDL_FINAL;
+
+    /// Get the i'th element of the resolved entities.
+    MDL_resource_element const *get_element(
+        size_t i) const MDL_FINAL;
+
+    /// Get the first existing frame number.
+    ///
+    /// \note This number is only valid, if get_count() > 0
+    size_t get_first_frame() const MDL_FINAL;
+
+    /// Get the last existing frame number.
+    ///
+    /// \note This number is only valid, if get_count() > 0
+    size_t get_last_frame() const MDL_FINAL;
+
+    /// Get the frame with given frame number of the resolved entities.
+    ///
+    /// \param frame  the frame number
+    ///
+    /// \return frame should be in [get_first_frame(), get_last_frame()]
+    MDL_resource_element const *get_frame(
+        size_t frame) const MDL_FINAL;
+
+    /// Create a resource set from a file mask.
+    ///
+    /// \param alloc         the allocator
+    /// \param url           the absolute MDL url
+    /// \param file_mask     the file mask
+    /// \param info          the marker info
+    static MDL_resource_set *from_mask(
+        IAllocator        *alloc,
+        char const        *url,
+        char const        *file_mask,
+        Marker_info const &info);
+
+private:
+    /// Create a resource set from a file mask describing files on disk.
+    ///
+    /// \param alloc         the allocator
+    /// \param url           the absolute MDL url
+    /// \param file_mask     the file mask
+    /// \param info          the marker info
+    static MDL_resource_set *from_mask_file(
+        IAllocator        *alloc,
+        char const        *url,
+        char const        *file_mask,
+        Marker_info const &info);
+
+    /// Recompute the component index.
+    void update_component_index();
+
+    /// Parse a file name and enter it into a resource set.
+    ///
+    /// \param alloc   the allocator
+    /// \param s       the resource set to fill up
+    /// \param name    the file name of one UDIM part
+    /// \param url     the already (already updated) url name of the entry
+    /// \param prefix  the (directory or archive name) prefix
+    /// \param sep     the separator to be used between prefix and file name
+    /// \param info    the marker info
+    /// \param hash    if non-NULL, the hash value of the resource file
+    static void parse_name_mapping(
+        IAllocator        *alloc,
+        MDL_resource_set  *s,
+        char const        *name,
+        char const        *url,
+        string const      &prefix,
+        char              sep,
+        Marker_info const &info,
+        unsigned char     hash[16]);
+
+    /// Create a resource set from a file mask describing files on a container.
+    ///
+    /// \param alloc           the allocator
+    /// \param url             the absolute MDL url
+    /// \param arc_name        the container name
+    /// \param container_kind  the kind of container
+    /// \param filename        the file name
+    /// \param info            the marker info
+    static MDL_resource_set *from_mask_container(
+        IAllocator        *alloc,
+        char const        *url,
+        char const        *container_name,
+        File_handle::Kind container_kind,
+        char const        *file_mask,
+        Marker_info const &info);
+
+private:
+    /// Constructor from one file name/url pair (typical case).
+    ///
+    /// \param alloc     the allocator
+    /// \param url       the absolute MDL url
+    /// \param filename  the file name
+    /// \param hash      the resource hash value if any
+    explicit MDL_resource_set(
+        IAllocator          *alloc,
+        char const          *url,
+        char const          *filename,
+        unsigned char const hash[16]);
+
+    /// Constructor for an (initially empty) set from masks.
+    ///
+    /// \param alloc      the allocator
+    /// \param url        the absolute MDL url
+    /// \param file_mask  the file mask
+    /// \param mode       the udim mode of this set
+    explicit MDL_resource_set(
+        IAllocator *alloc,
+        char const *url,
+        char const *file_mask,
+        UDIM_mode  mode,
+        bool       has_sequence_marker);
+
+private:
+    /// Helper class for sorting component index.
+    struct Frame_compare {
+        /// Constructor.
+        Frame_compare(MDL_resource_set &res_set)
+        : m_res_set(res_set)
+        {
+        }
+
+        /// Compare operator.
+        bool operator() (size_t idx_1, size_t idx_2) {
+            return m_res_set.m_elements[idx_1].m_frame < m_res_set.m_elements[idx_2].m_frame;
+        }
+
+    private:
+        MDL_resource_set &m_res_set;
+    };
+
+    /// The memory arena.
+    Memory_arena m_arena;
+
+    /// The lowest existing frame number.
+    size_t m_lowest_frame;
+
+    /// The highest existing frame number.
+    size_t m_highest_frame;
+
+    typedef vector<MDL_resource_element>::Type Elem_vec;
+
+    /// The resource elements data.
+    Elem_vec m_elements;
+
+    /// The elements accessible by frame index.
+    vector<size_t>::Type m_elem_frame_index;
+
+    /// The elements accessible by component index.
+    vector<size_t>::Type m_elem_component_index;
 
     /// The url mask.
     string m_url_mask;
 
     /// The filename mask.
     string m_filename_mask;
+
+    /// The UDIM mode.
+    UDIM_mode m_udim_mode;
+
+    /// Flag for sequence markers.
+    bool m_has_sequence_marker;
 };
 
 // ------------------------------------------------------------------------
@@ -1008,13 +1246,15 @@ public:
     /// \param owner_name        if non-NULL, the absolute name of the owner
     /// \param pos               if non-NULL, the position of the import statement for error
     ///                          messages
+    /// \param ctx               The thread context or NULL.
     ///
     /// \return the set of resolved resources or NULL if this name could not be resolved
     IMDL_resource_set *resolve_resource_file_name(
-        char const     *file_path,
-        char const     *owner_file_path,
-        char const     *owner_name,
-        Position const *pos) MDL_FINAL;
+        char const      *file_path,
+        char const      *owner_file_path,
+        char const      *owner_name,
+        Position const  *pos,
+        IThread_context *ctx) MDL_FINAL;
 
     /// Resolve a module name.
     ///
@@ -1023,13 +1263,15 @@ public:
     /// \param owner_name        if non-NULL, the absolute name of the owner
     /// \param pos               if non-NULL, the position of the import statement for error
     ///                          messages
+    /// \param ctx               The thread context or NULL.
     ///
     /// \return the absolute module name or NULL if this name could not be resolved
     IMDL_import_result *resolve_module(
-        char const     *mdl_name,
-        char const     *owner_file_path,
-        char const     *owner_name,
-        Position const *pos) MDL_FINAL;
+        char const      *mdl_name,
+        char const      *owner_file_path,
+        char const      *owner_name,
+        Position const  *pos,
+        IThread_context *ctx) MDL_FINAL;
 
     /// Access messages of last resolver operation.
     Messages const &access_messages() const MDL_FINAL;
@@ -1082,6 +1324,7 @@ IMDL_resource_reader *open_resource_file(
 /// \param vf        the value factory for the new owner
 /// \param src       the source (owner) module of r
 /// \param resolver  the file resolver to be used
+/// \param ctx       the thread context or NULL
 ///
 /// \return a new resource owned by dst if the URL was rewritten or r itself
 ///         if no rewrite is necessary (because the URL is absolute)
@@ -1091,8 +1334,9 @@ IValue_resource const *retarget_resource_url(
     IAllocator            *alloc,
     Type_factory          &tf,
     Value_factory         &vf,
-    IModule const          *src,
-    File_resolver         &resolver);
+    IModule const         *src,
+    File_resolver         &resolver,
+    IThread_context       *ctx);
 
 /// Retarget a (relative path) resource url from one package to be accessible from another
 /// package.
@@ -1102,6 +1346,7 @@ IValue_resource const *retarget_resource_url(
 /// \param dst       the destination module
 /// \param src       the source (owner) module of r
 /// \param resolver  the file resolver to be used
+/// \param ctx       the thread context or NULL
 ///
 /// \return a new resource owned by dst if the URL was rewritten or r itself
 ///         if no rewrite is necessary (because the URL is absolute)
@@ -1109,8 +1354,9 @@ IValue_resource const *retarget_resource_url(
     IValue_resource const *r,
     Position const        &pos,
     Module                *dst,
-    Module const         *src,
-    File_resolver         &resolver);
+    Module const          *src,
+    File_resolver         &resolver,
+    IThread_context       *ctx);
 
 }  // mdl
 }  // mi

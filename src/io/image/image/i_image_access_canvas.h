@@ -143,16 +143,6 @@ private:
     mi::Uint32 m_canvas_height;
     /// The pixel type of the canvas (cached).
     Pixel_type m_canvas_pixel_type;
-    /// The tile width of the canvas (cached).
-    mi::Uint32 m_tile_width;
-    /// The tile height of the canvas (cached).
-    mi::Uint32 m_tile_height;
-    /// The number of tiles in x direction (cached).
-    mi::Uint32 m_nr_of_tiles_x;
-    /// The number of tiles in y direction (cached).
-    mi::Uint32 m_nr_of_tiles_y;
-    /// The total number of tiles (cached).
-    mi::Uint32 m_nr_of_tiles;
 };
 
 /// Wraps a canvas and provides simplified access methods.
@@ -292,16 +282,6 @@ private:
     mi::Uint32 m_canvas_height;
     /// The pixel type of the canvas (cached).
     Pixel_type m_canvas_pixel_type;
-    /// The tile width of the canvas (cached).
-    mi::Uint32 m_tile_width;
-    /// The tile height of the canvas (cached).
-    mi::Uint32 m_tile_height;
-    /// The number of tiles in x direction (cached).
-    mi::Uint32 m_nr_of_tiles_x;
-    /// The number of tiles in y direction (cached).
-    mi::Uint32 m_nr_of_tiles_y;
-    /// The total number of tiles (cached).
-    mi::Uint32 m_nr_of_tiles;
 };
 
 } // namespace IMAGE

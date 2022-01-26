@@ -53,9 +53,8 @@ function calls.
     <dd><br>
         The method \c instantiate_definitions() shows how to instantiate a material or function
         definition from a previously \link mi_neuray_example_modules loaded module\endlink. The
-        methods #mi::neuraylib::IMaterial_definition::create_material_instance() and
-        #mi::neuraylib::IFunction_definition::create_function_call() are used to instantiate a
-        given material or function definition, respectively.
+        method #mi::neuraylib::IFunction_definition::create_function_call() is used to instantiate a
+        given material or function definition.
 
         There are two important cases to distinguish: all parameters have defaults, or some
         parameters have no defaults. The first part of the method deals with a material definition
@@ -70,8 +69,7 @@ function calls.
     </b></dt>
     <dd><br>
         The method \c change_arguments() shows how to change an argument of a material instance or
-        a function call. Essentially you have to call
-        #mi::neuraylib::IMaterial_instance::set_argument() or
+        a function call. Essentially, you have to call
         #mi::neuraylib::IFunction_call::set_argument() with the new argument. The method
         illustrates two ways for obtaining the new argument.
 

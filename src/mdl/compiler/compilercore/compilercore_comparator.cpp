@@ -307,7 +307,6 @@ public:
     /// Compare the two modules.
     void compare_modules();
 
-private:
     /// Compare two types.
     ///
     /// \param ctx      current thread context
@@ -1613,11 +1612,10 @@ bool Comparator::compare_values(
         return
             cast<IValue_bool>(valueA)->get_value() == cast<IValue_bool>(valueB)->get_value();
     case IValue::VK_INT:
-        return
-            cast<IValue_int>(valueA)->get_value() == cast<IValue_int>(valueB)->get_value();
     case IValue::VK_ENUM:
         return
-            cast<IValue_enum>(valueA)->get_value() == cast<IValue_enum>(valueB)->get_value();
+            cast<IValue_int_valued>(valueA)->get_value() ==
+            cast<IValue_int_valued>(valueB)->get_value();
     case IValue::VK_FLOAT:
     case IValue::VK_DOUBLE:
         {
@@ -1681,6 +1679,22 @@ bool Comparator::compare_values(
         return compare_types(valueA->get_type(), valueB->get_type());
 
     case IValue::VK_TEXTURE:
+        {
+            IValue_texture const *texA = cast<IValue_texture>(valueA);
+            IValue_texture const *texB = cast<IValue_texture>(valueB);
+
+            if (texA->get_tag_value() != texB->get_tag_value())
+                return false;
+            if (texA->get_tag_version() != texB->get_tag_version())
+                return false;
+            if (texA->get_gamma_mode() != texB->get_gamma_mode())
+                return false;
+            if (!compare_types(texA->get_type(), texB->get_type()))
+                return false;
+            return
+                strcmp(texA->get_string_value(), texB->get_string_value()) == 0 &&
+                strcmp(texA->get_selector(), texB->get_selector()) == 0;
+        }
     case IValue::VK_LIGHT_PROFILE:
     case IValue::VK_BSDF_MEASUREMENT:
         {
@@ -2371,7 +2385,6 @@ void Archive_comparator::compare_archives()
 
 namespace {
 
-bool equal( const IValue* value_a, const IValue* value_b);
 bool equal( const IExpression* expression_a, const IExpression* expression_b);
 bool equal( const IAnnotation_block* block_a, const IAnnotation_block* block_b);
 bool equal( const IStatement* stmt_a, const IStatement* stmt_b);
@@ -2470,116 +2483,12 @@ bool equal( const IType_name* name_a, const IType_name* name_b)
     return true;
 }
 
-// Compares values.
-bool equal( const IValue* value_a, const IValue* value_b)
-{
-    IValue::Kind kind_a = value_a->get_kind();
-    IValue::Kind kind_b = value_b->get_kind();
-    if( kind_a != kind_b)
-        return false;
-
-    switch( kind_a) {
-
-        case IValue::VK_BAD:
-            return true;
-
-        case IValue::VK_BOOL: {
-            auto bool_a = cast<IValue_bool>( value_a);
-            auto bool_b = cast<IValue_bool>( value_b);
-            return bool_a->get_value() == bool_b->get_value();
-        }
-
-        case IValue::VK_INT:
-        case IValue::VK_ENUM: {
-            auto int_valued_a = cast<IValue_int_valued>( value_a);
-            auto int_valued_b = cast<IValue_int_valued>( value_b);
-            return int_valued_a->get_value() == int_valued_b->get_value();
-        }
-
-        case IValue::VK_FLOAT: {
-            auto float_a = cast<IValue_float>( value_a);
-            auto float_b = cast<IValue_float>( value_b);
-            IValue_FP::FP_class class_a = float_a->get_fp_class();
-            IValue_FP::FP_class class_b = float_b->get_fp_class();
-            if( class_a != class_b)
-                return false;
-            if( class_a != IValue_FP::FPC_NORMAL)
-                return true;
-            return float_a->get_value() == float_b->get_value();
-        }
-
-        case IValue::VK_DOUBLE: {
-            auto double_a = cast<IValue_double>( value_a);
-            auto double_b = cast<IValue_double>( value_b);
-            IValue_FP::FP_class class_a = double_a->get_fp_class();
-            IValue_FP::FP_class class_b = double_b->get_fp_class();
-            if( class_a != class_b)
-                return false;
-            if( class_a != IValue_FP::FPC_NORMAL)
-                return true;
-            return double_a->get_value() == double_b->get_value();
-        }
-
-        case IValue::VK_STRING: {
-            auto string_a = cast<IValue_string>( value_a);
-            auto string_b = cast<IValue_string>( value_b);
-            return strcmp( string_a->get_value(), string_b->get_value()) == 0;
-        }
-
-        case IValue::VK_VECTOR:
-        case IValue::VK_MATRIX:
-        case IValue::VK_ARRAY:
-        case IValue::VK_RGB_COLOR:
-        case IValue::VK_STRUCT: {
-            auto compound_a = cast<IValue_compound>( value_a);
-            auto compound_b = cast<IValue_compound>( value_b);
-            int count_a = compound_a->get_component_count();
-            int count_b = compound_b->get_component_count();
-            if( count_a != count_b)
-                return false;
-            for( int i = 0; i < count_a; ++i) {
-                const IValue* component_a = compound_a->get_value( i);
-                const IValue* component_b = compound_b->get_value( i);
-                if( !equal( component_a, component_b))
-                    return false;
-            }
-            return true;
-        }
-
-        case IValue::VK_INVALID_REF:
-            return true;
-
-        case IValue::VK_TEXTURE: {
-            auto texture_a = cast<IValue_texture>( value_a);
-            auto texture_b = cast<IValue_texture>( value_b);
-            if( texture_a->get_gamma_mode() != texture_b->get_gamma_mode())
-                return false;
-            if( texture_a->get_bsdf_data_kind() != texture_b->get_bsdf_data_kind())
-                return false;
-            return strcmp( texture_a->get_string_value(), texture_b->get_string_value()) == 0;
-        }
-
-        case IValue::VK_LIGHT_PROFILE:
-        case IValue::VK_BSDF_MEASUREMENT: {
-            auto resource_a = cast<IValue_resource>( value_a);
-            auto resource_b = cast<IValue_resource>( value_b);
-            return strcmp( resource_a->get_string_value(), resource_b->get_string_value()) == 0;
-        }
-    }
-
-    MDL_ASSERT( !"unsupported type kind");
-    return false;
-}
-
 // Compares literal expressions.
 bool equal( const IExpression_literal* expr_a, const IExpression_literal* expr_b)
 {
     const IValue* value_a = expr_a->get_value();
     const IValue* value_b = expr_b->get_value();
-    if( !equal( value_a, value_b))
-        return false;
-
-    return true;
+    return Comparator::compare_values( value_a, value_b);
 }
 
 // Compares reference expressions.
@@ -2816,12 +2725,12 @@ bool equal( const IAnnotation_block* block_a, const IAnnotation_block* block_b)
     if( !block_a || !block_b)
         return false;
 
-    int count_a = block_a->get_annotation_count();
-    int count_b = block_b->get_annotation_count();
+    size_t count_a = block_a->get_annotation_count();
+    size_t count_b = block_b->get_annotation_count();
     if( count_a != count_b)
         return false;
 
-    for( int i = 0; i < count_a; ++i) {
+    for( size_t i = 0; i < count_a; ++i) {
         const IAnnotation* anno_a = block_a->get_annotation( i);
         const IAnnotation* anno_b = block_b->get_annotation( i);
         if( !equal( anno_a, anno_b))

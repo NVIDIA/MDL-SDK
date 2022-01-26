@@ -51,6 +51,7 @@ set(PROJECT_SOURCES
     "image/image_access_canvas.cpp"
     "image/image_mipmap_impl.cpp"
     "image/image_access_mipmap.cpp"
+    "image/image_image_api_impl.cpp"
     ${PROJECT_HEADERS}
     )
 

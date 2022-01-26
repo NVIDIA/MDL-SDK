@@ -30,12 +30,15 @@
 
 #include "pch.h"
 
+#include "mdl_elements_expression.h"
 #include "mdl_elements_value.h"
 #include "mdl_elements_type.h"
 
-#include <mi/neuraylib/istring.h>
 #include <cstring>
 #include <sstream>
+#include <boost/core/ignore_unused.hpp>
+
+#include <mi/neuraylib/istring.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/mem/i_mem_consumption.h>
 #include <base/data/db/i_db_access.h>
@@ -674,12 +677,14 @@ IValue_texture* Value_factory::create_texture(
     DB::Tag value,
     const char* unresolved_mdl_url,
     const char* owner_module,
-    mi::Float32 gamma) const
+    mi::Float32 gamma,
+    const char* selector) const
 {
     if( !type)
         return nullptr;
 
-    Value_texture *tex = new Value_texture( type, value, unresolved_mdl_url, owner_module, gamma);
+    Value_texture* tex = new Value_texture(
+        type, value, unresolved_mdl_url, owner_module, gamma, selector);
     return tex;
 }
 
@@ -803,6 +808,220 @@ IValue* Value_factory::create( const IType* type) const
     return nullptr;
 }
 
+namespace {
+
+/// Sets \p average to the average of \p min and \p max.
+///
+/// Assume that all three arguments have the same type. Supported types are
+/// TK_INT/TK_FLOAT/TK_DOUBLE.
+void get_average( const IValue* min, const IValue* max, IValue* average)
+{
+    mi::base::Handle<const IType> type( average->get_type());
+
+    switch( type->get_kind()) {
+
+        case IType::TK_INT: {
+            mi::base::Handle<const IValue_int> min_int( min->get_interface<IValue_int>());
+            mi::base::Handle<const IValue_int> max_int( max->get_interface<IValue_int>());
+            mi::base::Handle<IValue_int> average_int( average->get_interface<IValue_int>());
+            mi::Sint32 min_v = min_int->get_value();
+            mi::Sint32 max_v = max_int->get_value();
+            average_int->set_value( (min_v + max_v) / 2);
+            break;
+        }
+
+        case IType::TK_FLOAT: {
+            mi::base::Handle<const IValue_float> min_float( min->get_interface<IValue_float>());
+            mi::base::Handle<const IValue_float> max_float( max->get_interface<IValue_float>());
+            mi::base::Handle<IValue_float> average_float( average->get_interface<IValue_float>());
+            mi::Float32 min_v = min_float->get_value();
+            mi::Float32 max_v = max_float->get_value();
+            average_float->set_value( (min_v + max_v) / 2.0f);
+            break;
+        }
+
+        case IType::TK_DOUBLE: {
+            mi::base::Handle<const IValue_double> min_double( min->get_interface<IValue_double>());
+            mi::base::Handle<const IValue_double> max_double( max->get_interface<IValue_double>());
+            mi::base::Handle<IValue_double> average_double( average->get_interface<IValue_double>());
+            mi::Float64 min_v = min_double->get_value();
+            mi::Float64 max_v = max_double->get_value();
+            average_double->set_value( (min_v + max_v) / 2.0);
+            break;
+        }
+
+        case IType::TK_ALIAS:
+        case IType::TK_BOOL:
+        case IType::TK_ENUM:
+        case IType::TK_STRING:
+        case IType::TK_VECTOR:
+        case IType::TK_MATRIX:
+        case IType::TK_COLOR:
+        case IType::TK_ARRAY:
+        case IType::TK_STRUCT:
+        case IType::TK_TEXTURE:
+        case IType::TK_LIGHT_PROFILE:
+        case IType::TK_BSDF_MEASUREMENT:
+        case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
+        case IType::TK_EDF:
+        case IType::TK_VDF:
+        case IType::TK_FORCE_32_BIT:
+            ASSERT( M_SCENE, false);
+            break;
+    }
+}
+
+} // namespace
+
+IValue* Value_factory::create( const IAnnotation* annotation) const
+{
+    if( !annotation)
+        return nullptr;
+
+    const char* anno_name = annotation->get_name();
+    if(    (strncmp( anno_name, "::anno::soft_range(", 19) != 0)
+        && (strncmp( anno_name, "::anno::hard_range(", 19) != 0))
+        return nullptr;
+
+     mi::base::Handle<const IExpression_list> arguments( annotation->get_arguments());
+     mi::base::Handle<const IExpression_constant> min(
+         arguments->get_expression<IExpression_constant>( "min"));
+     mi::base::Handle<const IExpression_constant> max(
+         arguments->get_expression<IExpression_constant>( "max"));
+     ASSERT( M_SCENE, min && max);
+     if( !min || !max)
+         return nullptr;
+
+     mi::base::Handle<const IValue> min_value( min->get_value());
+     mi::base::Handle<const IValue> max_value( max->get_value());
+
+     mi::base::Handle<const IType> min_type( min_value->get_type());
+     mi::base::Handle<const IType> max_type( max_value->get_type());
+     IType::Kind min_kind = min_type->get_kind();
+     IType::Kind max_kind = max_type->get_kind();
+     ASSERT( M_SCENE, min_kind == max_kind);
+     boost::ignore_unused( max_kind);
+
+     switch( min_kind) {
+
+         case IType::TK_INT: {
+            IValue_int* result = create_int( 0);
+            get_average( min_value.get(), max_value.get(), result);
+            return result;
+        }
+
+        case IType::TK_FLOAT: {
+            IValue_float* result = create_float( 0.0f);
+            get_average( min_value.get(), max_value.get(), result);
+            return result;
+        }
+
+        case IType::TK_DOUBLE: {
+            IValue_double* result = create_double( 0.0);
+            get_average( min_value.get(), max_value.get(), result);
+            return result;
+        }
+
+        case IType::TK_COLOR: {
+
+            mi::base::Handle<const IValue_color> min_color(
+                min_value->get_interface<IValue_color>());
+            mi::base::Handle<const IValue_color> max_color(
+                max_value->get_interface<IValue_color>());
+            IValue_color* result = create_color( 0.0f, 0.0f, 0.0f);
+
+            for( mi::Size i = 0; i < 3; ++i) {
+                mi::base::Handle<const IValue_float> min_value( min_color->get_value( i));
+                mi::base::Handle<const IValue_float> max_value( max_color->get_value( i));
+                mi::base::Handle<      IValue_float> result_value( result->get_value( i));
+                get_average( min_value.get(), max_value.get(), result_value.get());
+            }
+
+            return result;
+        }
+
+       case IType::TK_VECTOR: {
+            mi::base::Handle<const IType_vector> min_vector_type(
+                min_type->get_interface<IType_vector>());
+            mi::base::Handle<const IType_vector> max_vector_type(
+                max_type->get_interface<IType_vector>());
+           mi::base::Handle<const IType_atomic> min_element_type(
+               min_vector_type->get_element_type());
+           mi::base::Handle<const IType_atomic> max_element_type(
+               max_vector_type->get_element_type());
+           IType::Kind min_element_kind = min_element_type->get_kind();
+           IType::Kind max_element_kind = max_element_type->get_kind();
+           ASSERT( M_SCENE, min_element_kind == max_element_kind);
+           boost::ignore_unused( min_element_kind);
+           boost::ignore_unused( max_element_kind);
+
+           mi::base::Handle<const IValue_vector> min_vector(
+               min_value->get_interface<IValue_vector>());
+           mi::base::Handle<const IValue_vector> max_vector(
+               max_value->get_interface<IValue_vector>());
+           IValue_vector* result = create_vector( min_vector_type.get());
+
+           mi::Size n = min_vector_type->get_size();
+           for( mi::Size i = 0; i < n; ++i) {
+                mi::base::Handle<const IValue_atomic> min_element( min_vector->get_value( i));
+                mi::base::Handle<const IValue_atomic> max_element( max_vector->get_value( i));
+                mi::base::Handle<      IValue_atomic> res_element( result->get_value( i));
+                get_average( min_element.get(), max_element.get(), res_element.get());
+            }
+
+            return result;
+        }
+
+        case IType::TK_ALIAS:
+        case IType::TK_BOOL:
+        case IType::TK_ENUM:
+        case IType::TK_STRING:
+        case IType::TK_MATRIX:
+        case IType::TK_ARRAY:
+        case IType::TK_STRUCT:
+        case IType::TK_TEXTURE:
+        case IType::TK_LIGHT_PROFILE:
+        case IType::TK_BSDF_MEASUREMENT:
+        case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
+        case IType::TK_EDF:
+        case IType::TK_VDF:
+        case IType::TK_FORCE_32_BIT:
+            break;
+     }
+
+     ASSERT( M_SCENE, !"unsupported overload");
+     return nullptr;
+}
+
+IValue* Value_factory::create( const IType* type, const IAnnotation_block* annotation_block) const
+{
+    if( !annotation_block)
+        return create( type);
+
+    mi::base::Handle<const IAnnotation> range_annotation;
+
+    for( mi::Size i = 0, n = annotation_block->get_size(); i < n; ++i) {
+
+        mi::base::Handle<const IAnnotation> annotation(
+            annotation_block->get_annotation( i));
+        const char* anno_name = annotation->get_name();
+        if(    (strncmp( anno_name, "::anno::soft_range(", 19) != 0)
+            && (strncmp( anno_name, "::anno::hard_range(", 19) != 0))
+            continue;
+
+        // ::anno::soft_range has higher priority than ::anno::hard_range
+        if(    (strncmp( anno_name, "::anno::hard_range(", 19) == 0)
+            && range_annotation)
+            continue;
+
+        range_annotation = annotation;
+    }
+
+    return range_annotation ? create( range_annotation.get()) : create( type);
+}
+
 IValue_list* Value_factory::create_value_list() const
 {
     return new Value_list;
@@ -887,7 +1106,8 @@ IValue* Value_factory::clone( const IValue* value) const
                 value_texture->get_value(),
                 value_texture->get_unresolved_mdl_url(),
                 value_texture->get_owner_module(),
-                value_texture->get_gamma());
+                value_texture->get_gamma(),
+                value_texture->get_selector());
         }
         case IValue::VK_LIGHT_PROFILE: {
             mi::base::Handle<const IValue_light_profile> value_light_profile(
@@ -980,7 +1200,7 @@ const mi::IString* Value_factory::dump(
     return new String( s.str().c_str());
 }
 
-mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs)
+mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs, mi::Float64 epsilon)
 {
     if( !lhs && !rhs) return 0;
     if( !lhs &&  rhs) return -1;
@@ -1037,6 +1257,8 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs)
                 rhs->get_interface<IValue_float>());
             mi::Float32 lhs_value = lhs_float->get_value();
             mi::Float32 rhs_value = rhs_float->get_value();
+            if( epsilon > 0 && fabs( lhs_value-rhs_value) <= epsilon)
+                return 0;
             if( lhs_value < rhs_value) return -1;
             if( lhs_value > rhs_value) return +1;
             return 0;
@@ -1048,6 +1270,8 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs)
                 rhs->get_interface<IValue_double>());
             mi::Float64 lhs_value = lhs_double->get_value();
             mi::Float64 rhs_value = rhs_double->get_value();
+            if( epsilon > 0 && fabs( lhs_value-rhs_value) <= epsilon)
+                return 0;
             if( lhs_value < rhs_value) return -1;
             if( lhs_value > rhs_value) return +1;
             return 0;
@@ -1099,7 +1323,7 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs)
                     lhs_compound->get_value( i));
                 mi::base::Handle<const IValue> rhs_element(
                     rhs_compound->get_value( i));
-                mi::Sint32 result = compare_static( lhs_element.get(), rhs_element.get());
+                mi::Sint32 result = compare_static( lhs_element.get(), rhs_element.get(), epsilon);
                 if( result != 0)
                     return result;
             }
@@ -1129,7 +1353,8 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs)
     return 0;
 }
 
-mi::Sint32 Value_factory::compare_static( const IValue_list* lhs, const IValue_list* rhs)
+mi::Sint32 Value_factory::compare_static(
+   const IValue_list* lhs, const IValue_list* rhs, mi::Float64 epsilon)
 {
     if( !lhs && !rhs) return 0;
     if( !lhs &&  rhs) return -1;
@@ -1149,7 +1374,7 @@ mi::Sint32 Value_factory::compare_static( const IValue_list* lhs, const IValue_l
         if( result > 0) return +1;
         mi::base::Handle<const IValue> lhs_value( lhs->get_value( i));
         mi::base::Handle<const IValue> rhs_value( rhs->get_value( i));
-        result = compare_static( lhs_value.get(), rhs_value.get());
+        result = compare_static( lhs_value.get(), rhs_value.get(), epsilon);
         if( result != 0)
             return result;
     }
@@ -1172,7 +1397,7 @@ void Value_factory::dump_static(
     mi::base::Handle<const IType> type( value->get_type());
 
     if( name) {
-        std::string type_name = Type_factory::get_type_name( type.get());
+        std::string type_name = Type_factory::get_type_name_static( type.get());
         s << type_name << " " << name << " = ";
     }
 
@@ -1480,6 +1705,8 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             serializer->write( value_texture->get_unresolved_mdl_url());
             serializer->write( value_texture->get_owner_module());
             serializer->write( value_texture->get_gamma());
+            const char* selector = value_texture->get_selector();
+            SERIAL::write( serializer, selector ? std::string( selector) : std::string());
             return;
         }
         case IValue::VK_LIGHT_PROFILE: {
@@ -1630,8 +1857,11 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             SERIAL::read( deserializer, &owner_module);
             mi::Float32 gamma;
             SERIAL::read( deserializer, &gamma);
-            IValue* result = create_texture(
-                type.get(),value, unresoved_resource_url.c_str(), owner_module.c_str(), gamma);
+            std::string selector;
+            SERIAL::read( deserializer, &selector);
+            const char* selector_cstr = !selector.empty() ? selector.c_str() : nullptr;
+            IValue* result = create_texture( type.get(),
+                value, unresoved_resource_url.c_str(), owner_module.c_str(), gamma, selector_cstr);
             return result;
         }
         case IValue::VK_LIGHT_PROFILE: {

@@ -29,6 +29,8 @@
 #ifndef SHADERS_PLUGIN_DDS_DDS_IMAGE_PLUGIN_IMPL_H
 #define SHADERS_PLUGIN_DDS_DDS_IMAGE_PLUGIN_IMPL_H
 
+#include <mi/base/handle.h>
+#include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/iimage_plugin.h>
 
 namespace MI {
@@ -79,6 +81,11 @@ public:
         mi::Uint32 quality) const;
 
     mi::neuraylib::IImage_file* open_for_reading( mi::neuraylib::IReader* reader) const;
+
+private:
+
+    /// API component IImage_api.
+    mi::base::Handle<mi::neuraylib::IImage_api> m_image_api;
 };
 
 } // namespace DDS

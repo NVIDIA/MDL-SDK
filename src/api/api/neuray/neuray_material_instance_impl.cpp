@@ -177,6 +177,16 @@ mi::Sint32 Material_instance_impl::set_argument(
     return m_impl->set_argument( name, argument);
 }
 
+mi::Sint32 Material_instance_impl::reset_argument( mi::Size index)
+{
+    return m_impl->reset_argument( index);
+}
+
+mi::Sint32 Material_instance_impl::reset_argument( const char* name)
+{
+    return m_impl->reset_argument( name);
+}
+
 bool Material_instance_impl::is_default() const
 {
     return m_impl->is_default();

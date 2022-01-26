@@ -573,7 +573,7 @@ extern "C" __global__ void __closesthit__radiance()
     const float3 P  = optixTransformPointFromObjectToWorldSpace(
         P0 * barycentrics.x + P1 * barycentrics.y + P2 * barycentrics.z);
 
-    const float3 geom_normal = optixTransformNormalFromObjectToWorldSpace(
+    float3 geom_normal = optixTransformNormalFromObjectToWorldSpace(
         normalize(cross(P1 - P0, P2 - P0)));
 
     const float3 N0 = v0.normal;
@@ -581,6 +581,9 @@ extern "C" __global__ void __closesthit__radiance()
     const float3 N2 = v2.normal;
     const float3 N  = optixTransformNormalFromObjectToWorldSpace(
         normalize(N0 * barycentrics.x + N1 * barycentrics.y + N2 * barycentrics.z));
+
+    if (dot(geom_normal, N) < 0.0f) // make sure that shading and geometry normal agree on sideness
+        geom_normal = -geom_normal;
 
     const float3 T0 = v0.tangent;
     const float3 T1 = v1.tangent;

@@ -179,7 +179,7 @@ namespace mdl_d3d12
     public:
         Mdl_material_info(
             mi::neuraylib::ICompiled_material const *comp_mat,
-            mi::neuraylib::IMaterial_definition const *mat_def,
+            mi::neuraylib::IFunction_definition const *mat_def,
             mi::neuraylib::ITarget_value_layout const *arg_block_layout,
             mi::neuraylib::ITarget_argument_block const *arg_block)
             : m_name(mat_def->get_mdl_name())

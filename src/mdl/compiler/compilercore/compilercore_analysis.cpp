@@ -106,6 +106,27 @@ namespace {
     };
 }
 
+// Check if the given type is a user defined type.
+bool is_user_type(IType const *type)
+{
+    if (IType_struct const *s_type = as<IType_struct>(type)) {
+        if (s_type->get_predefined_id() == IType_struct::SID_USER) {
+            return true;
+        }
+    } else if (IType_enum const *e_type = as<IType_enum>(type)) {
+        IType_enum::Predefined_id id = e_type->get_predefined_id();
+        if (id == IType_enum::EID_USER || id == IType_enum::EID_TEX_GAMMA_MODE) {
+            // although tex::gamma_mode is predefined in the compiler (due to its use
+            // in the texture constructor), it IS a user type: There is even MDL code
+            // for it
+            return true;
+        }
+    } else if (is<IType_array>(type)) {
+        return true;
+    }
+    return false;
+}
+
 // Returns true for error names.
 bool is_error(IQualified_name const *name)
 {
@@ -340,7 +361,8 @@ IValue_resource const *retarget_resource_url(
     Type_factory          &tf,
     Value_factory         &vf,
     IModule const         *src,
-    File_resolver         &resolver)
+    File_resolver         &resolver,
+    IThread_context       *ctx)
 {
     // check if the URL is relative. If yes, update it
     char const *url = r->get_string_value();
@@ -351,7 +373,8 @@ IValue_resource const *retarget_resource_url(
             pos,
             url,
             src->get_name(),
-            src->get_filename()));
+            src->get_filename(),
+            ctx));
 
         if (res.is_valid_interface()) {
             abs_url = res->get_mdl_url_mask();
@@ -416,7 +439,8 @@ IValue_resource const *retarget_resource_url(
     Position const        &pos,
     Module                *dst,
     Module const          *src,
-    File_resolver         &resolver)
+    File_resolver         &resolver,
+    IThread_context       *ctx)
 {
     return retarget_resource_url(
         r,
@@ -425,7 +449,8 @@ IValue_resource const *retarget_resource_url(
         *dst->get_type_factory(),
         *dst->get_value_factory(),
         src,
-        resolver);
+        resolver,
+        ctx);
 }
 
 /* ------------------------------ Helper shims and functions ------------------------------- */
@@ -727,7 +752,7 @@ static IAnnotation const *find_annotation_by_semantics(
     IAnnotation_block const *block,
     IDefinition::Semantics  sema)
 {
-    for (int i = 0, n = block->get_annotation_count(); i < n; ++i) {
+    for (size_t i = 0, n = block->get_annotation_count(); i < n; ++i) {
         IAnnotation const     *anno  = block->get_annotation(i);
         IQualified_name const *qname = anno->get_name();
         IDefinition const     *adef  = qname->get_definition();
@@ -988,9 +1013,9 @@ public:
     /// \param num_args      number of arguments of the processed call
     /// \param origin        the original module from which the initializer is cloned
     explicit Default_initializer_modifier(
-        NT_analysis  &ana,
-        size_t       num_args,
-        Module const *origin)
+        NT_analysis    &ana,
+        size_t         num_args,
+        Module const   *origin)
     : Base()
     , m_ana(ana)
     , m_dst(ana.m_module)
@@ -1105,22 +1130,23 @@ public:
                         lit->access_position(),
                         &m_dst,
                         m_src,
-                        resolver);
+                        resolver,
+                        &m_ana.m_ctx);
                 } else {
                     r = cast<IValue_resource>(m_dst.get_value_factory()->import(r));
                 }
 
-                Expression_factory  *fact = m_dst.get_expression_factory();
-                IExpression_literal *lit  = fact->create_literal(r);
+                Expression_factory  *fact    = m_dst.get_expression_factory();
+                IExpression_literal *res_lit = fact->create_literal(r);
 
                 // ensure, that the cloned resource is added to our resource table
-                m_ana.handle_resource_url(r, lit, r->get_type(), /*no_file_path_check=*/true);
+                m_ana.handle_resource_url(r, res_lit, r->get_type(), /*no_file_path_check=*/true);
 
-                return lit;
+                return res_lit;
             }
         }
         // just clone it
-        return m_dst.clone_expr(lit, NULL);
+        return m_dst.clone_expr(lit, /*modifier=*/NULL);
     }
 
     /// Clone a call.
@@ -1511,8 +1537,7 @@ void Analysis::parse_warning_options()
         if (opt[0] == 'e' && opt[1] == 'r' && opt[2] == 'r') {
             m_all_warnings_are_errors = true;
             opt += 3;
-        }
-        else {
+        } else {
             size_t code = 0;
 
             while (isdigit(opt[0])) {
@@ -1656,10 +1681,10 @@ void Analysis::add_imported_message(size_t fname_id, IMessage const *msg)
     size_t index = msgs.add_imported_msg(fname_id, msg);
     if (msg->get_severity() != IMessage::MS_INFO) {
         for (size_t i = 0, n = msg->get_note_count(); i < n; ++i) {
-            IMessage const *note    = msg->get_note(i);
-            size_t         fname_id = msgs.register_fname(msg->get_file());
+            IMessage const *note        = msg->get_note(i);
+            size_t         imp_fname_id = msgs.register_fname(msg->get_file());
 
-            msgs.add_imported_msg_as_note(index, fname_id, note);
+            msgs.add_imported_msg_as_note(index, imp_fname_id, note);
         }
     }
 }
@@ -2393,10 +2418,10 @@ bool Analysis::is_const_expression(IExpression const *expr, bool &is_invalid)
         if (callee->is_array_constructor()) {
             // an array constructor is a const expression if all of its arguments are
             for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
-                IArgument const   *arg  = c_expr->get_argument(i);
-                IExpression const *expr = arg->get_argument_expr();
+                IArgument const   *arg      = c_expr->get_argument(i);
+                IExpression const *arg_expr = arg->get_argument_expr();
 
-                if (!is_const_expression(expr, is_invalid)) {
+                if (!is_const_expression(arg_expr, is_invalid)) {
                     return false;
                 }
             }
@@ -2418,10 +2443,10 @@ bool Analysis::is_const_expression(IExpression const *expr, bool &is_invalid)
         {
             // check if all arguments are const
             for (int i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
-                IArgument const   *arg  = c_expr->get_argument(i);
-                IExpression const *expr = arg->get_argument_expr();
+                IArgument const   *arg      = c_expr->get_argument(i);
+                IExpression const *arg_expr = arg->get_argument_expr();
 
-                if (!is_const_expression(expr, is_invalid)) {
+                if (!is_const_expression(arg_expr, is_invalid)) {
                     return false;
                 }
             }
@@ -2441,10 +2466,10 @@ bool Analysis::is_const_expression(IExpression const *expr, bool &is_invalid)
             return def->has_flag(Definition::DEF_IS_CONST_CONSTRUCTOR);
         }
         for (size_t i = 0, n = c_expr->get_argument_count(); i < n; ++i) {
-            IArgument const   *arg  = c_expr->get_argument(i);
-            IExpression const *expr = arg->get_argument_expr();
+            IArgument const   *arg      = c_expr->get_argument(i);
+            IExpression const *arg_expr = arg->get_argument_expr();
 
-            if (!is_const_expression(expr, is_invalid)) {
+            if (!is_const_expression(arg_expr, is_invalid)) {
                 return false;
             }
         }
@@ -3418,6 +3443,12 @@ void NT_analysis::check_imported_module_dependencies(
     }
 }
 
+/// Check is a C-string is empty.
+static bool is_empty(char const *s)
+{
+    return s == NULL || s[0] == '\0';
+}
+
 // Find and load a module to import.
 Module const *NT_analysis::load_module_to_import(
     IQualified_name const *rel_name,
@@ -3458,11 +3489,21 @@ Module const *NT_analysis::load_module_to_import(
         import_name += sym->get_name();
     }
 
+    bool is_weak    = false;
     bool is_weak_16 = false;
-    if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
-        // from MDL 1.6 weak imports do not exists
-        if (!is_absolute && import_name[0] != '.') {
+
+    // from MDL 1.6 weak imports do not exists
+    if (!is_absolute && import_name[0] != '.') {
+        is_weak = true;
+        if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
             is_weak_16 = true;
+        }
+
+        if (!is_weak_16 && is_empty(m_module.get_filename())) {
+            // in string based module weak imports ALWAYS resolved to absolute prior to 1.6
+            import_name = "::" + import_name;
+            is_weak = false;
+        } else {
             // previous weak imports are relative now
             import_name = ".::" + import_name;
         }
@@ -3470,6 +3511,8 @@ Module const *NT_analysis::load_module_to_import(
 
     IMDL_foreign_module_translator *translator = is_absolute ?
         m_compiler->is_foreign_module(import_name.c_str()) : NULL;
+
+    mi::base::Handle<IMDL_import_result> import_result;
 
     if (translator == NULL) {
         Messages_impl messages(get_allocator(), m_module.get_filename());
@@ -3484,39 +3527,56 @@ Module const *NT_analysis::load_module_to_import(
             m_ctx.get_virtual_root_package());
 
         // let the resolver find the absolute name
-        mi::base::Handle<IMDL_import_result> result(m_compiler->resolve_import(
+        import_result = mi::base::make_handle(m_compiler->resolve_import(
             resolver,
             import_name.c_str(),
             &m_module,
-            &rel_name->access_position()));
+            &rel_name->access_position(),
+            &m_ctx));
 
-        // copy messages
-        copy_resolver_messages_to_module(messages, /*is_resource=*/ false);
-
-        if (is_weak_16 &&
-            !result.is_valid_interface() &&
+        if (is_weak &&
+            !import_result.is_valid_interface() &&
             messages.get_error_message_count() == 1)
         {
+            if (is_weak_16) {
+                // copy the error message, which is otherwise lost
+                copy_resolver_messages_to_module(messages, /*is_resource=*/false);
+            }
+            // clear previous messages
+            messages.clear();
+
             // resolving a formally weak reference failed, check if it is absolute
-            mi::base::Handle<IMDL_import_result> result(m_compiler->resolve_import(
+            mi::base::Handle<IMDL_import_result> abs_result(m_compiler->resolve_import(
                 resolver,
                 import_name.c_str() + 1,
                 &m_module,
-                &rel_name->access_position()));
-            if (result.is_valid_interface()) {
-                // .. and add a note
-                add_note(
-                    POSSIBLE_ABSOLUTE_IMPORT,
-                    rel_name->access_position(),
-                    Error_params(*this).add(import_name.c_str() + 1));
+                &rel_name->access_position(),
+                &m_ctx));
+            if (is_weak_16) {
+                if (abs_result.is_valid_interface()) {
+                    // .. and add a note
+                    add_note(
+                        POSSIBLE_ABSOLUTE_IMPORT,
+                        rel_name->access_position(),
+                        Error_params(*this).add(import_name.c_str() + 1));
+                } else {
+                    // do not generate a second error
+                    messages.clear();
+                }
+            } else {
+                // prior 1.6, we allow weak imports to be resolved as absolute
+                import_result = abs_result;
             }
         }
 
-        if (!result.is_valid_interface()) {
+        // copy messages
+        copy_resolver_messages_to_module(messages, /*is_resource=*/false);
+
+        if (!import_result.is_valid_interface()) {
             // name could not be resolved
             return NULL;
         }
-        import_name = result->get_absolute_name();
+        import_name = import_result->get_absolute_name();
     }
 
     char const *abs_name = import_name.c_str();
@@ -3547,14 +3607,15 @@ Module const *NT_analysis::load_module_to_import(
         // Create a new context here: we don't want the compilation errors to be appended
         // to the current context.
         mi::base::Handle<Thread_context> ctx(
-            m_compiler->create_thread_context(*this, m_ctx.get_front_path()));
+            m_compiler->create_thread_context(
+                *this, m_ctx.get_front_path(), m_ctx.get_user_data()));
 
         if (translator != NULL) {
             // compile this foreign module
             imp_mod = m_compiler->compile_foreign_module(*translator, *ctx.get(), abs_name, &cache);
         } else {
-            // compile this module
-            imp_mod = m_compiler->compile_module(*ctx.get(), abs_name, &cache);
+            // compile this (already resolved) module
+            imp_mod = m_compiler->compile_module(*ctx.get(), *import_result.get(), &cache);
         }
     }
 
@@ -6178,7 +6239,7 @@ bool NT_analysis::check_material_parameter_type(
 void NT_analysis::handle_enable_ifs(IParameter const *param)
 {
     if (IAnnotation_block const *anno_block = param->get_annotations()) {
-        for (int j = 0, n = anno_block->get_annotation_count(); j < n; ++j) {
+        for (size_t j = 0, n = anno_block->get_annotation_count(); j < n; ++j) {
             IAnnotation_enable_if const *enable_if =
                 as<IAnnotation_enable_if>(anno_block->get_annotation(j));
             if (enable_if == NULL) {
@@ -6658,7 +6719,11 @@ bool NT_analysis::collect_preset_defaults(
                     .add(sym));
             }
         } else {
-            n_pos = i;
+            if (i < n_params) {
+                n_pos = i;
+            } else {
+                res = false;
+            }
         }
 
         if (res) {
@@ -15053,9 +15118,9 @@ void NT_analysis::post_visit(IAnnotation_block *anno_blk)
 {
     IAnnotation const *hard_range = NULL;
     IAnnotation const *soft_range = NULL;
-    int sr_index = 0;
+    size_t sr_index = 0;
 
-    for (int i = 0, n = anno_blk->get_annotation_count(); i < n; ++i) {
+    for (size_t i = 0, n = anno_blk->get_annotation_count(); i < n; ++i) {
         IAnnotation const     *anno  = anno_blk->get_annotation(i);
         IQualified_name const *qname = anno->get_name();
         IDefinition const     *def   = qname->get_definition();
@@ -16424,7 +16489,8 @@ void NT_analysis::handle_resource_url(
                 lit->access_position(),
                 murl.c_str(),
                 m_module.get_name(),
-                m_module.get_filename()));
+                m_module.get_filename(),
+                &m_ctx));
 
             // copy messages
             copy_resolver_messages_to_module(messages, /*is_resource=*/ true);
@@ -16448,7 +16514,8 @@ void NT_analysis::handle_resource_url(
                         lit->access_position(),
                         murl.c_str() + 1,
                         m_module.get_name(),
-                        m_module.get_filename()));
+                        m_module.get_filename(),
+                        &m_ctx));
                     if (res.is_valid_interface()) {
                         // .. and add a note
                         add_note(

@@ -152,6 +152,11 @@ public:
     /// Bounding box with its elements not initialized.
     inline explicit Bbox( Uninitialized_tag) { }
 
+#if (__cplusplus >= 201103L)
+    /// Default copy constructor.
+    Bbox( const Bbox<T,DIM>& other ) = default;
+#endif
+
     /// Bounding box initialized from corresponding POD type.
     inline Bbox( const Bbox_struct<T,DIM>& bbox_struct )
     {
@@ -169,7 +174,7 @@ public:
     inline Bbox(
         const Vector& nmin,     ///< \c min corner vector
         const Vector& nmax)     ///< \c max corner vector
-  : min(nmin), max(nmax)
+      : min( nmin), max( nmax)
     {
     }
 

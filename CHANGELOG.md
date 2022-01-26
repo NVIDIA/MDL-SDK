@@ -1,7 +1,184 @@
 Change Log
 ==========
-MDL SDK 2021.0.4 (344800.9767): 26 Nov 2021
+MDL SDK 2021.1 (349500.7063): 18 Jan 2022
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2021.1 (349500.7063) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.7 Language Specification
+
+    - Removed the draft status of this document.
+
+    - Clarified that constants can be declared locally as well, which is
+      working since MDL 1.0.
+
+    - Clarified that the `thin_film` modifier applies only to
+      directly connected BSDFs that have a Fresnel term.
+
+    - Clarified that the `state::normal()` orientation is
+      facing outward from the volume, with thin-walled materials
+      treated as enclosing an infinitesimally thin volume, such that
+      both sides are facing outward and the normal always points to the
+      observer.
+
+- General
+
+    - The module `::core_definitions` requires now MDL 1.6 and contains a new material
+      `surface_falloff`.
+    - Added support for texture selectors. The selector can be queried with methods on `IImage`,
+      `ITexture`, `IVolume_data`, `IValue_texture`, and `ITarget_code`. For non-volume data
+      textures, the supported selectors are restricted to `"R"`, `"G"`, `"B"`, and `"A"` for now.
+    - Renamed `IVolume_data::get_channel_name()` to `IVolume_data::get_selector()` for consistency
+      with `IImage` and `ITexture`. The old method is still available if
+      `MI_NEURAYLIB_DEPRECATED_12_1` is defined.
+    - The signature of `IMdl_factory::create_texture()` has been extended to specify the selector.
+      The old signature is deprecated and still available if `MI_NEURAYLIB_DEPRECATED_12_1` is
+      defined.
+    - Added `IImage_api::create_canvas_from_reader()` to enable canvas creation directly from a
+      reader (in addition to `create_canvas_from_buffer()`).
+    - Added the methods `get_pixel_type_for_channel()` and `extract_channel()` to `IImage_api`,
+      which are useful for extracting RGBA channels from existing textures.
+    - Added a warning to catch some wrong implementations of
+      `IMdl_resolved_module::get_module_name()`.
+    - Improved resource enumeration on modules. The new method `IModule::get_resource()` returns
+      an `IValue_resource` with all details, including gamma mode and selector. The old methods
+      returning the individual bits are deprecated and still available if
+      `MI_NEURAYLIB_DEPRECATED_12_1` is defined.
+    - Added overloads of `IValue_factory::create()` that accept a range annotation as argument, and
+      a type and an entire annotation block. This makes it simpler to create values that observe
+      range annotations. Modified `Definition_wrapper` to make use of the latter if a parameter has
+      no default.
+    - Added `IFunction_call::reset_argument()` which sets an argument back to the parameter default
+      (if present), or an value observing given range annotations, or a default-constructed value.
+    - Extended `IValue_factory::compare()` and `IExpression_factory::compare()` to support floating
+      point comparisons with an optional epsilon range.
+    - The materials-are-functions feature is now enabled by default. See the documentation
+      referenced from `IMdl_configuration::set_materials_are_functions()`. All examples have been
+      updated to avoid usage of `IMaterial_definition` completely, and `IMaterial_instance` as much
+      as possible.
+    - Added an `user_data` option to the `IMdl_execution_context`, which allows the user to pass
+      its own interface pointer around, in particular to the methods of `IMdl_entity_resolver`.
+    - Improved performance of editing of instances of `IMdl_function_call`, in particular for
+      instances with a large set of arguments. Depending on the exact circumstances, this can cut
+      the time for a full edit cycle (create transaction, create argument editor, change argument,
+      destroy argument editor, commit transaction) in half. An additional speedup can be obtained
+      by making use of the additional optional argument of `Argument_editor`.
+    - Extended `IExpression_factory::compare()` to support deep comparisons of call expressions.
+      Useful to figure out whether an exporter needs to export an argument, or can rely on the
+      corresponding default on the definition.
+    - Export to EXR takes now the quality parameter into account: a value of 50 or less selects
+     `half` as channel type.
+    - Added `create_reader()` and `create_writer()` to `IMdl_impexp_api`.
+    - Changed the behavior of `IImage_api::adjust_gamma()` to include the alpha channel. This also
+      affects export operations (if `force_default_gamma` is set) and the MDL texture runtime if
+      derivatives are enabled.
+    - Added an implementation variant based on `std::atomic_uint32_t` to `Atom32`. This results
+      in a large speedup on ARM, and on a rather small speedup on Windows.
+    - Added support for animated textures:
+        - The signature of various methods on `IImage` and `ITexture` has been changed. The frame
+          index has been added as first parameter and the order of uvtile index and mipmap level
+          has been flipped. The default arguments have been removed. The old signatures are still
+          available if `MI_NEURAYLIB_DEPRECATED_12_1` is defined. Methods to query the mapping
+          between frame index and frame number have been added.
+        - The method `uvtile_marker_to_string()` on `IMdl_impexp_api` and `IExport_api` has been
+          renamed to `frame_uvtile_marker_to_string()`. It is still available under the old name if
+          `MI_NEURAYLIB_DEPRECATED_12_1` is defined. The method `uvtile_string_to_marker()` on both
+          interfaces has been deprecated without replacement. The last component of
+          `IImage::get_original_filename()` is an alternative (if available), or construct a custom
+          string from scratch.
+        - The interface `IMdl_resolved_resource` has been split such that it represents an array of
+          instances of the new interface `IMdl_resolved_resource_element`, where each element
+          corresponds to a texture frame (only one for non-animated textures and other resources).
+        - The frame parameter has been added to various method of the runtime interfaces
+          `Texture_handler_vtable` and `Texture_handler_deriv_vtable`. A new member `m_tex_frame`
+          to support the intrinsics `tex::first_frame()` and `tex::last_frame()` has been added.
+        - The examples "DF Native", "DXR", and "Execution Native" have been extended accordingly.
+    - Added an overload of `IMdl_factory::clone()` that allows cloning of an execution context.
+      Useful for local changes to the context options.
+    - Disabled WEBP export in the FreeImage plugin due to memory access violations.
+    - Changed `mi::math::gamma_correction()` to include the alpha channel, as it is done already in
+      other places.
+
+- MDL Compiler and Backends
+
+    - Added support for libbsdf normal adaption for CUDA and native runtime. The `--an` option for
+      the `df_cuda` and `df_native` examples demonstrates the feature (the dummy implementation
+      does not change the normal, though).
+    - The libbsdf implementations of the functions `df::diffuse_reflection_bsdf` and
+      `df::diffuse_transmission_bsdf` now compensate for energy loss caused by differences of
+      shading and geometric normal.
+    - Added frame sequences resolution using frame markers in resources to the MDL core compiler.
+    - Added an error message to the JIT backend that is issued if the user specifies
+      a state module that does not contain all necessary functions.
+    - Removed a redundant call to the entity resolver in the MDL core compiler when
+      importing modules.
+
+- MDL SDK examples
+
+    - Examples Shared
+        - All examples load now the `dds` plugin by default.
+    - Example DF Native
+        - Added support for custom texture runtime.
+    - Example DXR
+        - Added a new dependency to the DirectX Shader Compiler, which is optional for Windows SDK
+          10.0.20348.0 and later.
+        - Write a memory dump file in case an application crash occurs.
+        - Added support for the glTF extension `"KHR_materials_emissive_strength"` to
+          the example renderer and to the MDL support module.
+    - Example Python Bindings
+        - Added many more interface to the Python bindings, e.g., `IBaker`, `ICanvas`,
+          `ICompiled_material`, `IImage_api`, `IMdl_Module_builder`,
+          `IPlugin_configuration`, and `ITile`, and extended the examples.
+
+**Fixed Bugs**
+
+- General
+
+    - Fixed a bug in mdlm and i18n if the environment variable `HOME` is not set.
+    - Fixed a bug in i18n which caused command MDL search paths other than `"SYSTEM"` and `"USER"`
+      to get ignored.
+    - Fixed `IFactory::clone()` when dealing with untyped arrays.
+    - Fixed `IMdl_backend::deserialize_target_code()` such that the internal DF texture are no
+      longer missing under certain circumstances.
+    - Fixed handling of weak imports for MDL < 1.6 if an external entity resolver is set. The
+      semantic of weak imports is now handled by the core compiler itself, an external entity
+      resolver sees now only absolute or strictly relative module names.
+    - Fixed `ICompiled_material::get_hash()` to take the material slots for `surface.emission.mode`
+      and `backface.emission.mode` into account. Added enumerators `SLOT_SURFACE_EMISSION_MODE` and
+      `SLOT_BACKFACE_EMISSION_MODE` to `mi::neuraylib::Material_slot`. Also added `SLOT_FIRST` and
+      `SLOT_LAST` to support easier enumeration over all material slots.
+    - Fixed a crash with default constructed BSDF measurements during MDL export/MDLE creation.
+    - Fixed gamma value of pink 1x1 default textures.
+    - Fixed a race condition for accessing global core JIT backend options from
+      different threads, which could have caused overwritten options or a crash,
+      by using the thread local core thread context options instead.
+
+- MDL Compiler and Backends
+
+    - Improved numerical stability in `base::coordinate_projection()`.
+    - Improved performance of `math::blackbody()` implementation.
+    - Fixed incorrect normal flip for strongly bumped normal input (libbsdf).
+    - libbsdf: Fixed incorrect flipping of the shading normal for strongly bumped normals. Note
+      that libbsdf requires that state input shading and geometric agree on sideness (it has been
+      forgiving with respect to that due to this bug).
+    - libbsdf: Fixed a numerical issue for `df::fresnel_factor()` (for ior == 0).
+    - libbsdf: Fixed implementation of albedo for `df::tint(reflect, transmit)`.
+    - Fixed handling of resource sets if used inside MDLE archives.
+    - Fixed a crash inside the MDL core compiler if a material preset
+      with too many arguments is compiled.
+
+- MDL SDK examples
+
+    - Example OptiX 7
+        - Fixed normal orientation (as libbsdf needs side consistency between geometric and shading
+          normal).
+
+
+MDL SDK 2021.0.4 (344800.9767): 26 Nov 2021
+-------------------------------------------
 
 ABI compatible with the MDL SDK 2021.0.4 (344800.9767) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
@@ -10,8 +187,8 @@ ABI compatible with the MDL SDK 2021.0.4 (344800.9767) binary release
 
 - General
 
-    - Fixed incorrect handling of user-defined type names for structs and enums
-      when encoded names were enabled.
+    - Fixed a rare case of incorrect handling of user-defined type names for
+      structs and enums when encoded names were enabled.
 
 - MDL Compiler and Backends
 
@@ -59,6 +236,7 @@ ABI compatible with the MDL SDK 2021.0.2 (344800.7839) binary release
       BSDF parameter.
     - Fixed `df::thin_film` implementation for the case material IOR < thin film IOR
       (libbsdf).
+    - Fixed an internal compiler crash.
     - Creation of compiled materials fails now (instead of crashing) if some internal error
       condition is detected.
 
@@ -107,7 +285,6 @@ ABI compatible with the MDL SDK 2021.0.1 (344800.4174) binary release
     - Improved numerical stability in `base::coordinate_projection`.
     - Fixed missing `color_weighted_layer()` inside the transmission analysis.
     - Fixed thin film factor implementation (libbsdf).
-
 
 
 MDL SDK 2021 (344800.2052): 01 Jun 2021

@@ -2177,14 +2177,23 @@ size_t Function_context::get_resource_index(mi::mdl::IValue_resource const *reso
     if (m_res_manager != NULL) {
         IType_texture::Shape shape            = IType_texture::TS_2D;
         IValue_texture::gamma_mode gamma_mode = IValue_texture::gamma_default;
+        char const *selector                  = "";
 
         if (IValue_texture const *tex = as<IValue_texture>(resource)) {
             shape      = tex->get_type()->get_shape();
             gamma_mode = tex->get_gamma_mode();
+            selector   = tex->get_selector();
+            if (selector == nullptr)
+                selector = "";
         }
 
         return m_res_manager->get_resource_index(
-            kind_from_value(resource), resource->get_string_value(), tag_value, shape, gamma_mode);
+            kind_from_value(resource),
+            resource->get_string_value(),
+            tag_value,
+            shape,
+            gamma_mode,
+            selector);
     }
 
     // no resource manager, leave it "as is"
@@ -2721,15 +2730,19 @@ llvm::Value *Function_context::get_tex_lookup_func(
 #define ARGS4(a,b,c,d)           "(" #a ", " #b ", " #c ", " #d ")"
 #define ARGS5(a,b,c,d,e)         "(" #a ", " #b ", " #c ", " #d ", " #e ")"
 #define ARGS6(a,b,c,d,e,f)       "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ")"
-#define ARGS7(a,b,c,d,e,f,g,h)   "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ")"
+#define ARGS7(a,b,c,d,e,f,g)     "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ")"
 #define ARGS8(a,b,c,d,e,f,g,h)   "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ", " #h ")"
+#define ARGS9(a,b,c,d,e,f,g,h,i) \
+    "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ", " #h ", " #i ")"
 #define ARGSX(a,b,c,d,e,f,g,h,i,j) \
     "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ", " #h ", " #i ", " #j ")"
+#define ARGSY(a,b,c,d,e,f,g,h,i,j,k) \
+    "(" #a ", " #b ", " #c ", " #d ", " #e ", " #f ", " #g ", " #h ", " #i ", " #j ", " #k ")"
 
 #define OCP(args) "rtCallableProgramId<void " args ">"
 
 #define ARGS_lookup_float4_2d \
-    ARGS8( \
+    ARGS9( \
         float result[4], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
@@ -2737,10 +2750,11 @@ llvm::Value *Function_context::get_tex_lookup_func(
         tex_wrap_mode const wrap_u, \
         tex_wrap_mode const wrap_v, \
         float const crop_u[2], \
-        float const crop_v[2])
+        float const crop_v[2], \
+        float frame)
 
 #define ARGS_lookup_deriv_float4_2d \
-    ARGS8( \
+    ARGS9( \
         float result[4], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
@@ -2748,10 +2762,11 @@ llvm::Value *Function_context::get_tex_lookup_func(
         tex_wrap_mode const wrap_u, \
         tex_wrap_mode const wrap_v, \
         float const crop_u[2], \
-        float const crop_v[2])
+        float const crop_v[2], \
+        float frame)
 
 #define ARGS_lookup_float3_2d \
-    ARGS8( \
+    ARGS9( \
         float result[3], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
@@ -2759,10 +2774,11 @@ llvm::Value *Function_context::get_tex_lookup_func(
         tex_wrap_mode const wrap_u, \
         tex_wrap_mode const wrap_v, \
         float const crop_u[2], \
-        float const crop_v[2])
+        float const crop_v[2], \
+        float frame)
 
 #define ARGS_lookup_deriv_float3_2d \
-    ARGS8( \
+    ARGS9( \
         float result[3], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
@@ -2770,18 +2786,20 @@ llvm::Value *Function_context::get_tex_lookup_func(
         tex_wrap_mode const wrap_u, \
         tex_wrap_mode const wrap_v, \
         float const crop_u[2], \
-        float const crop_v[2])
+        float const crop_v[2], \
+        float frame)
 
 #define ARGS_texel_2d \
-    ARGS5( \
+    ARGS6( \
         float result[4], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
         int const coord[2], \
-        int const uv_tile[2])
+        int const uv_tile[2], \
+        float frame)
 
 #define ARGS_lookup_float4_3d \
-    ARGSX( \
+    ARGSY( \
         float result[4], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
@@ -2791,10 +2809,11 @@ llvm::Value *Function_context::get_tex_lookup_func(
         tex_wrap_mode const wrap_w, \
         float const crop_u[2], \
         float const crop_v[2], \
-        float const crop_w[2])
+        float const crop_w[2], \
+        float frame)
 
 #define ARGS_lookup_float3_3d \
-    ARGSX( \
+    ARGSY( \
         float result[3], \
         Core_tex_handler const *self, \
         unsigned texture_idx, \
@@ -2804,10 +2823,16 @@ llvm::Value *Function_context::get_tex_lookup_func(
         tex_wrap_mode const wrap_w, \
         float const crop_u[2], \
         float const crop_v[2], \
-        float const crop_w[2])
+        float const crop_w[2], \
+        float frame)
 
 #define ARGS_texel_3d \
-    ARGS4(float result[4], Core_tex_handler const *self, unsigned texture_idx, int const coord[3])
+    ARGS5( \
+        float result[4], \
+        Core_tex_handler const *self, \
+        unsigned texture_idx, \
+        int const coord[3], \
+        float frame)
 
 #define ARGS_lookup_float4_cube \
     ARGS4(float result[4], Core_tex_handler const *self, unsigned texture_idx, int const coord[3])
@@ -2816,13 +2841,16 @@ llvm::Value *Function_context::get_tex_lookup_func(
     ARGS4(float result[3], Core_tex_handler const *self, unsigned texture_idx, int const coord[3])
 
 #define ARGS_resolution_2d \
-    ARGS4(int result[2], Core_tex_handler const *self, unsigned texture_idx, int const uv_tile[2])
+    ARGS5(int result[2], Core_tex_handler const *self, unsigned texture_idx, int const uv_tile[2], float frame)
 
 #define ARGS_resolution_3d \
-    ARGS3(int result[3], Core_tex_handler const *self, unsigned texture_idx)
+    ARGS4(int result[3], Core_tex_handler const *self, unsigned texture_idx, float frame)
 
 #define ARGS_texture_isvalid \
     ARGS2(Core_tex_handler const *self, unsigned texture_idx)
+
+#define ARGS_texture_frame \
+    ARGS3(int result[2], Core_tex_handler const *self, unsigned texture_idx)
 
 #define ARGS_mbsdf_isvalid \
     ARGS2(Core_tex_handler const *self, unsigned bsdf_measurement_index)
@@ -2893,6 +2921,12 @@ llvm::Value *Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         unsigned light_profile_index, \
         float const theta_phi[2])
+
+#define ARGS_adapt_normal\
+    ARGS3( \
+        float result[3], \
+        Core_tex_handler const *self, \
+        float const normal[3])
 
 #define ARGS_sdata_isvalid \
     ARGS3( \
@@ -3055,6 +3089,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
         { "tex_resolution_2d",                  OCP(ARGS_resolution_2d) },
         { "tex_resolution_3d",                  OCP(ARGS_resolution_3d) },
         { "tex_texture_isvalid",                OCP(ARGS_texture_isvalid) },
+        { "tex_frame",                          OCP(ARGS_texture_frame) },
         { "df_light_profile_power",             OCP(ARGS_light_profile_power) },
         { "df_light_profile_maximum",           OCP(ARGS_light_profile_maximum) },
         { "df_light_profile_isvalid",           OCP(ARGS_light_profile_isvalid) },
@@ -3067,6 +3102,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
         { "df_bsdf_measurement_sample",         OCP(ARGS_mbsdf_sample) },
         { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
         { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
+        { "adapt_normal",                       OCP(ARGS_adapt_normal) },
         { "scene_data_isvalid",                 OCP(ARGS_sdata_isvalid) },
         { "scene_data_lookup_float",            OCP(ARGS_sdata_lookup_float) },
         { "scene_data_lookup_float2",           OCP(ARGS_sdata_lookup_float2) },
@@ -3091,6 +3127,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
         { "tex_resolution_2d",                  OCP(ARGS_resolution_2d) },
         { "tex_resolution_3d",                  OCP(ARGS_resolution_3d) },
         { "tex_texture_isvalid",                OCP(ARGS_texture_isvalid) },
+        { "tex_frame",                          OCP(ARGS_texture_frame) },
         { "df_light_profile_power",             OCP(ARGS_light_profile_power) },
         { "df_light_profile_maximum",           OCP(ARGS_light_profile_maximum) },
         { "df_light_profile_isvalid",           OCP(ARGS_light_profile_isvalid) },
@@ -3103,6 +3140,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
         { "df_bsdf_measurement_sample",         OCP(ARGS_mbsdf_sample) },
         { "df_bsdf_measurement_pdf",            OCP(ARGS_mbsdf_pdf) },
         { "df_bsdf_measurement_albedos",        OCP(ARGS_mbsdf_albedos) },
+        { "adapt_normal",                       OCP(ARGS_adapt_normal) },
         { "scene_data_isvalid",                 OCP(ARGS_sdata_isvalid) },
         { "scene_data_lookup_float",            OCP(ARGS_sdata_lookup_float) },
         { "scene_data_lookup_float2",           OCP(ARGS_sdata_lookup_float2) },
@@ -3123,27 +3161,6 @@ llvm::Value *Function_context::get_tex_lookup_func(
     Runtime_functions *names = m_code_gen.is_texruntime_with_derivs()
         ? names_deriv : names_nonderiv;
 
-#undef ARGS_resolution_2d
-#undef ARGS_lookup_float3_cube
-#undef ARGS_lookup_float4_cube
-#undef ARGS_texel_3d
-#undef ARGS_lookup_float3_3d
-#undef ARGS_lookup_float4_3d
-#undef ARGS_texel_2d
-#undef ARGS_lookup_float3_2d
-#undef ARGS_lookup_float4_2d
-#undef ARGS_mbsdf_isvalid
-#undef ARGS_mbsdf_resolution
-#undef ARGS_mbsdf_evaluate
-#undef ARGS_mbsdf_sample
-#undef ARGS_mbsdf_pdf
-#undef ARGS_mbsdf_albedos
-#undef ARGS_light_profile_power
-#undef ARGS_light_profile_maximum
-#undef ARGS_light_profile_isvalid
-#undef ARGS_light_profile_evaluate
-#undef ARGS_light_profile_sample
-#undef ARGS_light_profile_pdf
 #undef OCP
 #undef ARGSX
 #undef ARGS8

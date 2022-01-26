@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "example_shared.h"
+#include "texture_support_native.h"
 
 #include <GL/glew.h>
 #define GLFW_INCLUDE_NONE
@@ -47,10 +48,16 @@
 #define GL_DISPLAY_NATIVE
 #include <utils/gl_display.h>
 
+#if MI_PLATFORM_MACOSX
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#endif
+
 #include "utils/profiling.h"
 using namespace mi::examples::profiling;
 
 #define USE_PARALLEL_RENDERING
+#define ADD_EXTRA_TIMERS
 
 ///////////////////////////////////////////////////////////////////////////////
 // Global Constants
@@ -100,7 +107,8 @@ inline unsigned lcg(unsigned &prev)
 // Generate random float in [0, 1)
 inline float rnd(unsigned &prev)
 {
-    return ((float)lcg(prev) / (float)0x01000000);
+    const unsigned next = lcg(prev);
+    return ((float)next / (float)0x01000000);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -387,6 +395,9 @@ struct Options
     // Whether the custom texture runtime should be used.
     bool use_custom_tex_runtime;
 
+    // Whether normals should be adapted.
+    bool use_adapt_normal;
+
     // Whether derivative support should be enabled.
     // This example does not support derivatives in combination with the custom texture runtime.
     bool enable_derivatives;
@@ -410,6 +421,7 @@ struct Options
         , light_intensity(1.0f, 0.902f, 0.502f)
         , use_class_compilation(false)
         , use_custom_tex_runtime(false)
+        , use_adapt_normal(false)
         , enable_derivatives(false)
     {}
 };
@@ -575,6 +587,7 @@ struct Render_context
     // MDL Backend execution
     mi::neuraylib::Shading_state_material shading_state;
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code;
+    Texture_handler *tex_handler;
     uint64_t surface_bsdf_function_index;
     uint64_t surface_edf_function_index;
     uint64_t surface_emission_intensity_function_index;
@@ -586,6 +599,7 @@ struct Render_context
 
     Render_context()
         : target_code(nullptr)
+        , tex_handler(nullptr)
     {
         max_ray_length = 6;
         render_auxiliary = false;
@@ -710,10 +724,12 @@ struct Render_context
         isect_info.tan_u.x = cp * st * pi_rad;
         isect_info.tan_u.y = 0.f;
         isect_info.tan_u.z = -sp * st * pi_rad;
+        isect_info.tan_u = normalize(isect_info.tan_u);
 
         isect_info.tan_v.x = -sp * isect_info.normal.y * pi_rad;
         isect_info.tan_v.y = st * pi_rad;
         isect_info.tan_v.z = -cp * isect_info.normal.y * pi_rad;
+        isect_info.tan_v = normalize(isect_info.tan_v);
 
         return true;
     }
@@ -805,7 +821,10 @@ struct Render_context
     // importance sampling the environment map
     mi::Float32_3 sample_environment(mi::Float32_3& light_dir, float &light_pdf, unsigned &seed)
     {
-        mi::Float32_3 xi(rnd(seed), rnd(seed), rnd(seed));
+        mi::Float32_3 xi;
+        xi.x = rnd(seed);
+        xi.y = rnd(seed);
+        xi.z = rnd(seed);
 
         // importance sample the environment using an alias map
         const unsigned int size = env.map_size.x * env.map_size.y;
@@ -936,16 +955,16 @@ void create_material_instance(
             material_simple_name.c_str(), module_name.c_str());
 
     // Get the material definition from the database
-    mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-        transaction->access<mi::neuraylib::IMaterial_definition>(material_db_name.c_str()));
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        transaction->access<mi::neuraylib::IFunction_definition>(material_db_name.c_str()));
     if (!material_definition)
         exit_failure("Accessing definition '%s' failed.", material_db_name.c_str());
 
     // Create a material instance from the material definition with the default arguments.
     // Assuming the material has defaults for all parameters.
     mi::Sint32 result;
-    mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-        material_definition->create_material_instance(0, &result));
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        material_definition->create_function_call(0, &result));
     if (result != 0)
         exit_failure("Instantiating '%s' failed.", material_db_name.c_str());
 
@@ -980,12 +999,21 @@ void generate_native(
     mi::neuraylib::IMdl_execution_context* context,
     const char* compiled_material_name,
     bool use_custom_tex_runtime,
+    bool use_adapt_normal,
     bool enable_derivatives)
 {
     Timing timing("generate target code");
 
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+#endif
+
     mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
         transaction->access<mi::neuraylib::ICompiled_material>(compiled_material_name));
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+#endif
 
     // has material a constant cutout opacity?
     render_context.cutout.is_constant =
@@ -1008,7 +1036,7 @@ void generate_native(
         render_context.thin_walled.is_thin_walled = thin_walled_bool->get_value();
     }
 
-    // back faces could be different for thin walled materials 
+    // back faces could be different for thin walled materials
     bool need_backface_bsdf = false;
     bool need_backface_edf = false;
     bool need_backface_emission_intensity = false;
@@ -1056,12 +1084,20 @@ void generate_native(
         }
     }
 
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
+#endif
+
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_native(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_NATIVE));
 
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t4 = std::chrono::steady_clock::now();
+#endif
+
     check_success(be_native->set_option("num_texture_spaces", "1") == 0);
 
-    if(render_context.render_auxiliary)
+    if (render_context.render_auxiliary)
         check_success(be_native->set_option("enable_auxiliary", "on") == 0);
 
     if (use_custom_tex_runtime)
@@ -1070,9 +1106,20 @@ void generate_native(
     if (enable_derivatives)
         check_success(be_native->set_option("texture_runtime_with_derivs", "on") == 0);
 
+    if (use_adapt_normal)
+        check_success(be_native->set_option("use_renderer_adapt_normal", "on") == 0);
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t5 = std::chrono::steady_clock::now();
+#endif
+
     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
         be_native->create_link_unit(transaction, context));
     check_success(print_messages(context));
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t6 = std::chrono::steady_clock::now();
+#endif
 
     // select expressions to generate code for
     std::vector<mi::neuraylib::Target_function_description> descs;
@@ -1115,6 +1162,10 @@ void generate_native(
         descs.push_back(mi::neuraylib::Target_function_description("thin_walled"));
     }
 
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t7 = std::chrono::steady_clock::now();
+#endif
+
     // add the material to the link unit
     link_unit->add_material(
         compiled_material.get(),
@@ -1122,11 +1173,19 @@ void generate_native(
         context);
     check_success(print_messages(context));
 
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t8 = std::chrono::steady_clock::now();
+#endif
+
     // translate link unit
     mi::base::Handle<const mi::neuraylib::ITarget_code> code_native(
         be_native->translate_link_unit(link_unit.get(), context));
     check_success(print_messages(context));
     check_success(code_native);
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t9 = std::chrono::steady_clock::now();
+#endif
 
     // update render context
     render_context.target_code = code_native;
@@ -1148,6 +1207,85 @@ void generate_native(
 
     render_context.thin_walled_function_index = !render_context.thin_walled.is_constant
         ? descs[thin_walled_desc_index].function_index : ~0;
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t10 = std::chrono::steady_clock::now();
+#endif
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::duration<double> et = t10 - t1;
+    printf("GTC |||| Total time                 : %f seconds.\n", et.count());
+
+    et = t2 - t1;
+    printf("GTC | Compiled material DB          : %f seconds.\n", et.count());
+
+    et = t3 - t2;
+    printf("GTC | Mateial properties inspection : %f seconds.\n", et.count());
+
+    et = t4 - t3;
+    printf("GTC | Native backend                : %f seconds.\n", et.count());
+
+    et = t5 - t4;
+    printf("GTC | Material flags                : %f seconds.\n", et.count());
+
+    et = t6 - t5;
+    printf("GTC | Create link unit              : %f seconds.\n", et.count());
+
+    et = t7 - t6;
+    printf("GTC | Material expressions selection: %f seconds.\n", et.count());
+
+    et = t8 - t7;
+    printf("GTC | Add material to link unit     : %f seconds.\n", et.count());
+
+    et = t9 - t8;
+    printf("GTC | Translate link unit           : %f seconds.\n", et.count());
+
+    et = t10 - t9;
+    printf("GTC | RC update                     : %f seconds.\n", et.count());
+#endif
+}
+
+// Prepare the textures for our own texture runtime.
+bool prepare_textures(
+    std::vector<Texture>& textures,
+    mi::neuraylib::ITransaction* transaction,
+    mi::neuraylib::IImage_api* image_api,
+    const mi::neuraylib::ITarget_code* target_code)
+{
+    for (mi::Size i = 1 /*skip invalid texture*/; i < target_code->get_texture_count(); ++i)
+    {
+        mi::base::Handle<const mi::neuraylib::ITexture> texture(
+            transaction->access<const mi::neuraylib::ITexture>(
+                target_code->get_texture(i)));
+        mi::base::Handle<const mi::neuraylib::IImage> image(
+            transaction->access<mi::neuraylib::IImage>(texture->get_image()));
+        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
+        char const* image_type = image->get_type(0, 0);
+
+        if (image->is_uvtile() || image->is_animated()) {
+            std::cerr << "The example does not support uvtile and/or animated textures!" << std::endl;
+            return false;
+        }
+
+        // For simplicity, the texture access functions are only implemented for float4 and gamma
+        // is pre-applied here (all images are converted to linear space).
+
+        // Convert to linear color space if necessary
+        if (texture->get_effective_gamma(0, 0) != 1.0f) {
+            // Copy/convert to float4 canvas and adjust gamma from "effective gamma" to 1.
+            mi::base::Handle<mi::neuraylib::ICanvas> gamma_canvas(
+                image_api->convert(canvas.get(), "Color"));
+            gamma_canvas->set_gamma(texture->get_effective_gamma(0, 0));
+            image_api->adjust_gamma(gamma_canvas.get(), 1.0f);
+            canvas = gamma_canvas;
+        }
+        else if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0) {
+            // Convert to expected format
+            canvas = image_api->convert(canvas.get(), "Color");
+        }
+        textures.push_back(Texture(canvas));
+    }
+    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1180,7 +1318,7 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             rc.target_code->execute(
                 rc.cutout_opacity_function_index,
                 reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-                /*texture_handler=*/ nullptr,
+                rc.tex_handler,
                 /*arg_block_data=*/ nullptr,
                 &cutout_opacity);
         }
@@ -1203,7 +1341,7 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 rc.target_code->execute(
                     rc.thin_walled_function_index,
                     reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-                    /*texture_handler=*/ nullptr,
+                    rc.tex_handler,
                     /*arg_block_data=*/ nullptr,
                     &is_thin_walled);
             }
@@ -1219,7 +1357,7 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 rc.target_code->execute_bsdf_init(
                     edf_function_index,
                     rc.shading_state,
-                    nullptr,
+                    rc.tex_handler,
                     nullptr);
 
                 mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
@@ -1231,16 +1369,17 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                                                        // edf_function_index+2 to 'evaluate'
                     &eval_data,
                     rc.shading_state,
-                    /*texture_handler=*/ nullptr,
+                    rc.tex_handler,
                     /*arg_block_data=*/ nullptr);
 
+                // emission contribution is only valid for positive pdf
                 if (eval_data.pdf > 1.e-6f)
                 {
                     mi::Float32_3 intensity(1.f);
                     rc.target_code->execute(
                         rc.surface_emission_intensity_function_index,
                         reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-                        /*texture_handler=*/ nullptr,
+                        rc.tex_handler,
                         /*arg_block_data=*/ nullptr,
                         &intensity);
 
@@ -1259,7 +1398,7 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             rc.target_code->execute_bsdf_init(
                 surface_bsdf_function_index,
                 rc.shading_state,
-                nullptr,
+                rc.tex_handler,
                 nullptr);
 
             // get auxiliarity data
@@ -1283,7 +1422,7 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                                                         // bsdf_function_index+4 to 'auxiliary'
                     &aux_data,
                     rc.shading_state,
-                    nullptr,
+                    rc.tex_handler,
                     nullptr);
 
                 vp_sample[VPCH_ALBEDO] = aux_data.albedo;
@@ -1292,10 +1431,10 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
 
             // evaluate scene lights contribution
             mi::Float32_3 light_dir;
-            float light_pdf;
+            float light_pdf = 0.f;
             mi::Float32_3 radiance_over_pdf = rc.sample_lights(isect_info.pos, light_dir, light_pdf, seed);
 
-            if (light_pdf != 0.0f && ((dot(rc.shading_state.normal, light_dir) > 0.f) != ray.is_inside))
+            if (ray.level < rc.max_ray_length && light_pdf != 0.0f && ((dot(rc.shading_state.normal, light_dir) > 0.f) != ray.is_inside))
             {
                 mi::neuraylib::Bsdf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
                 if (ray.is_inside && !is_thin_walled)
@@ -1320,7 +1459,7 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                                                         // bsdf_function_index+2 to 'evaluate'
                     &eval_data,
                     rc.shading_state,
-                    /*texture_handler=*/ nullptr,
+                    rc.tex_handler,
                     /*arg_block_data=*/ nullptr);
 
                 if (eval_data.pdf > 1.e-6f)
@@ -1356,7 +1495,7 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                                                              // bsdf_function_index+1 to 'sample'
                     &sample_data,   // input/output
                     rc.shading_state,
-                    /*texture_handler=*/ nullptr,
+                    rc.tex_handler,
                     /*arg_block_data=*/ nullptr);
 
                 if (sample_data.event_type != mi::neuraylib::BSDF_EVENT_ABSORB)
@@ -1436,12 +1575,15 @@ void render_scene(
 
         for (size_t x = 0; x < width; ++x, ++vp_idx)
         {
-            std::vector<mi::Float32_3> vp_sample = 
+            std::vector<mi::Float32_3> vp_sample =
                 { mi::Float32_3(0.f), mi::Float32_3(0.f), mi::Float32_3(0.f) };
 
+            float x_rnd = rnd(seed);
+            float y_rnd = rnd(seed);
+
             mi::Float32_2 screen_pos(
-                (x + rnd(seed))*rc.cam.inv_res.x,
-                (y + rnd(seed))*rc.cam.inv_res.y);
+                (x + x_rnd)*rc.cam.inv_res.x,
+                (y + y_rnd)*rc.cam.inv_res.y);
 
             float r = (2.0f * screen_pos.x - 1.0f);
             float u = (2.0f * screen_pos.y - 1.0f);
@@ -1470,7 +1612,7 @@ void render_scene(
             }
             else
             {
-                vp_buffers->accum_buffer[vp_idx] = 
+                vp_buffers->accum_buffer[vp_idx] =
                     (vp_buffers->accum_buffer[vp_idx] * static_cast<float>(frame_nb - 1) + vp_sample[VPCH_ILLUM]) * (1.f / frame_nb);
                 vp_sample[VPCH_ILLUM] = vp_buffers->accum_buffer[vp_idx];
 
@@ -1506,7 +1648,7 @@ void render_scene(
 }
 
 // Save current result image to disk
-static void save_screeshot(
+static void save_screenshot(
     const mi::Float32_3* image_buffer,
     const unsigned int width,
     const unsigned int height,
@@ -1537,7 +1679,8 @@ void usage(char const *prog_name)
         << "  --hdr <filename>       environment map\n"
         << "                         (default: nvidia/sdk_examples/resources/environment.hdr)\n"
         << "  --cc                   use class compilation\n"
-        << "                         (not supported in combination with --cr by this example)\n"
+        << "  --cr                   use custom texture runtime\n"
+        << "  --an                   use adapt normal function\n"
         << "  --nogui                don't open interactive display\n"
         << "  --spp                  samples per pixel (default: 100) for output image when nogui\n"
         << "  -o <outputfile>        image file to write result to\n"
@@ -1625,6 +1768,14 @@ int MAIN_UTF8(int argc, char *argv[])
             else if (strcmp(opt, "--cc") == 0)
             {
                 options.use_class_compilation = true;
+            }
+            else if (strcmp(opt, "--cr") == 0)
+            {
+                options.use_custom_tex_runtime = true;
+            }
+            else if (strcmp(opt, "--an") == 0)
+            {
+                options.use_adapt_normal = true;
             }
             else if ((strcmp(opt, "--mdl_path") == 0 || strcmp(opt, "-p") == 0) &&
                 i < argc - 1)
@@ -1743,9 +1894,36 @@ int MAIN_UTF8(int argc, char *argv[])
                 context.get(),
                 compilation_name.c_str(),
                 options.use_custom_tex_runtime,
+                options.use_adapt_normal,
                 options.enable_derivatives);
         }
 
+        // Setup custom texture handler, if requested
+        std::vector<Texture>                  textures;
+        Texture_handler                       tex_handler = { 0 };
+        mi::neuraylib::Texture_handler_vtable tex_only_adapt_normal_vtable = { 0 };
+
+        if (options.use_custom_tex_runtime)
+        {
+            check_success(prepare_textures(
+                textures, transaction.get(), image_api.get(), rc.target_code.get()));
+
+            tex_handler.vtable = &tex_vtable;
+            tex_handler.num_textures = rc.target_code->get_texture_count() - 1;
+            tex_handler.textures = textures.data();
+
+            rc.tex_handler = &tex_handler;
+        }
+        else if (options.use_adapt_normal)
+        {
+            // only set the m_adapt_normal entry in the vtable of the texture handler object
+
+            tex_only_adapt_normal_vtable.m_adapt_normal = adapt_normal;
+
+            tex_handler.vtable = &tex_only_adapt_normal_vtable;
+
+            rc.tex_handler = &tex_handler;
+        }
 
         // create window context
         Window_context window_context;
@@ -1757,15 +1935,15 @@ int MAIN_UTF8(int argc, char *argv[])
 
         // Viewport buffers for progressive rendering
         VP_buffers vp_buffers;
-        
+
         // Setup file name for nogl mode
         std::string filename_base, filename_ext;
         size_t dot_pos = options.outputfile.rfind('.');
-        if (dot_pos == std::string::npos) 
+        if (dot_pos == std::string::npos)
         {
             filename_base = options.outputfile;
         }
-        else 
+        else
         {
             filename_base = options.outputfile.substr(0, dot_pos);
             filename_ext = options.outputfile.substr(dot_pos);
@@ -1774,13 +1952,15 @@ int MAIN_UTF8(int argc, char *argv[])
 
 #ifdef USE_PARALLEL_RENDERING
         // get number of physical/virtual threads available.
-#ifdef _WIN32
+#ifdef MI_PLATFORM_WINDOWS
         SYSTEM_INFO sysinfo;
         GetSystemInfo(&sysinfo);
         const int num_threads = sysinfo.dwNumberOfProcessors;
-#elif __APPLE__
-        const int num_threads = 8;
-#else // LINUX
+#elif MI_PLATFORM_MACOSX
+        int num_threads;
+        size_t len = sizeof(num_threads);
+        sysctlbyname("hw.logicalcpu", &num_threads, &len, NULL, 0);
+#else // LINUX // ARCH_64BIT
         const int num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 #endif
         std::cout << "Rendering on " << num_threads << " threads.\n";
@@ -1796,12 +1976,12 @@ int MAIN_UTF8(int argc, char *argv[])
             transaction->create<mi::neuraylib::IImage>("Image"));
         check_success(image->reset_file(options.env_map.c_str()) == 0);
 
-        rc.env.map = image->get_canvas();
+        rc.env.map = image->get_canvas(0, 0, 0);
         rc.env.map_size.x = rc.env.map->get_resolution_x();
         rc.env.map_size.y = rc.env.map->get_resolution_y();
 
         // Check, whether we need to convert the image
-        char const *image_type = image->get_type();
+        char const *image_type = image->get_type(0, 0);
         if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
             rc.env.map = image_api->convert(rc.env.map.get(), "Color");
 
@@ -1895,14 +2075,14 @@ int MAIN_UTF8(int argc, char *argv[])
             }
 
             // save screenshot
-            save_screeshot(vp_buffers.accum_buffer, window_width, window_height,
+            save_screenshot(vp_buffers.accum_buffer, window_width, window_height,
                 filename_base + filename_ext, image_api, mdl_impexp_api);
 
             if (options.output_auxiliary)
             {
-                save_screeshot(vp_buffers.albedo_buffer, window_width, window_height,
+                save_screenshot(vp_buffers.albedo_buffer, window_width, window_height,
                     filename_base + "_albedo" + filename_ext, image_api, mdl_impexp_api);
-                save_screeshot(vp_buffers.normal_buffer, window_width, window_height,
+                save_screenshot(vp_buffers.normal_buffer, window_width, window_height,
                     filename_base + "_normal" + filename_ext, image_api, mdl_impexp_api);
             }
         }
@@ -1996,14 +2176,14 @@ int MAIN_UTF8(int argc, char *argv[])
                 // handle save screenshot event
                 if (window_context.save_sreenshot && !ImGui::GetIO().WantCaptureMouse)
                 {
-                    save_screeshot(vp_buffers.accum_buffer, window_width, window_height,
+                    save_screenshot(vp_buffers.accum_buffer, window_width, window_height,
                         filename_base + filename_ext, image_api, mdl_impexp_api);
 
                     if (options.output_auxiliary)
                     {
-                        save_screeshot(vp_buffers.albedo_buffer, window_width, window_height,
+                        save_screenshot(vp_buffers.albedo_buffer, window_width, window_height,
                             filename_base + "_albedo" + filename_ext, image_api, mdl_impexp_api);
-                        save_screeshot(vp_buffers.normal_buffer, window_width, window_height,
+                        save_screenshot(vp_buffers.normal_buffer, window_width, window_height,
                             filename_base + "_normal" + filename_ext, image_api, mdl_impexp_api);
                     }
                 }

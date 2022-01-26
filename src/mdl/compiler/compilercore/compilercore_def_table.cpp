@@ -1930,7 +1930,7 @@ size_t Definition_table::get_memory_size() const
     size_t res = sizeof(*this);
 
     res += m_arena.get_chunks_size();
-    res += dynamic_memory_consumption(m_type_scopes);
+    res += mi::mdl::dynamic_memory_consumption(m_type_scopes);
     res += dynamic_memory_consumption(m_definitions);
 
     return res;

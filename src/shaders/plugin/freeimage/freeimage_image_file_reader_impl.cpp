@@ -31,6 +31,7 @@
 #include "freeimage_image_file_reader_impl.h"
 #include "freeimage_utilities.h"
 
+#include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/itile.h>
 
@@ -44,12 +45,17 @@ namespace MI {
 namespace FREEIMAGE {
 
 Image_file_reader_impl::Image_file_reader_impl(
-    mi::neuraylib::IReader* reader, FREE_IMAGE_FORMAT format)
-  : m_resolution_x( 1), m_resolution_y( 1), m_format( format), m_bitmap( 0), m_bitmap_pixel_type( 0)
+    mi::neuraylib::IImage_api* image_api,
+    mi::neuraylib::IReader* reader,
+    FREE_IMAGE_FORMAT format)
+  : m_image_api( image_api, mi::base::DUP_INTERFACE),
+    m_reader( reader, mi::base::DUP_INTERFACE),
+    m_resolution_x( 1),
+    m_resolution_y( 1),
+    m_format( format),
+    m_bitmap( 0),
+    m_bitmap_pixel_type( 0)
 {
-    m_reader = reader;
-    m_reader->retain();
-
     FreeImageIO io = construct_io_for_reading();
     m_format = FreeImage_GetFileTypeFromHandle( &io, static_cast<fi_handle>( reader));
     assert( m_format == format);
@@ -67,7 +73,8 @@ Image_file_reader_impl::Image_file_reader_impl(
     if( m_format != FIF_TIFF && FreeImage_FIFSupportsNoPixels( m_format))
         flags |= FIF_LOAD_NOPIXELS;
 
-    m_bitmap = FreeImage_LoadFromHandle( m_format, &io, static_cast<fi_handle>( m_reader), flags);
+    m_bitmap = FreeImage_LoadFromHandle(
+        m_format, &io, static_cast<fi_handle>( m_reader.get()), flags);
 
     if( !m_bitmap) {
         m_resolution_x = 1;
@@ -104,7 +111,6 @@ Image_file_reader_impl::Image_file_reader_impl(
 
 Image_file_reader_impl::~Image_file_reader_impl()
 {
-    m_reader->release();
     if( m_bitmap)
         FreeImage_Unload( m_bitmap);
 }
@@ -135,20 +141,6 @@ mi::Uint32 Image_file_reader_impl::get_layers_size( mi::Uint32 level) const
     return 1;
 }
 
-mi::Uint32 Image_file_reader_impl::get_tile_resolution_x( mi::Uint32 level) const //-V524 PVS
-{
-    if( level > 0)
-        return 0;
-    return m_resolution_x;
-}
-
-mi::Uint32 Image_file_reader_impl::get_tile_resolution_y( mi::Uint32 level) const //-V524 PVS
-{
-    if( level > 0)
-        return 0;
-    return m_resolution_y;
-}
-
 mi::Uint32 Image_file_reader_impl::get_miplevels() const
 {
     return 1;
@@ -165,16 +157,10 @@ mi::Float32 Image_file_reader_impl::get_gamma() const
     return IMAGE::get_default_gamma( pixel_type);
 }
 
-bool Image_file_reader_impl::read(
-    mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level) const
+mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 level) const
 {
     if( !m_bitmap || z != 0 || level != 0)
-        return false;
-
-#ifndef NDEBUG
-    const char* tile_pixel_type = tile->get_type();
-    assert( strcmp( tile_pixel_type, m_bitmap_pixel_type) == 0);
-#endif
+        return nullptr;
 
     if( !FreeImage_HasPixels( m_bitmap)) {
 
@@ -192,10 +178,10 @@ bool Image_file_reader_impl::read(
         m_reader->seek_absolute( 0);
         FreeImageIO io = construct_io_for_reading();
         m_bitmap = FreeImage_LoadFromHandle(
-            m_format, &io, static_cast<fi_handle>( m_reader), flags);
+            m_format, &io, static_cast<fi_handle>( m_reader.get()), flags);
 
         if( !m_bitmap)
-            return false;
+            return nullptr;
 
         bool convert = true; // avoid compiler warning
         const char* pixel_type
@@ -221,11 +207,19 @@ bool Image_file_reader_impl::read(
 
     }
 
-    return copy_from_bitmap_to_tile( m_bitmap, x, y, tile);
+    mi::base::Handle<mi::neuraylib::ITile> tile(
+        m_image_api->create_tile( m_bitmap_pixel_type, m_resolution_x, m_resolution_y));
+
+    bool success = copy_from_bitmap_to_tile( m_bitmap, tile.get());
+    if( !success)
+        return nullptr;
+
+    tile->retain();
+    return tile.get();
 }
 
 bool Image_file_reader_impl::write(
-    const mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level)
+    const mi::neuraylib::ITile* tile, mi::Uint32 z, mi::Uint32 level)
 {
     return false;
 }

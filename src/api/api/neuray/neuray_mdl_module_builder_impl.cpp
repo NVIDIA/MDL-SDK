@@ -39,7 +39,6 @@
 #include <base/util/string_utils/i_string_utils.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module_builder.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
-#include <io/scene/mdl_elements/mdl_elements_utilities.h>
 
 #include "neuray_array_impl.h"
 #include "neuray_expression_impl.h"

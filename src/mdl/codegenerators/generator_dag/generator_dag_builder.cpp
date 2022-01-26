@@ -1144,27 +1144,6 @@ bool DAG_builder::enable_target_material_compilation_mode(bool flag)
 }
 
 
-// Check if the given type is a user defined type.
-bool DAG_builder::is_user_type(IType const *type)
-{
-    if (IType_struct const *s_type = as<IType_struct>(type)) {
-        if (s_type->get_predefined_id() == IType_struct::SID_USER) {
-            return true;
-        }
-    } else if (IType_enum const *e_type = as<IType_enum>(type)) {
-        IType_enum::Predefined_id id = e_type->get_predefined_id();
-        if (id == IType_enum::EID_USER || id == IType_enum::EID_TEX_GAMMA_MODE) {
-            // although tex::gamma_mode is predefined in the compiler (due to its use
-            // in the texture constructor), it IS a user type: There is even MDL code
-            // for it
-            return true;
-        }
-    } else if (is<IType_array>(type)) {
-        return true;
-    }
-    return false;
-}
-
 // Convert a definition to a name.
 string DAG_builder::def_to_name(
     IDefinition const *def, const char *module_name, bool with_signature_suffix) const
@@ -2675,7 +2654,7 @@ static bool has_target_material_model_anno(
     IAnnotation_block const *block)
 {
     if (block != NULL) {
-        for (int i = 0, n = block->get_annotation_count(); i < n; ++i) {
+        for (size_t i = 0, n = block->get_annotation_count(); i < n; ++i) {
             IAnnotation const     *anno     = block->get_annotation(i);
             IQualified_name const *qname    = anno->get_name();
             IDefinition const     *anno_def = qname->get_definition();

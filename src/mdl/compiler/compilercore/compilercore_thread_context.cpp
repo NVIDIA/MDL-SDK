@@ -29,6 +29,7 @@
 #include "pch.h"
 
 #include "compilercore_thread_context.h"
+#include "compilercore_mdl.h"
 
 namespace mi {
 namespace mdl {
@@ -73,6 +74,11 @@ Messages_impl &Thread_context::access_messages_impl()
     return m_msg_list;
 }
 
+// Get the user data.
+mi::base::IInterface const *Thread_context::get_user_data() const {
+    return m_options.get_interface_option(m_options.get_option_index(MDL::option_user_data));
+}
+
 // Get a string buffer.
 char const *Thread_context::get_string_buffer(String_buffer_id id) const
 {
@@ -115,6 +121,8 @@ Thread_context::Thread_context(
 
         if (opt.is_binary()) {
             m_options.add_binary_option(opt.get_name(), opt.get_description());
+        } else if (opt.is_interface()) {
+            m_options.add_interface_option(opt.get_name(), opt.get_description());
         } else {
             m_options.add_option(opt.get_name(), opt.get_default_value(), opt.get_description());
         }

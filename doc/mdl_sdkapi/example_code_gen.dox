@@ -100,7 +100,7 @@ generation without any renderer specific work in order to provide a quick and pr
         the target code. See \ref mi_neuray_example_dxr which makes use of this feature when 
         enabled using the CLI or the user interface. 
 
-        The hash of the #mi::neuraylib::ICompiled_material is used as an identifer to
+        The hash of the #mi::neuraylib::ICompiled_material is used as an identifier to
         store the information during serialization and to select to stored data when loading.
         Changes in MDL SDK version for instance are detected during deserializing. 
         This helps to avoid problems with outdated cached data.

@@ -520,11 +520,16 @@ public:
     mi::neuraylib::IExpression_list* clone( const mi::neuraylib::IExpression_list* expr_list) const;
 
     mi::Sint32 compare(
-        const mi::neuraylib::IExpression* lhs, const mi::neuraylib::IExpression* rhs) const;
+        const mi::neuraylib::IExpression* lhs,
+        const mi::neuraylib::IExpression* rhs,
+        mi::Uint32 flags,
+        mi::Float64 epsilon) const;
 
     mi::Sint32 compare(
         const mi::neuraylib::IExpression_list* lhs,
-        const mi::neuraylib::IExpression_list* rhs) const;
+        const mi::neuraylib::IExpression_list* rhs,
+        mi::Uint32 flags,
+        mi::Float64 epsilon) const;
 
     const mi::IString* dump(
         const mi::neuraylib::IExpression* expr, const char* name, mi::Size depth) const;

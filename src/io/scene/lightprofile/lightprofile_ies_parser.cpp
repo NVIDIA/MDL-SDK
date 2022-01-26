@@ -75,7 +75,7 @@ const static char* ies_spec =
     "IESNA LM-63-95 - IESNA Standard File Format for Electronic Transfer of Photometric Data";
 
 // Maximal string length not-including end of line
-const static Uint MAX_LINE_LENGTH = 4096;   // though standard is 132/256
+constexpr static Uint MAX_LINE_LENGTH = 4096;   // though standard is 132/256
 
 } // namespace
 
@@ -134,7 +134,7 @@ private:
     ///
     /// Separators are comma, semicolon, whitespace, CR, LF. Empty tokens are skipped.
     void get_tokens(
-        char* line, std::vector<std::string>& valid_tokens);
+        const char* line, std::vector<std::string>& valid_tokens);
 
     /// Tokenizes one or several lines.
     ///
@@ -157,9 +157,9 @@ private:
         const std::string&    description);
 
     // Returns true if end of line has been reached
-    char* parse_next_token(
-        char*           line_pointer,           // Pointing to line position
-        std::string&  token) const;             // Returned token
+    //char* parse_next_token(
+    //    char*           line_pointer,           // Pointing to line position
+    //    std::string&  token) const;             // Returned token
 
     // File infos
     mi::base::Handle<mi::neuraylib::IReader> m_reader;
@@ -215,7 +215,6 @@ Lightprofile_ies_parser::Lightprofile_ies_parser(
     m_valid(true),
     m_skip_line_length_warning(false)
 {
-
     char line[MAX_LINE_LENGTH];
     m_reader->readline(line, sizeof(line));
 
@@ -250,20 +249,19 @@ Lightprofile_ies_parser::Lightprofile_ies_parser(
     {
         for(Uint i=0; i<m_nb_horizontal_angles; i++)
         {
-            std::string description = "candela values for horizontal angle #";
-            description += std::to_string(i);
+            const std::string description = "candela values for horizontal angle #" + std::to_string(i);
             if(m_valid)
                 parse_angles_data(m_candela_values[i], description);
         }
     }
 }
 
-void Lightprofile_ies_parser::get_tokens(char* line, std::vector<std::string>& valid_tokens)
+void Lightprofile_ies_parser::get_tokens(const char* line, std::vector<std::string>& valid_tokens)
 {
     std::vector<std::string> tokens;
     MI::STRING::split(line, ",; \t\r\n", tokens);
 
-    size_t n = tokens.size();
+    const size_t n = tokens.size();
     for (size_t i=0; i<n; ++i) {
         const std::string& token = tokens[i];
         if (!token.empty())
@@ -342,7 +340,7 @@ bool Lightprofile_ies_parser::parse_version(
 //
 void Lightprofile_ies_parser::parse_lamp_data()
 {
-    const Uint nb_required_lamp_values = 10;
+    constexpr Uint nb_required_lamp_values = 10;
 
     // Tokenize lamp data
     std::vector<std::string> tokens;
@@ -423,7 +421,7 @@ void Lightprofile_ies_parser::parse_lamp_data()
 //
 void Lightprofile_ies_parser::parse_additional_data()
 {
-    const Uint nb_required_data_values = 3;
+    constexpr Uint nb_required_data_values = 3;
 
     // Tokenize additional data
     std::vector<std::string> tokens;
@@ -597,7 +595,7 @@ void Lightprofile_ies_parser::parse_tilt(char* tilt)
         }
 
         mi::base::Handle<mi::neuraylib::IReader> orig_reader = m_reader;
-        std::string orig_log_identifier = m_log_identifier;
+        const std::string orig_log_identifier = m_log_identifier;
         m_reader = make_handle_dup( &reader);
         m_log_identifier = tilt_value;
 
@@ -613,7 +611,7 @@ void Lightprofile_ies_parser::parse_tilt(char* tilt)
 //
 void Lightprofile_ies_parser::parse_tilt_values()
 {
-    const Uint nb_required_data_values = 3;
+    constexpr Uint nb_required_data_values = 3;
 
     // Tokenize additional data
     std::vector<std::string> tokens;
@@ -865,7 +863,7 @@ static void resolve_special_case_type_c(
     const std::vector<std::vector<Scalar> >&    candela_values_in,
     std::vector<std::vector<Scalar> >&          candela_values_out)
 {
-    const Uint nb_horizontal_angles = 2;
+    constexpr Uint nb_horizontal_angles = 2;
     horizontal_angles_out.resize(nb_horizontal_angles);
 
     horizontal_angles_out[0] = horizontal_angles_in[0];
@@ -959,8 +957,9 @@ static void horizontal_rotate(
     while(rotation + horizontal_angles[0] < -M_PI)
         rotation += 2.0 * M_PI;
 
+    const Scalar rotationf = Scalar(rotation);
     for(Uint i=0; i<nb_horizontal_angles; i++)
-        horizontal_angles[i] += Scalar(rotation);
+        horizontal_angles[i] += rotationf;
 }
 //
 // Flip representation: IES normally has clockwise phi, but mi use counter -
@@ -971,12 +970,12 @@ static void horizontal_flip(
     std::vector<Scalar>&                horizontal_angles,
     std::vector<std::vector<Scalar> >&  candela_values)
 {
-    Uint nb_horizontal_angles = horizontal_angles.size();
+	const Uint nb_horizontal_angles = horizontal_angles.size();
 
-    Scalar max_angle = horizontal_angles[nb_horizontal_angles - 1];
+    const Scalar max_angle = horizontal_angles[nb_horizontal_angles - 1];
 
     // miASSERT(-M_PI <= max_angle && max_angle <= 3 * M_PI);
-    Scalar add = (max_angle>M_PI) ? Scalar(2.0*M_PI) : 0.f;   // Put reversed angle to [-PI,PI]
+    const Scalar add = (max_angle>Scalar(M_PI)) ? Scalar(2.0*M_PI) : 0.f;   // Put reversed angle to [-PI,PI]
 
     Uint i = 0;
     Uint j = nb_horizontal_angles-1;
@@ -1114,7 +1113,7 @@ static void add_boundary(
     std::vector<Scalar>& col_left_plus_two    = grid[2];
     std::vector<Scalar>& col_right            = grid[nb_horizontal_angles+1];
     std::vector<Scalar>& col_right_minus_two  = grid[nb_horizontal_angles-1];
-    if(fabs(delta)<0.0001)
+    if(fabs(delta)<0.0001f)
     {
         // Periodic boundary condition
         for(Uint i=0; i<nb_vertical_angles+2; i++) // Step up in vertical direction
@@ -1210,8 +1209,8 @@ static void compute_linear_interpolation(
 
     Uint idx = 0;
     Uint q = 0;
-    Scalar left  = 0.00001f;
-    Scalar right = 0.99999f;
+    constexpr Scalar left  = 0.00001f;
+    constexpr Scalar right = 0.99999f;
     for(Uint j=0; j<horizontal_resolution; j++)
     {
         const Scalar t_phi = j*d_phi;
@@ -1385,15 +1384,14 @@ static void compute_cubic_interpolation(
 
             // d0 and d1 are difference quotients, but the division may be omitted, since we map to
             // the interval [0,1) there is also a factor of the same size, due to the chain rule.
-            Scalar d0 = 0.0;
-            Scalar d1 = 0.0;
-            d0 = (candela_values_h0[p+1]-candela_values_h0[p-1])*delta_theta;
+            Scalar d0 = (candela_values_h0[p+1]-candela_values_h0[p-1])*delta_theta;
+            Scalar d1;
             if(p==nb_vertical_angles-2)
                 d1 = (candela_values_h0[p  ]-candela_values_h0[p-2])*delta_theta;
             else
                 d1 = (candela_values_h0[p+2]-candela_values_h0[p  ])*delta_theta;
-            Scalar val_0 = v_base[0]*candela_values_h0[p] + v_base[1]*candela_values_h0[p+1]
-                         + v_base[2]*d0                   + v_base[3]*d1;
+            const Scalar val_0 = v_base[0]*candela_values_h0[p] + v_base[1]*candela_values_h0[p+1]
+                               + v_base[2]*d0                   + v_base[3]*d1;
 
             // Index into candela values
             const std::vector<Scalar>& candela_values_h1 = candela[q];
@@ -1403,8 +1401,8 @@ static void compute_cubic_interpolation(
                 d1 = (candela_values_h1[p  ]-candela_values_h1[p-2])*delta_theta;
             else
                 d1 = (candela_values_h1[p+2]-candela_values_h1[p  ])*delta_theta;
-            Scalar val_1 = v_base[0]*candela_values_h1[p] + v_base[1]*candela_values_h1[p+1]
-                         + v_base[2]*d0                   + v_base[3]*d1;
+            const Scalar val_1 = v_base[0]*candela_values_h1[p] + v_base[1]*candela_values_h1[p+1]
+                               + v_base[2]*d0                   + v_base[3]*d1;
 
             // Index into candela values
             const std::vector<Scalar>& candela_values_h2 = candela[q+1];
@@ -1414,8 +1412,8 @@ static void compute_cubic_interpolation(
                 d1 = (candela_values_h2[p  ]-candela_values_h2[p-2])*delta_theta;
             else
                 d1 = (candela_values_h2[p+2]-candela_values_h2[p  ])*delta_theta;
-            Scalar val_2 = v_base[0]*candela_values_h2[p] + v_base[1]*candela_values_h2[p+1]
-                         + v_base[2]*d0                   + v_base[3]*d1;
+            const Scalar val_2 = v_base[0]*candela_values_h2[p] + v_base[1]*candela_values_h2[p+1]
+                               + v_base[2]*d0                   + v_base[3]*d1;
 
             // Index into candela values
             const std::vector<Scalar>& candela_values_h3 =
@@ -1426,14 +1424,14 @@ static void compute_cubic_interpolation(
                 d1 = (candela_values_h3[p  ]-candela_values_h3[p-2])*delta_theta;
             else
                 d1 = (candela_values_h3[p+2]-candela_values_h3[p  ])*delta_theta;
-            Scalar val_3 = v_base[0]*candela_values_h3[p] + v_base[1]*candela_values_h3[p+1]
-                         + v_base[2]*d0                   + v_base[3]*d1;
+            const Scalar val_3 = v_base[0]*candela_values_h3[p] + v_base[1]*candela_values_h3[p+1]
+                               + v_base[2]*d0                   + v_base[3]*d1;
 
             d0 = (val_2-val_0)*delta_phi;
             d1 = (val_3-val_1)*delta_phi;
 
-            Scalar w = h_base[0] * val_1 + h_base[1] * val_2
-                     + h_base[2] * d0    + h_base[3] * d1;
+            const Scalar w = h_base[0] * val_1 + h_base[1] * val_2
+                           + h_base[2] * d0    + h_base[3] * d1;
 
             grid_values[idx] = (w>0.f) ? w : 0.f;
             idx++;
@@ -1460,7 +1458,7 @@ Uint lcm(Uint a, Uint b)
 // resolution that keeps the given angles.
 Uint compute_resolution(const std::vector<Scalar>& angles)
 {
-    Uint l = angles.size();
+    const Uint l = angles.size();
     if( l <= 2)
         return l;
 
@@ -1468,17 +1466,17 @@ Uint compute_resolution(const std::vector<Scalar>& angles)
     // (numbered from 0 to n), such that the following computations can be done in integers. The
     // number n is chosen such that we can represent 0.1 degrees as well as an equidistant grid of
     // resolution l.
-    Dscalar range = (180.0 / M_PI) * (angles[l-1] - angles[0]);
-    Uint precision = static_cast<Uint>(10 * range + 1);
-    Uint n = lcm(precision-1, l-1);
-    Dscalar factor = n / range * (180.0 / M_PI);
+    const Dscalar range = (180.0 / M_PI) * (angles[l-1] - angles[0]);
+    const Uint precision = static_cast<Uint>(10 * range + 1);
+    const Uint n = lcm(precision-1, l-1);
+    const Dscalar factor = n / range * (180.0 / M_PI);
 
     std::vector<Uint> differences(l-1);
     for (size_t i = 0; i+1 < l; ++i)
         differences[i] = static_cast<Uint>(floor(factor * (angles[i+1]-angles[i]) + 0.5));
 
-    Uint min = * min_element(differences.begin(), differences.end());
-    Uint max = * max_element(differences.begin(), differences.end());
+    const Uint min = * min_element(differences.begin(), differences.end());
+    const Uint max = * max_element(differences.begin(), differences.end());
 
     // If all differences are the same (within tolerance), the grid is equidistant.
     if (min == max)
@@ -1489,10 +1487,10 @@ Uint compute_resolution(const std::vector<Scalar>& angles)
     for (size_t i = 0; i+1 < l; ++i)
         g = gcd(g, differences[i]);
 
-    Uint result = n/g + 1;
+    const Uint result = n/g + 1;
 
     // Avoid upscaling large resolutions if l-1 is coprime to precision-1.
-    Uint limit = static_cast<Uint>(2 * range + 1);
+    const Uint limit = static_cast<Uint>(2 * range + 1);
     return result <= limit ? result : limit;
 }
 
@@ -1565,8 +1563,8 @@ bool Lightprofile_ies_parser::setup_lightprofile(
     std::vector<Scalar>               horizontal_angles;        // To be filled next ...
     std::vector<std::vector<Scalar> > candela_values;           // To be filled next ...
 
-    Scalar first_angle = m_horizontal_angles[0];
-    Scalar last_angle  = m_horizontal_angles[m_nb_horizontal_angles-1];
+    const Scalar first_angle = m_horizontal_angles[0];
+    const Scalar last_angle  = m_horizontal_angles[m_nb_horizontal_angles-1];
 
     if(m_photometric_type == TYPE_C)
     {
@@ -1700,8 +1698,8 @@ bool Lightprofile_ies_parser::setup_lightprofile(
     }
 
     // Remember original resolution after unfolding symmetries
-    size_t orig_nb_horizontal_angles = horizontal_angles.size();
-    size_t orig_nb_vertical_angles   = vertical_angles.size();
+    const size_t orig_nb_horizontal_angles = horizontal_angles.size();
+    const size_t orig_nb_vertical_angles   = vertical_angles.size();
 
     // Adjust requested resolution (if not set) based on IES dimensions after unfolding symmetries
     if(vertical_resolution == 0)
@@ -1752,7 +1750,6 @@ bool Lightprofile_ies_parser::setup_lightprofile(
             "Unknown interpolation used in %s. "
             "Lightprofile sampling supports either linear (hermite=1) "
             "or cubic (hermite=3) interpolation.\n"
-            "Please, see also Chapter 2.7.7 in 'Programming mental ray, Third Edition'\n"
             "A dummy profile will be used instead.",
             m_log_identifier.c_str());
         return false;

@@ -1400,7 +1400,7 @@ void Mdl_function_definition::dump( DB::Transaction* transaction) const
     s << "Module MDL name: " << m_module_mdl_name << std::endl;
     s << "Module DB name: " << m_module_db_name << std::endl;
     s << "Function definition tag: " << m_function_tag.get_uint() << std::endl;
-    s << "Function definition ID: " << m_function_ident << std::endl;
+    s << "Function definition identifier: " << m_function_ident << std::endl;
     s << "Function MDL semantic: " << m_mdl_semantic << std::endl;
     s << "Function semantic: " << m_semantic << std::endl;
     s << "Function definition MDL name: " << m_mdl_name << std::endl;
@@ -1428,6 +1428,8 @@ void Mdl_function_definition::dump( DB::Transaction* transaction) const
     s << "Return annotations: " << tmp->get_c_str() << std::endl;
     tmp = m_ef->dump( transaction, m_enable_if_conditions.get(), /*name*/ nullptr);
     s << "Enable_if conditions: " << tmp->get_c_str() << std::endl;
+
+    s << std::endl;
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
 
@@ -1602,7 +1604,7 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
                 *errors = -8;
                 return nullptr;
             }
-            // use clone of default as argument
+            // clone the default (also resolves parameter references)
             mi::base::Handle<IExpression> default_copy(
                 deep_copy( m_ef.get(), transaction, default_.get(), call_context));
             ASSERT( M_SCENE, default_copy);

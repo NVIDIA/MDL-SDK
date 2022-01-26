@@ -1162,6 +1162,9 @@ unsigned mdl_since_version(unsigned flags);
 /// Decode the removed version.
 ///
 /// \param flags  version flags of a definition
+///
+/// \return The MDL version (as IMDL::MDL_version) when this entity was removed,
+///         or 0xFFFFFFFF if it is the current version.
 unsigned mdl_removed_version(unsigned flags);
 
 /// Check if a entity is available in the given MDL language level of a module.

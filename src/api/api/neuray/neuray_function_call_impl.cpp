@@ -273,6 +273,24 @@ mi::Sint32 Function_call_impl::set_argument(
     return result;
 }
 
+mi::Sint32 Function_call_impl::reset_argument( mi::Size index)
+{
+    mi::Sint32 result = get_db_element()->reset_argument(
+        get_db_transaction(), index);
+    if( result == 0)
+        add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    return result;
+}
+
+mi::Sint32 Function_call_impl::reset_argument( const char* name)
+{
+    mi::Sint32 result = get_db_element()->reset_argument(
+        get_db_transaction(), name);
+    if( result == 0)
+        add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    return result;
+}
+
 bool Function_call_impl::is_default() const
 {
     return get_db_element()->is_immutable();

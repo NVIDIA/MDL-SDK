@@ -81,9 +81,9 @@ private:
 
 enum Markers
 {
-    NO_MARKER = 0x0,
-    END_MARKER = 0xABABABAB,
-    EXTENSION_MARKER = 0xB5B5B5B5
+    NO_MARKER = 0x0u,
+    END_MARKER = 0xABABABABu,
+    EXTENSION_MARKER = 0xB5B5B5B5u
 };
 
 /// Helper for writing markers on the serialization side.

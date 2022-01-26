@@ -103,7 +103,7 @@ HLSLWriterPass::HLSLWriterPass(
 
 void HLSLWriterPass::getAnalysisUsage(llvm::AnalysisUsage &usage) const
 {
-    usage.addRequired<llvm::hlsl::ASTComputePass>();
+    usage.addRequired<llvm::hlsl::StructuredControlFlowPass>();
     usage.setPreservesAll();
 }
 
@@ -111,7 +111,7 @@ bool HLSLWriterPass::runOnModule(llvm::Module &M)
 {
     Store<llvm::DataLayout const *> layout_store(m_cur_data_layout, &M.getDataLayout());
 
-    llvm::hlsl::ASTComputePass &ast_compute_pass = getAnalysis<llvm::hlsl::ASTComputePass>();
+    llvm::hlsl::StructuredControlFlowPass &ast_compute_pass = getAnalysis<llvm::hlsl::StructuredControlFlowPass>();
 
     m_def_tab.transition_to_scope(m_def_tab.get_predef_scope());
 
@@ -136,7 +136,8 @@ bool HLSLWriterPass::runOnModule(llvm::Module &M)
         if (func.isDeclaration()) {
             continue;
         }
-        llvm::hlsl::ASTFunction const *ast_func = ast_compute_pass.getASTFunction(&func);
+        llvm::hlsl::StructuredFunction const *ast_func =
+            ast_compute_pass.getStructuredFunction(&func);
         translate_function(ast_func);
     }
 
@@ -307,7 +308,8 @@ hlsl::Def_function *HLSLWriterPass::get_definition(llvm::Function *func)
 }
 
 // Generate HLSL AST for the given function.
-void HLSLWriterPass::translate_function(llvm::hlsl::ASTFunction const *ast_func)
+void HLSLWriterPass::translate_function(
+    llvm::hlsl::StructuredFunction const *ast_func)
 {
     llvm::Function *func = &ast_func->getFunction();
 

@@ -523,16 +523,20 @@ protected:
 
     /// Compute the resulting MDL version.
     ///
-    /// \param root  the root module
+    /// \param root            the root module
+    /// \param inline_imports  the callback that decides whether to inline a given module
     IMDL::MDL_version compute_mdl_version(
-        Module const *root);
+        Module const            *root,
+        IInline_import_callback *inline_imports);
 
     /// Inlines the given module.
     ///
     /// \param module       the module
     /// \param inline_mdle  true, if only MDLE definitions should be inlined
     /// \return the inlined module or NULL in case of failure.
-    IModule *inline_module(IModule const *imodule, bool inline_mdle);
+    IModule *inline_module(
+        IModule const *imodule,
+        bool          inline_mdle);
 
 private:
     /// The MDL compiler.

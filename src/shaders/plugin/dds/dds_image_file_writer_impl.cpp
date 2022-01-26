@@ -162,14 +162,14 @@ mi::Float32 Image_file_writer_impl::get_gamma() const
     return m_gamma;
 }
 
-bool Image_file_writer_impl::read(
-    mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level) const
+mi::neuraylib::ITile* Image_file_writer_impl::read(
+    mi::Uint32 z, mi::Uint32 level) const
 {
-    return false;
+    return nullptr;
 }
 
 bool Image_file_writer_impl::write(
-    const mi::neuraylib::ITile* tile, mi::Uint32 x, mi::Uint32 y, mi::Uint32 z, mi::Uint32 level)
+    const mi::neuraylib::ITile* tile, mi::Uint32 z, mi::Uint32 level)
 {
     if( level >= get_miplevels() || z >= get_layers_size( level))
         return false;
@@ -186,7 +186,7 @@ bool Image_file_writer_impl::write(
     mi::Uint32 bytes_per_layer = image_width * image_height * bytes_per_pixel;
 
     copy_from_tile_to_dds(
-        tile, &m_level[level][0] + z * bytes_per_layer, x, y, image_width, image_height);
+        tile, &m_level[level][0] + z * bytes_per_layer, image_width, image_height);
 
     return true;
 }

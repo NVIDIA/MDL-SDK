@@ -49,7 +49,9 @@ namespace MI {
 namespace DBLIGHT {
 
 Database_impl::Database_impl()
-  : m_global_scope(new Scope_impl(this))
+  : m_next_tag(0)
+  , m_next_transaction_id(0)
+  , m_global_scope(new Scope_impl(this))
 {
 }
 

@@ -29,6 +29,7 @@
 #include "pch.h"
 
 #include <cstdio>
+#include <algorithm>
 
 #include <mi/base/interface_implement.h>
 
@@ -1089,7 +1090,7 @@ string File_resolver::consider_search_paths(
     string const &canonical_file_mask,
     bool         is_resource,
     char const   *file_path,
-    UDIM_mode    udim_mode)
+    bool         file_mask_is_regex)
 {
     MDL_ASSERT(canonical_file_mask[0] == '/');
 
@@ -1103,7 +1104,7 @@ string File_resolver::consider_search_paths(
         canonical_file_mask_os.c_str() + 1,
         /*in_extra_resource_path=*/false,
         m_front_path,
-        udim_mode);
+        file_mask_is_regex);
 
     // For backward compatibility we also consider the resource search paths for resources.
     if (is_resource && resolved_filename.empty()) {
@@ -1111,7 +1112,7 @@ string File_resolver::consider_search_paths(
             canonical_file_mask_os.c_str() + 1,
             /*in_extra_resource_path=*/true,
             m_front_path,
-            udim_mode);
+            file_mask_is_regex);
         if (!resolved_filename.empty()) {
             warning(
                 DEPRECATED_RESOURCE_PATH_USED,
@@ -1121,7 +1122,7 @@ string File_resolver::consider_search_paths(
     }
 
     if (!is_resource && resolved_filename.empty() && is_string_based(canonical_file_mask)) {
-            MDL_ASSERT(udim_mode == NO_UDIM && "non-resource files should not be UDIM");
+            MDL_ASSERT(!file_mask_is_regex && "non-resource files should not be UDIM");
             return get_string_based_prefix() + canonical_file_mask.substr(1);
     }
 
@@ -1385,7 +1386,7 @@ string File_resolver::search_mdl_path(
     char const *file_mask,
     bool       in_resource_path,
     char const *front_path,
-    UDIM_mode  udim_mode)
+    bool       file_mask_is_regex)
 {
     // Calls to IMDL_search_path are not thread-safe.
     // Ensure that at least this compiler will serialize it.
@@ -1486,7 +1487,7 @@ string File_resolver::search_mdl_path(
                 }
 
                 string mdr_path = join_path(string(path, m_alloc), e);
-                if (udim_mode == NO_UDIM) {
+                if (!file_mask_is_regex) {
                     // found a possibly matching archive, check if it contains the searched file
                     if (archive_contains(mdr_path.c_str(), file_name_fs.c_str())) {
                         if (!is_killed(path, e, archives)) {
@@ -1521,7 +1522,7 @@ string File_resolver::search_mdl_path(
 
         // no archives
 
-        if (udim_mode == NO_UDIM) {
+        if (!file_mask_is_regex) {
             string joined_file_name = join_path(string(path, m_alloc), string(file_mask, m_alloc));
             if (!is_killed(file_mask)) {
                 if (is_file_utf8(m_alloc, joined_file_name.c_str())) {
@@ -1663,6 +1664,156 @@ static bool is_url_absolute(char const *url)
     return false;
 }
 
+/// Check, if the given text points to a frame marker '<' '#'+ '>'
+///
+/// \param txt  the text to check
+///
+/// \return 0 if txt does not point to a marker, number of '#' characters otherwise
+static unsigned is_frame_marker(char const *txt)
+{
+    char const *s = txt;
+
+    MDL_ASSERT(*s == '<');
+    ++s;
+    if (*s == '#') {
+        do {
+            ++s;
+        } while (*s == '#');
+        if (*s == '>') {
+            // assume the length of a resource is limited by 32bit
+            return unsigned(s - 1 - txt);
+        }
+    }
+    return 0;
+}
+
+static bool is_mari_marker(char const *p)
+{
+    return strncmp(p, UDIM_MARI_MARKER, UDIM_MARI_MARKER_SIZE) == 0;
+}
+
+static bool is_zbrush_marker(char const *p)
+{
+    return strncmp(p, UDIM_ZBRUSH_MARKER, UDIM_ZBRUSH_MARKER_SIZE) == 0;
+}
+
+static bool is_mudbox_marker(char const *p)
+{
+    return strncmp(p, UDIM_MUDBOX_MARKER, UDIM_MUDBOX_MARKER_SIZE) == 0;
+}
+
+static bool is_marker(char const *p)
+{
+    return is_frame_marker(p) > 0 ||
+        is_mari_marker(p) || is_zbrush_marker(p) || is_mudbox_marker(p);
+}
+
+// Parse markers in a file name.
+string File_resolver::parse_marker(
+    char const  *file_name,
+    Marker_info &info)
+{
+    size_t prefix_len = 0;
+    char const *s = strrchr(file_name, '/');
+    if (s != NULL) {
+        // length of prefix including '/'
+        prefix_len = s - file_name + 1;
+    }
+    s = file_name;
+
+    string mask(get_allocator());
+    size_t start_idx = 0;
+
+    unsigned part_idx = 0;
+    for (char const *p = strchr(s, '<'); p != NULL; p = strchr(s, '<')) {
+        if (part_idx == 2) {
+            if (is_marker(p)) {
+                // FIXME: add error
+            }
+            // not a marker
+            mask.append(s, p - s + 1);
+            s = p + 1;
+        }
+        if (size_t l = is_frame_marker(p)) {
+            if (info.max_frame_digits > 0) {
+                // FIXME: multiple frame marker
+                mask.append(s, p - s + 1);
+                s = p + 1;
+            } else {
+                mask.append(s, p - s);
+
+                info.marker_kinds[part_idx] = Marker_info::MK_FRAME;
+                info.part_len[part_idx++] = mask.length() - start_idx;
+                info.max_frame_digits     = l;
+                mask.append("[0-9]+");
+                start_idx = mask.length();
+
+                s = p + l + 2;
+            }
+        } else if (is_mari_marker(p)) {
+            if (info.udim_mode != NO_UDIM) {
+                // FIXME: multiple UDIM marker
+                mask.append(s, p - s + 1);
+                s = p + 1;
+            } else {
+                mask.append(s, p - s);
+
+                info.marker_kinds[part_idx] = Marker_info::MK_UDIM;
+                info.part_len[part_idx++] = mask.length() - start_idx;
+                info.udim_mode = UM_MARI;
+                mask.append("[0-9][0-9][0-9][0-9]");
+                start_idx = mask.length();
+
+                s = p + UDIM_MARI_MARKER_SIZE;
+            }
+        } else if (is_zbrush_marker(p)) {
+            if (info.udim_mode != NO_UDIM) {
+                // FIXME: multiple UDIM marker
+                mask.append(s, p - s + 1);
+                s = p + 1;
+            } else {
+                mask.append(s, p - s);
+
+                info.marker_kinds[part_idx] = Marker_info::MK_UDIM;
+                info.part_len[part_idx++] = mask.length() - start_idx;
+                info.udim_mode = UM_ZBRUSH;
+                mask.append("_u-?[0-9]+_v-?[0-9]+");
+                start_idx = mask.length();
+
+                s = p + UDIM_ZBRUSH_MARKER_SIZE;
+            }
+        } else if (is_mudbox_marker(p)) {
+            if (info.udim_mode != NO_UDIM) {
+                // FIXME: multiple UDIM marker
+                mask.append(s, p - s + 1);
+                s = p + 1;
+            } else {
+                mask.append(s, p - s);
+
+                info.marker_kinds[part_idx] = Marker_info::MK_UDIM;
+                info.part_len[part_idx++] = mask.length() - start_idx;
+                info.udim_mode = UM_MUDBOX;
+                mask.append("_u-?[0-9]+_v-?[0-9]+");
+                start_idx = mask.length();
+
+                s = p + UDIM_MUDBOX_MARKER_SIZE;
+            }
+        } else {
+            // not a marker
+            mask.append(s, p - s + 1);
+            s = p + 1;
+        }
+    }
+    // append the rest
+    mask.append(s);
+    info.part_len[part_idx] = mask.length() - start_idx;
+    MDL_ASSERT(part_idx <= 2);
+
+    info.part_len[0] -= prefix_len;
+
+    return mask;
+}
+
 // Resolve a MDL file name.
 string File_resolver::resolve_filename(
     string         &abs_file_name,
@@ -1671,10 +1822,10 @@ string File_resolver::resolve_filename(
     char const     *module_file_system_path,
     char const     *module_name,
     Position const *pos,
-    UDIM_mode      &udim_mode)
+    Marker_info     &info)
 {
     abs_file_name.clear();
-    udim_mode = NO_UDIM;
+    info.clear();
 
     Position_store store(m_pos, pos);
 
@@ -1732,36 +1883,13 @@ string File_resolver::resolve_filename(
         csp_is_archive,
         current_module_path);
 
-    // handle UDIM
+    // handle markers
     string url_mask(m_alloc);
     if (is_resource) {
         // check if one of the supported markers are inside the resource path, if yes compute
         // its mode and mask
-
-        char const *p;
-        char const *file_name = url.c_str();
-
-        if ((p = strstr(file_name, UDIM_MARI_MARKER)) != NULL) {
-            udim_mode = UM_MARI;
-            url_mask.append(file_name, p - file_name);
-            url_mask.append("[0-9][0-9][0-9][0-9]");
-            url_mask.append(p + strlen(UDIM_MARI_MARKER));
-        } else if ((p = strstr(file_name, UDIM_ZBRUSH_MARKER)) != NULL) {
-            udim_mode = UM_ZBRUSH;
-            url_mask.append(file_name, p - file_name);
-            url_mask.append("_u-?[0-9]+_v-?[0-9]+");
-            url_mask.append(p + strlen(UDIM_ZBRUSH_MARKER));
-        } else if ((p = strstr(file_name, UDIM_MUDBOX_MARKER)) != NULL) {
-            udim_mode = UM_MUDBOX;
-            url_mask.append(file_name, p - file_name);
-            url_mask.append("_u-?[0-9]+_v-?[0-9]+");
-            url_mask.append(p + strlen(UDIM_MUDBOX_MARKER));
-        } else {
-            udim_mode = NO_UDIM;
-            url_mask = url;
-        }
+        url_mask = parse_marker(url.c_str(), info);
     } else {
-        udim_mode = NO_UDIM;
         url_mask = url;
     }
 
@@ -1769,7 +1897,7 @@ string File_resolver::resolve_filename(
     string canonical_file_path = normalize_file_path(
         url,
         url_mask,
-        udim_mode != NO_UDIM,
+        info.has_marker(),
         directory_path,
         file_name,
         nesting_level,
@@ -1805,31 +1933,20 @@ string File_resolver::resolve_filename(
         // check if one of the supported markers are inside the resource path, if yes compute
         // its mode and mask
 
-        char const *p;
         char const *file_name = canonical_file_path.c_str();
 
-        switch (udim_mode) {
-        case UM_MARI:
-            p = strstr(file_name, UDIM_MARI_MARKER);
-            canonical_file_mask.append(file_name, p - file_name);
-            canonical_file_mask.append("[0-9][0-9][0-9][0-9]");
-            canonical_file_mask.append(p + strlen(UDIM_MARI_MARKER));
-            break;
-        case UM_ZBRUSH:
-            p = strstr(file_name, UDIM_ZBRUSH_MARKER);
-            canonical_file_mask.append(file_name, p - file_name);
-            canonical_file_mask.append("_u-?[0-9]+_v-?[0-9]+");
-            canonical_file_mask.append(p + strlen(UDIM_ZBRUSH_MARKER));
-            break;
-        case UM_MUDBOX:
-            p = strstr(file_name, UDIM_MUDBOX_MARKER);
-            canonical_file_mask.append(file_name, p - file_name);
-            canonical_file_mask.append("_u-?[0-9]+_v-?[0-9]+");
-            canonical_file_mask.append(p + strlen(UDIM_MUDBOX_MARKER));
-            break;
-        case NO_UDIM:
+        if (info.has_marker()) {
+            // replace the marker with the regex
+            if (char const *p = strrchr(file_name, '/')) {
+                canonical_file_mask.append(file_name, p - file_name + 1);
+            }
+            if (char const *p = strrchr(url_mask.c_str(), '/')) {
+                canonical_file_mask.append(p + 1);
+            } else {
+                canonical_file_mask.append(url_mask);
+            }
+        } else {
             canonical_file_mask = canonical_file_path;
-            break;
         }
     }
 
@@ -1882,7 +1999,7 @@ string File_resolver::resolve_filename(
             file = convert_slashes_to_os_separators(url_mask);
         }
 
-        if (!file_exists(file.c_str(), udim_mode != NO_UDIM)) {
+        if (!file_exists(file.c_str(), info.has_marker())) {
             string module_for_error_msg(m_alloc);
 
             if (m_pos->get_start_line() == 0) {
@@ -1906,12 +2023,12 @@ string File_resolver::resolve_filename(
     } else {
         // Step 2: consider search paths
         resolved_file_system_location = consider_search_paths(
-            canonical_file_mask, is_resource, file_path, udim_mode);
+            canonical_file_mask, is_resource, file_path, info.has_marker());
 
         // the referenced resource is part of an MDLE
         // Note, this is invalid for mdl modules in the search paths!
         if (resolved_file_system_location.empty() && strstr(file_path, ".mdle:") != NULL) {
-            if (file_exists(file_path, udim_mode != NO_UDIM)) {
+            if (file_exists(file_path, info.has_marker())) {
                 resolved_file_system_location = file_path;
             }
         }
@@ -1938,11 +2055,12 @@ string File_resolver::resolve_filename(
             return string(m_alloc);
         }
     }
-    // Step 3: consistency checks
-    if (!check_consistency(
+    // Step 3: consistency checks: Note that builtin modules do not have a "real" file path,
+    // so ignore the checks for them
+    if ((is_resource || is_mdle_module || !is_builtin(canonical_file_path)) && !check_consistency(
         resolved_file_system_location,
         canonical_file_path,
-        udim_mode != NO_UDIM,
+        info.has_marker(),
         url,
         current_working_directory,
         current_search_path,
@@ -2016,10 +2134,11 @@ void File_resolver::handle_file_error(MDL_zip_container_error_code err)
 
 // Resolve an import (module) name to the corresponding absolute module name.
 IMDL_import_result *File_resolver::resolve_import(
-    Position const &pos,
-    char const     *import_name,
-    char const     *owner_name,
-    char const     *owner_filename)
+    Position const  &pos,
+    char const      *import_name,
+    char const      *owner_name,
+    char const      *owner_filename,
+    IThread_context *ctx)
 {
     mark_module_search(import_name);
 
@@ -2060,13 +2179,14 @@ IMDL_import_result *File_resolver::resolve_import(
                 import_name,
                 owner_filename,
                 owner_name,
-                &pos);
+                &pos,
+                ctx);
         m_msgs.copy_messages(m_external_resolver->access_messages());
         return result;
     }
 
     string os_file_name(m_alloc);
-    UDIM_mode udim_mode = NO_UDIM;
+    Marker_info info;
     string canonical_file_name = resolve_filename(
         os_file_name,
         import_file.c_str(),
@@ -2074,8 +2194,8 @@ IMDL_import_result *File_resolver::resolve_import(
         owner_filename,
         owner_name,
         &pos,
-        udim_mode);
-    MDL_ASSERT(udim_mode == NO_UDIM && "only resources should return a file mask");
+        info);
+    MDL_ASSERT(!info.has_marker() && "only resources should return a file mask");
     if (canonical_file_name.empty()) {
         return NULL;
     }
@@ -2106,10 +2226,11 @@ IMDL_import_result *File_resolver::resolve_import(
 
 // Resolve a resource (file) name to the corresponding absolute file path.
 IMDL_resource_set *File_resolver::resolve_resource(
-    Position const &pos,
-    char const     *import_file,
-    char const     *owner_name,
-    char const     *owner_filename)
+    Position const  &pos,
+    char const      *import_file,
+    char const      *owner_name,
+    char const      *owner_filename,
+    IThread_context *ctx)
 {
     mark_resource_search(import_file);
 
@@ -2125,7 +2246,8 @@ IMDL_resource_set *File_resolver::resolve_resource(
             import_file,
             owner_filename,
             owner_name,
-            &pos);
+            &pos,
+            ctx);
         m_msgs.copy_messages(m_external_resolver->access_messages());
         return result;
     }
@@ -2139,23 +2261,23 @@ IMDL_resource_set *File_resolver::resolve_resource(
         owner_filename_str = owner_filename;
     }
 
-    UDIM_mode udim_mode = NO_UDIM;
+    Marker_info info;
     string os_file_name(m_alloc);
     string abs_file_name = resolve_filename(
         os_file_name, import_file, /*is_resource=*/true,
-        owner_filename_str.c_str(), owner_name, &pos, udim_mode);
+        owner_filename_str.c_str(), owner_name, &pos, info);
 
     if (abs_file_name.empty()) {
         return NULL;
     }
 
-    if (udim_mode != NO_UDIM) {
+    if (info.has_marker()) {
         // lookup ALL files for the given mask
         return MDL_resource_set::from_mask(
             m_alloc,
             abs_file_name.c_str(),
             os_file_name.c_str(),
-            udim_mode);
+            info);
     } else {
         // single return
         Allocator_builder builder(m_alloc);
@@ -2388,51 +2510,218 @@ Buffered_archive_resource_reader::~Buffered_archive_resource_reader()
 // --------------------------------------------------------------------------
 
 // Constructor from one file name/url pair (typical case).
-MDL_resource_set::MDL_resource_set(
-    IAllocator *alloc,
-    char const *url,
-    char const *filename,
+MDL_resource_element::MDL_resource_element(
+    MDL_resource_set    &parent,
+    char const          *url,
+    char const          *filename,
     unsigned char const hash[16])
-: Base(alloc)
-, m_arena(alloc)
+: Base(parent.m_arena.get_allocator())
+, m_parent(parent)
 , m_entries(
     1,
-    Resource_entry(Arena_strdup(m_arena, url), Arena_strdup(m_arena, filename), 0, 0, hash),
-    &m_arena)
-, m_udim_mode(NO_UDIM)
-, m_url_mask(url, alloc)
-, m_filename_mask(filename, alloc)
+    Resource_tile(
+        Arena_strdup(parent.m_arena, url),
+        Arena_strdup(parent.m_arena, filename),
+        /*u=*/0, /*v=*/0,
+        hash),
+    &parent.m_arena)
+, m_frame(0)
 {
 }
 
-// Empty Constructor from masks.
+// Constructor of an empty element.
+MDL_resource_element::MDL_resource_element(
+    MDL_resource_set &parent,
+    size_t           frame)
+: Base(parent.m_arena.get_allocator())
+, m_parent(parent)
+, m_entries(&parent.m_arena)
+, m_frame(frame)
+{
+}
+
+// Get the frame number of this element (inside the sequence).
+size_t MDL_resource_element::get_frame_number() const
+{
+    return m_frame;
+}
+
+// Get the number of entries for this element.
+size_t MDL_resource_element::get_count() const
+{
+    return m_entries.size();
+}
+
+// Get the i'th MDL URL of the ordered set for this element.
+char const *MDL_resource_element::get_mdl_url(
+    size_t i) const
+{
+    if (i < m_entries.size()) {
+        return m_entries[i].url;
+    }
+    return NULL;
+}
+
+// Get the i'th file name of the ordered set for this element.
+char const *MDL_resource_element::get_filename(
+    size_t i) const
+{
+    if (i < m_entries.size()) {
+        return m_entries[i].filename;
+    }
+    return NULL;
+}
+
+// If the ordered set for the element represents an UDIM mapping, returns it.
+bool MDL_resource_element::get_udim_mapping(
+    size_t i,
+    int    &u,
+    int    &v) const
+{
+    bool res = false;
+    u = v = 0;
+
+    if (i < m_entries.size()) {
+        if (m_parent.get_udim_mode() != NO_UDIM) {
+            u = m_entries[i].u;
+            v = m_entries[i].v;
+            res = true;
+        }
+    }
+    return res;
+}
+
+// Opens a reader for the i'th entry of the ordered set for the given element.
+IMDL_resource_reader *MDL_resource_element::open_reader(
+    size_t i) const
+{
+    if (i < m_entries.size()) {
+        MDL_zip_container_error_code err = EC_OK;
+        IMDL_resource_reader *res = open_resource_file(
+            get_allocator(),
+            m_entries[i].url,
+            m_entries[i].filename,
+            err);
+
+        // FIXME: handle error?
+        return res;
+    }
+    return NULL;
+}
+
+// Get the resource hash value for the i'th entry in the set for this element if any.
+bool MDL_resource_element::get_resource_hash(
+    size_t        i,
+    unsigned char hash[16]) const
+{
+    if (i < m_entries.size()) {
+        if (m_entries[i].has_hash) {
+            memcpy(hash, m_entries[i].hash, sizeof(m_entries[i].hash));
+            return true;
+        }
+    }
+    return false;
+}
+
+// Increments the reference count.
+Uint32 MDL_resource_element::retain() const
+{
+    // this is owned by the parent, so forward it
+    return m_parent.retain();
+}
+
+// Decrements the reference count.
+Uint32 MDL_resource_element::release() const
+{
+    // this is owned by the parent, so forward it
+    return m_parent.release();
+}
+
+// Add a new entry to the resource element.
+size_t MDL_resource_element::add_entry(
+    char const          *url,
+    char const          *filename,
+    int                 u,
+    int                 v,
+    unsigned char const hash[16])
+{
+    size_t res = m_entries.size();
+
+    m_entries.push_back(
+        Resource_tile(
+            Arena_strdup(m_parent.m_arena, url),
+            Arena_strdup(m_parent.m_arena, filename),
+            u, v,
+            hash));
+
+    return res;
+}
+
+// --------------------------------------------------------------------------
+
+// Constructor from one file name/url pair (typical case).
 MDL_resource_set::MDL_resource_set(
-    IAllocator *alloc,
-    UDIM_mode  udim_mode,
-    char const *url_mask,
-    char const *filename_mask)
+    IAllocator          *alloc,
+    char const          *url,
+    char const          *filename,
+    unsigned char const hash[16])
 : Base(alloc)
 , m_arena(alloc)
-, m_entries(&m_arena)
-, m_udim_mode(udim_mode)
-, m_url_mask(url_mask, alloc)
-, m_filename_mask(filename_mask, alloc)
+, m_lowest_frame(0)
+, m_highest_frame(0) // m_elements not empty: frame 0 exists
+, m_elements(
+    1,
+    MDL_resource_element(*this, url, filename, hash),
+    alloc)
+, m_elem_frame_index(
+    1,
+    0u,
+    alloc)
+, m_elem_component_index(
+    1,
+    0u,
+    alloc)
+, m_url_mask(url, alloc)
+, m_filename_mask(filename, alloc)
+, m_udim_mode(NO_UDIM)
+, m_has_sequence_marker(false)
+{
+}
+
+// Constructor for an (initially empty) set from masks.
+MDL_resource_set::MDL_resource_set(
+    IAllocator *alloc,
+    char const *url,
+    char const *file_mask,
+    UDIM_mode  mode,
+    bool       has_sequence_marker)
+: Base(alloc)
+, m_arena(alloc)
+, m_lowest_frame(0)
+, m_highest_frame(0) // m_elements empty: no frame exists yet
+, m_elements(alloc)
+, m_elem_frame_index(alloc)
+, m_elem_component_index(alloc)
+, m_url_mask(url, alloc)
+, m_filename_mask(file_mask, alloc)
+, m_udim_mode(mode)
+, m_has_sequence_marker(has_sequence_marker)
 {
 }
 
 // Create a resource set from a file mask.
 MDL_resource_set *MDL_resource_set::from_mask(
-    IAllocator *alloc,
-    char const *url,
-    char const *file_mask,
-    UDIM_mode  udim_mode)
+    IAllocator        *alloc,
+    char const        *url,
+    char const        *file_mask,
+    Marker_info const &info)
 {
     char const *p = strstr(file_mask, ".mdr:");
     if (p != NULL) {
         string container_name(file_mask, p + 4, alloc);
         p += 5;
         return from_mask_container(
-            alloc, url, container_name.c_str(), File_handle::FH_ARCHIVE, p, udim_mode);
+            alloc, url, container_name.c_str(), File_handle::FH_ARCHIVE, p, info);
     }
 
     p = strstr(file_mask, ".mdle:");
@@ -2440,18 +2729,36 @@ MDL_resource_set *MDL_resource_set::from_mask(
         string container_name(file_mask, p + 5, alloc);
         p += 6;
         return from_mask_container(
-            alloc, url, container_name.c_str(), File_handle::FH_MDLE, p, udim_mode);
+            alloc, url, container_name.c_str(), File_handle::FH_MDLE, p, info);
     }
 
-    return from_mask_file(alloc, url, file_mask, udim_mode);
+    return from_mask_file(alloc, url, file_mask, info);
+}
+
+// Recompute the component index.
+void MDL_resource_set::update_component_index()
+{
+    // compute the component index
+    size_t n_elems = m_elements.size();
+    m_elem_component_index.resize(n_elems);
+
+    for (size_t i = 0; i < n_elems; ++i) {
+        m_elem_component_index[i] = i;
+    }
+
+    // sort it
+    std::sort(
+        m_elem_component_index.begin(),
+        m_elem_component_index.end(),
+        Frame_compare(*this));
 }
 
 // Create a resource set from a file mask describing files on disk.
 MDL_resource_set *MDL_resource_set::from_mask_file(
-    IAllocator *alloc,
-    char const *url,
-    char const *file_mask,
-    UDIM_mode  udim_mode)
+    IAllocator        *alloc,
+    char const        *url,
+    char const        *file_mask,
+    Marker_info const &info)
 {
     Directory dir(alloc);
     string dname(alloc);
@@ -2476,57 +2783,23 @@ MDL_resource_set *MDL_resource_set::from_mask_file(
         }
     }
 
-    p = NULL;
-
-    char const *q = NULL;
-
-    switch (udim_mode) {
-    case NO_UDIM:
-        MDL_ASSERT(!"UDIM mode not set");
-        return NULL;
-    case UM_MARI:
-        // UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
-        p = strstr(file_mask, "[0-9][0-9][0-9][0-9]");
-        q = strstr(url, UDIM_MARI_MARKER);
-        break;
-    case UM_ZBRUSH:
-        // 0-based (Zbrush), expands to "_u0_v0" for the first tile
-        p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
-        q = strstr(url, UDIM_ZBRUSH_MARKER);
-        break;
-    case UM_MUDBOX:
-        // 1-based (Mudbox), expands to "_u1_v1" for the first tile
-        p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
-        q = strstr(url, UDIM_MUDBOX_MARKER);
-        break;
-    }
-
-    if (p == NULL) {
-        MDL_ASSERT(!"Could not find udim regexp");
-        return NULL;
-    }
-
-    size_t ofs = p - file_mask;
-
     Allocator_builder builder(alloc);
 
-    MDL_resource_set *s = builder.create<MDL_resource_set>(alloc, udim_mode, url, file_mask);
+    MDL_resource_set *res_set =
+        builder.create<MDL_resource_set>(
+            alloc, url, file_mask, info.get_udim_mode(), info.has_sequence_marker());
 
     for (char const *entry = dir.read(); entry != NULL; entry = dir.read()) {
         if (utf8_match(file_mask, entry)) {
-            string purl(url, alloc);
-
-            if (q != NULL) {
-                // also patch the URL if possible
-                purl = string(url, q - url, alloc);
-                purl += entry + ofs;
-            }
-
             // so far no hashes for files
-            parse_u_v(s, entry, ofs, purl.c_str(), dname, sep, udim_mode, NULL);
+            parse_name_mapping(alloc, res_set, entry, url, dname, sep, info, /*hash=*/NULL);
         }
     }
-    return s;
+
+    res_set->update_component_index();
+
+    MDL_ASSERT(res_set->m_elements.size() == res_set->m_elem_component_index.size());
+    return res_set;
 }
 
 // Create a resource set from a file mask describing files on an archive.
@@ -2536,7 +2809,7 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
     char const        *container_name,
     File_handle::Kind container_kind,
     char const        *file_mask,
-    UDIM_mode         udim_mode)
+    Marker_info const &info)
 {
     MDL_zip_container_error_code err = EC_OK;
     MDL_zip_container *container = NULL;
@@ -2552,40 +2825,10 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
     }
 
     if (container != NULL) {
-        char const *p = NULL;
-        char const *q = NULL;
-
-        switch (udim_mode) {
-        case NO_UDIM:
-            MDL_ASSERT(!"UDIM mode not set");
-            return NULL;
-        case UM_MARI:
-            // UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
-            p = strstr(file_mask, "[0-9][0-9][0-9][0-9]");
-            q = strstr(url, UDIM_MARI_MARKER);
-            break;
-        case UM_ZBRUSH:
-            // 0-based (Zbrush), expands to "_u0_v0" for the first tile
-            p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
-            q = strstr(url, UDIM_ZBRUSH_MARKER);
-            break;
-        case UM_MUDBOX:
-            // 1-based (Mudbox), expands to "_u1_v1" for the first tile
-            p = strstr(file_mask, "_u-?[0-9]+_v-?[0-9]+");
-            q = strstr(url, UDIM_MUDBOX_MARKER);
-            break;
-        }
-
-        if (p == NULL) {
-            MDL_ASSERT(!"Could not find udim regexp");
-            return NULL;
-        }
-
-        size_t ofs = p - file_mask;
-
         Allocator_builder builder(alloc);
 
-        MDL_resource_set *s = builder.create<MDL_resource_set>(alloc, udim_mode, url, file_mask);
+        MDL_resource_set *res_set = builder.create<MDL_resource_set>(
+            alloc, url, file_mask, info.get_udim_mode(), info.has_sequence_marker());
 
         // ZIP uses '/'
         string forward(file_mask, alloc);
@@ -2597,14 +2840,6 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
             char const *file_name = container->get_entry_name(i);
 
             if (utf8_match(forward.c_str(), file_name)) {
-                string purl(url, alloc);
-
-                if (q != NULL) {
-                    // also patch the URL if possible
-                    purl = string(url, q - url, alloc);
-                    purl += file_name + ofs;
-                }
-
                 // convert back to OS notation
                 string fname(file_name, alloc);
                 fname = convert_slashes_to_os_separators(fname);
@@ -2626,113 +2861,199 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
                     }
                 }
 
-                parse_u_v(
-                    s, fname.c_str(), ofs, purl.c_str(), container_name_str, ':', udim_mode,
+                parse_name_mapping(
+                    alloc, res_set, fname.c_str(), url, container_name_str, ':', info,
                     has_hash ? hash : NULL);
             }
         }
-
         container->close();
-        return s;
+
+        res_set->update_component_index();
+
+        MDL_ASSERT(res_set->m_elements.size() == res_set->m_elem_component_index.size());
+        return res_set;
     }
     return NULL;
 }
 
 // Parse a file name and enter it into a resource set.
-void MDL_resource_set::parse_u_v(
-    MDL_resource_set *s,
-    char const       *name,
-    size_t           ofs,
-    char const       *url,
-    string const     &prefix,
-    char             sep,
-    UDIM_mode        udim_mode,
-    unsigned char    hash[16])
+void MDL_resource_set::parse_name_mapping(
+    IAllocator        *alloc,
+    MDL_resource_set  *s,
+    char const        *name,
+    char const        *url,
+    string const      &prefix,
+    char              sep,
+    Marker_info const &info,
+    unsigned char     hash[16])
 {
+    size_t frame = 0;
     int u = 0, v = 0, sign = 1;
-    switch (udim_mode) {
-    case NO_UDIM:
-        break;
-    case UM_MARI:
-        // UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
-        {
-            char const *n = name + ofs;
-            unsigned num =
-                1000 * (n[0] - '0') +
-                100 * (n[1] - '0') +
-                10 * (n[2] - '0') +
-                1 * (n[3] - '0') - 1001;
 
-            // assume u, v [0..9]
-            u = num % 10;
-            v = num / 10;
+    char const *n = name + info.get_length(0);
 
-            s->m_entries.push_back(
-                Resource_entry(
-                    Arena_strdup(s->m_arena, url),
-                    Arena_strdup(s->m_arena, (prefix + sep + name).c_str()),
-                    u,
-                    v,
-                    hash
-                )
-            );
-        }
-        break;
-    case UM_ZBRUSH:
-        // 0-based (Zbrush), expands to "_u0_v0" for the first tile
-    case UM_MUDBOX:
-        // 1-based (Mudbox), expands to "_u1_v1" for the first tile
-        {
-            char const *n = name + ofs + 2;
-
-            if (*n == '-') {
-                sign = -1;
-                ++n;
-            } else {
-                sign = +1;
-            }
-            while (isdigit(*n)) {
-                u = u * 10 + *n - '0';
-                ++n;
-            }
-            u *= sign;
-
-            if (*n == '_') {
-                ++n;
-            }
-            if (*n == 'v') {
-                ++n;
-            }
-
-            if (*n == '-') {
-                sign = -1;
-                ++n;
-            } else {
-                sign = +1;
-            }
-            while (isdigit(*n)) {
-                v = v * 10 + *n - '0';
-                ++n;
-            }
-            v *= sign;
-
-            if (udim_mode == UM_MUDBOX) {
-                u -= 1;
-                v -= 1;
-            }
-
-            s->m_entries.push_back(
-                Resource_entry(
-                    Arena_strdup(s->m_arena, url),
-                    Arena_strdup(s->m_arena, (prefix + sep + name).c_str()),
-                    u,
-                    v,
-                    hash
-                )
-            );
-        }
-        break;
+    string purl(alloc);
+    char const *n_url = strrchr(url, '/');
+    if (n_url != NULL) {
+        ++n_url;
+        purl.append(url, n_url - url);
+    } else {
+        n_url = name;
     }
+
+    purl.append(n_url, info.get_length(0));
+    n_url += info.get_length(0);
+
+    for (unsigned i = 0; i < 2; ++i) {
+        if (info.get_marker_kind(i) == Marker_info::MK_FRAME) {
+            size_t l = 0;
+
+            while (isdigit(*n)) {
+                frame = frame * 10 + *n - '0';
+                purl.append(*n);
+                ++n;
+                ++l;
+            }
+            if (l > info.get_max_frame_digits()) {
+                // FIXME: invalid entry
+                return;
+            }
+
+            n     += info.get_length(i + 1);
+            n_url += info.get_max_frame_digits() + 2;
+        } else if (info.get_marker_kind(i) == Marker_info::MK_UDIM) {
+            switch (info.get_udim_mode()) {
+            case NO_UDIM:
+                break;
+            case UM_MARI:
+                // UDIM (Mari), expands to four digits calculated as 1000+(u+1+v*10)
+                {
+                    unsigned num =
+                        1000 * (n[0] - '0') +
+                        100 * (n[1] - '0') +
+                        10 * (n[2] - '0') +
+                        1 * (n[3] - '0') - 1001;
+
+                    // assume u, v [0..9]
+                    u = num % 10;
+                    v = num / 10;
+
+                    purl.append(n, 4);
+                    n     += 4;
+                    n_url += UDIM_MARI_MARKER_SIZE;
+                }
+                break;
+            case UM_ZBRUSH:
+                // 0-based (Zbrush), expands to "_u0_v0" for the first tile
+            case UM_MUDBOX:
+                // 1-based (Mudbox), expands to "_u1_v1" for the first tile
+                {
+                    if (*n == '_') {
+                        purl.append(*n);
+                        ++n;
+                    }
+                    if (*n == 'u') {
+                        purl.append(*n);
+                        ++n;
+                    }
+                    if (*n == '-') {
+                        purl.append(*n);
+                        sign = -1;
+                        ++n;
+                    } else {
+                        sign = +1;
+                    }
+                    while (isdigit(*n)) {
+                        purl.append(*n);
+                        u = u * 10 + *n - '0';
+                        ++n;
+                    }
+                    u *= sign;
+
+                    if (*n == '_') {
+                        purl.append(*n);
+                        ++n;
+                    }
+                    if (*n == 'v') {
+                        purl.append(*n);
+                        ++n;
+                    }
+
+                    if (*n == '-') {
+                        purl.append(*n);
+                        sign = -1;
+                        ++n;
+                    } else {
+                        sign = +1;
+                    }
+                    while (isdigit(*n)) {
+                        purl.append(*n);
+                        v = v * 10 + *n - '0';
+                        ++n;
+                    }
+                    v *= sign;
+
+                    if (info.get_udim_mode() == UM_MUDBOX) {
+                        u -= 1;
+                        v -= 1;
+
+                        n_url += UDIM_MUDBOX_MARKER_SIZE;
+                    } else {
+                        n_url += UDIM_ZBRUSH_MARKER_SIZE;
+                    }
+                }
+                break;
+            }
+        } else {
+            break;
+        }
+        purl.append(n_url, info.get_length(i + 1));
+        n_url += info.get_length(i + 1);
+    }
+    purl.append(n_url);
+
+    // compute frame range
+    if (s->m_elements.empty()) {
+        // entered first frame
+        s->m_lowest_frame  = frame;
+        s->m_highest_frame = frame;
+        // easy case: create [0] = BAD
+        s->m_elem_frame_index.resize(1, ~size_t(0));
+    } else {
+        if (frame < s->m_lowest_frame) {
+            // ugly case: add at beginning
+            s->m_elem_frame_index.resize(s->m_highest_frame - frame + 1, ~size_t(0));
+            memmove(
+                &s->m_elem_frame_index[s->m_lowest_frame - frame],
+                &s->m_elem_frame_index[0],
+                (s->m_highest_frame - s->m_lowest_frame + 1) * sizeof(s->m_elem_frame_index[0]));
+            for (size_t i = 0, n = s->m_lowest_frame - frame; i < n; ++i) {
+                s->m_elem_frame_index[i] = ~size_t(0);
+            }
+            s->m_lowest_frame = frame;
+        } else if (frame > s->m_highest_frame) {
+            s->m_highest_frame = frame;
+            // easy case: add at the end
+            s->m_elem_frame_index.resize(s->m_highest_frame - s->m_lowest_frame + 1, ~size_t(0));
+        }
+    }
+
+    size_t idx = s->m_elem_frame_index[frame - s->m_lowest_frame];
+    if (idx == ~size_t(0)) {
+        idx = s->m_elements.size();
+        s->m_elements.push_back(
+            MDL_resource_element(*s, frame));
+        s->m_elem_frame_index[frame - s->m_lowest_frame] = idx;
+    }
+
+    MDL_resource_element &elem = s->m_elements[idx];
+    elem.add_entry(
+            purl.c_str(),
+            (prefix + sep + name).c_str(),
+            u,
+            v,
+            hash
+    );
 }
 
 // Get the MDL URL mask of the ordered set.
@@ -2747,59 +3068,9 @@ char const *MDL_resource_set::get_filename_mask() const
     return m_filename_mask.c_str();
 }
 
-// Get the number of resolved file names.
-size_t MDL_resource_set::get_count() const
+bool MDL_resource_set::has_sequence_marker() const
 {
-    return m_entries.size();
-}
-
-// Get the i'th file name of the ordered set.
-char const *MDL_resource_set::get_filename(size_t i) const
-{
-    if (i < m_entries.size()) {
-        return m_entries[i].filename;
-    }
-    return NULL;
-}
-
-// Get the i'th MDL url of the ordered set.
-char const *MDL_resource_set::get_mdl_url(size_t i) const
-{
-    if (i < m_entries.size()) {
-        return m_entries[i].url;
-    }
-    return NULL;
-}
-
-// If the ordered set represents an UDIM mapping, returns it, otherwise NULL.
-bool MDL_resource_set::get_udim_mapping(size_t i, int &u, int &v) const
-{
-    u = v = 0;
-    if (m_udim_mode != NO_UDIM) {
-        if (i < m_entries.size()) {
-            u = m_entries[i].u;
-            v = m_entries[i].v;
-            return true;
-        }
-    }
-    return false;
-}
-
-// Opens a reader for the i'th entry.
-IMDL_resource_reader *MDL_resource_set::open_reader(size_t i) const
-{
-    if (i < m_entries.size()) {
-        MDL_zip_container_error_code err = EC_OK;
-        IMDL_resource_reader *res = open_resource_file(
-            get_allocator(),
-            m_entries[i].url,
-            m_entries[i].filename,
-            err);
-
-        // FIXME: handle error?
-        return res;
-    }
-    return NULL;
+    return m_has_sequence_marker;
 }
 
 // Get the UDIM mode for this set.
@@ -2808,18 +3079,50 @@ UDIM_mode MDL_resource_set::get_udim_mode() const
     return m_udim_mode;
 }
 
-// Get the resource hash value for the i'th file in the set if any.
-bool MDL_resource_set::get_resource_hash(
-    size_t i,
-    unsigned char hash[16]) const
+// Get the number of resolved file names.
+size_t MDL_resource_set::get_count() const
 {
-    if (i < m_entries.size()) {
-        if (m_entries[i].has_hash) {
-            memcpy(hash, m_entries[i].hash, sizeof(m_entries[i].hash));
-            return true;
+    return m_elements.size();
+}
+
+// Get the i'th element of the resolved entities.
+MDL_resource_element const *MDL_resource_set::get_element(
+    size_t i) const
+{
+    if (i < m_elements.size()) {
+        size_t idx = m_elem_component_index[i];
+        MDL_resource_element const *elem = &m_elements[idx];
+        elem->retain();
+        return elem;
+    }
+    return NULL;
+}
+
+// Get the first existing frame number.
+size_t MDL_resource_set::get_first_frame() const
+{
+    return m_lowest_frame;
+}
+
+// Get the last existing frame number.
+size_t MDL_resource_set::get_last_frame() const
+{
+    return m_highest_frame;
+}
+
+// Get the frame with given frame number of the resolved entities.
+MDL_resource_element const *MDL_resource_set::get_frame(
+    size_t frame) const
+{
+    if (m_lowest_frame <= frame && frame <= m_highest_frame && !m_elements.empty()) {
+        size_t idx = m_elem_frame_index[frame - m_lowest_frame];
+        if (idx != ~size_t(0)) {
+            MDL_resource_element const *elem = &m_elements[idx];
+            elem->retain();
+            return elem;
         }
     }
-    return false;
+    return NULL;
 }
 
 // --------------------------------------------------------------------------
@@ -3039,10 +3342,11 @@ Entity_resolver::Entity_resolver(
 
 // Resolve a resource file name.
 IMDL_resource_set *Entity_resolver::resolve_resource_file_name(
-    char const     *file_path,
-    char const     *owner_file_path,
-    char const     *owner_name,
-    Position const *pos)
+    char const      *file_path,
+    char const      *owner_file_path,
+    char const      *owner_name,
+    Position const  *pos,
+    IThread_context *ctx)
 {
     if (file_path == NULL) {
         return NULL;
@@ -3060,15 +3364,17 @@ IMDL_resource_set *Entity_resolver::resolve_resource_file_name(
         *pos,
         file_path,
         owner_name,
-        owner_file_path);
+        owner_file_path,
+        ctx);
 }
 
 // Resolve a module name.
 IMDL_import_result *Entity_resolver::resolve_module(
-    char const     *mdl_name,
-    char const     *owner_file_path,
-    char const     *owner_name,
-    Position const *pos)
+    char const      *mdl_name,
+    char const      *owner_file_path,
+    char const      *owner_name,
+    Position const  *pos,
+    IThread_context *ctx)
 {
     Position_impl zero(0, 0, 0, 0);
 
@@ -3080,7 +3386,8 @@ IMDL_import_result *Entity_resolver::resolve_module(
         pos == NULL ? zero : *pos,
         mdl_name,
         owner_name,
-        owner_file_path);
+        owner_file_path,
+        ctx);
 }
 
 // Access messages of last resolver operation.

@@ -77,8 +77,6 @@ public:
 
     mi::mdl::ICode_cache *get_code_cache() const;
 
-    bool utf8_match(char const *file_mask, char const *file_name) const;
-
     void set_implicit_cast_enabled(bool value);
 
     bool get_implicit_cast_enabled() const;
@@ -105,7 +103,7 @@ private:
     ///                    error for unsupported MDL core plugin types.
     bool is_valid_mdl_core_plugin(
        const char* type, const char* name, const char* filename);
-    
+
     /// Pointer to the MDL interface.
     mi::mdl::IMDL *m_mdl;
 

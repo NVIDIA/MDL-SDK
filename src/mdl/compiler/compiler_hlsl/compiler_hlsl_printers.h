@@ -402,6 +402,9 @@ public:
 
     // ---------------- non-interface ----------------
 
+    /// Print a comment.
+    void print_comment(char const *comment);
+
     /// Print a statement.
     void print_condition(Stmt const *stmt);
 

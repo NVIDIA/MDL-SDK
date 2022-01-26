@@ -200,7 +200,8 @@ extern "C" __device__ void tex_lookup_float4_2d(
     Tex_wrap_mode const         wrap_u,
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
-    float const                 crop_v[2])
+    float const                 crop_v[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -229,7 +230,8 @@ extern "C" __device__ void tex_lookup_deriv_float4_2d(
     Tex_wrap_mode const         wrap_u,
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
-    float const                 crop_v[2])
+    float const                 crop_v[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -258,7 +260,8 @@ extern "C" __device__ void tex_lookup_float3_2d(
     Tex_wrap_mode const         wrap_u,
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
-    float const                 crop_v[2])
+    float const                 crop_v[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -287,7 +290,8 @@ extern "C" __device__ void tex_lookup_deriv_float3_2d(
     Tex_wrap_mode const         wrap_u,
     Tex_wrap_mode const         wrap_v,
     float const                 crop_u[2],
-    float const                 crop_v[2])
+    float const                 crop_v[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -308,13 +312,14 @@ extern "C" __device__ void tex_lookup_deriv_float3_2d(
 }
 
 // Implementation of tex::texel_float4() for a texture_2d texture.
-// Note: uvtile textures are not supported
+// Note: uvtile and/or animated textures are not supported
 extern "C" __device__ void tex_texel_float4_2d(
     float                       result[4],
     Texture_handler_base const *self_base,
     unsigned                    texture_idx,
     int const                   coord[2],
-    int const                   /*uv_tile*/[2])
+    int const                   /*uv_tile*/[2],
+    float                       /*frame*/)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -343,7 +348,8 @@ extern "C" __device__ void tex_lookup_float4_3d(
     Tex_wrap_mode               wrap_w,
     float const                 crop_u[2],
     float const                 crop_v[2],
-    float const                 crop_w[2])
+    float const                 crop_w[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -374,7 +380,8 @@ extern "C" __device__ void tex_lookup_float3_3d(
     Tex_wrap_mode               wrap_w,
     float const                 crop_u[2],
     float const                 crop_v[2],
-    float const                 crop_w[2])
+    float const                 crop_w[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -399,7 +406,8 @@ extern "C" __device__ void tex_texel_float4_3d(
     float                       result[4],
     Texture_handler_base const *self_base,
     unsigned                    texture_idx,
-    const int                   coord[3])
+    const int                   coord[3],
+    float                       /*frame*/)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -459,12 +467,13 @@ extern "C" __device__ void tex_lookup_float3_cube(
 }
 
 // Implementation of resolution_2d function needed by generated code.
-// Note: uvtile textures are not supported
+// Note: uvtile and/or animated textures are not supported
 extern "C" __device__ void tex_resolution_2d(
     int                         result[2],
     Texture_handler_base const *self_base,
     unsigned                    texture_idx,
-    int const                   /*uv_tile*/[2])
+    int const                   /*uv_tile*/[2],
+    float                       frame)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
@@ -485,7 +494,8 @@ extern "C" __device__ void tex_resolution_2d(
 extern "C" __device__ void tex_resolution_3d(
     int                         result[3],
     Texture_handler_base const *self_base,
-    unsigned                    texture_idx)
+    unsigned                    texture_idx,
+    float                       frame)
 {
     // invalid texture returns zero
     result[0] = 0;
@@ -501,6 +511,17 @@ extern "C" __device__ bool tex_texture_isvalid(
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
     return texture_idx != 0 && texture_idx - 1 < self->num_textures;
+}
+
+// Implementation of frame function needed by generated code.
+// Not supported
+extern "C" __device__ void tex_frame(
+    int                         result[2],
+    Texture_handler_base const *self_base,
+    unsigned                    texture_idx)
+{
+    result[0] = 0;
+    result[1] = 0;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -875,6 +896,7 @@ __device__ mi::mdl::Texture_handler_vtable tex_vtable = {
     tex_resolution_2d,
     tex_resolution_3d,
     tex_texture_isvalid,
+    tex_frame,
     df_light_profile_power,
     df_light_profile_maximum,
     df_light_profile_isvalid,
@@ -913,6 +935,7 @@ __device__ mi::mdl::Texture_handler_deriv_vtable tex_deriv_vtable = {
     tex_resolution_2d,
     tex_resolution_3d,
     tex_texture_isvalid,
+    tex_frame,
     df_light_profile_power,
     df_light_profile_maximum,
     df_light_profile_isvalid,

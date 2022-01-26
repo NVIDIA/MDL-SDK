@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,11 +28,10 @@
 
 #include "pch.h"
 
-#include "compiler_hlsl_half.h"
+#include "compilercore_half.h"
 
 namespace mi {
 namespace mdl {
-namespace hlsl {
 
 /// Convert an IEEE 754 single float to an IEEE 754-2008 half float.
 ///
@@ -290,6 +289,5 @@ int test_hlsl_half()
 
 #endif  // TEST_HALF_CONVERSIONS
 
-}  // hlsl
 }  // mdl
 }  // mi

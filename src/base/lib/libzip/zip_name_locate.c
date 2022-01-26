@@ -1,6 +1,6 @@
 /*
   zip_name_locate.c -- get index by name
-  Copyright (C) 1999-2016 Dieter Baron and Thomas Klausner
+  Copyright (C) 1999-2021 Dieter Baron and Thomas Klausner
 
   This file is part of libzip, a library to manipulate ZIP archives.
   The authors can be contacted at <libzip@nih.at>
@@ -53,40 +53,40 @@ _zip_name_locate(zip_t *za, const char *fname, zip_flags_t flags, zip_error_t *e
     zip_uint64_t i;
 
     if (za == NULL)
-	return -1;
+        return -1;
 
     if (fname == NULL) {
-	zip_error_set(error, ZIP_ER_INVAL, 0);
-	return -1;
+        zip_error_set(error, ZIP_ER_INVAL, 0);
+        return -1;
     }
 
     if (flags & (ZIP_FL_NOCASE | ZIP_FL_NODIR | ZIP_FL_ENC_CP437)) {
-	/* can't use hash table */
-	cmp = (flags & ZIP_FL_NOCASE) ? strcasecmp : strcmp;
+        /* can't use hash table */
+        cmp = (flags & ZIP_FL_NOCASE) ? strcasecmp : strcmp;
 
-	for (i = 0; i < za->nentry; i++) {
-	    fn = _zip_get_name(za, i, flags, error);
+        for (i = 0; i < za->nentry; i++) {
+            fn = _zip_get_name(za, i, flags, error);
 
-	    /* newly added (partially filled) entry or error */
-	    if (fn == NULL)
-		continue;
+            /* newly added (partially filled) entry or error */
+            if (fn == NULL)
+                continue;
 
-	    if (flags & ZIP_FL_NODIR) {
-		p = strrchr(fn, '/');
-		if (p)
-		    fn = p + 1;
-	    }
+            if (flags & ZIP_FL_NODIR) {
+                p = strrchr(fn, '/');
+                if (p)
+                    fn = p + 1;
+            }
 
-	    if (cmp(fname, fn) == 0) {
-		_zip_error_clear(error);
-		return (zip_int64_t)i;
-	    }
-	}
+            if (cmp(fname, fn) == 0) {
+                _zip_error_clear(error);
+                return (zip_int64_t)i;
+            }
+        }
 
-	zip_error_set(error, ZIP_ER_NOENT, 0);
-	return -1;
+        zip_error_set(error, ZIP_ER_NOENT, 0);
+        return -1;
     }
     else {
-	return _zip_hash_lookup(za->names, (const zip_uint8_t *)fname, flags, error);
+        return _zip_hash_lookup(za->names, (const zip_uint8_t *)fname, flags, error);
     }
 }

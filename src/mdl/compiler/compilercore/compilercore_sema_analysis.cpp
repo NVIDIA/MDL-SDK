@@ -1991,12 +1991,12 @@ bool Sema_analysis::identical_anno_blocks(
         return lhs == rhs;
     }
 
-    int n = lhs->get_annotation_count();
+    size_t n = lhs->get_annotation_count();
     if (n != rhs->get_annotation_count()) {
         return false;
     }
 
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         IAnnotation const *l = lhs->get_annotation(i);
         IAnnotation const *r = rhs->get_annotation(i);
 

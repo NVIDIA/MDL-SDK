@@ -40,11 +40,14 @@
 #include <mi/base/lock.h>
 #include <mi/neuraylib/ineuray.h>
 
+#include <atomic>
 #include <map>
-#include <base/system/main/access_module.h>
+
 #include <boost/core/noncopyable.hpp>
 
-namespace mi { 
+#include <base/system/main/access_module.h>
+
+namespace mi {
     namespace base { class ILogger; }
     namespace neuraylib { class IVersion; }
 }
@@ -134,7 +137,7 @@ public:
     /// Counts the number of instances of this class.
     ///
     /// Used by mi_factory() to avoid multiple instances of this class.
-    static mi::base::Atom32 s_instance_count;
+    static std::atomic_uint32_t s_instance_count;
 
 private:
       /// Logs the startup message (library path and version information).

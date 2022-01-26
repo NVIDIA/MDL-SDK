@@ -176,19 +176,19 @@ void create_textured_material( mi::neuraylib::INeuray* neuray)
         // Create a material instance from the material definition
         // "mdl::nvidia::sdk_examples::tutorials::example_material"
         // with the just prepared arguments.
-        mi::base::Handle<const mi::neuraylib::IMaterial_definition> material_definition(
-            transaction->access<mi::neuraylib::IMaterial_definition>(
+        mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+            transaction->access<mi::neuraylib::IFunction_definition>(
                 "mdl::nvidia::sdk_examples::tutorials::example_material(color,float)"));
         mi::Sint32 result;
-        mi::base::Handle<mi::neuraylib::IMaterial_instance> material_instance(
-            material_definition->create_material_instance( arguments.get(), &result));
+        mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+            material_definition->create_function_call( arguments.get(), &result));
         check_success( result == 0);
         transaction->store( material_instance.get(), "instance of example_material");
     }
     {
         // Dump the created material instance and function calls.
-        mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
-            transaction->access<mi::neuraylib::IMaterial_instance>(
+        mi::base::Handle<const mi::neuraylib::IFunction_call> material_instance(
+            transaction->access<mi::neuraylib::IFunction_call>(
                 "instance of example_material"));
         std::cout << "Dumping material instance \"instance of example_material\":" << std::endl;
         dump_instance( expression_factory.get(), material_instance.get(), std::cout);

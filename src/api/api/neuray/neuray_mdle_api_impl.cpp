@@ -61,10 +61,9 @@
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module_builder.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
-#include <io/scene/mdl_elements/mdl_elements_expression.h>
-#include <io/scene/mdl_elements/mdl_elements_type.h>
-#include <io/scene/mdl_elements/mdl_elements_utilities.h>
-#include <io/scene/mdl_elements/mdl_elements_value.h>
+#include <io/scene/mdl_elements/i_mdl_elements_expression.h>
+#include <io/scene/mdl_elements/i_mdl_elements_type.h>
+#include <io/scene/mdl_elements/i_mdl_elements_value.h>
 #include <io/scene/texture/i_texture.h>
 
 #include <mdl/integration/mdlnr/i_mdlnr.h>
@@ -264,7 +263,7 @@ char const *Mdle_resource_mapper::get_resource_name(
     // handle resources that have to be exported or copied here,
     // basically all resources that are not on disk and in a valid search path
     std::unordered_map<std::string, mi::base::Handle<mi::neuraylib::IBuffer>> in_memory_resources;
-    Resource_callback::BufferCallback callback = [&](
+    Resource_callback::Buffer_callback callback = [&](
         mi::neuraylib::IBuffer* buffer,
         const char* suggested_file_name)
     {
@@ -274,7 +273,7 @@ char const *Mdle_resource_mapper::get_resource_name(
 
         // store the buffer
         in_memory_resources[name] = mi::base::make_handle_dup(buffer);
-        return "./" + name;;
+        return "./" + name;
     };
 
     // Use the base class implementation the handle all the mappings and exporting of in-memory
@@ -325,24 +324,29 @@ char const *Mdle_resource_mapper::get_resource_name(
     // handle file-based resources
     else
     {
-        // use the entity resolved to get the file path on disk
+        // use the entity resolver to get the file path on disk
+        mi::base::Handle<mi::mdl::IThread_context> ctx( MDL::create_thread_context( m_context));
         mi::base::Handle<mi::mdl::IMDL_resource_set> res_set(m_resolver->resolve_resource_file_name(
             resolved_name.c_str(),
             /*owner_file_path*/ nullptr,
             /*owner_name*/ nullptr,
-            /*pos*/ nullptr));
+            /*pos*/ nullptr,
+            ctx.get()));
 
         for (size_t fi = 0, fi_n = res_set->get_count(); fi < fi_n; ++fi)
         {
-            Resource_desc desc;
-            desc.mdle_file_name_mask = mdle_name;
-            desc.resolved_file_name = HAL::Ospath::normpath_v2(res_set->get_filename(fi));
-            desc.in_memory_buffer = nullptr;
+            mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(res_set->get_element(fi));
+            for (size_t i = 0, el_n = elem->get_count(); i < el_n; ++i) {
+                Resource_desc desc;
+                desc.mdle_file_name_mask = mdle_name;
+                desc.resolved_file_name = HAL::Ospath::normpath_v2(elem->get_filename(i));
+                desc.in_memory_buffer = nullptr;
 
-            // use the uv-components (if there are any) of the resolved file
-            desc.mdle_file_name = replace_uvtile_base(mdle_name, desc.resolved_file_name);
+                // use the uv-components (if there are any) of the resolved file
+                desc.mdle_file_name = replace_uvtile_base(mdle_name, desc.resolved_file_name);
 
-            m_resources.push_back(desc);
+                m_resources.push_back(desc);
+            }
         }
     }
     // return the name that will be written into the exported module
@@ -449,15 +453,23 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_additional_data_reader(
         absolute_path = path;
     } else {
         // try to resolve from mdl search paths next
-        mi::base::Handle<mi::mdl::IMDL_resource_set> res_set(m_resolver->resolve_resource_file_name(
-            path, /*owner_file_path*/ nullptr, /*owner_name*/ nullptr, /*pos*/ nullptr));
+        mi::base::Handle<mi::mdl::IThread_context> ctx( MDL::create_thread_context( m_context));
+        mi::base::Handle<mi::mdl::IMDL_resource_set> res_set(
+            m_resolver->resolve_resource_file_name(
+                path,
+                /*owner_file_path*/ nullptr,
+                /*owner_name*/ nullptr,
+                /*pos*/ nullptr,
+                ctx.get()));
 
-        if (res_set && res_set->get_count() > 0)
-            absolute_path = res_set->get_filename(0);
+        if (res_set && res_set->get_count() > 0) {
+            mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(res_set->get_element(0));
+            absolute_path = elem->get_filename(0);
+        }
     }
 
     // as fall-back, check the file system for relative paths
-    if(absolute_path.empty()) {
+    if (absolute_path.empty()) {
         // add the current working directory
         absolute_path = mi::mdl::join_path(
             mi::mdl::get_cwd(m_mdl->get_mdl_allocator()),
@@ -554,9 +566,8 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>(transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-    MDL::Type_factory tf;
-    MDL::Value_factory vf(&tf);
-    MDL::Expression_factory ef(&vf);
+    mi::base::Handle<MDL::IValue_factory> vf( MDL::get_value_factory());
+    mi::base::Handle<MDL::IExpression_factory> ef( MDL::get_expression_factory());
 
     // get the prototype
     mi::base::Handle<const mi::IString> prototype_name(
@@ -648,7 +659,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
     // compute (filtered) annotations
     //---------------------------------------------------------------------------------------------
-    mi::base::Handle<MDL::IAnnotation_block> new_annotations_int(ef.create_annotation_block());
+    mi::base::Handle<MDL::IAnnotation_block> new_annotations_int(ef->create_annotation_block());
     bool has_origin = false;
     for(size_t a = 0; annotations_int && a < annotations_int->get_size(); ++a) {
 
@@ -676,12 +687,12 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         definiton_name = definiton_name.substr(0, definiton_name.rfind('(')); // strip signature
 
         mi::base::Handle<MDL::IValue> anno_value(
-            vf.create_string(definiton_name.c_str()));
-        mi::base::Handle<MDL::IExpression> anno_expr(ef.create_constant(anno_value.get()));
-        mi::base::Handle<MDL::IExpression_list> anno_expr_list(ef.create_expression_list());
+            vf->create_string(definiton_name.c_str()));
+        mi::base::Handle<MDL::IExpression> anno_expr(ef->create_constant(anno_value.get()));
+        mi::base::Handle<MDL::IExpression_list> anno_expr_list(ef->create_expression_list());
         anno_expr_list->add_expression("name", anno_expr.get());
 
-        mi::base::Handle<MDL::IAnnotation> anno(ef.create_annotation(
+        mi::base::Handle<MDL::IAnnotation> anno(ef->create_annotation(
             db_transaction, "::anno::origin(string)", anno_expr_list.get()));
         new_annotations_int->add_annotation(anno.get());
     }
@@ -703,12 +714,12 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
         // create the thumbnail annotation
         mi::base::Handle<MDL::IValue> anno_value(
-            vf.create_string(additional_file_target_paths.back()));
-        mi::base::Handle<MDL::IExpression> anno_expr(ef.create_constant(anno_value.get()));
-        mi::base::Handle<MDL::IExpression_list> anno_expr_list(ef.create_expression_list());
+            vf->create_string(additional_file_target_paths.back()));
+        mi::base::Handle<MDL::IExpression> anno_expr(ef->create_constant(anno_value.get()));
+        mi::base::Handle<MDL::IExpression_list> anno_expr_list(ef->create_expression_list());
         anno_expr_list->add_expression("name", anno_expr.get());
 
-        mi::base::Handle<MDL::IAnnotation> anno(ef.create_annotation(
+        mi::base::Handle<MDL::IAnnotation> anno(ef->create_annotation(
             db_transaction, "::anno::thumbnail(string)", anno_expr_list.get()));
         new_annotations_int->add_annotation(anno.get());
     }
@@ -726,8 +737,8 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
     // add main material
     //---------------------------------------------------------------------------------------------
-    mi::base::Handle<MDL::IAnnotation_block> empty_block(ef.create_annotation_block());
-    mi::base::Handle<MDL::IAnnotation_list> empty_list(ef.create_annotation_list());
+    mi::base::Handle<MDL::IAnnotation_block> empty_block(ef->create_annotation_block());
+    mi::base::Handle<MDL::IAnnotation_list> empty_list(ef->create_annotation_list());
     builder.add_function(
         "main",                    // function/material name is "main"
         prototype_tag,             // stored in the database with this tag

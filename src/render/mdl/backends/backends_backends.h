@@ -47,7 +47,7 @@
 #include <io/scene/dbimage/i_dbimage.h>
 
 namespace mi {
-namespace mdl { class IType_struct; class IType; }
+namespace mdl { class IType_struct; class IType; class Code_genenator_thread_context; }
 namespace neuraylib { class ITarget_code; }
 }
 
@@ -133,10 +133,15 @@ public:
         Link_unit const *lu,
         MDL::Execution_context* context);
 
-    /// Update the MDL JIT options from the given parameters.
-    void update_jit_options(
-        const char *internal_space,
-        MDL::Execution_context *context);
+    /// Update the MDL JIT context options from the given parameters.
+    ///
+    /// \param cg_ctx          the MDL core code generator context that is updated
+    /// \param internal_space  if non-NULL, the name of the internal space
+    /// \param context         the neuray execution context
+    void update_jit_context_options(
+        mi::mdl::ICode_generator_thread_context &cg_ctx,
+        const char                              *internal_space,
+        MDL::Execution_context                  *context) const;
 
     /// Get the MDL compiler.
     mi::base::Handle<mi::mdl::IMDL> get_compiler() const { return m_compiler; }
@@ -463,81 +468,6 @@ private:
         mi::Uint32 m_resolution_y;      ///< resolution in y
 
         const float* m_data;            ///< data
-    };
-
-    class Df_data_canvas : public mi::base::Interface_implement<mi::neuraylib::ICanvas>
-    {
-    public:
-
-        /// Constructor
-        Df_data_canvas(mi::Uint32 rx, mi::Uint32 ry, mi::Uint32 rz, const float *data)
-        {
-            m_tiles.resize(rz);
-            mi::Uint32 offset = rx * ry;
-            for (mi::Size i = 0; i < rz; ++i) {
-                m_tiles[i] = new Df_data_tile(rx, ry, &data[i*offset]);
-            }
-        }
-
-        // methods of mi::neuraylib::ICanvas_base
-
-        mi::Uint32 get_resolution_x() const final;
-
-        mi::Uint32 get_resolution_y() const final;
-
-        const char* get_type() const final;
-
-        mi::Uint32 get_layers_size() const final;
-
-        mi::Float32 get_gamma() const final;
-
-        void set_gamma(mi::Float32) final;
-
-        // methods of mi::neuraylib::ICanvas
-
-        const mi::neuraylib::ITile* get_tile(mi::Uint32 layer = 0) const final;
-
-        mi::neuraylib::ITile* get_tile(mi::Uint32 layer = 0) final;
-
-    private:
-
-        std::vector<mi::base::Handle<Df_data_tile>> m_tiles;
-    };
-
-    class Df_image_set : public DBIMAGE::Image_set
-    {
-    public:
-
-        Df_image_set(mi::neuraylib::ICanvas* canvas)
-            : m_canvas(mi::base::make_handle_dup(canvas)) { }
-
-        // methods from DBIMAGE::Image_set
-        mi::Size get_length() const final;
-
-        bool is_uvtile() const final;
-
-        bool is_mdl_container() const final;
-
-        void get_uv_mapping( mi::Size i, mi::Sint32 &u, mi::Sint32 &v) const final;
-
-        const char* get_original_filename() const final;
-
-        const char* get_container_filename() const final;
-
-        const char* get_mdl_file_path() const final;
-
-        const char* get_resolved_filename( mi::Size i) const final;
-
-        const char* get_container_membername( mi::Size i) const final;
-
-        mi::neuraylib::IReader* open_reader( mi::Size i) const final;
-
-        mi::neuraylib::ICanvas* get_canvas( mi::Size i) const final;
-
-        const char* get_image_format() const final;
-
-    private:
-        mi::base::Handle <mi::neuraylib::ICanvas> m_canvas;
     };
 
     DB::Tag store_texture(

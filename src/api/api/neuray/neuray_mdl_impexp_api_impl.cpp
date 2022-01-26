@@ -66,8 +66,8 @@
 namespace MI {
 namespace NEURAY {
 
-Mdl_impexp_api_impl::Mdl_impexp_api_impl(mi::neuraylib::INeuray *neuray)
-: m_neuray(neuray)
+Mdl_impexp_api_impl::Mdl_impexp_api_impl( mi::neuraylib::INeuray *neuray)
+  : m_neuray( neuray)
 {
 }
 
@@ -229,24 +229,31 @@ mi::Sint32 Mdl_impexp_api_impl::export_bsdf_data(
     return result ? 0 : -4;
 }
 
-const mi::IString* Mdl_impexp_api_impl::uvtile_marker_to_string(
-    const char* marker, mi::Sint32 u, mi::Sint32 v) const
+const mi::IString* Mdl_impexp_api_impl::frame_uvtile_marker_to_string(
+    const char* marker, mi::Size f, mi::Sint32 u, mi::Sint32 v) const
 {
     if( !marker)
         return nullptr;
 
-    const std::string& result = MDL::uvtile_marker_to_string( marker, u, v);
+    const std::string& result = MDL::frame_uvtile_marker_to_string( marker, f, u, v);
     return result.empty() ? nullptr : new String_impl( result.c_str());
 }
 
-const mi::IString* Mdl_impexp_api_impl::uvtile_string_to_marker(
+const mi::IString* Mdl_impexp_api_impl::deprecated_uvtile_string_to_marker(
     const char* str, const char* marker) const
 {
     if( !str || !marker)
         return nullptr;
 
-    const std::string& result = MDL::uvtile_string_to_marker( str, marker);
+    const std::string& result = MDL::deprecated_uvtile_string_to_marker( str, marker);
     return result.empty() ? nullptr : new String_impl( result.c_str());
+}
+
+const mi::IString* Mdl_impexp_api_impl::deprecated_frame_string_to_marker(
+    const char* str, mi::Size digits) const
+{
+    ASSERT( M_NEURAY_API, false);
+    return nullptr;
 }
 
 const mi::IString* Mdl_impexp_api_impl::get_mdl_module_name(
@@ -295,6 +302,22 @@ const mi::neuraylib::ISerialized_function_name* Mdl_impexp_api_impl::serialize_f
         return_type_int.get(),
         mdle_callback,
         context_impl);
+}
+
+mi::neuraylib::IReader* Mdl_impexp_api_impl::create_reader(
+    const mi::neuraylib::IBuffer* buffer) const
+{
+    return buffer ? new DISK::Memory_reader_impl( buffer) : nullptr;
+}
+
+mi::neuraylib::IReader* Mdl_impexp_api_impl::create_reader( const char* filename) const
+{
+    return filename ? Impexp_utilities::create_reader( filename) : nullptr;
+}
+
+mi::neuraylib::IWriter* Mdl_impexp_api_impl::create_writer( const char* filename) const
+{
+    return filename ? Impexp_utilities::create_writer( filename) : nullptr;
 }
 
 namespace {
@@ -528,4 +551,5 @@ mi::Sint32 Mdl_impexp_api_impl::shutdown()
 }
 
 } // namespace NEURAY
+
 } // namespace MI

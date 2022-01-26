@@ -591,12 +591,12 @@ bool Environment::create(const std::string& file_path)
             return false;
         }
 
-        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas());
+        mi::base::Handle<const mi::neuraylib::ICanvas> canvas(image->get_canvas(0, 0, 0));
         const size_t rx = canvas->get_resolution_x();
         const size_t ry = canvas->get_resolution_y();
 
         // Check, whether we need to convert the image
-        char const *image_type = image->get_type();
+        char const *image_type = image->get_type(0, 0);
         if (strcmp(image_type, "Color") != 0 && strcmp(image_type, "Float32<4>") != 0)
             canvas = m_app->get_mdl_sdk().get_image_api().convert(canvas.get(), "Color");
 

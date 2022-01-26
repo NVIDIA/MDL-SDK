@@ -61,8 +61,7 @@ mi::base::Handle<mi::IStructure> data(transaction->create<mi::IStructure>("Mdle_
 \endcode
         The fields of the structure describe the content of the MDLE to create.
         This includes the future main material or function which is specified by passing the database  
-        name of an existing #mi::neuraylib::IMaterial_definition, #mi::neuraylib::IMaterial_instance, 
-        #mi::neuraylib::IFunction_definition, or #mi::neuraylib::IFunction_call to the \c 
+        name of an existing function definition of function call in the \c 
         prototype_name field.
 \code{.unparsed}
 
@@ -75,7 +74,7 @@ prototype->set_c_str("mdl::nvidia::sdk_examples::tutorials::example_mod_rough");
         Depending on the selected prototype, different default parameters are generated for the
         future main material/function. In case a definition is provided, the default values of the 
         definitions are copied. In case of an material instance or a function call, the arguments 
-        that have been applied during the instanciation are used instead. To override these defaults, 
+        that have been applied during the instantiation are used instead. To override these defaults, 
         a new #mi::neuraylib::IExpression_list is created and new expressions are added for the 
         parameters to override. Finally, the created list is set to the \c defaults field of  
         the \c Mdle_data structure. 

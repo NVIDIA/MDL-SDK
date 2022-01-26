@@ -349,6 +349,10 @@ namespace {
 ///     float  fval( 0.0f );
 ///     Uint32 uval( binary_cast<Uint32>(fval) );
 /// \endcode
+#if (defined(_WIN32) && defined(_HAS_CXX20) && _HAS_CXX20) || (defined(__GNUC__) && (__GNUC__ >= 11 ))
+#include <bit>
+template<class T, class S> constexpr T binary_cast(const S& src) noexcept { return std::bit_cast<T,S>(src); }
+#else
 template <class Target, class Source>
 inline Target binary_cast(Source const & val)
 {
@@ -357,6 +361,7 @@ inline Target binary_cast(Source const & val)
     val_.source = val;
     return val_.target;
 }
+#endif
 
 /// %Base class for the helper class to deduce properties of numeric types defined in this API.
 ///

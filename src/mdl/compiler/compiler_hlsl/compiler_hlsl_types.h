@@ -1004,7 +1004,7 @@ class Type_factory : public Interface_owned
                         size_t n_params = size_t(ft->get_parameter_count());
 
                         size_t t = ret_type - (Type *)0;
-                        t = ((t) >> 3) ^ (t >> 16) ^
+                        t = ((t) >> 3) ^ (t >> 16) ^           //-V2007
                             size_t(KEY_FUNC_TYPE) ^ n_params;
 
                         for (size_t i = 0; i < n_params; ++i) {
@@ -1019,7 +1019,7 @@ class Type_factory : public Interface_owned
                 case KEY_FUNC_KEY:
                     {
                         size_t t = key.type - (Type *)0;
-                        t = ((t) >> 3) ^ (t >> 16) ^
+                        t = ((t) >> 3) ^ (t >> 16) ^                      //-V2007
                             size_t(KEY_FUNC_TYPE) ^ key.u.func.n_params;
 
                         Type_function::Parameter const *p = key.u.func.params;

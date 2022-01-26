@@ -62,7 +62,7 @@ class Access_module : private STLEXT::Non_copyable
     /// Default constructor.
     /// \param deferred shall the initialization be deferred?
     explicit Access_module(
-	bool deferred=true);
+        bool deferred=true);
     /// Destruction.
     ~Access_module();
 
@@ -82,6 +82,13 @@ class Access_module : private STLEXT::Non_copyable
     /// \return const reference to this, could be 0
     const T* operator->() const;
 
+    /// Access the underlying module.
+    /// \return reference to this, could be 0
+    T* get();
+    /// Access the underlying module.
+    /// \return const reference to this, could be 0
+    const T* get() const;
+
     /// Retrieve whether the module was already initialized or not.
     /// \param name name of the module
     static bool is_module_initialized();
@@ -100,7 +107,7 @@ Access_module<T, is_essential>::Access_module(
   : m_module(0)
 {
     if (!deferred)
-	set();
+        set();
 }
 
 
@@ -121,7 +128,7 @@ template <typename T, Module_variant is_essential>
 void Access_module<T, is_essential>::set()
 {
     if (!m_module)
-	m_module = T::get_instance();
+        m_module = T::get_instance();
 }
 
 
@@ -132,8 +139,8 @@ template <typename T, Module_variant is_essential>
 void Access_module<T, is_essential>::reset()
 {
     if (m_module) {
-	Module_registration_entry::exit_module(m_module->get_name());
-	m_module = 0;
+        Module_registration_entry::exit_module(m_module->get_name());
+        m_module = 0;
     }
 }
 
@@ -145,13 +152,13 @@ template <typename T, Module_variant is_essential>
 Module_state Access_module<T, is_essential>::get_status() const
 {
     if (m_module == 0)
-	return MODULE_STATUS_UNINITIALIZED;
+        return MODULE_STATUS_UNINITIALIZED;
     // if finally everything got cleaned up
     if (m_module->get_status() == MODULE_STATUS_EXITED)
-	return MODULE_STATUS_EXITED;
+        return MODULE_STATUS_EXITED;
     // this usage of RTTI is in non-performance critical code and ensures safety of usage
     if (dynamic_cast<T*>(m_module->get_module()) == 0)
-	return MODULE_STATUS_FAILED;
+        return MODULE_STATUS_FAILED;
     return m_module->get_status();
 }
 
@@ -182,6 +189,30 @@ T* Access_module<T, is_essential>::operator->()
 
 //--------------------------------------------------------------------------------------------------
 
+// Access the underlying module. Here we do a run-time check whether the stored module
+// pointer is actually convertible to T.
+template <typename T, Module_variant is_essential>
+const T* Access_module<T, is_essential>::get() const
+{
+    // this usage of RTTI is in non-performance critical code and ensures safety of usage
+    return dynamic_cast<const T*>(m_module->get_module());
+}
+
+
+//--------------------------------------------------------------------------------------------------
+
+// Access the underlying module. Here we do a run-time check whether the stored module
+// pointer is actually convertible to T.
+template <typename T, Module_variant is_essential>
+T* Access_module<T, is_essential>::get()
+{
+    // fall-back on the const version
+    return const_cast<T*>(static_cast<const Access_module<T, is_essential>*>(this)->operator->());
+}
+
+
+//--------------------------------------------------------------------------------------------------
+
 template <typename T, Module_variant is_essential>
 bool Access_module<T, is_essential>::is_module_initialized()
 {
@@ -202,14 +233,14 @@ class Access_module<T, OPTIONAL_MODULE> : private STLEXT::Non_copyable
     /// Initializing constructor.
     /// \param name the name of the module
     Access_module(
-	const std::string& name);
+        const std::string& name);
     /// Destruction.
     ~Access_module();
 
     /// Setup the module with the given name.
     /// \param name the name of the module
     void set(
-	const std::string& name);
+        const std::string& name);
     /// Tear down the module with the given name.
     void reset();
 
@@ -223,6 +254,13 @@ class Access_module<T, OPTIONAL_MODULE> : private STLEXT::Non_copyable
     /// Const access to the underlying module. Note that this could be 0!
     /// \return const reference to this, could be 0
     const T* operator->() const;
+
+    /// Access to the underlying module. Note that this could be 0!
+    /// \return reference to this, could be 0
+    T* get();
+    /// Const access to the underlying module. Note that this could be 0!
+    /// \return const reference to this, could be 0
+    const T* get() const;
 
     /// Retrieve whether the module was already initialized or not.
     /// \param name name of the module
@@ -276,7 +314,7 @@ void Access_module<T, OPTIONAL_MODULE>::set(
     const std::string& name)
 {
     if (!m_module)
-	m_module = Module_registration_entry::init_module(name.c_str());
+        m_module = Module_registration_entry::init_module(name.c_str());
 }
 
 
@@ -287,8 +325,8 @@ template <typename T>
 void Access_module<T, OPTIONAL_MODULE>::reset()
 {
     if (m_module) {
-	Module_registration_entry::exit_module(m_module->get_name());
-	m_module = 0;
+        Module_registration_entry::exit_module(m_module->get_name());
+        m_module = 0;
     }
 }
 
@@ -300,13 +338,13 @@ template <typename T>
 Module_state Access_module<T, OPTIONAL_MODULE>::get_status() const
 {
     if (m_module == 0)
-	return MODULE_STATUS_UNINITIALIZED;
+        return MODULE_STATUS_UNINITIALIZED;
     // if finally everything got cleaned up
     if (m_module->get_status() == MODULE_STATUS_EXITED)
-	return MODULE_STATUS_EXITED;
+        return MODULE_STATUS_EXITED;
     // this usage of RTTI is in non-performance critical code and ensures safety of usage
     if (dynamic_cast<T*>(m_module->get_module()) == 0)
-	return MODULE_STATUS_FAILED;
+        return MODULE_STATUS_FAILED;
     return m_module->get_status();
 }
 
@@ -329,6 +367,29 @@ T* Access_module<T, OPTIONAL_MODULE>::operator->()
 // pointer is actually convertible to T.
 template <typename T>
 const T* Access_module<T, OPTIONAL_MODULE>::operator->() const
+{
+    // this usage of RTTI is in non-performance critical code and ensures safety of usage
+    return const_cast<const T*>(dynamic_cast<T*>(m_module->get_module()));
+}
+
+//--------------------------------------------------------------------------------------------------
+
+// Access the underlying module. Here we do a run-time check whether the stored module
+// pointer is actually convertible to T.
+template <typename T>
+T* Access_module<T, OPTIONAL_MODULE>::get()
+{
+    // this usage of RTTI is in non-performance critical code and ensures safety of usage
+    return dynamic_cast<T*>(m_module->get_module());
+}
+
+
+//--------------------------------------------------------------------------------------------------
+
+// Const access to the underlying module. Here we do a run-time check whether the stored module
+// pointer is actually convertible to T.
+template <typename T>
+const T* Access_module<T, OPTIONAL_MODULE>::get() const
 {
     // this usage of RTTI is in non-performance critical code and ensures safety of usage
     return const_cast<const T*>(dynamic_cast<T*>(m_module->get_module()));

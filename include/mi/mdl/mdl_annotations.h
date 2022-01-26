@@ -59,12 +59,12 @@ public:
     virtual IQualified_name const *get_name() const = 0;
 
     /// Get the argument count of this annotation.
-    virtual int get_argument_count() const = 0;
+    virtual size_t get_argument_count() const = 0;
 
     /// Get the argument at index.
     ///
     /// \param index  the index of the requested argument
-    virtual IArgument const *get_argument(int index) const = 0;
+    virtual IArgument const *get_argument(size_t index) const = 0;
 
     /// Add an argument.
     ///
@@ -75,7 +75,7 @@ public:
     ///
     /// \param index  the index of the argument to replace
     /// \param arg    the new argument
-    virtual void replace_argument(int index, IArgument const *arg) = 0;
+    virtual void replace_argument(size_t index, IArgument const *arg) = 0;
 
     /// Access the position of this annotation.
     virtual Position &access_position() = 0;
@@ -103,12 +103,12 @@ class IAnnotation_block : public Interface_owned
 {
 public:
     /// Get the number of annotations in this block.
-    virtual int get_annotation_count() const = 0;
+    virtual size_t get_annotation_count() const = 0;
 
     /// Get the annotation at index.
     ///
     /// \param index  the index of the requested annotation
-    virtual IAnnotation const *get_annotation(int index) const = 0;
+    virtual IAnnotation const *get_annotation(size_t index) const = 0;
 
     /// Add an annotation to this block.
     ///
@@ -124,7 +124,7 @@ public:
     /// Delete the annotation at given index.
     ///
     /// \param index  the index of the annotation to remove
-    virtual void delete_annotation(int index) = 0;
+    virtual void delete_annotation(size_t index) = 0;
 
     /// Replace the annotation at index.
     ///
@@ -133,7 +133,7 @@ public:
     ///
     /// \return the old anno or NULL if the index was invalid
     virtual IAnnotation const *set_annotation(
-        int               index,
+        size_t            index,
         IAnnotation const *anno) = 0;
 };
 

@@ -80,40 +80,23 @@ void Access_canvas::set( const mi::neuraylib::ICanvas* canvas)
         m_canvas_width      = 0;
         m_canvas_height     = 0;
         m_canvas_pixel_type = PT_UNDEF;
-        m_tile_width        = 0;
-        m_tile_height       = 0;
-        m_nr_of_tiles_x     = 0;
-        m_nr_of_tiles_y     = 0;
-        m_nr_of_tiles       = 0;
         m_tiles.clear();
     } else {
         m_nr_of_layers      = m_canvas->get_layers_size();
         m_canvas_width      = m_canvas->get_resolution_x();
         m_canvas_height     = m_canvas->get_resolution_y();
         m_canvas_pixel_type = convert_pixel_type_string_to_enum( m_canvas->get_type());
-        m_tile_width        = m_canvas->get_tile_resolution_x();
-        m_tile_height       = m_canvas->get_tile_resolution_y();
-        m_nr_of_tiles_x     = (m_canvas_width  + m_tile_width  - 1) / m_tile_width;
-        m_nr_of_tiles_y     = (m_canvas_height + m_tile_height - 1) / m_tile_height;
-        m_nr_of_tiles       = m_nr_of_tiles_x * m_nr_of_tiles_y * m_nr_of_layers;
         m_tiles.clear(); // clear previously cached elements
-        m_tiles.resize( m_nr_of_tiles);
+        m_tiles.resize( m_nr_of_layers);
     }
 
     if( !m_lockless)
         return;
 
     // Prefetch all tiles in the lockless variant.
-    for( mi::Uint32 z = 0; z < m_nr_of_layers; ++z)
-        for( mi::Uint32 tile_y = 0; tile_y < m_nr_of_tiles_y; ++tile_y)
-            for( mi::Uint32 tile_x = 0; tile_x < m_nr_of_tiles_x; ++tile_x) {
-                mi::Uint32 index = z * m_nr_of_tiles_x*m_nr_of_tiles_y
-                                   + tile_y * m_nr_of_tiles_x + tile_x;
-                ASSERT( M_IMAGE, index < m_nr_of_tiles);
-                mi::Uint32 pixel_x = tile_x * m_tile_width;
-                mi::Uint32 pixel_y = tile_y * m_tile_height;
-                m_tiles[index] = m_canvas->deprecated_get_tile( pixel_x, pixel_y, z);
-            }
+    for( mi::Uint32 z = 0; z < m_nr_of_layers; ++z) {
+        m_tiles[z] = m_canvas->get_tile( z);
+    }
 }
 
 const mi::neuraylib::ICanvas* Access_canvas::get() const
@@ -129,14 +112,14 @@ const mi::neuraylib::ICanvas* Access_canvas::get() const
 
 bool Access_canvas::read_rect(
     mi::Uint8* buffer,
-    bool buffer_topdown,
-    Pixel_type buffer_pixel_type,
-    mi::Uint32 canvas_x,
-    mi::Uint32 canvas_y,
-    mi::Uint32 width,
-    mi::Uint32 height,
-    mi::Uint32 buffer_padding,
-    mi::Uint32 canvas_layer) const
+    const bool buffer_topdown,
+    const Pixel_type buffer_pixel_type,
+    const mi::Uint32 canvas_x,
+    const mi::Uint32 canvas_y,
+    const mi::Uint32 width,
+    const mi::Uint32 height,
+    const mi::Uint32 buffer_padding,
+    const mi::Uint32 canvas_layer) const
 {
     if( !buffer || !m_canvas)
         return false;
@@ -153,60 +136,29 @@ bool Access_canvas::read_rect(
     if( !exists_pixel_conversion( m_canvas_pixel_type, buffer_pixel_type))
         return false;
 
-    mi::Uint32 canvas_bytes_per_pixel = get_bytes_per_pixel( m_canvas_pixel_type);
-    mi::Uint32 buffer_bytes_per_pixel = get_bytes_per_pixel( buffer_pixel_type);
+    const mi::Uint32 canvas_bytes_per_pixel = get_bytes_per_pixel( m_canvas_pixel_type);
+    const mi::Uint32 buffer_bytes_per_pixel = get_bytes_per_pixel( buffer_pixel_type);
 
-    // Compute canvas_x/canvas_y rounded down to multiples of m_tile_width/m_tile_height
-    mi::Uint32 canvas_x_rd = (canvas_x / m_tile_width ) * m_tile_width;
-    mi::Uint32 canvas_y_rd = (canvas_y / m_tile_height) * m_tile_height;
+    // Compute the pointer to the lower left corner of the rectangle that falls into this
+    // tile, and stride per row (canvas, source).
+    const mi::Difference source_stride = m_canvas_width * canvas_bytes_per_pixel;
+    mi::base::Handle<const mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
+    const mi::Uint8* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
+    const mi::Uint8* source =
+            tile_data + canvas_y * source_stride + canvas_x * canvas_bytes_per_pixel;
 
-    // Loop over the affected tiles, (x,y) is the lower left corner of the tile
-    for( mi::Uint32 y = canvas_y_rd; y < canvas_y + height; y += m_tile_height) {
-        for( mi::Uint32 x = canvas_x_rd; x < canvas_x + width; x += m_tile_width) {
-
-            // Compute height of rectangle that falls into this tile
-            mi::Uint32 local_height = m_tile_height;
-            if( y < canvas_y)
-                local_height -= canvas_y - y;
-            if( y + m_tile_height > canvas_y + height)
-                local_height -= y + m_tile_height - (canvas_y + height);
-
-            // Compute width of rectangle that falls into this tile
-            mi::Uint32 local_width = m_tile_width;
-            if( x < canvas_x)
-                local_width -= canvas_x - x;
-            if( x + m_tile_width > canvas_x + width)
-                local_width -= x + m_tile_width - (canvas_x + width);
-
-            // Compute the pointer to the lower left corner of the rectangle that falls into this
-            // tile, and stride per row (canvas, source).
-            mi::Difference source_stride = m_tile_width * canvas_bytes_per_pixel;
-            mi::base::Handle<const mi::neuraylib::ITile> tile(
-                m_canvas->deprecated_get_tile( x, y, canvas_layer));
-            const mi::Uint8* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
-            mi::Uint32 local_x = std::max( canvas_x, x) % m_tile_width;
-            mi::Uint32 local_y = std::max( canvas_y, y) % m_tile_height;
-            const mi::Uint8* source
-                = tile_data + local_y * source_stride + local_x * canvas_bytes_per_pixel;
-
-            // Compute the pointer to the lower left corner of the rectangle that falls into this
-            // tile, and stride per row (buffer, dest).
-            mi::Difference dest_stride = width * buffer_bytes_per_pixel + buffer_padding;
-            mi::Uint8* dest = buffer;
-            if( buffer_topdown) {
-                dest += (height - 1) * dest_stride;
-                dest_stride = -dest_stride;
-            }
-            if( y > canvas_y)
-                dest += (y - canvas_y) * dest_stride;
-            if( x > canvas_x)
-                dest += (x - canvas_x) * buffer_bytes_per_pixel;
-
-            // Copy pixel data for rectangle that falls into this tile
-            convert( source, dest, m_canvas_pixel_type, buffer_pixel_type, local_width,
-                local_height, source_stride, dest_stride);
-        }
+    // Compute the pointer to the lower left corner of the rectangle that falls into this
+    // tile, and stride per row (buffer, dest).
+    mi::Difference dest_stride = width * buffer_bytes_per_pixel + buffer_padding;
+    mi::Uint8* dest = buffer;
+    if( buffer_topdown) {
+        dest += (height - 1) * dest_stride;
+        dest_stride = -dest_stride;
     }
+
+    // Copy pixel data for rectangle that falls into this tile
+    convert( source, dest, m_canvas_pixel_type, buffer_pixel_type, width, height,
+             source_stride, dest_stride);
 
     return true;
 }
@@ -217,21 +169,14 @@ bool Access_canvas::lookup(
     if( x >= m_canvas_width || y >= m_canvas_height || z >= m_nr_of_layers)
         return false;
 
-    const mi::Uint32 tile_x  = x / m_tile_width;
-    const mi::Uint32 local_x = x % m_tile_width;
-    const mi::Uint32 tile_y  = y / m_tile_height;
-    const mi::Uint32 local_y = y % m_tile_height;
-    const mi::Size   tile_index = (z*m_nr_of_tiles_y + tile_y) * m_nr_of_tiles_x + tile_x;
-    ASSERT( M_NEURAY_API, tile_index < m_nr_of_tiles);
-
     mi::base::Lock::Block block;
     if( !m_lockless) {
         block.set( &m_tiles_lock);
-        if( !m_tiles[tile_index])
-            m_tiles[tile_index] = m_canvas->deprecated_get_tile( x, y, z);
+        if( !m_tiles[z])
+            m_tiles[z] = m_canvas->get_tile( z);
     }
 
-    m_tiles[tile_index]->get_pixel( local_x, local_y, &color.r);
+    m_tiles[z]->get_pixel( x, y, &color.r);
     return true;
 }
 
@@ -274,40 +219,23 @@ void Edit_canvas::set( mi::neuraylib::ICanvas* canvas)
         m_canvas_width      = 0;
         m_canvas_height     = 0;
         m_canvas_pixel_type = PT_UNDEF;
-        m_tile_width        = 0;
-        m_tile_height       = 0;
-        m_nr_of_tiles_x     = 0;
-        m_nr_of_tiles_y     = 0;
-        m_nr_of_tiles       = 0;
         m_tiles.clear();
     } else {
         m_nr_of_layers      = m_canvas->get_layers_size();
         m_canvas_width      = m_canvas->get_resolution_x();
         m_canvas_height     = m_canvas->get_resolution_y();
         m_canvas_pixel_type = convert_pixel_type_string_to_enum( m_canvas->get_type());
-        m_tile_width        = m_canvas->get_tile_resolution_x();
-        m_tile_height       = m_canvas->get_tile_resolution_y();
-        m_nr_of_tiles_x     = (m_canvas_width  + m_tile_width  - 1) / m_tile_width;
-        m_nr_of_tiles_y     = (m_canvas_height + m_tile_height - 1) / m_tile_height;
-        m_nr_of_tiles       = m_nr_of_tiles_x * m_nr_of_tiles_y * m_nr_of_layers;
         m_tiles.clear(); // clear previously cached elements
-        m_tiles.resize( m_nr_of_tiles);
+        m_tiles.resize( m_nr_of_layers);
     }
 
     if( !m_lockless)
         return;
 
     // Prefetch all tiles in the lockless variant.
-    for( mi::Uint32 z = 0; z < m_nr_of_layers; ++z)
-        for( mi::Uint32 tile_y = 0; tile_y < m_nr_of_tiles_y; ++tile_y)
-            for( mi::Uint32 tile_x = 0; tile_x < m_nr_of_tiles_x; ++tile_x) {
-                mi::Uint32 index = z * m_nr_of_tiles_x*m_nr_of_tiles_y
-                                   + tile_y * m_nr_of_tiles_x + tile_x;
-                ASSERT( M_IMAGE, index < m_nr_of_tiles);
-                mi::Uint32 pixel_x = tile_x * m_tile_width;
-                mi::Uint32 pixel_y = tile_y * m_tile_height;
-                m_tiles[index] = m_canvas->deprecated_get_tile( pixel_x, pixel_y, z);
-            }
+    for( mi::Uint32 z = 0; z < m_nr_of_layers; ++z) {
+        m_tiles[z] = m_canvas->get_tile( z);
+    }
 }
 
 mi::neuraylib::ICanvas* Edit_canvas::get() const
@@ -347,60 +275,29 @@ bool Edit_canvas::read_rect(
     if( !exists_pixel_conversion( m_canvas_pixel_type, buffer_pixel_type))
         return false;
 
-    mi::Uint32 canvas_bytes_per_pixel = get_bytes_per_pixel( m_canvas_pixel_type);
-    mi::Uint32 buffer_bytes_per_pixel = get_bytes_per_pixel( buffer_pixel_type);
+    const mi::Uint32 canvas_bytes_per_pixel = get_bytes_per_pixel( m_canvas_pixel_type);
+    const mi::Uint32 buffer_bytes_per_pixel = get_bytes_per_pixel( buffer_pixel_type);
 
-    // Compute canvas_x/canvas_y rounded down to multiples of m_tile_width/m_tile_height
-    mi::Uint32 canvas_x_rd = (canvas_x / m_tile_width ) * m_tile_width;
-    mi::Uint32 canvas_y_rd = (canvas_y / m_tile_height) * m_tile_height;
+    // Compute the pointer to the lower left corner of the rectangle that falls into this
+    // tile, and stride per row (canvas, source).
+    const mi::Difference source_stride = (mi::Difference)m_canvas_width * canvas_bytes_per_pixel;
+    mi::base::Handle<const mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
+    const mi::Uint8* const tile_data = static_cast<const mi::Uint8*>( tile->get_data());
+    const mi::Uint8* const source =
+            tile_data + canvas_y * source_stride + canvas_x * canvas_bytes_per_pixel;
 
-    // Loop over the affected tiles, (x,y) is the lower left corner of the tile
-    for( mi::Uint32 y = canvas_y_rd; y < canvas_y + height; y += m_tile_height) {
-        for( mi::Uint32 x = canvas_x_rd; x < canvas_x + width; x += m_tile_width) {
-
-            // Compute height of rectangle that falls into this tile
-            mi::Uint32 local_height = m_tile_height;
-            if( y < canvas_y)
-                local_height -= canvas_y - y;
-            if( y + m_tile_height > canvas_y + height)
-                local_height -= y + m_tile_height - (canvas_y + height);
-
-            // Compute width of rectangle that falls into this tile
-            mi::Uint32 local_width = m_tile_width;
-            if( x < canvas_x)
-                local_width -= canvas_x - x;
-            if( x + m_tile_width > canvas_x + width)
-                local_width -= x + m_tile_width - (canvas_x + width);
-
-            // Compute the pointer to the lower left corner of the rectangle that falls into this
-            // tile, and stride per row (canvas, source).
-            mi::Difference source_stride = m_tile_width * canvas_bytes_per_pixel;
-            mi::base::Handle<const mi::neuraylib::ITile> tile(
-                m_canvas->deprecated_get_tile( x, y, canvas_layer));
-            const mi::Uint8* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
-            mi::Uint32 local_x = std::max( canvas_x, x) % m_tile_width;
-            mi::Uint32 local_y = std::max( canvas_y, y) % m_tile_height;
-            const mi::Uint8* source
-                = tile_data + local_y * source_stride + local_x * canvas_bytes_per_pixel;
-
-            // Compute the pointer to the lower left corner of the rectangle that falls into this
-            // tile, and stride per row (buffer, dest).
-            mi::Difference dest_stride = width * buffer_bytes_per_pixel + buffer_padding;
-            mi::Uint8* dest = buffer;
-            if( buffer_topdown) {
-                dest += (height - 1) * dest_stride;
-                dest_stride = -dest_stride;
-            }
-            if( y > canvas_y)
-                dest += (y - canvas_y) * dest_stride;
-            if( x > canvas_x)
-                dest += (x - canvas_x) * buffer_bytes_per_pixel;
-
-            // Copy pixel data for rectangle that falls into this tile
-            convert( source, dest, m_canvas_pixel_type, buffer_pixel_type, local_width,
-                local_height, source_stride, dest_stride);
-        }
+    // Compute the pointer to the lower left corner of the rectangle that falls into this
+    // tile, and stride per row (buffer, dest).
+    mi::Difference dest_stride = width * buffer_bytes_per_pixel + buffer_padding;
+    mi::Uint8* dest = buffer;
+    if( buffer_topdown) {
+        dest += (height - 1) * dest_stride;
+        dest_stride = -dest_stride;
     }
+
+    // Copy pixel data for rectangle that falls into this tile
+    convert( source, dest, m_canvas_pixel_type, buffer_pixel_type, width, height,
+             source_stride, dest_stride);
 
     return true;
 }
@@ -431,59 +328,29 @@ bool Edit_canvas::write_rect(
     if( !exists_pixel_conversion( m_canvas_pixel_type, buffer_pixel_type))
         return false;
 
-    mi::Uint32 canvas_bytes_per_pixel = get_bytes_per_pixel( m_canvas_pixel_type);
-    mi::Uint32 buffer_bytes_per_pixel = get_bytes_per_pixel( buffer_pixel_type);
+    const mi::Uint32 canvas_bytes_per_pixel = get_bytes_per_pixel( m_canvas_pixel_type);
+    const mi::Uint32 buffer_bytes_per_pixel = get_bytes_per_pixel( buffer_pixel_type);
 
-    // Compute canvas_x/canvas_y rounded down to multiples of m_tile_width/m_tile_height
-    mi::Uint32 canvas_x_rd = (canvas_x / m_tile_width ) * m_tile_width;
-    mi::Uint32 canvas_y_rd = (canvas_y / m_tile_height) * m_tile_height;
+    // Compute the pointer to the lower left corner of the rectangle that falls into this
+    // tile, and stride per row (canvas, dest).
+    const mi::Difference dest_stride = (mi::Difference)m_canvas_width * canvas_bytes_per_pixel;
+    mi::base::Handle<mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
+    mi::Uint8* const tile_data = static_cast<mi::Uint8*>( tile->get_data());
+    mi::Uint8* const dest =
+            tile_data + canvas_y * dest_stride + canvas_x * canvas_bytes_per_pixel;
 
-    // Loop over the affected tiles, (x,y) is the lower left corner of the tile
-    for( mi::Uint32 y = canvas_y_rd; y < canvas_y + height; y += m_tile_height) {
-        for( mi::Uint32 x = canvas_x_rd; x < canvas_x + width; x += m_tile_width) {
-
-            // Compute height of rectangle that falls into this tile
-            mi::Uint32 local_height = m_tile_height;
-            if( y < canvas_y)
-                local_height -= canvas_y - y;
-            if( y + m_tile_height > canvas_y + height)
-                local_height -= y + m_tile_height - (canvas_y + height);
-
-            // Compute width of rectangle that falls into this tile
-            mi::Uint32 local_width = m_tile_width;
-            if( x < canvas_x)
-                local_width -= canvas_x - x;
-            if( x + m_tile_width > canvas_x + width)
-                local_width -= x + m_tile_width - (canvas_x + width);
-
-            // Compute the pointer to the lower left corner of the rectangle that falls into this
-            // tile, and stride per row (canvas, dest).
-            mi::Difference dest_stride = m_tile_width * canvas_bytes_per_pixel;
-            mi::base::Handle<mi::neuraylib::ITile> tile( m_canvas->deprecated_get_tile( x, y, canvas_layer));
-            mi::Uint8* tile_data = static_cast<mi::Uint8*>( tile->get_data());
-            mi::Uint32 local_x = std::max( canvas_x, x) % m_tile_width;
-            mi::Uint32 local_y = std::max( canvas_y, y) % m_tile_height;
-            mi::Uint8* dest
-                = tile_data + local_y * dest_stride + local_x * canvas_bytes_per_pixel;
-
-            // Compute the pointer to the lower left corner of the rectangle that falls into this
-            // tile, and stride per row (buffer, source).
-            mi::Difference source_stride = width * buffer_bytes_per_pixel + buffer_padding;
-            const mi::Uint8* source = buffer;
-            if( buffer_topdown) {
-                source += (height - 1) * source_stride;
-                source_stride = -source_stride;
-            }
-            if( y > canvas_y)
-                source += (y - canvas_y) * source_stride;
-            if( x > canvas_x)
-                source += (x - canvas_x) * buffer_bytes_per_pixel;
-
-            // Copy pixel data for rectangle that falls into this tile
-            convert( source, dest, buffer_pixel_type, m_canvas_pixel_type, local_width,
-                local_height, source_stride, dest_stride);
-        }
+    // Compute the pointer to the lower left corner of the rectangle that falls into this
+    // tile, and stride per row (buffer, source).
+    mi::Difference source_stride = (mi::Difference)width * buffer_bytes_per_pixel + buffer_padding;
+    const mi::Uint8* source = buffer;
+    if( buffer_topdown) {
+        source += (height - 1) * source_stride;
+        source_stride = -source_stride;
     }
+
+    // Copy pixel data for rectangle that falls into this tile
+    convert( source, dest, buffer_pixel_type, m_canvas_pixel_type, width, height,
+             source_stride, dest_stride);
 
     return true;
 }
@@ -494,21 +361,14 @@ bool Edit_canvas::lookup(
     if( x >= m_canvas_width || y >= m_canvas_height || z >= m_nr_of_layers)
         return false;
 
-    const mi::Uint32 tile_x  = x / m_tile_width;
-    const mi::Uint32 local_x = x % m_tile_width;
-    const mi::Uint32 tile_y  = y / m_tile_height;
-    const mi::Uint32 local_y = y % m_tile_height;
-    const mi::Size   tile_index = (z * m_nr_of_tiles_y + tile_y) * m_nr_of_tiles_x + tile_x;
-    ASSERT( M_NEURAY_API, tile_index < m_nr_of_tiles);
-
     mi::base::Lock::Block block;
     if( !m_lockless) {
         block.set( &m_tiles_lock);
-        if( !m_tiles[tile_index])
-            m_tiles[tile_index] = m_canvas->deprecated_get_tile( x, y, z);
+        if( !m_tiles[z])
+            m_tiles[z] = m_canvas->get_tile( z);
     }
 
-    m_tiles[tile_index]->get_pixel( local_x, local_y, &color.r);
+    m_tiles[z]->get_pixel( x, y, &color.r);
     return true;
 }
 
@@ -518,21 +378,14 @@ bool Edit_canvas::store(
     if( x >= m_canvas_width || y >= m_canvas_height || z >= m_nr_of_layers)
         return false;
 
-    const mi::Uint32 tile_x  = x / m_tile_width;
-    const mi::Uint32 local_x = x % m_tile_width;
-    const mi::Uint32 tile_y  = y / m_tile_height;
-    const mi::Uint32 local_y = y % m_tile_height;
-    const mi::Size   tile_index = (z * m_nr_of_tiles_y + tile_y) * m_nr_of_tiles_x + tile_x;
-    ASSERT( M_NEURAY_API, tile_index < m_nr_of_tiles);
-
     mi::base::Lock::Block block;
     if( !m_lockless) {
         block.set( &m_tiles_lock);
-        if( !m_tiles[tile_index])
-            m_tiles[tile_index] = m_canvas->deprecated_get_tile( x, y, z);
+        if( !m_tiles[z])
+            m_tiles[z] = m_canvas->get_tile( z);
     }
 
-    m_tiles[tile_index]->set_pixel( local_x, local_y, &color.r);
+    m_tiles[z]->set_pixel( x, y, &color.r);
     return true;
 }
 

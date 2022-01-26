@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IMDL_IMPEXP_API_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -39,6 +40,7 @@ class IString;
 
 namespace neuraylib {
 
+class IBuffer;
 class IBsdf_isotropic_data;
 class ICanvas;
 class IDeserialized_function_name;
@@ -47,10 +49,12 @@ class ILightprofile;
 class IMdl_execution_context;
 class IMdle_deserialization_callback;
 class IMdle_serialization_callback;
+class IReader;
 class ISerialized_function_name;
 class ITransaction;
 class IType;
 class IType_list;
+class IWriter;
 
 /** \addtogroup mi_neuray_mdl_types
 @{
@@ -108,6 +112,11 @@ public:
     /// The provided module source is compiled. If successful, the method creates DB elements for
     /// the module and all its imported modules, as well as for all material and function
     /// definitions contained in these modules.
+    ///
+    /// \note String-based module have limitations compared to regular modules loaded from disk:
+    /// - no support for resources, and
+    /// - string-based modules referenced in an import statement need to be loaded explicitly
+    ///   upfront (no automatic recursive loading as for file-based modules).
     ///
     /// \param transaction   The transaction to be used.
     /// \param module_name   The MDL name of the module.
@@ -179,6 +188,8 @@ public:
         IMdl_execution_context* context = 0) = 0;
 
     /// Exports an MDL module from the database to string.
+    ///
+    /// \note See #load_module_from_string() for limitations of string-based modules.
     ///
     /// \param transaction       The transaction to be used.
     /// \param module_name       The DB name of the MDL module to export.
@@ -313,24 +324,21 @@ public:
     virtual const IString* get_mdl_module_name(
         const char* filename, Search_option option = SEARCH_OPTION_USE_FIRST) const = 0;
 
-    /// Replaces an uv-tile marker by coordinates of a given uv-tile.
+    /// Replaces a frame and/or uv-tile marker by coordinates of a given uv-tile.
     ///
-    /// \param marker   String containing a valid uv-tile marker.
+    /// \param marker   String containing a valid frame and/or uv-tile marker.
+    /// \param f        The frame number of the uv-tile.
     /// \param u        The u coordinate of the uv-tile.
     /// \param v        The v coordinate of the uv-tile.
-    /// \return         String with the uv-tile marker replaced by the coordinates of the uv-tile,
-    ///                 \c NULL in case of errors.
-    virtual const IString* uvtile_marker_to_string(
-        const char* marker, Sint32 u, Sint32 v) const = 0;
+    /// \return         String with the frame and/or uv-tile marker replaced by the coordinates of
+    ///                 the uv-tile, or \c NULL in case of errors.
+    virtual const IString* frame_uvtile_marker_to_string(
+        const char* marker, Size f, Sint32 u, Sint32 v) const = 0;
 
-    /// Replaces the pattern describing the coordinates of a uv-tile by the given marker.
-    ///
-    /// \param str      String containing the coordinate pattern, e.g., "_u1_v1".
-    /// \param marker   The marker to replace the pattern with, e.g., "<UVTILE1>".
-    /// \return         The string with the coordinate pattern replaced by the marker (if found), or
-    ///                 \c NULL case of errors.
-    virtual const IString*  uvtile_string_to_marker(
-        const char* str, const char* marker) const = 0;
+#ifdef MI_NEURAYLIB_DEPRECATED_12_1
+    inline const IString* uvtile_marker_to_string( const char* marker, Sint32 u, Sint32 v)
+    { return frame_uvtile_marker_to_string( marker, 0, u, v); }
+#endif
 
     //@}
     /// \name Serialized names
@@ -432,6 +440,33 @@ public:
         IMdl_execution_context* context) const = 0;
 
     //@}
+    /// \name Generic reader/writer support
+    //@{
+
+    /// Creates a random-access reader for a given buffer.
+    virtual IReader* create_reader( const IBuffer* buffer) const = 0;
+
+    /// Returns a random-access reader for a given file.
+    ///
+    /// \param filename   The filename of the file to get the reader for.
+    /// \return           A reader that can be used to read the file, or \c NULL in case of
+    ///                   failures (e.g., there is no such file).
+    virtual IReader* create_reader( const char* filename) const = 0;
+
+    /// Returns a random-access writer for a given file.
+    ///
+    /// \param filename   The filename of the file to get the writer for.
+    /// \return           A writer that can be used to write to that file, or \c NULL in case of
+    ///                   failures (e.g., insufficient permissions).
+    virtual IWriter* create_writer( const char* filename) const = 0;
+
+    //@}
+
+    virtual const IString* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(uvtile_string_to_marker)(
+        const char* str, const char* marker) const = 0;
+
+    virtual const IString* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(frame_string_to_marker)(
+        const char* str, Size digits) const = 0;
 };
 
 mi_static_assert( sizeof( IMdl_impexp_api::Search_option) == sizeof( Uint32));
