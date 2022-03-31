@@ -50,7 +50,7 @@ static bool is_selector_operator(mi::neuraylib::IFunction_definition::Semantics 
 static bool is_call_like_operator(mi::neuraylib::IFunction_definition::Semantics semantic);
 
 Compiled_material_traverser_print::Context::Context(
-    mi::neuraylib::ITransaction* transaction, 
+    mi::neuraylib::ITransaction* transaction,
     mi::neuraylib::IMdl_factory* mdl_factory,
     bool keep_structure)
     : m_transaction(transaction)
@@ -227,9 +227,9 @@ void Compiled_material_traverser_print::visit_begin(
                     element.expression->get_interface<const mi::neuraylib::IExpression_parameter
                     >());
 
-                // get the parameter name 
+                // get the parameter name
                 bool generated;
-                std::string name = get_parameter_name(material, expr_param->get_index(), 
+                std::string name = get_parameter_name(material, expr_param->get_index(),
                                                       &generated);
 
                 // if we choose to inline generated parameters, we do it here
@@ -245,7 +245,7 @@ void Compiled_material_traverser_print::visit_begin(
                 {
                     ctx->m_print << name << "/*param*/";
                 }
-                
+
                 return;
             }
 
@@ -267,9 +267,10 @@ void Compiled_material_traverser_print::visit_begin(
 
                 std::string function_name;
                 if (is_builtins)
-                    function_name = func_def->get_mdl_simple_name();
+                    function_name = ctx->decode_name(func_def->get_mdl_simple_name());
                 else
-                    function_name = module_name + "::" +  func_def->get_mdl_simple_name();
+                    function_name =
+                        module_name + "::" + ctx->decode_name(func_def->get_mdl_simple_name());
 
                 // keep track of used modules and/or imports
                 const std::string m = func_def->get_module();
@@ -287,14 +288,14 @@ void Compiled_material_traverser_print::visit_begin(
                         const mi::base::Handle<const mi::neuraylib::IType> return_type(
                             func_def->get_return_type());
 
-                        const mi::base::Handle<const mi::neuraylib::IType_struct> 
+                        const mi::base::Handle<const mi::neuraylib::IType_struct>
                             return_type_struct(
                                 return_type->get_interface<const mi::neuraylib::IType_struct>());
 
                         const mi::base::Handle<const mi::neuraylib::IType_enum>
                             return_type_enum(
                                 return_type->get_interface<const mi::neuraylib::IType_enum>());
-                        
+
                         const mi::base::Handle<const mi::neuraylib::IType_array> return_type_array(
                             return_type->get_interface<const mi::neuraylib::IType_array>());
 
@@ -324,11 +325,11 @@ void Compiled_material_traverser_print::visit_begin(
                         if (drop_qualification)
                         {
                             // strip qualification part of the name
-                            function_name = func_def->get_mdl_simple_name();
+                            function_name = ctx->decode_name(func_def->get_mdl_simple_name());
                         }
                         else
                         {
-                            // add the struct or enum definition to the imports 
+                            // add the struct or enum definition to the imports
                             ctx->m_imports.insert(function_name);
                         }
                     }
@@ -537,7 +538,7 @@ void Compiled_material_traverser_print::visit_begin(
                 std::string type_name = struct_type_to_string(struct_type.get(), ctx, &is_keyword);
                 ctx->m_print << type_name << "(";
 
-                if (!is_keyword) 
+                if (!is_keyword)
                     ctx->m_print << "/*struct*/";
                 return;
             }
@@ -568,7 +569,7 @@ void Compiled_material_traverser_print::visit_begin(
                 {
                     ctx->m_print << '\"' << mdl_path << '\"';
                     ctx->m_used_resources.insert(mdl_path); // keep track of this information
-                
+
                     // get the texture for gamma value
                     const mi::base::Handle<const mi::neuraylib::ITexture> texture(
                         ctx->m_transaction->access<mi::neuraylib::ITexture>(
@@ -683,7 +684,7 @@ void Compiled_material_traverser_print::visit_begin(
         {
             mi::base::Handle<const mi::neuraylib::IType> type(element.parameter->value->get_type());
             // assuming all parameters are uniforms at this point
-            ctx->m_print << indent(ctx) << "uniform " 
+            ctx->m_print << indent(ctx) << "uniform "
                          << type_to_string(type.get(), ctx) << " " <<
                 name << " = ";
         }
@@ -699,7 +700,7 @@ void Compiled_material_traverser_print::visit_begin(
         // include the return type if required
         const std::string return_type = type_to_string(temporary_return_type.get(), ctx);
         if(return_type.rfind("::") != std::string::npos) // no '::' has to be a build-in type
-            ctx->m_imports.insert(return_type);             
+            ctx->m_imports.insert(return_type);
 
         ctx->m_print << indent(ctx) << return_type << " " << get_temporary_name(
             material, element.sibling_index) << " = ";
@@ -731,7 +732,7 @@ void Compiled_material_traverser_print::visit_child(
                         expr_dcall->get_definition()));
                 const mi::neuraylib::IFunction_definition::Semantics semantic = func_def->
                     get_semantic();
-                std::string function_name = func_def->get_mdl_simple_name();
+                std::string function_name = ctx->decode_name(func_def->get_mdl_simple_name());
 
                 // check for special cases based on the semantic
 
@@ -784,7 +785,7 @@ void Compiled_material_traverser_print::visit_child(
                 if (   is_call_like_operator(semantic)
                     || is_constructor(semantic))
                 {
-                    ctx->m_print << (child_index == 0 ? "\n" : ",\n") << indent(ctx) 
+                    ctx->m_print << (child_index == 0 ? "\n" : ",\n") << indent(ctx)
                                  << arguments->get_name(child_index) << ": "; // named parameters
                     return;
                 }
@@ -794,7 +795,7 @@ void Compiled_material_traverser_print::visit_child(
                     ctx->m_print << (child_index == 0 ? "\n" : ",\n") << indent(ctx); // no names
                     return;
                 }
-                
+
                 // error case (should not happen):
                 std::cerr << "[Compiled_material_traverser_print] ran into unhandled semantic: '"
                           << func_def->get_mdl_name() << "' Semantic:" << semantic << "\n";
@@ -872,7 +873,7 @@ void Compiled_material_traverser_print::visit_end(
 
                 if (is_selector_operator(semantic))
                 {
-                    std::string selector = func_def->get_mdl_simple_name();
+                    std::string selector = ctx->decode_name(func_def->get_mdl_simple_name());
                     selector = selector.substr(selector.rfind('.'));
                     ctx->m_print << selector;
                     break;
@@ -907,7 +908,7 @@ void Compiled_material_traverser_print::visit_end(
 
                 if (is_array_constructor(semantic))
                 {
-                    // a bit special because the parameter count is zero 
+                    // a bit special because the parameter count is zero
                     // for the array constructor semantic
                     ctx->m_print << "\n" << indent(ctx, -1) << ")";
                     break;
@@ -957,7 +958,7 @@ void Compiled_material_traverser_print::visit_end(
         std::string name = get_parameter_name(material, element.sibling_index, &generated);
 
         // optionally add annotations here (in the generated == false case)
-        
+
         // in case we want to inline the compiler generated parameters
         // we temporarily swapped the the stream for the time we process the parameter
         // this happened in the 'visit_begin' method
@@ -969,7 +970,7 @@ void Compiled_material_traverser_print::visit_end(
             {
                 // c++11
                 //std::swap(ctx->m_print, ctx->m_print_inline_swap);
-                
+
                 // c++0x (knowing that ctx->m_print_inline_swap will be discarded)
                 ctx->m_print.str("");
                 ctx->m_print.clear();
@@ -1168,7 +1169,7 @@ std::string Compiled_material_traverser_print::atomic_type_to_string(
             return "float";
         case mi::neuraylib::IType::TK_DOUBLE:
             return "double";
-        case mi::neuraylib::IType::TK_STRING: 
+        case mi::neuraylib::IType::TK_STRING:
             return "string";
         case mi::neuraylib::IType::TK_ENUM:
         {
@@ -1206,7 +1207,7 @@ std::string Compiled_material_traverser_print::matrix_type_to_string(
         column_type->get_element_type());
 
     std::stringstream s;
-    s << atomic_type_to_string(elem_type.get(), context) 
+    s << atomic_type_to_string(elem_type.get(), context)
       << column_type->get_size() << "x" << matrix_type->get_size();
     return s.str();;
 }
@@ -1220,7 +1221,7 @@ std::string Compiled_material_traverser_print::array_type_to_string(
     const mi::base::Handle<const mi::neuraylib::IType_atomic> atomic_type(
         elem_type->get_interface<const mi::neuraylib::IType_atomic>());
 
-    std::stringstream s; 
+    std::stringstream s;
     s << type_to_string(elem_type.get(), context);
 
     if (array_type->is_immediate_sized())
@@ -1236,7 +1237,7 @@ std::string Compiled_material_traverser_print::array_type_to_string(
 // local helper functions
 //--------------------------------------------------------------------------------------------------
 
-inline std::string replace_all(const std::string& input, 
+inline std::string replace_all(const std::string& input,
                                const std::string& old, const std::string& with)
 {
     if (input.empty()) return input;

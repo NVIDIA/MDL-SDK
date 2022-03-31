@@ -372,15 +372,27 @@ class Attribute_set : public SERIAL::Serializable
 
     /// Detach an attribute, but don't destroy it. The std::shared_ptr return value
     /// takes care of destroying the attribute in the end.
+    ///
+    /// All iterators and references to the given element become invalid.
+    ///
     /// \param id ID of attribute to detach
     std::shared_ptr<Attribute> detach(
         Attribute_id id);
 
     /// Detach an attribute, but don't destroy it. The std::shared_ptr return value
     /// takes care of destroying the attribute in the end.
+    ///
+    /// All iterators and references to the given element become invalid.
+    ///
     /// \param name name of attribute to detach
     std::shared_ptr<Attribute> detach(
         const char* name);
+
+    /// Replaces the attribute at the given value's id with the given value.
+    /// See #attach for details.
+    /// \return success or failure
+    bool replace(
+        const std::shared_ptr<Attribute>& attr);
 
     /// Clear the attribute set, i.e. detach and delete all attributes
     void clear();

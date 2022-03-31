@@ -131,7 +131,8 @@ public:
     ///                           default gamma which is 1.0 for HDR pixel types and 2.2 for LDR
     ///                           pixel types.
     /// \return                   The requested mipmap, or \c NULL in case of invalid pixel type,
-    ///                           width, height, layers, or cubemap flag.
+    ///                           width, height, layers, or cubemap flag, or memory allocation
+    ///                           failures.
     virtual IMipmap* create_mipmap(
         Pixel_type pixel_type,
         mi::Uint32 width,
@@ -254,7 +255,8 @@ public:
     ///                           default gamma which is 1.0 for HDR pixel types and 2.2 for LDR
     ///                           pixel types.
     /// \return                   The requested canvas, or \c NULL in case of invalid pixel type,
-    ///                           width, height, layers, or cubemap flag.
+    ///                           width, height, layers, or cubemap flag, or memory allocation
+    ///                           failures.
     virtual mi::neuraylib::ICanvas* create_canvas(
         Pixel_type pixel_type,
         mi::Uint32 width,
@@ -361,7 +363,7 @@ public:
     /// \param width              The desired width.
     /// \param height             The desired height.
     /// \return                   The requested tile, or \c NULL in case of invalid pixel type,
-    ///                           width, or height.
+    ///                           width, or height, or memory allocation failures.
     virtual mi::neuraylib::ITile* create_tile(
         Pixel_type pixel_type,
         mi::Uint32 width,

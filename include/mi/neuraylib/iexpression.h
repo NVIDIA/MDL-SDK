@@ -335,10 +335,10 @@ public:
     enum Semantics
     {
         AS_UNKNOWN = 0,                          ///< Unknown semantics.
-        AS_ANNOTATION_FIRST = 0x0100,
 
         /// This is the internal intrinsic() annotation.
-        AS_INTRINSIC_ANNOTATION = AS_ANNOTATION_FIRST,
+        AS_INTRINSIC_ANNOTATION = 0x0100,
+        AS_ANNOTATION_FIRST = AS_INTRINSIC_ANNOTATION,
         AS_THROWS_ANNOTATION,                    ///< This is the internal throws() annotation.
         AS_SINCE_ANNOTATION,                     ///< This is the internal since() annotation.
         AS_REMOVED_ANNOTATION,                   ///< This is the internal removed() annotation.
@@ -685,12 +685,12 @@ public:
         /// identity. That is, the comparison is not done via
         /// #mi::neuraylib::IExpression::get_value(), but by traversing into the referenced
         /// function call, i.e., comparing the function definition reference and the arguments.
-        /// This option is useful if you want to decide wether an argument is \em semantically equal
+        /// This option is useful if you want to decide whether an argument is \em semantically equal
         /// to the corresponding default parameter.
         DEEP_CALL_COMPARISONS           = 1,
         /// This option indicates that all type aliases should be skipped before types of
         /// expression are compared. Defaults and argument might sometimes differ in explicit type
-        /// modifiers, therefore this option is useful if you want to decide wether an argument is
+        /// modifiers, therefore this option is useful if you want to decide whether an argument is
         /// \em semantically equal to the corresponding default parameter.
         SKIP_TYPE_ALIASES               = 2,
         // Undocumented, for alignment only
@@ -828,7 +828,8 @@ public:
     /// If the type of \p src_expr and \p target_type are not compatible, \c NULL is returned.
     ///
     /// \param src_expr     The expression whose type is supposed to be casted.
-    /// \param target_type  The result type of the cast.
+    /// \param target_type  The result type of the cast. Note that the inserted cast operator acts on
+    ///                     types without qualifiers, i.e., modifiers on \p target_type are ignored.
     /// \param cast_db_name This name is used when storing the instance
     ///                     of the cast-operator function into the database. If the name is already
     ///                     taken by another DB element, this string will be used as the base for

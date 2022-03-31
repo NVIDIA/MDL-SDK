@@ -278,6 +278,19 @@ std::shared_ptr<Attribute> Attribute_set::detach(
     return detach(Attribute::id_lookup(name));
 }
 
+bool Attribute_set::replace(
+    const std::shared_ptr<Attribute>& attr)
+{
+    Iter it = m_attrs.find(attr->get_id());
+    if (it != m_attrs.end()) {
+        it->second = attr;
+        return true;
+    }
+
+    return false;
+}
+
+
 
 //
 // deep copy of all Attributes

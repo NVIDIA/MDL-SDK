@@ -549,7 +549,7 @@ std::string get_cwd()
     }
     set_error(0);
 
-    std::string cwd(STRING::wchar_to_utf8(&buf[0]));
+    std::string cwd(STRING::wchar_to_utf8(buf.data()));
     return cwd;
 }
 

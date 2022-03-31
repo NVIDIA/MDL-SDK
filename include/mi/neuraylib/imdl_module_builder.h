@@ -46,7 +46,7 @@ class IExpression;
 class IExpression_list;
 class IMdl_execution_context;
 
-/** \addtogroup mi_neuray_mdl_sdk_misc
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -245,7 +245,7 @@ public:
         IMdl_execution_context* context) = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_sdk_misc
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

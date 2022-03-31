@@ -118,6 +118,7 @@ Type_mapper::Type_mapper(
 , m_type_deriv_float(NULL)
 , m_type_deriv_float2(NULL)
 , m_type_deriv_float3(NULL)
+, m_type_deriv_float4(NULL)
 , m_type_deriv_arr_float_2(NULL)
 , m_type_deriv_arr_float_3(NULL)
 , m_type_deriv_arr_float_4(NULL)
@@ -304,6 +305,7 @@ Type_mapper::Type_mapper(
         m_type_deriv_float3 = lookup_deriv_type(m_type_float3);
 
         m_type_deriv_arr_float_4 = lookup_deriv_type(m_type_arr_float_4);
+        m_type_deriv_float4 = lookup_deriv_type(m_type_float4);
     }
 
     bool vec_in_structs = !target_supports_pointers();

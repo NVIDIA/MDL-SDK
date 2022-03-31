@@ -619,7 +619,7 @@ The following requirements apply when creating function calls of the ternary ope
 - the expression named \c "cast" is of an arbitrary type (this is the intended argument of the
   function call),
 - the type of the expression named \c "cast_return" specifies the return type of the function
-  call (the expression itself is not used), and
+  call (no frequency qualifiers; the expression itself is not used), and
 - the types of \c "cast" and \c "cast_return" are compatible.
 
 The suffix for the serialized name has two arguments, the type name of the \c "cast" expression,
@@ -660,7 +660,7 @@ obtain that interface right before that call, and to use it only for that call i
 
 \subsection mi_mdl_materials_are_functions_api_changes API Changes when materials are functions
 
-Treating materials as functionse comes with a few API changes that need to be takes into account.
+Treating materials as functions comes with a few API changes that need to be takes into account.
 Code shared between different applications, i.e., in plugins, should be able to handle both
 settings.
 

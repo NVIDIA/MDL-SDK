@@ -937,6 +937,11 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     scene_data_lookup_int3,
     scene_data_lookup_int4,
     scene_data_lookup_color,
+    /*m_scene_data_lookup_deriv_float*/  nullptr,
+    /*m_scene_data_lookup_deriv_float2*/ nullptr,
+    /*m_scene_data_lookup_deriv_float3*/ nullptr,
+    /*m_scene_data_lookup_deriv_float4*/ nullptr,
+    /*m_scene_data_lookup_deriv_color*/  nullptr
 };
 
 // The vtable containing all texture access handlers required by the generated code

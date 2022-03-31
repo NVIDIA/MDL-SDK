@@ -44,7 +44,7 @@ class IMdl_execution_context;
 class IReader;
 class ITransaction;
 
-/** \addtogroup mi_neuray_mdl_types
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -172,7 +172,7 @@ public:
         IMdl_execution_context* context) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 } // namespace mi

@@ -49,7 +49,7 @@ class IDeserializer;
 */
 /** 
 \if IRAY_API \addtogroup mi_neuray_plugins
-\elseif MDL_SOURCE_RELEASE \addtogroup mi_neuray_plugins
+\elseif MDL_SDK_API \addtogroup mi_neuray_plugins
 \else \addtogroup mi_neuray_dice
 \endif
 @{
@@ -309,4 +309,3 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_ISERIALIZER_H
-

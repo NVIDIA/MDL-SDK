@@ -57,7 +57,8 @@ namespace neuraylib {
     In addition, the free functions #mi::neuraylib::get_value() and #mi::neuraylib::set_value() are
     useful to read and write instances of #mi::neuraylib::IValue.
 
-    See \ref mi_neuray_mdl_elements for MDL elements that make use of this type system.
+    See \ref mi_neuray_mdl_elements and \ref mi_neuray_mdl_misc for interfaces that make use of
+    this type system.
 */
 
 /** \addtogroup mi_neuray_mdl_types

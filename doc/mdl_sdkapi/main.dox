@@ -94,6 +94,7 @@ them, assertions, and configurations.
       - \ref mi_neuray_configuration "Configuration Interfaces"
       - \ref mi_neuray_types "Types"
       - \ref mi_neuray_mdl_types "MDL type system"
+      - \ref mi_neuray_mdl_misc "MDL-related interfaces"
       - \ref mi_neuray_database_access "Database Access"
       - \ref mi_neuray_scene_element "Scene Elements"
           - \ref mi_neuray_mdl_elements "MDL-related elements",

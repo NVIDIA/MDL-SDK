@@ -115,7 +115,7 @@ Image_file_writer_impl::~Image_file_writer_impl()
         if( !FreeImage_SaveToHandle(
             m_format, m_bitmap, &io, static_cast<fi_handle>( m_writer), flags)) {
 
-            std::string message
+            const std::string message
                 = "The image plugin \"" + m_plugin_name + "\" failed to export an image.";
             log( mi::base::MESSAGE_SEVERITY_ERROR, message.c_str());
         }

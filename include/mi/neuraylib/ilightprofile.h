@@ -133,6 +133,9 @@ public:
     ///                           - -4: File format error.
     ///                           - -5: \p resolution_phi or \p resolution_theta is invalid (must
     ///                                 not be 1).
+    ///
+    /// \see #mi::neuraylib::IMdl_factory::create_light_profile() for a way to create a light
+    ///      profile based on an MDL file path instead of a filename.
     virtual Sint32 reset_file(
         const char* filename,
         Uint32 resolution_phi = 0,

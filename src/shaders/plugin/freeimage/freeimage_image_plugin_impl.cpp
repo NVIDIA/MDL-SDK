@@ -155,6 +155,10 @@ const char* Image_plugin_impl::get_file_extension( mi::Uint32 index) const
             if( index == 1) return "pic";
             if( index == 2) return "pict";
             return 0;
+        case FIF_SGI:
+            if( index == 0) return "rgb";
+            if( index == 1) return "sgi";
+            return 0;
         case FIF_TARGA:
             if( index == 0) return "targa";
             if( index == 1) return "tga";

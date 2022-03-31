@@ -490,6 +490,9 @@ public:
     /// Get the LLVM derivative type for float[3].
     llvm::StructType *get_deriv_arr_float_3_type() const { return m_type_deriv_arr_float_3; }
 
+    /// Get the LLVM derivative type for float4.
+    llvm::StructType *get_deriv_float4_type() const { return m_type_deriv_float4; }
+
     /// Get the LLVM derivative type for float[4].
     llvm::StructType *get_deriv_arr_float_4_type() const { return m_type_deriv_arr_float_4; }
 
@@ -719,6 +722,7 @@ private:
     llvm::StructType  *m_type_deriv_float;
     llvm::StructType  *m_type_deriv_float2;
     llvm::StructType  *m_type_deriv_float3;
+    llvm::StructType  *m_type_deriv_float4;
     llvm::StructType  *m_type_deriv_arr_float_2;
     llvm::StructType  *m_type_deriv_arr_float_3;
     llvm::StructType  *m_type_deriv_arr_float_4;

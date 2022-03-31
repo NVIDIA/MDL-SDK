@@ -40,7 +40,7 @@ namespace mi {
 namespace neuraylib {
 
 
-/** \addtogroup mi_neuray_mdl_types
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -316,7 +316,7 @@ public:
 };
 
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 } // namespace mi

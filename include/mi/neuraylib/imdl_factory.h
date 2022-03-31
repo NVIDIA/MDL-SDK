@@ -53,7 +53,14 @@ class IValue_factory;
 class IValue_light_profile;
 class IValue_texture;
 
-/** \addtogroup mi_neuray_mdl_types
+/**
+    \defgroup mi_neuray_mdl_misc Miscellaneous MDL-related Interfaces
+    \ingroup mi_neuray
+
+    MDL-related interfaces excluding types, scene elements, and the compiler
+*/
+
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -113,7 +120,10 @@ public:
     ///                      - -3: Failed to resolve the given file path, or no suitable image
     ///                            plugin available.
     /// \return              The value referencing the texture, or \c NULL in case of failure.
-    virtual IValue_texture* create_texture(
+    ///
+    /// \see #mi::neuraylib::IImage::reset_file() if you are given a plain filename instead of an
+    ///      MDL file path.
+    virtual IValue_texture* create_texture(  
         ITransaction* transaction,
         const char* file_path,
         IType_texture::Shape shape,
@@ -152,6 +162,9 @@ public:
     ///                      - -2: The file path is not an absolute MDL file path.
     ///                      - -3: Failed to resolve the given file path.
     /// \return              The value referencing the light profile, or \c NULL in case of failure.
+    ///
+    /// \see #mi::neuraylib::ILightprofile::reset_file() if you are given a plain filename instead
+    ///      of an MDL file path.
     virtual IValue_light_profile* create_light_profile(
         ITransaction* transaction, const char* file_path, bool shared, Sint32* errors = 0) = 0;
 
@@ -175,6 +188,9 @@ public:
     ///                      - -3: Failed to resolve the given file path.
     /// \return              The value referencing the BSDF measurement, or \c NULL in case of
     ///                      failure.
+    ///
+    /// \see #mi::neuraylib::IBsdf_measurement::reset_file() if you are given a plain filename
+    ///      instead of an MDL file path.
     virtual IValue_bsdf_measurement* create_bsdf_measurement(
         ITransaction* transaction, const char* file_path, bool shared, Sint32* errors = 0) = 0;
 
@@ -371,7 +387,7 @@ public:
         IMdl_execution_context* context) = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

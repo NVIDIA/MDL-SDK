@@ -71,6 +71,9 @@ public:
     ///                         exist.
     ///                   - -3: Invalid file format or invalid filename extension (only \c .mbsdf is
     ///                         supported).
+    ///
+    /// \see #mi::neuraylib::IMdl_factory::create_bsdf_measurement() for a way to create a BSDF
+    ///      measurement based on an MDL file path instead of a filename.
     virtual Sint32 reset_file( const char* filename) = 0;
 
     /// Sets the BSDF measurement to the data provided by a reader.

@@ -297,7 +297,7 @@ Required tools to build the documentation:
     are available in the package management system:
 
     ```bash
-    sudo apt-get install git build-essential python cmake g++
+    sudo apt-get install git git-lfs build-essential python cmake
     sudo apt-get install libboost-dev libfreeimage-dev libglew-dev libglfw3-dev
     ```
 
@@ -318,6 +318,7 @@ Required tools to build the documentation:
 
     ```bash
     export MDL_SDK_ROOT=$HOME/projects/mdl-sdk
+    git lfs install
     git clone https://github.com/NVIDIA/MDL-SDK.git $MDL_SDK_ROOT
     ```
 

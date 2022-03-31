@@ -171,29 +171,31 @@ private:
     /// \name Utilities
     //@{
 
-    /// Generates a filename for resources with the given extension and/or based on old filename.
+    /// Generates a filename for resources with the new extension and/or based on old filename.
     ///
     /// Does not support images with uvtiles or non-trivial frames.
     ///
     /// If \p old_filename is not \p NULL and the filename derived from it does not already exist,
-    /// return it. Otherwise, generate a generic filename with the given extension that does not
-    /// already exist.
+    /// return it. Otherwise, generate a generic filename with the new or original extension that
+    /// does not already exist.
     ///
-    /// Returns m_path_prefix + "_" + strip_directories(old_filename) or
+    /// Returns m_path_prefix + "_" + stem(old_filename) + "." + extension or
     /// m_path_prefix + _resource_" + counter + extension .
-    std::string get_new_resource_filename( const char* extension, const char* old_filename);
+    std::string get_new_resource_filename(
+        const char* new_extension, const char* old_filename, bool use_new_extension);
 
-    /// Generates a filename for images with the given extension and/or based on old filename.
+    /// Generates a filename for images with the new extension and/or based on old filename.
     ///
     /// Invokes #get_new_resource_filename() if \p add_sequence_marker and \p add_uvtile_marker
     /// are \c false.
     ///
     /// Otherwise, if \p old_filename is not \p NULL, returns a filename with markers derived from
-    /// it (no existence check). Otherwise, generate a generic filename with the given extension
-    /// and markers (no existence check).
+    /// it (no existence check). Otherwise, generate a generic filename with the new or original
+    /// extension and markers (no existence check).
     std::string get_new_resource_filename_marker(
-        const char* extension,
+        const char* new_extension,
         const char* old_filename,
+        bool use_new_extension,
         bool add_sequence_marker,
         bool add_uvtile_marker,
         mi::Size frame_digits);

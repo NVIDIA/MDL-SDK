@@ -3263,6 +3263,7 @@ BSDF_API void tint_edf_auxiliary(
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
+//!! TODO: remove thin film, no longer standalone implementation!
 
 /////////////////////////////////////////////////////////////////////
 // bsdf thin_film(
@@ -3370,7 +3371,10 @@ BSDF_API void thin_film_auxiliary(
     // assuming perfect reflection of k1, so the half-vector equals the normal
     const float kh = math::abs(math::dot(data->k1, shading_normal));
 
-    const float3 factor = thin_film_factor(ior, thickness, mat_ior, kh);
+    const float3 base_ior = make<float3>(mat_ior.y);
+    const float3 base_k = make<float3>(0.0f);
+    const float3 incoming_ior = make<float3>(mat_ior.x);
+    const float3 factor = thin_film_factor(thickness, ior, base_ior, base_k, incoming_ior, kh);
 
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
@@ -3660,8 +3664,8 @@ BSDF_API void fresnel_factor_sample(
         return;
     }
 
-    const float2 material_ior = process_ior(data, state);
-    const float inv_eta_i = 1.0f / material_ior.x;
+    const float3 incoming_ior = process_incoming_ior(data, state);
+    const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
     const float3 eta = ior * inv_eta_i;
     const float3 eta_k = extinction_coefficient * inv_eta_i;
     data->bsdf_over_pdf *= complex_ior_fresnel(eta, eta_k, kh);
@@ -3688,8 +3692,8 @@ BSDF_INLINE float3 fresnel_factor_get_factor_impl(
         return make_float3(0.0f, 0.0f, 0.0f);
     }
 
-    const float2 material_ior = process_ior(data, state);
-    const float inv_eta_i = 1.0f / material_ior.x;
+    const float3 incoming_ior = process_incoming_ior(data, state);
+    const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
     const float3 eta = ior * inv_eta_i;
     const float3 eta_k = extinction_coefficient * inv_eta_i;
 
@@ -3758,8 +3762,8 @@ BSDF_API void fresnel_factor_auxiliary(
         return;
     }
 
-    const float2 material_ior = process_ior(data, state);
-    const float inv_eta_i = 1.0f / material_ior.x;
+    const float3 incoming_ior = process_incoming_ior(data, state);
+    const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
     const float3 eta = ior * inv_eta_i;
     const float3 eta_k = extinction_coefficient * inv_eta_i;
 
@@ -3767,6 +3771,155 @@ BSDF_API void fresnel_factor_auxiliary(
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf base = fresnel_factor(
+//         color  ior,
+//         color  extinction_coefficent,
+//         bsdf   base = bsdf()
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+BSDF_API void thin_film_fresnel_factor_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &ior,
+    const float3 &extinction_coefficient,
+    const BSDF &base,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    base.sample(data, state, inherited_normal);
+    if (data->event_type == BSDF_EVENT_ABSORB)
+        return;
+
+    float3 shading_normal, geometry_normal;
+    get_oriented_normals(
+        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+
+    const float nk2 = math::abs(math::dot(data->k2, shading_normal));
+    const float3 h = compute_half_vector(
+        data->k1, data->k2, shading_normal, nk2,
+        (data->event_type & BSDF_EVENT_TRANSMISSION) != 0);
+    const float kh = math::dot(data->k1, h);
+    if (kh < 0.0f) {
+        absorb(data);
+        return;
+    }
+
+    const float3 incoming_ior = process_incoming_ior(data, state);
+    data->bsdf_over_pdf *= thin_film_factor(
+        coating_thickness, coating_ior, ior, extinction_coefficient, incoming_ior, kh);
+}
+
+// we need an extra function, as clang doesn't allow to inline and export the same function
+BSDF_INLINE float3 thin_film_fresnel_factor_get_factor_impl(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &ior,
+    const float3 &extinction_coefficient,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    float3 shading_normal, geometry_normal;
+    get_oriented_normals(
+        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+
+    const float nk2 = math::abs(math::dot(data->k2, shading_normal));
+    const float3 h = compute_half_vector(
+        data->k1, data->k2, shading_normal, nk2,
+        math::dot(data->k2, geometry_normal) < 0.0f);
+    const float kh = math::dot(data->k1, h);
+    if (kh < 0.0f) {
+        return make_float3(0.0f, 0.0f, 0.0f);
+    }
+
+    const float3 incoming_ior = process_incoming_ior(data, state);
+    const float3 factor = thin_film_factor(
+        coating_thickness, coating_ior, ior, extinction_coefficient, incoming_ior, kh);
+    return factor;
+}
+
+BSDF_API float3 thin_film_fresnel_factor_get_factor(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &ior,
+    const float3 &extinction_coefficient,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    return thin_film_fresnel_factor_get_factor_impl(
+        data, state, inherited_normal, ior, extinction_coefficient, coating_thickness, coating_ior);
+}
+
+BSDF_API void thin_film_fresnel_factor_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float3 &ior,
+    const float3 &extinction_coefficient,
+    const BSDF &base,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 factor = thin_film_fresnel_factor_get_factor_impl(
+        data, state, inherited_normal, ior, extinction_coefficient, coating_thickness, coating_ior);
+
+    if (factor.x == 0.0f && factor.y == 0.0f && factor.z == 0.0f) {
+        absorb(data);
+        return;
+    }
+
+    base.evaluate(data, state, inherited_normal, factor * inherited_weight);
+}
+
+BSDF_API void thin_film_fresnel_factor_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &ior,
+    const float3 &extinction_coefficient,
+    const BSDF &base,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    base.pdf(data, state, inherited_normal);
+}
+
+BSDF_API void thin_film_fresnel_factor_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float3 &ior,
+    const float3 &extinction_coefficient,
+    const BSDF &base,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    float3 shading_normal, geometry_normal;
+    get_oriented_normals(
+        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+
+    const float nk1 = math::dot(data->k1, shading_normal);
+    if (nk1 < 0.0f) {
+        absorb(data);
+        return;
+    }
+
+    const float3 incoming_ior = process_incoming_ior(data, state);
+    const float3 factor = thin_film_factor(
+        coating_thickness, coating_ior, ior, extinction_coefficient, incoming_ior, nk1);
+
+    base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
+}
 
 /////////////////////////////////////////////////////////////////////
 // bsdf measured_curve_factor(
@@ -4282,10 +4435,14 @@ BSDF_INLINE void curve_layer_sample(
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &layer_normal,
+    const float3 &layer_normal_unoriented,
     const float3 &base_normal)
 {
     weight = math::saturate(weight);
+
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, layer_normal_unoriented, state->geometry_normal(), data->k1);
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
     const float estimated_curve_factor = c.estimate(nk1);
@@ -4299,7 +4456,7 @@ BSDF_INLINE void curve_layer_sample(
     else
         data->xi.z = (1.0f - data->xi.z) / (1.0f - prob_layer);
 
-    BSDF::select_sample(sample_layer, data, state, layer, layer_normal, base, base_normal);
+    BSDF::select_sample(sample_layer, data, state, layer, layer_normal_unoriented, base, base_normal);
 
     if (data->event_type == BSDF_EVENT_ABSORB)
         return;
@@ -4326,7 +4483,7 @@ BSDF_INLINE void curve_layer_sample(
         data->bsdf_over_pdf *= w_base / (1.0f - prob_layer);
     }
 
-    BSDF::select_pdf(sample_layer, &pdf_data, state, base, base_normal, layer, layer_normal);
+    BSDF::select_pdf(sample_layer, &pdf_data, state, base, base_normal, layer, layer_normal_unoriented);
 
     if (sample_layer)
         data->pdf = pdf_data.pdf * (1.0f - prob_layer) + data->pdf * prob_layer;
@@ -4342,12 +4499,15 @@ BSDF_INLINE void curve_layer_evaluate(
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &layer_normal,
+    const float3 &layer_normal_unoriented,
     const float3 &base_normal,
-    const float3 &geometry_normal,
     const float3 &inherited_weight)
 {
     weight = math::saturate(weight);
+
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, layer_normal_unoriented, state->geometry_normal(), data->k1);
 
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
     const float nk2 = math::abs(math::dot(data->k2, layer_normal));
@@ -4368,7 +4528,7 @@ BSDF_INLINE void curve_layer_evaluate(
     const float nk2_refl = no_refraction ? nk2 : (2.0f * kh * math::dot(layer_normal, h) - nk1);
     const float3 cf2 = c.eval(nk2_refl);
 
-    layer.evaluate(data, state, layer_normal, weight * curve_factor * inherited_weight);
+    layer.evaluate(data, state, layer_normal_unoriented, weight * curve_factor * inherited_weight);
     if (base.is_black())
         return;
 
@@ -4388,18 +4548,21 @@ BSDF_INLINE void curve_layer_auxiliary(
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &layer_normal,
+    const float3 &layer_normal_unoriented,
     const float3 &base_normal,
-    const float3 &geometry_normal,
     const float3 &inherited_weight)
 {
     weight = math::saturate(weight);
 
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, layer_normal_unoriented, state->geometry_normal(), data->k1);
+    
     // assuming perfect reflection
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
     const float3 curve_factor = weight * c.eval(nk1);
 
-    layer.auxiliary(data, state, layer_normal, curve_factor * inherited_weight);
+    layer.auxiliary(data, state, layer_normal_unoriented, curve_factor * inherited_weight);
     if (base.is_black())
         return;
 
@@ -4414,13 +4577,16 @@ BSDF_INLINE void curve_layer_pdf(
     float weight,
     const BSDF &layer,
     const BSDF &base,
-    const float3 &layer_normal,
-    const float3 &base_normal,
-    const float3 &geometry_normal)
+    const float3 &layer_normal_unoriented,
+    const float3 &base_normal)
 {
     weight = math::saturate(weight);
 
-    layer.pdf(data, state, layer_normal);
+    float3 layer_normal, geometry_normal;
+    get_oriented_normals(
+        layer_normal, geometry_normal, layer_normal_unoriented, state->geometry_normal(), data->k1);
+
+    layer.pdf(data, state, layer_normal_unoriented);
     if (base.is_black())
         return;
 
@@ -4431,7 +4597,6 @@ BSDF_INLINE void curve_layer_pdf(
     base.pdf(data, state, base_normal);
     data->pdf = (1.0f - prob_layer) * data->pdf + pdf_layer;
 }
-
 
 /////////////////////////////////////////////////////////////////////
 // bsdf fresnel_layer(
@@ -4478,14 +4643,10 @@ BSDF_API void fresnel_layer_sample(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
     const Fresnel_curve_eval c(mat_ior);
     curve_layer_sample(
-        c, data, state, weight, layer, base, shading_normal, inherited_normal);
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void fresnel_layer_evaluate(
@@ -4501,15 +4662,11 @@ BSDF_API void fresnel_layer_evaluate(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
     const Fresnel_curve_eval c(mat_ior);
     curve_layer_evaluate(
         c, data, state, weight, layer, base,
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 BSDF_API void fresnel_layer_pdf(
@@ -4524,14 +4681,10 @@ BSDF_API void fresnel_layer_pdf(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
     const Fresnel_curve_eval c(mat_ior);
     curve_layer_pdf(
-        c, data, state, weight, layer, base, shading_normal, inherited_normal, geometry_normal);
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void fresnel_layer_auxiliary(
@@ -4547,17 +4700,134 @@ BSDF_API void fresnel_layer_auxiliary(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
     const Fresnel_curve_eval c(mat_ior);
     curve_layer_auxiliary(
         c, data, state, weight, layer, base, 
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
+
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf base = fresnel_layer(
+//         float   ior,
+//         float   weight = 1.0,
+//         bsdf    layer  = bsdf(),
+//         bsdf    base   = bsdf(),
+//         float3  normal = state->normal()
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+class Thin_film_fresnel_curve_eval {
+public:
+    Thin_film_fresnel_curve_eval(const float coating_thickness, const float3 coating_ior, const float2 &ior) :
+        m_coating_thickness(coating_thickness), m_coating_ior(coating_ior), m_ior(ior) {
+    }
+
+    float estimate(const float cosine) const {
+        return math::luminance(eval(cosine));
+    }
+
+    float3 eval(const float cosine) const {
+        return thin_film_factor(m_coating_thickness, m_coating_ior, make<float3>(m_ior.y), make<float3>(0.0f), make<float3>(m_ior.x), cosine);
+     }
+
+    float2 ior() const {
+        return m_ior;
+    }
+private:
+    float m_coating_thickness;
+    float3 m_coating_ior;
+    float2 m_ior;
+};
+
+BSDF_API void thin_film_fresnel_layer_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float ior,
+    const float weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
+    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    curve_layer_sample(
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
+}
+
+BSDF_API void thin_film_fresnel_layer_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float ior,
+    const float weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
+    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    curve_layer_evaluate(
+        c, data, state, weight, layer, base,
+        adapted_normal, inherited_normal, inherited_weight);
+}
+
+BSDF_API void thin_film_fresnel_layer_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float ior,
+    const float weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
+    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    curve_layer_pdf(
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
+}
+
+BSDF_API void thin_film_fresnel_layer_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float ior,
+    const float weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const float2 mat_ior = process_ior_fresnel_layer(data, state, ior);
+    const Thin_film_fresnel_curve_eval c(coating_thickness, coating_ior, mat_ior);
+    curve_layer_auxiliary(
+        c, data, state, weight, layer, base, 
+        adapted_normal, inherited_normal, inherited_weight);
+}
 
 /////////////////////////////////////////////////////////////////////
 // bsdf color_fresnel_layer(
@@ -4607,14 +4877,10 @@ BSDF_API void color_fresnel_layer_sample(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_fresnel_ior mat_ior = process_ior_color_fresnel_layer(data, state, ior);
     const Color_fresnel_curve_eval c(mat_ior.eta, weight, mat_ior.ior);
     curve_layer_sample(
-        c, data, state, 1.0f, layer, base, shading_normal, inherited_normal);
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void color_fresnel_layer_evaluate(
@@ -4630,15 +4896,11 @@ BSDF_API void color_fresnel_layer_evaluate(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_fresnel_ior mat_ior = process_ior_color_fresnel_layer(data, state, ior);
     const Color_fresnel_curve_eval c(mat_ior.eta, weight, mat_ior.ior);
     curve_layer_evaluate(
         c, data, state, 1.0f, layer, base,
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 BSDF_API void color_fresnel_layer_pdf(
@@ -4653,14 +4915,10 @@ BSDF_API void color_fresnel_layer_pdf(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_fresnel_ior mat_ior = process_ior_color_fresnel_layer(data, state, ior);
     const Color_fresnel_curve_eval c(mat_ior.eta, weight, mat_ior.ior);
     curve_layer_pdf(
-        c, data, state, 1.0f, layer, base, shading_normal, inherited_normal, geometry_normal);
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void color_fresnel_layer_auxiliary(
@@ -4676,17 +4934,143 @@ BSDF_API void color_fresnel_layer_auxiliary(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_fresnel_ior mat_ior = process_ior_color_fresnel_layer(data, state, ior);
     const Color_fresnel_curve_eval c(mat_ior.eta, weight, mat_ior.ior);
     curve_layer_auxiliary(
         c, data, state, 1.0f, layer, base, 
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     base = color_fresnel_layer(
+//         color   ior,
+//         color   weight = 1.0,
+//         bsdf    layer  = bsdf(),
+//         bsdf    base   = bsdf(),
+//         float3  normal = state->normal()
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+class Thin_film_color_fresnel_curve_eval {
+public:
+    Thin_film_color_fresnel_curve_eval(
+        const float3 &weight,
+        const float coating_thickness,
+        const float3 &coating_ior,
+        const float3 &ior1,
+        const float3 &ior2,
+        const float2 &ior) :
+        m_weight(math::saturate(weight)), m_coating_thickness(coating_thickness), m_coating_ior(coating_ior),
+        m_base_ior(ior2), m_incoming_ior(ior1), m_ior(ior) {
+    }
+
+    float estimate(const float cosine) const {
+        return math::luminance(eval(cosine));
+    }
+
+    float3 eval(const float cosine) const {
+        return m_weight * thin_film_factor(m_coating_thickness, m_coating_ior, m_base_ior, make<float3>(0.0f), m_incoming_ior, cosine);
+    }
+    float2 ior() const {
+        return m_ior;
+    }
+
+private:
+    float m_coating_thickness;
+    float3 m_coating_ior;
+    float3 m_base_ior;
+    float3 m_incoming_ior;
+    float3 m_weight;
+    float2 m_ior;
+};
+
+BSDF_API void thin_film_color_fresnel_layer_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &ior,
+    const float3 &weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
+    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    curve_layer_sample(
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
+}
+
+BSDF_API void thin_film_color_fresnel_layer_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float3 &ior,
+    const float3 &weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
+    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    curve_layer_evaluate(
+        c, data, state, 1.0f, layer, base,
+        adapted_normal, inherited_normal, inherited_weight);
+}
+
+BSDF_API void thin_film_color_fresnel_layer_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &ior,
+    const float3 &weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
+    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    curve_layer_pdf(
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
+}
+
+BSDF_API void thin_film_color_fresnel_layer_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float3 &ior,
+    const float3 &weight,
+    const BSDF &layer,
+    const BSDF &base,
+    const float3 &normal,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float3 adapted_normal = state->adapt_normal(normal);
+
+    const Thin_film_color_fresnel_ior mat_ior = process_ior_thin_film_color_fresnel_layer(data, state, ior);
+    const Thin_film_color_fresnel_curve_eval c(weight, coating_thickness, coating_ior, mat_ior.ior1, mat_ior.ior2, mat_ior.ior);
+    curve_layer_auxiliary(
+        c, data, state, 1.0f, layer, base, 
+        adapted_normal, inherited_normal, inherited_weight);
+}
 
 /////////////////////////////////////////////////////////////////////
 // bsdf custom_curve_layer(
@@ -4738,12 +5122,8 @@ BSDF_API void custom_curve_layer_sample(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Custom_curve_eval c(normal_reflectivity, grazing_reflectivity, exponent);
-    curve_layer_sample(c, data, state, weight, layer, base, shading_normal, inherited_normal);
+    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void custom_curve_layer_evaluate(
@@ -4761,14 +5141,10 @@ BSDF_API void custom_curve_layer_evaluate(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Custom_curve_eval c(normal_reflectivity, grazing_reflectivity, exponent);
     curve_layer_evaluate(
         c, data, state, weight, layer, base,
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 BSDF_API void custom_curve_layer_pdf(
@@ -4785,13 +5161,9 @@ BSDF_API void custom_curve_layer_pdf(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Custom_curve_eval c(normal_reflectivity, grazing_reflectivity, exponent);
     curve_layer_pdf(
-        c, data, state, weight, layer, base, shading_normal, inherited_normal, geometry_normal);
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
 
 
@@ -4810,14 +5182,10 @@ BSDF_API void custom_curve_layer_auxiliary(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Custom_curve_eval c(normal_reflectivity, grazing_reflectivity, exponent);
     curve_layer_auxiliary(
         c, data, state, weight, layer, base,
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 
@@ -4873,12 +5241,8 @@ BSDF_API void color_custom_curve_layer_sample(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_custom_curve_eval c(normal_reflectivity, grazing_reflectivity, weight, exponent);
-    curve_layer_sample(c, data, state, 1.0f, layer, base, shading_normal, inherited_normal);
+    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void color_custom_curve_layer_evaluate(
@@ -4896,14 +5260,10 @@ BSDF_API void color_custom_curve_layer_evaluate(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_custom_curve_eval c(normal_reflectivity, grazing_reflectivity, weight, exponent);
     curve_layer_evaluate(
         c, data, state, 1.0f, layer, base,
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 BSDF_API void color_custom_curve_layer_pdf(
@@ -4920,13 +5280,9 @@ BSDF_API void color_custom_curve_layer_pdf(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_custom_curve_eval c(normal_reflectivity, grazing_reflectivity, weight, exponent);
     curve_layer_pdf(
-        c, data, state, 1.0f, layer, base, shading_normal, inherited_normal, geometry_normal);
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void color_custom_curve_layer_auxiliary(
@@ -4944,14 +5300,10 @@ BSDF_API void color_custom_curve_layer_auxiliary(
 {
     const float3 adapted_normal = state->adapt_normal(normal);
 
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, adapted_normal, state->geometry_normal(), data->k1);
-
     const Color_custom_curve_eval c(normal_reflectivity, grazing_reflectivity, weight, exponent);
     curve_layer_auxiliary(
         c, data, state, 1.0f, layer, base, 
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 
@@ -5006,12 +5358,10 @@ BSDF_API void measured_curve_layer_sample(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Measured_curve_eval c(curve_values, num_curve_values);
-    curve_layer_sample(c, data, state, weight, layer, base, shading_normal, inherited_normal);
+    curve_layer_sample(c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void measured_curve_layer_evaluate(
@@ -5026,14 +5376,12 @@ BSDF_API void measured_curve_layer_evaluate(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Measured_curve_eval c(curve_values, num_curve_values);
     curve_layer_evaluate(
         c, data, state, weight, layer, base, 
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 BSDF_API void measured_curve_layer_pdf(
@@ -5047,13 +5395,11 @@ BSDF_API void measured_curve_layer_pdf(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Measured_curve_eval c(curve_values, num_curve_values);
     curve_layer_pdf(
-        c, data, state, weight, layer, base, shading_normal, inherited_normal, geometry_normal);
+        c, data, state, weight, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void measured_curve_layer_auxiliary(
@@ -5068,14 +5414,12 @@ BSDF_API void measured_curve_layer_auxiliary(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Measured_curve_eval c(curve_values, num_curve_values);
     curve_layer_auxiliary(
         c, data, state, weight, layer, base, 
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        shading_normal, adapted_normal, geometry_normal, inherited_weight);
 }
 
 #else
@@ -5111,7 +5455,7 @@ BSDF_API void measured_curve_layer_sample(
     else
         data->xi.z = (1.0f - data->xi.z) / (1.0f - prob_layer);
 
-    BSDF::select_sample(sample_layer, data, state, layer, layer_normal, base, base_normal);
+    BSDF::select_sample(sample_layer, data, state, layer, adapted_normal, base, base_normal);
 
     if (data->event_type == BSDF_EVENT_ABSORB)
         return;
@@ -5134,7 +5478,7 @@ BSDF_API void measured_curve_layer_sample(
         data->bsdf_over_pdf *= w_base / (1.0f - prob_layer);
     }
 
-    BSDF::select_pdf(sample_layer, &pdf_data, state, base, base_normal, layer, layer_normal);
+    BSDF::select_pdf(sample_layer, &pdf_data, state, base, base_normal, layer, adapted_normal);
 
     if (sample_layer)
         data->pdf = pdf_data.pdf * (1.0f - prob_layer) + data->pdf * prob_layer;
@@ -5174,7 +5518,7 @@ BSDF_API void measured_curve_layer_evaluate(
     const float3 cf1 = measured_curve_factor_eval(nk1, curve_values, num_curve_values);
     const float3 cf2 = measured_curve_factor_eval(nk2, curve_values, num_curve_values);
 
-    layer.evaluate(data, state, layer_normal, (weight * curve_factor) * inherited_weight); 
+    layer.evaluate(data, state, adapted_normal, (weight * curve_factor) * inherited_weight); 
     if (base.is_black())
         return;
 
@@ -5206,7 +5550,7 @@ BSDF_API void measured_curve_layer_pdf(
 
     weight = math::saturate(weight);
 
-    layer.pdf(data, state, layer_normal);
+    layer.pdf(data, state, adapted_normal);
     if (base.is_black())
         return;
 
@@ -5242,7 +5586,7 @@ BSDF_API void measured_curve_layer_auxiliary(
     const float nk1 = math::saturate(math::dot(data->k1, layer_normal));
     const float3 curve_factor = weight * measured_curve_factor_eval(nk1, curve_values, num_curve_values);
 
-    layer.auxiliary(data, state, layer_normal, curve_factor * inherited_weight);
+    layer.auxiliary(data, state, adapted_normal, curve_factor * inherited_weight);
     if (base.is_black())
         return;
 
@@ -5305,12 +5649,10 @@ BSDF_API void color_measured_curve_layer_sample(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_measured_curve_eval c(curve_values, num_curve_values, weight);
-    curve_layer_sample(c, data, state, 1.0f, layer, base, shading_normal, inherited_normal);
+    curve_layer_sample(c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void color_measured_curve_layer_evaluate(
@@ -5325,14 +5667,12 @@ BSDF_API void color_measured_curve_layer_evaluate(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_measured_curve_eval c(curve_values, num_curve_values, weight);
     curve_layer_evaluate(
         c, data, state, 1.0f, layer, base, 
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 BSDF_API void color_measured_curve_layer_pdf(
@@ -5346,13 +5686,11 @@ BSDF_API void color_measured_curve_layer_pdf(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_measured_curve_eval c(curve_values, num_curve_values, weight);
     curve_layer_pdf(
-        c, data, state, 1.0f, layer, base, shading_normal, inherited_normal, geometry_normal);
+        c, data, state, 1.0f, layer, base, adapted_normal, inherited_normal);
 }
 
 BSDF_API void color_measured_curve_layer_auxiliary(
@@ -5367,14 +5705,12 @@ BSDF_API void color_measured_curve_layer_auxiliary(
     const BSDF &base,
     const float3 &normal)
 {
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, normal, state->geometry_normal(), data->k1);
+    const float3 adapted_normal = state->adapt_normal(normal);
 
     const Color_measured_curve_eval c(curve_values, num_curve_values, weight);
     curve_layer_auxiliary(
         c, data, state, 1.0f, layer, base, 
-        shading_normal, inherited_normal, geometry_normal, inherited_weight);
+        adapted_normal, inherited_normal, inherited_weight);
 }
 
 
@@ -5412,7 +5748,7 @@ BSDF_API void color_measured_curve_layer_sample(
     else
         data->xi.z = (1.0f - data->xi.z) / (1.0f - prob_layer);
 
-    BSDF::select_sample(sample_layer, data, state, layer, layer_normal, base, base_normal);
+    BSDF::select_sample(sample_layer, data, state, layer, adapted_normal, base, base_normal);
 
     if (data->event_type == BSDF_EVENT_ABSORB)
         return;
@@ -5438,7 +5774,7 @@ BSDF_API void color_measured_curve_layer_sample(
         data->bsdf_over_pdf *= w_base / (1.0f - prob_layer);
     }
 
-    BSDF::select_pdf(sample_layer, &pdf_data, state, base, base_normal, layer, layer_normal);
+    BSDF::select_pdf(sample_layer, &pdf_data, state, base, base_normal, layer, adapted_normal);
 
     if (sample_layer)
         data->pdf = pdf_data.pdf * (1.0f - prob_layer) + data->pdf * prob_layer;
@@ -5481,7 +5817,7 @@ BSDF_API void color_measured_curve_layer_evaluate(
     const float3 cf2 = color_measured_curve_factor_eval(
             nk2, curve_values, num_curve_values, color_weight);
 
-    layer.evaluate(data, state, layer_normal, (weight * curve_factor) * inherited_weight); 
+    layer.evaluate(data, state, adapted_normal, (weight * curve_factor) * inherited_weight); 
     if (base.is_black())
         return;
 
@@ -5513,7 +5849,7 @@ BSDF_API void color_measured_curve_layer_pdf(
 
     const float weight = 1.0f; // TODO check if that is right
 
-    layer.pdf(data, state, layer_normal);
+    layer.pdf(data, state, adapted_normal);
     if (base.is_black())
         return;
 
@@ -5550,7 +5886,7 @@ BSDF_API void color_measured_curve_layer_auxiliary(
     const float3 curve_factor = weight * color_measured_curve_factor_eval(
         nk1, curve_values, num_curve_values, color_weight);
 
-    layer.auxiliary(data, state, layer_normal, curve_factor * inherited_weight);
+    layer.auxiliary(data, state, adapted_normal, curve_factor * inherited_weight);
     if (base.is_black())
         return;
 

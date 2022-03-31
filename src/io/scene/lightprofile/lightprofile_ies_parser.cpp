@@ -497,7 +497,7 @@ bool Lightprofile_ies_parser::parse_label(char* label)
     while(*label && isspace(static_cast<unsigned char>(*label)))
         label++; // remove trailing white space
 
-    std::string label_tag = "";
+    std::string label_tag;
     if(*label == '[')
     {
         label++;
@@ -516,7 +516,7 @@ bool Lightprofile_ies_parser::parse_label(char* label)
     while(*label && isspace(static_cast<unsigned char>(*label)))
         label++; // remove trailing white space
 
-    std::string label_contents = "";
+    std::string label_contents;
     while(*label)
     {
         label_contents += *label;
@@ -559,7 +559,7 @@ void Lightprofile_ies_parser::parse_tilt(char* tilt)
     while (*tilt && isspace(static_cast<unsigned char>(*tilt)))
         tilt++;     // remove trailing white space
 
-    std::string tilt_value = "";
+    std::string tilt_value;
     while (*tilt)
     {
         tilt_value += *tilt;

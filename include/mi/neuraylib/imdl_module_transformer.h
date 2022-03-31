@@ -42,7 +42,7 @@ namespace neuraylib {
 
 class IMdl_execution_context;
 
-/** \addtogroup mi_neuray_mdl_sdk_misc
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 

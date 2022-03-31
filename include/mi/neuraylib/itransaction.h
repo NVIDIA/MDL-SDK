@@ -56,7 +56,7 @@ class IScope;
 /// #mi::neuraylib::IScope::create_transaction().
 ///
 /// Transactions are not thread-safe. If you use a particular transaction from multiple threads,
-/// then you have to serialize all transaction uses. This does not ony apply to methods of
+/// then you have to serialize all transaction uses. This does not only apply to methods of
 /// #mi::neuraylib::ITransaction, but all methods that implicitly use the transaction. For example,
 /// such a use can happen by methods of DB elements returned from #access() or #edit() calls, or by
 /// objects returned from factories taking the transaction as \ifnot DICE_API argument, like

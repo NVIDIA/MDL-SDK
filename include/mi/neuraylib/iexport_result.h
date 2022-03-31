@@ -39,15 +39,13 @@ namespace mi {
 namespace neuraylib {
 
 /** 
-\ifnot MDL_SOURCE_RELEASE
 \addtogroup mi_neuray_impexp
 @{
-\endif
 */
 
 /// This interface represents the result of an export operation.
 ///
-/// \ifnot MDL_SOURCE_RELEASE
+/// \ifnot MDL_SDK_API
 /// Such an export operation is triggered by #mi::neuraylib::IExport_api::export_elements() or
 /// #mi::neuraylib::IExport_api::export_scene(). It gives access to messages, message numbers, and
 /// and message severities.
@@ -115,7 +113,7 @@ public:
 /// exporter writers. In addition to the #mi::neuraylib::IExport_result interface it provides
 /// methods to set all values.
 ///
-/// \ifnot MDL_SOURCE_RELEASE
+/// \ifnot MDL_SDK_API
 /// See #mi::neuraylib::IExport_api::export_scene() and
 /// #mi::neuraylib::IExport_api::export_elements() for common message numbers. Numbers in the range
 /// 6000-7999 are reserved for exporter-specific messages. All other numbers are reserved for other
@@ -185,9 +183,7 @@ public:
 };
 
 /*
-\ifnot MDL_SOURCE_RELEASE
 @}
-\endif
 */ // end group mi_neuray_impexp
 
 } // namespace neuraylib
@@ -195,4 +191,3 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IEXPORT_RESULT_H
-

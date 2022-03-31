@@ -3727,10 +3727,14 @@ hlsl::Type *HLSLWriterPass::convert_struct_type(
     // Slang does not
     Symbol *struct_sym;
     bool is_api_type = false;
-    if (is_deriv && s_type == m_type_mapper.get_deriv_float2_type()) {
+    if (is_deriv && s_type == m_type_mapper.get_deriv_float_type()) {
+        struct_sym = get_sym("Derived_float"), is_api_type = true;
+    } else if (is_deriv && s_type == m_type_mapper.get_deriv_float2_type()) {
         struct_sym = get_sym("Derived_float2"), is_api_type = true;
     } else if (is_deriv && s_type == m_type_mapper.get_deriv_float3_type()) {
         struct_sym = get_sym("Derived_float3"), is_api_type = true;
+    } else if (is_deriv && s_type == m_type_mapper.get_deriv_float4_type()) {
+        struct_sym = get_sym("Derived_float4"), is_api_type = true;
     } else {
         struct_sym = get_unique_hlsl_sym(
             struct_name.c_str(),

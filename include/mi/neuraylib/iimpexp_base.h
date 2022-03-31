@@ -39,11 +39,10 @@ namespace neuraylib {
 
 class IImpexp_state;
 
-/** 
-\ifnot MDL_SOURCE_RELEASE
-\addtogroup mi_neuray_impexp
+/** \if MDL_SDK_API \addtogroup mi_neuray_mdl_sdk_misc
+    \else \addtogroup mi_neuray_impexp
+    \endif
 @{
-\endif
 */
 
 /// Confidence in capabilities of an importer or exporter.
@@ -173,9 +172,7 @@ public:
 };
 
 /*
-\ifnot MDL_SOURCE_RELEASE
 @}
-\endif
 */ // end group mi_neuray_impexp
 
 } // namespace neuraylib
@@ -183,4 +180,3 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IIMPEXP_BASE_H
-

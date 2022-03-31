@@ -873,10 +873,10 @@ using std::isnan;
 
 
 #ifndef __CUDA_ARCH__
-inline float uint_as_float(const unsigned v)
+inline float __uint_as_float(const unsigned v)
 { return base::binary_cast<float>(v);}
 
-inline unsigned float_as_uint(const float v)
+inline unsigned __float_as_uint(const float v)
 { return base::binary_cast<unsigned>(v);}
 #endif
 
@@ -1032,8 +1032,8 @@ MI_HOST_DEVICE_INLINE void to_rgbe( const Float32 color[3], Uint32& rgbe)
     else if( m >= 1.7014118346046923173168730371588e+38f) // 2^127
         rgbe = 0xFFFFFFFFu;
     else {
-        const Uint32  e = float_as_uint( m) & 0x7F800000u;
-        const Float32 v = uint_as_float( 0x82800000u - e);
+        const Uint32  e = __float_as_uint( m) & 0x7F800000u;
+        const Float32 v = __uint_as_float( 0x82800000u - e);
 
         rgbe =  Uint32( c[0] * v)
              | (Uint32( c[1] * v) <<  8)
@@ -1058,8 +1058,8 @@ MI_HOST_DEVICE_INLINE void to_rgbe( const Float32 color[3], Uint8 rgbe[4])
     else if( m >= 1.7014118346046923173168730371588e+38f) // 2^127
         rgbe[0] = rgbe[1] = rgbe[2] = rgbe[3] = 255;
     else {
-        const Uint32  e = float_as_uint( m) & 0x7F800000u;
-        const Float32 v = uint_as_float( 0x82800000u - e);
+        const Uint32  e = __float_as_uint( m) & 0x7F800000u;
+        const Float32 v = __uint_as_float( 0x82800000u - e);
 
         rgbe[0] = Uint8( c[0] * v);
         rgbe[1] = Uint8( c[1] * v);
@@ -1077,12 +1077,12 @@ MI_HOST_DEVICE_INLINE void from_rgbe( const Uint8 rgbe[4], Float32 color[3])
     }
 
     const Uint32  e = (static_cast<Uint32>( rgbe[3]) << 23) - 0x800000u;
-    const Float32 v = uint_as_float( e);
+    const Float32 v = __uint_as_float( e);
     const Float32 c = static_cast<Float32>( 1.0 - 0.5/256.0) * v;
 
-    color[0] = uint_as_float( e | (static_cast<Uint32>( rgbe[0]) << 15)) - c;
-    color[1] = uint_as_float( e | (static_cast<Uint32>( rgbe[1]) << 15)) - c;
-    color[2] = uint_as_float( e | (static_cast<Uint32>( rgbe[2]) << 15)) - c;
+    color[0] = __uint_as_float( e | (static_cast<Uint32>( rgbe[0]) << 15)) - c;
+    color[1] = __uint_as_float( e | (static_cast<Uint32>( rgbe[1]) << 15)) - c;
+    color[2] = __uint_as_float( e | (static_cast<Uint32>( rgbe[2]) << 15)) - c;
 }
 
 /// Decodes a color from RGBE representation.
@@ -1095,12 +1095,12 @@ MI_HOST_DEVICE_INLINE void from_rgbe( const Uint32 rgbe, Float32 color[3])
     }
 
     const Uint32  e = (rgbe3 >> 1) - 0x800000u;
-    const Float32 v = uint_as_float( e);
+    const Float32 v = __uint_as_float( e);
     const Float32 c = static_cast<Float32>( 1.0 - 0.5/256.0) * v;
 
-    color[0] = uint_as_float( e | ((rgbe << 15) & 0x7F8000u)) - c;
-    color[1] = uint_as_float( e | ((rgbe <<  7) & 0x7F8000u)) - c;
-    color[2] = uint_as_float( e | ((rgbe >>  1) & 0x7F8000u)) - c;
+    color[0] = __uint_as_float( e | ((rgbe << 15) & 0x7F8000u)) - c;
+    color[1] = __uint_as_float( e | ((rgbe <<  7) & 0x7F8000u)) - c;
+    color[2] = __uint_as_float( e | ((rgbe >>  1) & 0x7F8000u)) - c;
 }
 
 

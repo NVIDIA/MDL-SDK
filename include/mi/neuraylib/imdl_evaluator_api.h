@@ -43,7 +43,7 @@ class ITransaction;
 class IValue_bool;
 class IValue_factory;
 
-/** \addtogroup mi_neuray_mdl_types
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -101,7 +101,7 @@ public:
         Sint32* error) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 } // namespace mi

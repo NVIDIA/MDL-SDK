@@ -42,7 +42,7 @@ namespace neuraylib {
 class IManifest;
 class IReader;
 
-/** \addtogroup mi_neuray_mdl_types
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -152,7 +152,7 @@ public:
     virtual const char* get_value( const char* key, Size index) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

@@ -74,7 +74,7 @@ MI_HOST_DEVICE_INLINE unsigned quantize_unsigned(const float x)
     enum { N = (1u << bits) - 1, Np1 = (1u << bits) };
     //return min((unsigned)(x * (float)Np1),(unsigned)N); // does not handle large values, as these trigger undefined behavior (on x86: 0)
 #ifdef __CUDA_ARCH__
-    return (unsigned)(fminf(x, uint_as_float(0x3f800000u-1)) * (float)Np1);
+    return (unsigned)(fminf(x, __uint_as_float(0x3f800000u-1)) * (float)Np1);
 #else
     return (unsigned)(min(x, mi::base::binary_cast<float>(0x3f800000u-1)) * (float)Np1);
 #endif

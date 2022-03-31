@@ -72,7 +72,7 @@ Version_impl::Version_impl()
 {
     m_stripped_platform = strip_compiler_suffix(VERSION::get_platform_os());
 
-    m_version = get_product_name() + std::string(" ") + get_product_version();
+    m_version = std::string(get_product_name()) + ' ' + get_product_version();
     m_version += std::string( ", build ") + VERSION::get_platform_version();
     m_version += std::string( ", ") + VERSION::get_platform_date();
     m_version += std::string( ", ") + m_stripped_platform;

@@ -42,7 +42,7 @@ class IMdl_resolved_module;
 class IMdl_resolved_resource;
 class IReader;
 
-/** \addtogroup mi_neuray_mdl_sdk_misc
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -188,7 +188,7 @@ public:
     /// \param[out] u  The u coordinate of the resource.
     /// \param[out] v  The v coordinate of the resource.
     /// \return        \c true if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE and \p i is
-    ///                in range, \c false otherwise (and the output values are undefine).
+    ///                in range, \c false otherwise (and the output values are undefined).
     virtual bool get_uvtile_uv( Size i, Sint32& u, Sint32& v) const = 0;
 };
 
@@ -244,7 +244,7 @@ public:
     virtual const IMdl_resolved_resource_element* get_element( Size i) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_sdk_misc
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

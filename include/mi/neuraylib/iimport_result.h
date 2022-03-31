@@ -39,15 +39,12 @@ namespace mi {
 namespace neuraylib {
     
 /** 
-\ifnot MDL_SOURCE_RELEASE
 \addtogroup mi_neuray_impexp
 @{
-\endif
 */
 
 /// This interface represents the result of an import operation.
 ///
-/// \ifnot MDL_SOURCE_RELEASE
 /// Such an import operation is triggered by #mi::neuraylib::IImport_api::import_elements() or
 /// #mi::neuraylib::IImport_api::import_elements_from_string(). It gives access
 /// to messages, message numbers, and message severities, and to important scene elements like root
@@ -66,7 +63,6 @@ namespace neuraylib {
 /// - #mi::base::details::MESSAGE_SEVERITY_VERBOSE and
 ///   #mi::base::details::MESSAGE_SEVERITY_DEBUG \n
 ///   These message severities should be avoided by importers.
-/// \endif
 class IImport_result :
     public base::Interface_declare<0xa47741d4,0x49c5,0x418d,0xa5,0x4b,0xa6,0xfb,0xf4,0xa0,0x91,0x44>
 {
@@ -142,11 +138,9 @@ public:
 /// importer writers. In addition to the #mi::neuraylib::IImport_result interface it provides
 /// methods to set all values.
 ///
-/// \ifnot MDL_SOURCE_RELEASE
 /// See #mi::neuraylib::IImport_api::import_elements() for common message numbers. Numbers in the
 /// range 4000-5999 are reserved for importer-specific messages. All other numbers are reserved for
 /// other purposes.
-/// \endif
 ///
 /// \note In case of a successful Import operation the array of messages should not contain an
 ///       explicit message with message number 0. If there are no other importer-specific messages,
@@ -264,9 +258,7 @@ public:
 
 
 /*
-\ifnot MDL_SOURCE_RELEASE
 @}
-\endif
 */ // end group mi_neuray_impexp
 
 } // namespace neuraylib
@@ -274,4 +266,3 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IIMPORT_RESULT_H
-

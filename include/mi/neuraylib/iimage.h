@@ -151,6 +151,9 @@ public:
     ///                       - -3: Failure to open the file.
     ///                       - -4: No image plugin found to handle the file.
     ///                       - -5: The image plugin failed to import the file.
+    ///
+    /// \see #mi::neuraylib::IMdl_factory::create_texture() for a way to create a texture based
+    ///      on an MDL file path instead of a filename.
     virtual Sint32 reset_file( const char* filename, const char* selector = 0) = 0;
 
     /// Sets the image to the data provided by a reader.
@@ -277,7 +280,7 @@ public:
 
     /// Returns the frame number for a give frame ID.
     ///
-    /// This function is stricly monotonically increasing. Frame numbers are not necessarily
+    /// This function is strictly monotonically increasing. Frame numbers are not necessarily
     /// consecutive, there can be missing frame numbers.
     ///
     /// \param frame_id    The frame ID of the frame.
@@ -361,7 +364,7 @@ public:
     /// passed to #reset_file().
     ///
     /// \param frame_id    The frame ID of the mipmap.
-    /// \param uvtile_id   The uv-tile ID of the mimap.
+    /// \param uvtile_id   The uv-tile ID of the mipmap.
     ///
     /// \see #get_original_filename()
     virtual const char* get_filename( Size frame_id, Size uvtile_id) const = 0;
@@ -404,7 +407,7 @@ public:
     /// Returns the pixel type of a mipmap.
     ///
     /// \param frame_id    The frame ID of the mipmap.
-    /// \param uvtile_id   The uv-tile ID of the mimap to get the pixel type for.
+    /// \param uvtile_id   The uv-tile ID of the mipmap to get the pixel type for.
     /// \return            The pixel type, or \c NULL in case of an invalid frame ID or uv-tile ID.
     ///
     /// See \ref mi_neuray_types for a list of supported pixel types.
@@ -417,7 +420,7 @@ public:
     /// Returns the number of levels in the mipmap pyramid.
     ///
     /// \param frame_id    The frame ID of the mipmap.
-    /// \param uvtile_id   The uv-tile ID of the mimap to get the number of levels for.
+    /// \param uvtile_id   The uv-tile ID of the mipmap to get the number of levels for.
     /// \return            The number of levels, or -1 in case of an invalid frame ID or uv-tile ID.
     virtual Uint32 get_levels( Size frame_id, Size uvtile_id) const = 0;
 

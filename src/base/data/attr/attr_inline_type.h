@@ -31,9 +31,27 @@
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/mem/i_mem_consumption.h>
+#include <base/lib/log/log.h>
 
 namespace MI {
 namespace ATTR {
+
+namespace {
+
+ATTR::Type_code to_valid_range(const ATTR::Type_code code)
+{
+    if (code < TYPE_UNDEF || code >= TYPE_NUM)
+    {
+        MI::LOG::mod_log->warning(M_ATTR, LOG::Mod_log::C_DATABASE, 49,
+            "Invalid type code: %d", code);
+        return TYPE_UNDEF;
+    }
+
+    return code;
+}
+
+} // unnamed namespace
+
 
 // return true if the two types agree exactly, including all child types. This
 // is useful to check that the values are compatible, for example for shader
@@ -146,6 +164,89 @@ MI_INLINE std::vector<std::pair<int, std::string> >* Type::get_enum() const
     return m_enum;
 }
 
+MI_INLINE void Type::set_name(
+    const char		*name)		// new field name
+{
+    if (name)
+        m_name = name;
+    else
+        m_name.clear();
+}
+
+
+//
+// Set the next Type.
+//
+
+MI_INLINE void Type::set_next(
+    const Type &next)			// new successor
+{
+    delete m_next;
+    m_next = new Type(next);
+}
+
+//
+// return the size of one member of a type. For example, a color is 16
+// bytes, regardless of the array size because the array size isn't known
+// here. Note that the nonstatic sizeof_one() does include the static array
+// size. Structs have size 0 since their members are not included either.
+//
+
+MI_INLINE size_t Type::sizeof_one(
+    Type_code		type)		// return size of one of this type
+{
+    return m_typeinfo[type].comp * m_typeinfo[type].size;
+}
+
+
+//
+// return the ascii name of a type. Useful for all sorts of user messages.
+//
+
+MI_INLINE const char *Type::type_name(
+    Type_code		type)		// type to look up
+{
+    type = to_valid_range(type);
+    return m_typeinfo[type].name;
+}
+
+
+//
+// return how a type is composed of component types, ie. a Color is 4 Scalars.
+//
+
+MI_INLINE Uint Type::component_count(
+    Type_code		type)		// type, ie. Color -> 4 components
+{
+    type = to_valid_range(type);
+    return m_typeinfo[type].comp;
+}
+
+
+MI_INLINE Type_code Type::component_type(
+    Type_code		type)		// type, ie. Color -> Scalar
+{
+    type = to_valid_range(type);
+    return m_typeinfo[type].base;
+}
+
+MI_INLINE const char *Type::component_name( //-V524 PVS
+    Type_code		type)		// type, ie. Color -> Scalar
+{
+    type = to_valid_range(type);
+    return m_typeinfo[type].name;
+}
+
+//
+// Am I the given subclass? (poor man's dynamic_cast support)
+// This base class implementation return false in any case.
+//
+
+MI_INLINE bool Type::is_type_subclass(
+    SERIAL::Class_id id) const		// id of the requested subclass
+{
+    return false;
+}
 
 // write access functions. Setting next/child deletes the entire old chain.
 MI_INLINE void Type::set_typecode(
@@ -179,6 +280,12 @@ MI_INLINE void Type::set_arraysize(
         if (m_child && m_child->get_typecode() != TYPE_ARRAY)
             m_child->m_arraysize = arraysize;
     }
+}
+
+MI_INLINE void Type::set_type_name(
+    const std::string& str)
+{
+    m_type_name = str;
 }
 
 

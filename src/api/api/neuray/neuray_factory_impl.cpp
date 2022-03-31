@@ -1323,11 +1323,11 @@ mi::neuraylib::ITransaction* Factory_impl::get_transaction( const mi::IData* dat
     }
 
     // extract transaction from ICompound
-    if( data->compare_iid( mi::ICompound::IID()))
+    if( mi::ICompound::compare_iid( data->get_iid()))
         return nullptr;
 
     // all interfaces derived from IData_collection should be handled now
-    ASSERT( M_NEURAY_API, !data->compare_iid( mi::IData_collection::IID()));
+    ASSERT( M_NEURAY_API, !mi::IData_collection::compare_iid( data->get_iid()));
 
     // extract transaction from IPointer
     mi::base::Handle<const mi::IPointer> pointer( data->get_interface<mi::IPointer>());

@@ -56,7 +56,7 @@ class IType;
 class IType_list;
 class IWriter;
 
-/** \addtogroup mi_neuray_mdl_types
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -596,7 +596,7 @@ public:
     virtual const IString* get_deserialized_filename( const char* serialized_filename) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

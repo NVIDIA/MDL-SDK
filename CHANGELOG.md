@@ -1,7 +1,48 @@
 Change Log
 ==========
-MDL SDK 2021.1 (349500.7063): 18 Jan 2022
+MDL SDK 2021.1.1 (349500.8264): 18 Mar 2022
 -----------------------------------------------
+
+ABI compatible with the MDL SDK 2021.1.1 (349500.8264) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Known Issues**
+
+- The version text in the MI_NEURAYLIB_PRODUCT_VERSION_STRING macro
+  in the version.h include file contains the previous version number
+  of "2021.1" instead of "2021.1.1".
+
+**Added and Changed Features**
+
+- Image File Format Plugins
+
+    - Support .rgb extension for textures in the SGI file format.
+
+**Fixed Bugs**
+
+- General
+
+    - Fixed filename extension mismatch when exporting textures referenced from MDL modules.
+      Under certain circumstances, the texture was copied, but got a different filename extension,
+      causing problems importing the MDL module again.
+    - Fixed creation of function calls of the cast operator if the target type has frequency
+      qualifiers. Similarly, fixed creation of function calls of the ternary operator if the
+      argument types have frequency qualifiers.
+    - Fixed handling of memory allocation failures in `IImage_api::create_canvas()/create_tile()`
+      methods.
+    - Also encode the simple name of function definitions. For almost all functions this does not
+      make any change since the simple name is usually an identifier, except for a couple of
+      operators from the builtins module.
+    
+- MDL Compiler and Backends
+
+    - libbsdf: Fixed incorrect child normal orientation usage in `df::(color_)fresnel_layer`,
+      `df::(color_)custom_curve_layer` and `df::(color_)measured_curve_layer` for backside hits.
+    - HLSL backend: Fixed code generation for scene data access functions inside automatically
+      derived expressions.
+
+MDL SDK 2021.1 (349500.7063): 26 Jan 2022
+-----------------------------------------
 
 ABI compatible with the MDL SDK 2021.1 (349500.7063) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))

@@ -538,12 +538,12 @@ std::string Attribute_set_impl_helper::get_attribute_type_name(
         while( member_type) {
             std::string member_type_name = get_attribute_type_name( *member_type, false);
             if( member_type_name.empty())
-                return "";
-            attribute_type_name += " ";
+                return std::string();
+            attribute_type_name += ' ';
             attribute_type_name += member_type_name;
-            attribute_type_name += " ";
+            attribute_type_name += ' ';
             attribute_type_name += member_type->get_name(); //-V769 PVS
-            attribute_type_name += ";";
+            attribute_type_name += ';';
             member_type = member_type->get_next();
         }
         attribute_type_name += " }";

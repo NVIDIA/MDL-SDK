@@ -71,7 +71,7 @@ public:
 
     /// All known semantics of functions definitions.
     ///
-    /// Material definitions always have the sematic #DS_UNKNOWN.
+    /// Material definitions always have the semantic #DS_UNKNOWN.
     ///
     /// \note Do not rely on the numeric values of the enumerators since they may change without
     ///       further notice.
@@ -87,15 +87,14 @@ public:
         DS_INVALID_REF_CONSTRUCTOR,               ///< The invalid reference constructor.
         DS_DEFAULT_STRUCT_CONSTRUCTOR,            ///< The default constructor for a struct.
         DS_TEXTURE_CONSTRUCTOR,                   ///< The texture constructor.
-
         DS_CONV_OPERATOR,                         ///< The type conversion operator.
-
         DS_COPY_CONSTRUCTOR,                      ///< The copy constructor.
 
         // Unary operators
-        DS_OPERATOR_FIRST = 0x0200,
-        DS_UNARY_FIRST = DS_OPERATOR_FIRST,
-        DS_BITWISE_COMPLEMENT = DS_UNARY_FIRST,   ///< The bitwise complement operator.
+
+        DS_BITWISE_COMPLEMENT = 0x0200,           ///< The bitwise complement operator.
+        DS_UNARY_FIRST = DS_BITWISE_COMPLEMENT,
+        DS_OPERATOR_FIRST = DS_UNARY_FIRST,
         DS_LOGICAL_NOT,                           ///< The unary logical negation operator.
         DS_POSITIVE,                              ///< The unary arithmetic positive operator.
         DS_NEGATIVE,                              ///< The unary arithmetic negation operator.
@@ -103,15 +102,14 @@ public:
         DS_PRE_DECREMENT,                         ///< The pre-decrement operator.
         DS_POST_INCREMENT,                        ///< The post-increment operator.
         DS_POST_DECREMENT,                        ///< The post-decrement operator.
-
-        /// The cast operator. See \ref mi_neuray_mdl_cast_operator.
+        ///  The cast operator. See \ref mi_neuray_mdl_cast_operator.
         DS_CAST,
         DS_UNARY_LAST = DS_CAST,
 
         // Binary operators
-        DS_BINARY_FIRST,
-        DS_SELECT = DS_BINARY_FIRST,              ///< The select operator.
 
+        DS_SELECT,                                ///< The select operator.
+        DS_BINARY_FIRST = DS_SELECT,
         /// The array index operator. See \ref mi_neuray_mdl_array_index_operator.
         DS_ARRAY_INDEX,
         DS_MULTIPLY,                              ///< The multiplication operator.
@@ -149,13 +147,14 @@ public:
         DS_BINARY_LAST = DS_SEQUENCE,
 
         // Ternary operator
+
         /// The ternary operator (conditional). See \ref mi_neuray_mdl_ternary_operator.
         DS_TERNARY,
         DS_OPERATOR_LAST = DS_TERNARY,
 
         // ::math module intrinsics
-        DS_INTRINSIC_MATH_FIRST = 0x0300,
-        /// The %math::abs() intrinsic function.
+
+        DS_INTRINSIC_MATH_FIRST = 0x0300,         ///< The %math::abs() intrinsic function.
         DS_INTRINSIC_MATH_ABS = DS_INTRINSIC_MATH_FIRST,
         DS_INTRINSIC_MATH_ACOS,                   ///< The %math::acos() intrinsic function.
         DS_INTRINSIC_MATH_ALL,                    ///< The %math::all() intrinsic function.
@@ -171,9 +170,8 @@ public:
         DS_INTRINSIC_MATH_DEGREES,                ///< The %math::degrees() intrinsic function.
         DS_INTRINSIC_MATH_DISTANCE,               ///< The %math::distance() intrinsic function.
         DS_INTRINSIC_MATH_DOT,                    ///< The %math::dot() intrinsic function.
-
-        /// The %math::eval_at_wavelength() intrinsic function.
-        DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH,
+        DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH,     ///< The %math::eval_at_wavelength() intrinsic
+                                                  ///  function.
         DS_INTRINSIC_MATH_EXP,                    ///< The %math::exp() intrinsic function.
         DS_INTRINSIC_MATH_EXP2,                   ///< The %math::exp2() intrinsic function.
         DS_INTRINSIC_MATH_FLOOR,                  ///< The %math::floor() intrinsic function.
@@ -189,14 +187,12 @@ public:
         DS_INTRINSIC_MATH_LUMINANCE,              ///< The %math::luminance() intrinsic function.
         DS_INTRINSIC_MATH_MAX,                    ///< The %math::max() intrinsic function.
         DS_INTRINSIC_MATH_MAX_VALUE,              ///< The %math::max_value() intrinsic function.
-
-        /// The %math::max_value_wavelength() intrinsic function.
-        DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH,
+        DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH,   ///< The %math::max_value_wavelength() intrinsic
+                                                  ///  function.
         DS_INTRINSIC_MATH_MIN,                    ///< The %math::min() intrinsic function.
         DS_INTRINSIC_MATH_MIN_VALUE,              ///< The %math::min_value() intrinsic function.
-
-        /// The %math::min_value_wavelength() intrinsic function.
-        DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH,
+        DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH,   ///< The %math::min_value_wavelength() intrinsic
+                                                  ///  function.
         DS_INTRINSIC_MATH_MODF,                   ///< The %math::modf() intrinsic function.
         DS_INTRINSIC_MATH_NORMALIZE,              ///< The %math::normalize() intrinsic function.
         DS_INTRINSIC_MATH_POW,                    ///< The %math::pow() intrinsic function.
@@ -213,9 +209,8 @@ public:
         DS_INTRINSIC_MATH_TAN,                    ///< The %math::tan() intrinsic function.
         DS_INTRINSIC_MATH_TRANSPOSE,              ///< The %math::transpose() intrinsic function.
         DS_INTRINSIC_MATH_BLACKBODY,              ///< The %math::blackbody() intrinsic function.
-
-        /// The %math::emission_color() intrinsic function.
-        DS_INTRINSIC_MATH_EMISSION_COLOR,
+        DS_INTRINSIC_MATH_EMISSION_COLOR,         ///< The %math::emission_color() intrinsic
+                                                  ///  function.
         DS_INTRINSIC_MATH_COSH,                   ///< The %math::cosh() intrinsic function.
         DS_INTRINSIC_MATH_SINH,                   ///< The %math::sinh() intrinsic function.
         DS_INTRINSIC_MATH_TANH,                   ///< The %math::tanh() intrinsic function.
@@ -228,9 +223,9 @@ public:
         DS_INTRINSIC_MATH_LAST = DS_INTRINSIC_MATH_DY,
 
         // ::state module intrinsics
-        DS_INTRINSIC_STATE_FIRST = 0x0400,
-        /// The %state::position() function.
-        DS_INTRINSIC_STATE_POSITION = DS_INTRINSIC_STATE_FIRST,
+
+        DS_INTRINSIC_STATE_POSITION = 0x0400,     ///<  The %state::position() function.
+        DS_INTRINSIC_STATE_FIRST = DS_INTRINSIC_STATE_POSITION,
         DS_INTRINSIC_STATE_NORMAL,                ///< The %state::normal() function.
         DS_INTRINSIC_STATE_GEOMETRY_NORMAL,       ///< The %state::geometry_normal() function.
         DS_INTRINSIC_STATE_MOTION,                ///< The %state::motion() function.
@@ -258,10 +253,9 @@ public:
         DS_INTRINSIC_STATE_LAST = DS_INTRINSIC_STATE_WAVELENGTH_MAX,
 
         // ::tex module intrinsics
-        DS_INTRINSIC_TEX_FIRST = 0x0500,
 
-        /// The tex::width() function.
-        DS_INTRINSIC_TEX_WIDTH = DS_INTRINSIC_TEX_FIRST,
+        DS_INTRINSIC_TEX_WIDTH = 0x0500,          ///< The tex::width() function.
+        DS_INTRINSIC_TEX_FIRST = DS_INTRINSIC_TEX_WIDTH,
         DS_INTRINSIC_TEX_HEIGHT,                  ///< The tex::height() function.
         DS_INTRINSIC_TEX_DEPTH,                   ///< The tex::depth() function.
         DS_INTRINSIC_TEX_LOOKUP_FLOAT,            ///< The tex::lookup_float() function.
@@ -284,14 +278,13 @@ public:
         DS_INTRINSIC_TEX_LAST = DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE,
 
         // ::df module intrinsics
-        DS_INTRINSIC_DF_FIRST = 0x0600,
 
         /// The df::diffuse_reflection_bsdf() function.
-        DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = DS_INTRINSIC_DF_FIRST,
+        DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = 0x0600,
+        DS_INTRINSIC_DF_FIRST = DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
         DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF,///< The df::diffuse_transmission_bsdf() function.
         DS_INTRINSIC_DF_SPECULAR_BSDF,            ///< The df::specular_bsdf() function.
         DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF,       ///< The df::simple_glossy_bsdf() function.
-
         /// The df::backscattering_glossy_reflection_bsdf() function.
         DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF,
         DS_INTRINSIC_DF_MEASURED_BSDF,            ///< The df::measured_bsdf() function.
@@ -313,7 +306,6 @@ public:
         DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM,    ///< The df::light_profile_maximum() function.
         DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID,    ///< The df::light_profile_isvalid() function.
         DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID, ///< The df::bsdf_measurement_is_valid() function.
-
         /// The df::microfacet_beckmann_smith_bsdf() function.
         DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF,
         /// The df::microfacet_ggx_smith_bsdf() function.
@@ -329,7 +321,6 @@ public:
         DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER,     ///< The df::color_weighted_layer() function.
         DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER,      ///< The df::color_fresnel_layer() function.
         DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER, ///< The df::color_custom_curve_layer() function.
-
         /// The df::color_measured_curve_layer() function.
         DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER,
         DS_INTRINSIC_DF_FRESNEL_FACTOR,           ///< The df::fresnel_factor() function.
@@ -342,42 +333,61 @@ public:
 
 
         // ::scene module intrinsics
-        DS_INTRINSIC_SCENE_FIRST = 0x0800,
 
-        DS_INTRINSIC_SCENE_DATA_ISVALID = DS_INTRINSIC_SCENE_FIRST,
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT,             ///< scene::data_lookup_int()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2,            ///< scene::data_lookup_int2()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3,            ///< scene::data_lookup_int3()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4,            ///< scene::data_lookup_int4()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT,           ///< scene::data_lookup_float()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2,          ///< scene::data_lookup_float2()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3,          ///< scene::data_lookup_float3()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4,          ///< scene::data_lookup_float4()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR,           ///< scene::data_lookup_color()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT,     ///< scene::data_lookup_uniform_int()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2,    ///< scene::data_lookup_uniform_int2()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3,    ///< scene::data_lookup_uniform_int3()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4,    ///< scene::data_lookup_uniform_int4()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT,   ///< scene::data_lookup_uniform_float()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2,  ///< scene::data_lookup_uniform_float2()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3,  ///< scene::data_lookup_uniform_float3()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,  ///< scene::data_lookup_uniform_float4()
-        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,   ///< scene::data_lookup_uniform_color()
+        /// The scene::data_is_valid() function.
+        DS_INTRINSIC_SCENE_DATA_ISVALID = 0x0800,
+        DS_INTRINSIC_SCENE_FIRST = DS_INTRINSIC_SCENE_DATA_ISVALID,
+        /// The scene::data_lookup_int() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT,
+        /// The scene::data_lookup_int2() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2,
+        /// The scene::data_lookup_int3() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3,
+        /// The scene::data_lookup_int4() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4,
+        /// The scene::data_lookup_float() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT,
+        /// The scene::data_lookup_float2() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2,
+        /// The scene::data_lookup_float3() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3,
+        /// The scene::data_lookup_float4() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4,
+        /// The scene::data_lookup_color() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR,
+        /// The scene::data_lookup_uniform_int() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT,
+        /// The scene::data_lookup_uniform_int2() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2,
+        /// The scene::data_lookup_uniform_int3() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3,
+        /// The scene::data_lookup_uniform_int4() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4,
+        /// The scene::data_lookup_uniform_float() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT,
+        /// The scene::data_lookup_uniform_float2() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2,
+        /// The scene::data_lookup_uniform_float3() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3,
+        /// The scene::data_lookup_uniform_float4() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,
+        /// The scene::data_lookup_uniform_color() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
         DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
 
         // ::debug module intrinsics
-        DS_INTRINSIC_DEBUG_FIRST = 0x0900,
 
-        /// The debug::breakpoint() function.
-        DS_INTRINSIC_DEBUG_BREAKPOINT = DS_INTRINSIC_DEBUG_FIRST,
+        DS_INTRINSIC_DEBUG_BREAKPOINT = 0x0900,   ///< The debug::breakpoint() function.
+        DS_INTRINSIC_DEBUG_FIRST = DS_INTRINSIC_DEBUG_BREAKPOINT,
         DS_INTRINSIC_DEBUG_ASSERT,                ///< The debug::assert() function.
         DS_INTRINSIC_DEBUG_PRINT,                 ///< The debug::print() function.
         DS_INTRINSIC_DEBUG_LAST = DS_INTRINSIC_DEBUG_PRINT,
 
         // DAG backend intrinsics
-        DS_INTRINSIC_DAG_FIRST = 0x0A00,
+
         /// The structure field access function.
-        DS_INTRINSIC_DAG_FIELD_ACCESS = DS_INTRINSIC_DAG_FIRST,
+        DS_INTRINSIC_DAG_FIELD_ACCESS = 0x0A00,
+        DS_INTRINSIC_DAG_FIRST = DS_INTRINSIC_DAG_FIELD_ACCESS,
         /// The array constructor. See \ref mi_neuray_mdl_array_constructor.
         DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR,
         /// The array length operator. See \ref mi_neuray_mdl_array_length_operator.

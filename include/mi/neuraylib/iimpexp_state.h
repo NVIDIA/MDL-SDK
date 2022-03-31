@@ -38,10 +38,8 @@ namespace mi {
 namespace neuraylib {
 
 /** 
-\ifnot MDL_SOURCE_RELEASE
 \addtogroup mi_neuray_impexp
 @{
-\endif
 */
 
 /// This interface represents states that are passed to recursive calls of importers and exporters.
@@ -91,9 +89,7 @@ public:
 };
 
 /*
-\ifnot MDL_SOURCE_RELEASE
 @}
-\endif
 */ // end group mi_neuray_impexp
 
 } // namespace neuraylib
@@ -101,4 +97,3 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IIMPEXP_STATE_H
-

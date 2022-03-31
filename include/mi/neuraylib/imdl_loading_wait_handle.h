@@ -38,7 +38,7 @@ namespace mi {
 namespace neuraylib {
 
 
-/** \addtogroup mi_neuray_mdl_types
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -95,7 +95,7 @@ public:
     virtual IMdl_loading_wait_handle* create_wait_handle() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 } // namespace mi

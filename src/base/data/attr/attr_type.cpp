@@ -40,7 +40,6 @@
 #include <base/data/serial/i_serializer.h>
 #include <base/lib/cont/i_cont_array.h>
 #include <base/lib/cont/i_cont_rle_array.h>
-#include <base/lib/log/log.h>
 
 #undef EXPERIMENTAL_ARRAYS_OF_ARRAYS_MODE
 
@@ -152,22 +151,6 @@ const Type::Typeinfo Type::m_typeinfo[] = {
 
 };
 
-namespace {
-
-ATTR::Type_code to_valid_range(const ATTR::Type_code code)
-{
-    if (code < TYPE_UNDEF || code >= TYPE_NUM)
-    {
-        mod_log->warning(M_ATTR, LOG::Mod_log::C_DATABASE, 49,
-            "Invalid type code: %d", code);
-        return TYPE_UNDEF;
-    }
-
-    return code;
-}
-
-} // unnamed namespace
-
 //
 // constructor.
 //
@@ -178,6 +161,7 @@ Type::Type(
     Uint		arraysize)	// number of elements, 0=dynamic
 {
     mi_static_assert(TYPE_NUM == (sizeof(m_typeinfo) / sizeof(Typeinfo)));
+    mi_static_assert(sizeof(Type::m_typeinfo) == TYPE_NUM * sizeof(Type::Typeinfo));
     ASSERT(M_ATTR, type != TYPE_ID);
 
     type = to_valid_range(type);
@@ -220,28 +204,6 @@ Type::~Type()
         delete m_child;
     else
         delete m_enum;
-}
-
-
-void Type::set_name(
-    const char		*name)		// new field name
-{
-    if (name)
-        m_name = name;
-    else
-        m_name.clear();
-}
-
-
-//
-// Set the next Type.
-//
-
-void Type::set_next(
-    const Type &next)			// new successor
-{
-    delete m_next;
-    m_next = new Type(next);
 }
 
 
@@ -289,60 +251,6 @@ void Type::set_child(
             }
         }
     }
-}
-
-
-//
-// return the size of one member of a type. For example, a color is 16
-// bytes, regardless of the array size because the array size isn't known
-// here. Note that the nonstatic sizeof_one() does include the static array
-// size. Structs have size 0 since their members are not included either.
-//
-
-size_t Type::sizeof_one(
-    Type_code		type)		// return size of one of this type
-{
-    mi_static_assert(sizeof(m_typeinfo) == TYPE_NUM * sizeof(Type::Typeinfo));
-    return m_typeinfo[type].comp * m_typeinfo[type].size;
-}
-
-
-//
-// return the ascii name of a type. Useful for all sorts of user messages.
-//
-
-const char *Type::type_name(
-    Type_code		type)		// type to look up
-{
-    type = to_valid_range(type);
-    return m_typeinfo[type].name;
-}
-
-
-//
-// return how a type is composed of component types, ie. a Color is 4 Scalars.
-//
-
-Uint Type::component_count(
-    Type_code		type)		// type, ie. Color -> 4 components
-{
-    type = to_valid_range(type);
-    return m_typeinfo[type].comp;
-}
-
-
-Type_code Type::component_type(
-    Type_code		type)		// type, ie. Color -> Scalar
-{
-    type = to_valid_range(type);
-    return m_typeinfo[type].base;
-}
-
-const char *Type::component_name( //-V524 PVS
-    Type_code		type)		// type, ie. Color -> Scalar
-{
-    type = to_valid_range(type);
-    return m_typeinfo[type].name;
 }
 
 
@@ -560,18 +468,6 @@ const Type* Type::lookup(
                         
 
 //
-// Am I the given subclass? (poor man's dynamic_cast support)
-// This base class implementation return false in any case.
-//
-
-bool Type::is_type_subclass(
-    SERIAL::Class_id id) const		// id of the requested subclass
-{
-    return false;
-}
-
-
-//
 // serialize the object to the given serializer including all sub elements.
 // It must return a pointer behind itself (e.g. this + 1) to handle arrays.
 // Also recurse into children and successors.
@@ -705,13 +601,6 @@ void Type::dump() const
     CONT::Array<const Type *> types(1, this);
     rec_print_type(&types);
     ASSERT(M_ATTR, types.empty());
-}
-
-
-void Type::set_type_name(
-    const std::string& str)
-{
-    m_type_name = str;
 }
 
 

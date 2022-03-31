@@ -51,11 +51,6 @@ class ITile;
     \ingroup mi_neuray
 
     \brief Various utility classes.
-\elseif IRAY_API
-    \defgroup mi_neuray_mdl_sdk_misc Miscellaneous MDL-related Interfaces
-    \ingroup mi_neuray
-
-    \brief Various utility classes.
 \endif
 */
 
@@ -93,7 +88,7 @@ public:
     /// \param width        The desired width.
     /// \param height       The desired height.
     /// \return             The requested tile, or \c NULL in case of invalid pixel type, width, or
-    ///                     height.
+    ///                     height, or memory allocation failures.
     virtual ITile* create_tile(
         const char* pixel_type,
         Uint32 width,
@@ -116,7 +111,7 @@ public:
     /// \param gamma        The desired gamma value. The special value 0.0 represents the default
     ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
     /// \return             The requested canvas, or \c NULL in case of invalid pixel type, width,
-    ///                     height, layers, or cubemap flag.
+    ///                     height, layers, or cubemap flag, or memory allocation failures.
     virtual ICanvas* create_canvas(
         const char* pixel_type,
         Uint32 width,

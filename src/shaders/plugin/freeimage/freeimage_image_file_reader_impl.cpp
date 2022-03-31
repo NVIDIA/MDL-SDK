@@ -153,7 +153,7 @@ bool Image_file_reader_impl::get_is_cubemap() const
 
 mi::Float32 Image_file_reader_impl::get_gamma() const
 {
-    IMAGE::Pixel_type pixel_type = IMAGE::convert_pixel_type_string_to_enum( m_bitmap_pixel_type);
+    const IMAGE::Pixel_type pixel_type = IMAGE::convert_pixel_type_string_to_enum( m_bitmap_pixel_type);
     return IMAGE::get_default_gamma( pixel_type);
 }
 

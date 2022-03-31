@@ -146,6 +146,14 @@ BSDF_INLINE float2 process_ior(Data *data, State *state)
     return ior;
 }
 
+template<typename Data>
+BSDF_INLINE float3 process_incoming_ior(Data *data, State *state)
+{
+    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
+        data->ior1 = get_material_ior(state);
+    return data->ior1;
+}
+
 BSDF_INLINE void compute_eta(float &eta, const float3 &ior1, const float3 &ior2)
 {
     eta = (ior2.x + ior2.y + ior2.z) / (ior1.x + ior1.y + ior1.z);
@@ -218,6 +226,46 @@ BSDF_INLINE Color_fresnel_ior process_ior_color_fresnel_layer(Data *data, State 
     ret_val.ior = make_float2(
         (ior1.x + ior1.y + ior1.z) * (float)(1.0 / 3.0),
         (ior2.x + ior2.y + ior2.z) * (float)(1.0 / 3.0));
+
+    const float IOR_THRESHOLD = 1e-4f;
+    const float ior_diff = ret_val.ior.y - ret_val.ior.x;
+    if (math::abs(ior_diff) < IOR_THRESHOLD) {
+        ret_val.ior.y = ret_val.ior.x + copysignf(IOR_THRESHOLD, ior_diff);
+    }
+
+    return ret_val;
+}
+
+// variant of the above for color thin film Fresnel layering, replaces one of the IORs by
+// the parameter of the layerer for weight computation
+struct Thin_film_color_fresnel_ior {
+    float3 ior1;
+    float3 ior2;
+    float2 ior;
+};
+template<typename Data>
+BSDF_INLINE Thin_film_color_fresnel_ior process_ior_thin_film_color_fresnel_layer(Data *data, State *state, const float3 &ior_param)
+{
+    const float3 material_ior = get_material_ior(state);
+    
+    if (data->ior1.x == BSDF_USE_MATERIAL_IOR)
+        data->ior1 = material_ior;
+    if (data->ior2.x == BSDF_USE_MATERIAL_IOR)
+        data->ior2 = material_ior;
+
+    //!! this property should be communicated by the renderer
+    const bool outside =
+        (material_ior.x == data->ior2.x) &&
+        (material_ior.y == data->ior2.y) &&
+        (material_ior.z == data->ior2.z);
+
+    Thin_film_color_fresnel_ior ret_val;
+    ret_val.ior1 = outside ? data->ior1 : ior_param;
+    ret_val.ior2 = outside ? ior_param : data->ior2;
+
+    ret_val.ior = make_float2(
+        (ret_val.ior1.x + ret_val.ior1.y + ret_val.ior1.z) * (float)(1.0 / 3.0),
+        (ret_val.ior2.x + ret_val.ior2.y + ret_val.ior2.z) * (float)(1.0 / 3.0));
 
     const float IOR_THRESHOLD = 1e-4f;
     const float ior_diff = ret_val.ior.y - ret_val.ior.x;
@@ -1078,28 +1126,73 @@ BSDF_INLINE float refraction_cosine(
     return math::sqrt(1.0f - sintheta2_sqr);
 }
 
-// Fresnel s/p-polarized reflectance/transmittance factors
-BSDF_INLINE float fresnel_rs(const float n1, const float n2, const float cos1, const float cos2) {
-    return (n1 * cos1 - n2 * cos2) / (n1 * cos1 + n2 * cos2);
-}
-BSDF_INLINE float fresnel_rp(const float n1, const float n2, const float cos1, const float cos2) {
-    return (n2 * cos1 - n1 * cos2) / (n1 * cos2 + n2 * cos1);
-}
-BSDF_INLINE float fresnel_ts(const float n1, const float n2, const float cos1, const float cos2) {
-    return 2.0f * n1 * cos1 / (n1 * cos1 + n2 * cos2);
-}
-BSDF_INLINE float fresnel_tp(const float n1, const float n2, const float cos1, const float cos2) {
-    return 2.0f * n1 * cos1 / (n1 * cos2 + n2 * cos1);
+template<typename T>
+BSDF_INLINE T sqr(const T t) {
+    return t * t;
 }
 
+// compute squared norm of s/p polarized Fresnel reflection coefficients and phase shifts in complex unit circle
+// Born/Wolf - "Principles of Optics", section 13.4
+BSDF_INLINE float2 fresnel_conductor(float2 &phase_shift_sin, float2 &phase_shift_cos, const float n_a, const float n_b, const float k_b, const float cos_a, const float sin_a_sqd)
+{
+    const float k_b2 = k_b * k_b;
+    const float n_b2 = n_b * n_b;
+    const float n_a2 = n_a * n_a;
+    const float tmp0 = n_b2 - k_b2;
+    const float half_U = 0.5f * (tmp0 - n_a2 * sin_a_sqd);
+    const float half_V = math::sqrt(math::max(half_U * half_U + k_b2 * n_b2, 0.0f));
+
+    const float u_b2 = half_U + half_V;
+    const float v_b2 = half_V - half_U;
+    const float u_b = math::sqrt(math::max(u_b2, 0.0f));
+    const float v_b = math::sqrt(math::max(v_b2, 0.0f));
+
+    const float tmp1 = tmp0 * cos_a;
+    const float tmp2 = n_a * u_b;
+    const float tmp3 = (2.0f * n_b * k_b) * cos_a;
+    const float tmp4 = n_a * v_b;
+    const float tmp5 = n_a * cos_a;
+
+    const float tmp6 = (2.0f * tmp5) * v_b;
+    const float tmp7 = (u_b2 + v_b2) - tmp5 * tmp5;
+
+    const float tmp8 = (2.0f * tmp5) * ((2.0f * n_b * k_b) * u_b - tmp0 * v_b);
+    const float tmp9 = sqr((n_b2 + k_b2) * cos_a) - n_a2 * (u_b2 + v_b2);
+
+    const float tmp67 = tmp6 * tmp6 + tmp7 * tmp7;
+    const float inv_sqrt_x = (tmp67 > 0.0f) ? (1.0f / math::sqrt(tmp67)) : 0.0f;
+    const float tmp89 = tmp8 * tmp8 + tmp9 * tmp9;
+    const float inv_sqrt_y = (tmp89 > 0.0f) ? (1.0f / math::sqrt(tmp89)) : 0.0f;
+    phase_shift_cos = make_float2(tmp7 * inv_sqrt_x, tmp9 * inv_sqrt_y);
+    phase_shift_sin = make_float2(tmp6 * inv_sqrt_x, tmp8 * inv_sqrt_y);
+
+    return make_float2(
+        (sqr(tmp5 - u_b) + v_b2) / (sqr(tmp5 + u_b) + v_b2),
+        (sqr(tmp1 - tmp2) + sqr(tmp3 - tmp4)) / (sqr(tmp1 + tmp2) + sqr(tmp3 + tmp4)));
+}
+
+// simplified for dielectric, no phase shift computation
+BSDF_INLINE float2 fresnel_dielectric(const float n_a, const float n_b, const float cos_a, const float cos_b)
+{
+    const float naca = n_a * cos_a;
+    const float nbcb = n_b * cos_b;
+    const float r_s = (naca - nbcb) / (naca + nbcb);
+
+    const float nacb = n_a * cos_b;
+    const float nbca = n_b * cos_a;
+    const float r_p = (nbca - nacb) / (nbca + nacb);
+
+    return make_float2(r_s * r_s, r_p * r_p);
+}
 
 // compute the reflection color tint caused by a thin-film coating
-// good reference:
-// https://www.gamedev.net/tutorials/_/technical/graphics-programming-and-theory/thin-film-interference-for-computer-graphics-r2962/
+// for reference, see Born/Wolf - "Principles of Optics", section 13.4.2, equation 30
 BSDF_INLINE float3 thin_film_factor(
-    const float3 coating_ior3,
     const float coating_thickness,
-    const float2 material_ior,
+    const float3 &coating_ior3,
+    const float3 &base_ior3,
+    const float3 &base_k3,
+    const float3 &incoming_ior3,
     const float kh)
 {
     if (coating_thickness <= 0.0f)
@@ -1120,21 +1213,23 @@ BSDF_INLINE float3 thin_film_factor(
         {0.38751f, 0.16135f, 0.00000f}, {0.13401f, 0.05298f, 0.00000f},
         {0.03531f, 0.01375f, 0.00000f}, {0.00817f, 0.00317f, 0.00000f}};
 
+    const float sin0_sqr = math::max(1.0f - kh * kh, 0.0f);
+
     //!! poor handling of color data here... just using "closest" color component of color IOR
     float coating_ior = coating_ior3.z;
+    float base_ior = base_ior3.z;
+    float base_k = base_k3.z;
+    float incoming_ior = incoming_ior3.z;
     float lambda = lambda_min;
+
     unsigned int i = 0;
     while (i < 16)
     {
-        const float eta01 = material_ior.x / coating_ior;
-        const float eta01_sqr = eta01 * eta01;
-        const float sin1_sqr = eta01_sqr * (1.0f - kh * kh);
+        const float eta01 = incoming_ior / coating_ior;
 
-        const float eta02 = material_ior.x / material_ior.y;
-        const float eta02_sqr = eta02 * eta02;
-        const float sin2_sqr = eta02_sqr * (1.0f - kh * kh);
-        
-        if (sin1_sqr > 1.0f || sin2_sqr > 1.0f) {
+        const float eta01_sqr = eta01 * eta01;
+        const float sin1_sqr = eta01_sqr * sin0_sqr;
+        if (sin1_sqr > 1.0f) {
 
             while (i < 16) {
 
@@ -1143,50 +1238,105 @@ BSDF_INLINE float3 thin_film_factor(
                 lambda += lambda_step;
                 ++i;
 
+                //!! poor handling of color data here... just using "closest" color component of color IOR
                 const float d_x = math::abs(lambda - 700.0f);
                 const float d_y = math::abs(lambda - 546.1f);
                 const float d_z = math::abs(lambda - 435.8f);
-                const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.z);
-
-                if (coating_ior_next != coating_ior) {
+                float coating_ior_next;
+                float base_ior_next;
+                float base_k_next;
+                float incoming_ior_next;
+                if (d_x < d_y && d_x < d_z) {
+                    coating_ior_next = coating_ior3.x;
+                    base_ior_next = base_ior3.x;
+                    base_k_next = base_k3.x;
+                    incoming_ior_next = incoming_ior3.x;
+                } else if (d_y < d_z) {
+                    coating_ior_next = coating_ior3.y;
+                    base_ior_next = base_ior3.y;
+                    base_k_next = base_k3.y;
+                    incoming_ior_next = incoming_ior3.y;
+                } else {
+                    coating_ior_next = coating_ior3.z;
+                    base_ior_next = base_ior3.z;
+                    base_k_next = base_k3.z;
+                    incoming_ior_next = incoming_ior3.z;
+                }
+                if (coating_ior_next != coating_ior || base_ior_next != base_ior || base_k_next != base_k || incoming_ior_next != incoming_ior) {
                     coating_ior = coating_ior_next;
+                    base_ior = base_ior_next;
+                    base_k = base_k_next;
+                    incoming_ior = incoming_ior_next;
                     break;
                 }
             }
-            continue;
         }
-        
-        const float cos1 = math::sqrt(1.0f - sin1_sqr);
-        const float cos2 = math::sqrt(1.0f - sin2_sqr);
+        else
+        {        
+            const float cos1 = math::sqrt(math::max(1.0f - sin1_sqr, 0.0f));
 
-        const float alpha_s = fresnel_rs(coating_ior, material_ior.x, cos1, kh) * fresnel_rs(coating_ior, material_ior.y, cos1, cos2);
-        const float alpha_p = fresnel_rp(coating_ior, material_ior.x, cos1, kh) * fresnel_rp(coating_ior, material_ior.y, cos1, cos2);
-        const float beta_s = fresnel_ts(material_ior.x, coating_ior, kh, cos1) * fresnel_ts(coating_ior, material_ior.y, cos1, cos2);
-        const float beta_p = fresnel_tp(material_ior.x, coating_ior, kh, cos1) * fresnel_tp(coating_ior, material_ior.y, cos1, cos2);
+            const float2 R01 = fresnel_dielectric(incoming_ior, coating_ior, kh, cos1);
+            float2 phi12_sin, phi12_cos;
+            const float2 R12 = fresnel_conductor(phi12_sin, phi12_cos, coating_ior, base_ior, base_k, cos1, sin1_sqr);
 
-        while (i < 16) {
+            const float tmp = (float)(4.0 * M_PI) * coating_ior * coating_thickness * cos1;
 
-            const float phi = (float)(4.0 * M_PI) * coating_ior * coating_thickness * cos1 / lambda;
-            const float cosphi = math::cos(phi);
-        
-            const float ts = beta_s * beta_s / ((alpha_s * alpha_s) - 2.0f * alpha_s * cosphi + 1.0f);
-            const float tp = beta_p * beta_p / ((alpha_p * alpha_p) - 2.0f * alpha_p * cosphi + 1.0f);
-            const float val = 1.0f - 0.5f * (ts + tp) * (material_ior.y * cos2) / (material_ior.x * kh);
+            const float R01R12_s = math::max(R01.x * R12.x, 0.0f);
+            const float r01r12_s = math::sqrt(R01R12_s);
+            const float R01R12_p = math::max(R01.y * R12.y, 0.0f);
+            const float r01r12_p = math::sqrt(R01R12_p);
 
-            xyz += cie_xyz[i] * val;
 
-            lambda += lambda_step;
-            ++i;
+            while (i < 16) {
 
-            //!! poor handling of color data here... just using "closest" color component of color IOR
-            const float d_x = math::abs(lambda - 700.0f);
-            const float d_y = math::abs(lambda - 546.1f);
-            const float d_z = math::abs(lambda - 435.8f);
-            const float coating_ior_next = (d_x < d_y && d_x < d_z) ? coating_ior3.x : ((d_y < d_z) ? coating_ior3.y : coating_ior3.z);
+                const float phi = tmp / lambda;
 
-            if (coating_ior_next != coating_ior) {
-                coating_ior = coating_ior_next;
-                break;
+                float phi_s, phi_c;
+                math::sincos(phi, &phi_s, &phi_c);
+                const float cos_phi_s = phi_c * phi12_cos.x - phi_s * phi12_sin.x; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+                const float tmp_s = 2.0f * r01r12_s * cos_phi_s;
+                const float R_s = (R01.x + R12.x + tmp_s) / (1.0f + R01R12_s + tmp_s);
+
+                const float cos_phi_p = phi_c * phi12_cos.y - phi_s * phi12_sin.y; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+            	const float tmp_p = 2.0f * r01r12_p * cos_phi_p;
+                const float R_p = (R01.y + R12.y + tmp_p) / (1.0f + R01R12_p + tmp_p);
+
+                xyz += cie_xyz[i] * (0.5f * (R_s + R_p));
+
+                lambda += lambda_step;
+                ++i;
+
+                //!! poor handling of color data here... just using "closest" color component of color IOR
+                const float d_x = math::abs(lambda - 700.0f);
+                const float d_y = math::abs(lambda - 546.1f);
+                const float d_z = math::abs(lambda - 435.8f);
+                float coating_ior_next;
+                float base_ior_next;
+                float base_k_next;
+                float incoming_ior_next;
+                if (d_x < d_y && d_x < d_z) {
+                    coating_ior_next = coating_ior3.x;
+                    base_ior_next = base_ior3.x;
+                    base_k_next = base_k3.x;
+                    incoming_ior_next = incoming_ior3.x;
+                } else if (d_y < d_z) {
+                    coating_ior_next = coating_ior3.y;
+                    base_ior_next = base_ior3.y;
+                    base_k_next = base_k3.y;
+                    incoming_ior_next = incoming_ior3.y;
+                } else {
+                    coating_ior_next = coating_ior3.z;
+                    base_ior_next = base_ior3.z;
+                    base_k_next = base_k3.z;
+                    incoming_ior_next = incoming_ior3.z;
+                }
+                if (coating_ior_next != coating_ior || base_ior_next != base_ior || base_k_next != base_k || incoming_ior_next != incoming_ior) {
+                    coating_ior = coating_ior_next;
+                    base_ior = base_ior_next;
+                    base_k = base_k_next;
+                    incoming_ior = incoming_ior_next;
+                    break;
+                }
             }
         }
     }
@@ -1219,7 +1369,10 @@ BSDF_INLINE float3 thin_film_factor(
 
     const float kh = math::abs(math::dot(k1, h));
 
-    return thin_film_factor(coating_ior3, coating_thickness, material_ior, kh);
+    const float3 base_ior = make<float3>(material_ior.y);
+    const float3 base_k = make<float3>(0.0f);
+    const float3 incoming_ior = make<float3>(material_ior.x);
+    return thin_film_factor(coating_thickness, coating_ior3, base_ior, base_k, incoming_ior, kh);
 }
 
 // evaluate measured color curve

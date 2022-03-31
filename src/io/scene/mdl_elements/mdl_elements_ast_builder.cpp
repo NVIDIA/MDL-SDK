@@ -1303,10 +1303,17 @@ static std::string get_texture_resource_name_gamma_selector(
         if( !s1.empty())
             return s1;
         const std::string& s2 = image->get_filename( 0, 0);
+        if( s2.empty())
+            return std::string();
+        const std::string& s3 = get_file_path(
+            s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
         // Do not use the filename for animated textures/uvtiles since it only identifies the first
         // frame/uvtile.
-        if( !s2.empty() && (image->get_length() == 0) && !image->is_uvtile())
-            return get_file_path( s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
+        if( !s3.empty() && !image->is_uvtile() && !image->is_animated())
+            return s3;
+        const char* name = trans->tag_to_name( image_tag);
+        LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
+            "Failed to construct MDL file path for image resource \"%s\".", name ? name : "");
         return std::string();
     }
     return std::string();
@@ -1321,7 +1328,7 @@ static std::string get_light_profile_resource_name(
     if( class_id != LIGHTPROFILE::Lightprofile::id) {
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-            "Incorrect type for light profile resource \"%s\".", name?name:"");
+            "Incorrect type for light profile resource \"%s\".", name ? name : "");
         return std::string();
     }
     DB::Access<LIGHTPROFILE::Lightprofile> lightprofile( tag, trans);
@@ -1329,8 +1336,15 @@ static std::string get_light_profile_resource_name(
     if( !s1.empty())
         return s1;
     const std::string& s2 = lightprofile->get_filename();
-    if( !s2.empty())
-        return get_file_path( s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
+    if( s2.empty())
+        return std::string();
+    const std::string& s3 = get_file_path(
+        s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
+    if( !s3.empty())
+        return s3;
+    const char* name = trans->tag_to_name( tag);
+    LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
+        "Failed to construct MDL file path for light profile resource \"%s\".", name ? name : "");
     return std::string();
 }
 
@@ -1343,7 +1357,7 @@ static std::string get_bsdf_measurement_resource_name(
     if( class_id != BSDFM::Bsdf_measurement::id) {
         const char* name = trans->tag_to_name( tag);
         LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-            "Incorrect type for BSDF measurement resource \"%s\".", name?name:"");
+            "Incorrect type for BSDF measurement resource \"%s\".", name ? name : "");
         return std::string();
     }
     DB::Access<BSDFM::Bsdf_measurement> bsdf_measurement( tag, trans);
@@ -1351,8 +1365,16 @@ static std::string get_bsdf_measurement_resource_name(
     if( !s1.empty())
         return s1;
     const std::string& s2 = bsdf_measurement->get_filename();
-    if( !s2.empty())
-        return get_file_path( s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
+    if( s2.empty())
+        return std::string();
+    const std::string& s3 = get_file_path(
+        s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
+    if( !s3.empty())
+        return s3;
+    const char* name = trans->tag_to_name( tag);
+    LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
+        "Failed to construct MDL file path for BSDF measurement resource \"%s\".",
+        name ? name : "");
     return std::string();
 }
 

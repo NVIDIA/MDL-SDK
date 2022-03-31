@@ -235,7 +235,7 @@ std::pair<std::string, STLEXT::Any> parse(
     }
     else {						// numbers: copy
         ASSERT(M_CONFIG, newtype == 'f');
-        float val = float(atof(&(value[0])[0]));
+        float val = float(atof(value[0].c_str()));
         result.second = STLEXT::Any(val);
     }
 

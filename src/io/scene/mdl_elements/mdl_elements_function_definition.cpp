@@ -132,7 +132,7 @@ Mdl_function_definition::Mdl_function_definition(
 
     Code_dag code_dag( mdl_code_dag, m_is_material);
 
-    m_simple_name  = code_dag.get_simple_name( index);
+    m_simple_name  = encode_name_without_signature( code_dag.get_simple_name( index));
     m_mdl_name     = MDL::get_mdl_name( mdl_code_dag, is_material, index);
     m_db_name      = get_db_name( m_mdl_name);
     m_mdl_semantic = code_dag.get_semantics( index);
@@ -1656,6 +1656,7 @@ Mdl_function_definition::check_and_prepare_arguments_cast_operator(
     mi::base::Handle<const IExpression> cast_from(
         arguments->get_expression( index_cast));
     mi::base::Handle<const IType> cast_from_type( cast_from->get_type());
+    cast_from_type = cast_from_type->skip_all_type_aliases();
 
     mi::base::Handle<const IExpression> cast_to(
         arguments->get_expression( index_cast_return));
@@ -1726,12 +1727,14 @@ Mdl_function_definition::check_and_prepare_arguments_ternary_operator(
     mi::base::Handle<const IExpression> true_exp(
         arguments->get_expression( index_true_exp));
     mi::base::Handle<const IType> true_type( true_exp->get_type());
+    mi::base::Handle<const IType> s_true_type( true_type->skip_all_type_aliases());
 
     mi::base::Handle<const IExpression> false_exp(
         arguments->get_expression( index_false_exp));
     mi::base::Handle<const IType> false_type( false_exp->get_type());
+    mi::base::Handle<const IType> s_false_type( false_type->skip_all_type_aliases());
 
-    if( m_tf->compare( true_type.get(), false_type.get()) != 0) {
+    if( m_tf->compare( s_true_type.get(), s_false_type.get()) != 0) {
         *errors = -2;
         return std::make_tuple( nullptr, nullptr, nullptr);
     }
@@ -1743,13 +1746,13 @@ Mdl_function_definition::check_and_prepare_arguments_ternary_operator(
     // create parameter type list
     mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list());
     parameter_types->add_type( "cond", cond_type.get());
-    parameter_types->add_type( "true_exp", true_type.get());
-    parameter_types->add_type( "false_exp", false_type.get());
+    parameter_types->add_type( "true_exp", s_true_type.get());
+    parameter_types->add_type( "false_exp", s_false_type.get());
 
     new_arguments->retain();
     parameter_types->retain();
-    true_type->retain();
-    return std::make_tuple( new_arguments.get(), parameter_types.get(), true_type.get());
+    s_true_type->retain();
+    return std::make_tuple( new_arguments.get(), parameter_types.get(), s_true_type.get());
 }
 
 std::tuple<IExpression_list*,IType_list*,const IType*>

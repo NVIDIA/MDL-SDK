@@ -52,7 +52,7 @@ class IMdl_backend;
     #mi::neuraylib::IMdl_backend_api::get_backend().
 */
 
-/** \addtogroup mi_neuray_mdl_types
+/** \addtogroup mi_neuray_mdl_misc
 @{
 */
 
@@ -114,7 +114,7 @@ public:
         Size &rz) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/*@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

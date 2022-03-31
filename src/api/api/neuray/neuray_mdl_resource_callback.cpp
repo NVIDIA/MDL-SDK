@@ -582,7 +582,7 @@ std::string Resource_callback::export_texture_image(
     mi::base::Handle<const IMAGE::IMipmap> mipmap(
         image->get_mipmap( m_transaction, /*frame_id*/ 0, /*uvtile_id*/ 0));
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    const char* extension = get_extension( canvas->get_type());
+    const char* new_extension = get_extension( canvas->get_type());
 
     bool add_sequence_marker = image->is_animated();
     bool add_uvtile_marker   = image->is_uvtile();
@@ -592,11 +592,28 @@ std::string Resource_callback::export_texture_image(
     mi::Size f = n > 0 ? image->get_frame_number( n-1) : 0;
     while( f > 9) { ++frame_digits; f /= 10; }
 
+    // Figure out whether we can copy all frames/uvtiles. If yes, then we can keep the extension.
+    // Otherwise we need to re-export all frames/uvtiles to match the chosen extension.
+    bool copy_all = !buffer_callback;
+    for( mi::Size i = 0; copy_all && (i < n); ++i) {
+        mi::Size m = image->get_frame_length( i);
+        for( mi::Size j = 0; copy_all && (j < m); ++j) {
+            std::string old_filename_fuv = image->get_filename( i, j);
+            if( old_filename_fuv.empty())
+                copy_all = false;
+            if( !DISK::is_file( old_filename_fuv.c_str()))
+                copy_all = false;
+        }
+    }
+
     // Both filenames might include frame/uvtile markers.
-    std::string old_filename = image->get_original_filename();
+    std::string old_filename = image->get_mdl_file_path();
+    if( old_filename.empty())
+        old_filename = image->get_original_filename();
     std::string new_filename = get_new_resource_filename_marker(
-        extension,
+        new_extension,
         old_filename.empty() ? nullptr : old_filename.c_str(),
+        !copy_all,
         add_sequence_marker,
         add_uvtile_marker,
         frame_digits);
@@ -622,12 +639,13 @@ std::string Resource_callback::export_texture_image(
 
             if( buffer_callback) {
                 // export via buffer callback
+                assert( !copy_all);
                 mi::base::Handle<const IMAGE::IMipmap> mipmap(
                     image->get_mipmap( m_transaction, i, j));
                 mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
                 mi::base::Handle<mi::neuraylib::IBuffer> buffer(
                     m_image_module->create_buffer_from_canvas(
-                        canvas.get(), extension+1, canvas->get_type()));
+                        canvas.get(), new_extension+1, canvas->get_type()));
                 if( buffer) {
                     std::string tmp
                         = (*buffer_callback)( buffer.get(), new_filename_fuv.c_str());
@@ -635,11 +653,12 @@ std::string Resource_callback::export_texture_image(
                 } else {
                     success = false;
                 }
-            } else if( !old_filename_fuv.empty() && DISK::is_file( old_filename_fuv.c_str())) {
+            } else if( copy_all) {
                 // copy the file
                 success &= DISK::file_copy( old_filename_fuv.c_str(), new_filename_fuv.c_str());
             } else {
                 // export to file
+                assert( !copy_all);
                 success &= m_image_module->export_canvas( canvas.get(), new_filename_fuv.c_str());
             }
         }
@@ -656,8 +675,9 @@ std::string Resource_callback::export_light_profile(
     std::string old_filename = profile->get_filename();
     if( old_filename.empty())
         old_filename = profile->get_original_filename();
+    // Value of use_new_extension does not matter since there is only one valid extension.
     std::string new_filename = get_new_resource_filename(
-        ".ies", old_filename.empty() ? nullptr : old_filename.c_str());
+        ".ies", old_filename.empty() ? nullptr : old_filename.c_str(), /*use_new_extension*/ true);
 
     bool success = false;
 
@@ -687,8 +707,9 @@ std::string Resource_callback::export_bsdf_measurement(
     std::string old_filename = measurement->get_filename();
     if( old_filename.empty())
         old_filename = measurement->get_original_filename();
+    // Value of use_new_extension does not matter since there is only one valid extension.
     std::string new_filename = get_new_resource_filename(
-        ".mbsdf", old_filename.empty() ? nullptr : old_filename.c_str());
+        ".mbsdf", old_filename.empty() ? nullptr : old_filename.c_str(), /*use_new_extension*/ true);
 
     mi::base::Handle<const mi::neuraylib::IBsdf_isotropic_data> refl(
         measurement->get_reflection<mi::neuraylib::IBsdf_isotropic_data>( m_transaction));
@@ -717,23 +738,26 @@ std::string Resource_callback::export_bsdf_measurement(
 }
 
 std::string Resource_callback::get_new_resource_filename(
-    const char* extension, const char* old_filename)
+    const char* new_extension, const char* old_filename, bool use_new_extension)
 {
     ASSERT( M_NEURAY_API, !m_path_prefix.empty());
+    ASSERT( M_NEURAY_API, old_filename || use_new_extension);
 
-    std::string s;
+    std::string s, old_extension;
 
     if( old_filename) {
-        std::string old_root, old_ext;
-        HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_ext);
-        s = m_path_prefix + "_" + old_root + extension;
+        std::string old_root;
+        HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_extension);
+        s = m_path_prefix + "_" + old_root;
+        s += use_new_extension ? std::string( new_extension) : old_extension;
         if( !DISK::is_file( s.c_str()))
             return s;
     }
 
     do {
         std::ostringstream ss;
-        ss << m_path_prefix << "_resource_" << m_counter++ << extension;
+        ss << m_path_prefix << "_resource_" << m_counter++;
+        ss << (use_new_extension ? std::string( new_extension) : old_extension);
         s = ss.str();
     }  while( DISK::is_file( s.c_str()));
 
@@ -741,23 +765,26 @@ std::string Resource_callback::get_new_resource_filename(
 }
 
 std::string Resource_callback::get_new_resource_filename_marker(
-    const char* extension,
+    const char* new_extension,
     const char* old_filename,
+    bool use_new_extension,
     bool add_sequence_marker,
     bool add_uvtile_marker,
     mi::Size frame_digits)
 {
     if( !add_sequence_marker && !add_uvtile_marker)
-        return get_new_resource_filename( extension, old_filename);
+        return get_new_resource_filename( new_extension, old_filename, use_new_extension);
 
     ASSERT( M_NEURAY_API, !m_path_prefix.empty());
+    ASSERT( M_NEURAY_API, old_filename || use_new_extension);
 
-    std::string s;
+    std::string s, old_extension;
 
     if( old_filename) {
-        std::string old_root, old_ext;
-        HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_ext);
-        s = m_path_prefix + "_" + old_root + extension;
+        std::string old_root;
+        HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_extension);
+        s = m_path_prefix + "_" + old_root;
+        s += use_new_extension ? std::string( new_extension) : old_extension;
         return s;
     }
 
@@ -789,7 +816,7 @@ std::string Resource_callback::get_new_resource_filename_marker(
        }
     }
 
-    s += extension;
+    s += use_new_extension ? std::string( new_extension) : old_extension;
     return s;
 }
 

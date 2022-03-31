@@ -159,8 +159,11 @@ IMipmap* Image_module_impl::create_mipmap(
     if( is_cubemap && layers != 6)
         return nullptr;
 
-    return new Mipmap_impl(
-        pixel_type, width, height, layers, is_cubemap, gamma);
+    try {
+        return new Mipmap_impl( pixel_type, width, height, layers, is_cubemap, gamma);
+    } catch( const std::bad_alloc& e) {
+        return nullptr;
+    }
 }
 
 IMipmap* Image_module_impl::create_mipmap(
@@ -266,8 +269,11 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     if( is_cubemap && layers != 6)
         return nullptr;
 
-    return new Canvas_impl(
-        pixel_type, width, height, layers, is_cubemap, gamma);
+    try {
+        return new Canvas_impl( pixel_type, width, height, layers, is_cubemap, gamma);
+    } catch( const std::bad_alloc& e) {
+        return nullptr;
+    }
 }
 
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
@@ -340,7 +346,11 @@ mi::neuraylib::ITile* Image_module_impl::create_tile(
     if( width == 0 || height == 0 || pixel_type == PT_UNDEF)
         return nullptr;
 
-    return IMAGE::create_tile( pixel_type, width, height);
+    try {
+        return IMAGE::create_tile( pixel_type, width, height);
+    } catch( const std::bad_alloc& e) {
+        return nullptr;
+    }
 }
 
 IMipmap* Image_module_impl::copy_mipmap( const IMipmap* other, bool only_first_level) const

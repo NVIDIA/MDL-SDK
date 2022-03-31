@@ -34,8 +34,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <locale>
-#include <cstring>
 
 #include <boost/algorithm/string.hpp>
 
@@ -168,7 +166,7 @@ string to_lower(
     const string& input)
 {
     std::string result(input);
-    to_lower(static_cast<string&>(result));
+    to_lower(result);
     return result;
 }
 
@@ -177,7 +175,7 @@ string to_upper(
     const string& input)
 {
     std::string result(input);
-    to_upper(static_cast<string&>(result));
+    to_upper(result);
     return result;
 }
 
@@ -245,6 +243,38 @@ string wchar_to_mbs(
 
     return result;
 }
+
+#if 0 // uses windows.h functionality instead of "manual" en/decoding
+// from UTF8
+std::wstring string_to_wide_string(const std::string& str)
+{
+    if (str.empty())
+        return std::wstring();
+
+    const int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), nullptr, 0);
+    if (size_needed <= 0)
+        return std::wstring();
+
+    std::vector<wchar_t> result(size_needed+10); // MSDN has this +10, for whatever reason
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, result.data(), size_needed+10);
+    return result.data();
+}
+
+// to UTF8
+std::string wide_string_to_string(const std::wstring& wide_str)
+{
+    if (wide_str.empty())
+        return std::string();
+
+    const int size_needed = WideCharToMultiByte(CP_UTF8, 0, wide_str.c_str(), (int)wide_str.length(), nullptr, 0, nullptr, nullptr);
+    if (size_needed <= 0)
+        return std::string();
+
+    std::vector<char> result(size_needed);
+    WideCharToMultiByte(CP_UTF8, 0, wide_str.c_str(), -1, result.data(), size_needed, nullptr, nullptr);
+    return result.data();
+}
+#endif
 #endif
 
 // Converts a wchar_t * string into an utf8 encoded string.

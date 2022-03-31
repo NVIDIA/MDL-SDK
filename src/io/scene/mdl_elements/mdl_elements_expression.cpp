@@ -808,11 +808,14 @@ IExpression* Expression_factory::create_cast(
     ASSERT(M_SCENE, src_expr);
     ASSERT(M_SCENE, target_type);
     ASSERT(M_SCENE, errors);
-
+    
     mi::base::Handle<const IType> src_type(src_expr->get_type());
 
+    mi::base::Handle<const IType> stripped_src_type(src_type->skip_all_type_aliases());
+    mi::base::Handle<const IType> stripped_target_type(target_type->skip_all_type_aliases());
+
     mi::base::Handle<IType_factory> tf(m_value_factory->get_type_factory());
-    mi::Sint32 r = tf->is_compatible(src_type.get(), target_type);
+    mi::Sint32 r = tf->is_compatible(stripped_src_type.get(), stripped_target_type.get());
     if (r < 0) {
         *errors = -2;
         return nullptr;
@@ -831,7 +834,9 @@ IExpression* Expression_factory::create_cast(
     args->add_expression("cast", src_expr);
 
     if (direct_call) {
-        return create_direct_call(target_type, cast_def->get_module(transaction),
+        return create_direct_call(
+            stripped_target_type.get(),
+            cast_def->get_module(transaction),
             Mdl_tag_ident(cast_def_tag, cast_def->get_ident()),
             get_cast_operator_db_name(), args.get());
     }
@@ -846,14 +851,14 @@ IExpression* Expression_factory::create_cast(
         store_level = transaction->get_tag_storage_level(t);
     }
 
-    mi::base::Handle<IValue> target_type_value(m_value_factory->create(target_type));
+    mi::base::Handle<IValue> target_type_value(m_value_factory->create(stripped_target_type.get()));
     mi::base::Handle<IExpression> target_type_expr(create_constant(target_type_value.get()));
     args->add_expression("cast_return", target_type_expr.get());
 
     std::string call_name;
     if (cast_db_name) {
         DB::Tag tag = transaction->name_to_tag(cast_db_name);
-        if (tag.is_valid())
+        if (tag)
             call_name = DETAIL::generate_unique_db_name(transaction, cast_db_name);
         else
             call_name = cast_db_name;
@@ -866,7 +871,7 @@ IExpression* Expression_factory::create_cast(
         cast_call, call_name.c_str(), level, store_level);
     ASSERT(M_SCENE, call_tag); // should always succeed
 
-    return create_call(target_type, call_tag);
+    return create_call(stripped_target_type.get(), call_tag);
 }
 
 void Expression_factory::serialize( SERIAL::Serializer* serializer, const IExpression* expr) const
