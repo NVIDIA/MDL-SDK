@@ -31,6 +31,7 @@
 
 #include <mutex>
 
+#include <ai.h>
 #include <mi/base/handle.h>
 #include <mi/mdl_sdk.h>
 
@@ -77,10 +78,9 @@ public:
 
     bool log_messages(const mi::neuraylib::IMdl_execution_context* context);
 
+    const AtString& get_default_mdl_module_name() const {  return m_default_mdl_module_name; }
+    const AtString& get_default_mdl_function_name() const { return m_default_mdl_function_name; }
     const std::string& get_default_material_db_name() const { return m_default_material_db_name; }
-    const std::string& get_default_material_simple_name() const { return 
-        m_default_material_simple_name; 
-    }
 
     void set_search_paths();
 
@@ -91,8 +91,9 @@ public:
 private:
     void* m_so_handle;
     EMdl_sdk_state m_state;
+    AtString m_default_mdl_module_name;
+    AtString m_default_mdl_function_name;
     std::string m_default_material_db_name;
-    std::string m_default_material_simple_name;
     std::mutex m_loading_mutex;
 
     mi::base::Handle<mi::neuraylib::INeuray> m_mdl_sdk;

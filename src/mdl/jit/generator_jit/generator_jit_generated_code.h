@@ -933,6 +933,15 @@ public:
     /// Executes a compiled uniform function returning int.
     bool run(int &result) MDL_FINAL;
 
+    /// Run this compiled lambda functions as a uniform function returning int2 on the CPU.
+    ///
+    /// \param[out] result  the result will be written to
+    ///
+    /// \returns false if execution was aborted by runtime error, true otherwise
+    ///
+    /// Executes a compiled uniform function returning float2.
+    bool run(Int2_struct &result) MDL_FINAL;
+
     /// Run this compiled lambda functions as a uniform function returning unsigned on the CPU.
     ///
     /// \param[out] result  the result will be written to
@@ -1210,6 +1219,18 @@ private:
     /// \param cap_args       the captured arguments block, should be NULL for const functions
     typedef void (Lambda_func_int)(
         int                            &result,
+        Res_data_pair const            &res_data_pair,
+        Exc_state                      &exc_state,
+        void const                     *cap_args);
+
+    /// The signature of the JIT compiled lambda function returning a int2 vector.
+    ///
+    /// \param result         the result will be written here
+    /// \param res_data_pair  the resource data helper object, shared and thread parts
+    /// \param exc_state      the exception state helper
+    /// \param cap_args       the captured arguments block, should be NULL for const functions
+    typedef void (Lambda_func_int2)(
+        Int2_struct                    &result,
         Res_data_pair const            &res_data_pair,
         Exc_state                      &exc_state,
         void const                     *cap_args);

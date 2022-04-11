@@ -1334,6 +1334,15 @@ public:
     /// Executes a compiled uniform function returning int.
     virtual bool run(int &result) = 0;
 
+    /// Run this compiled lambda functions as a uniform function returning int2 on the CPU.
+    ///
+    /// \param[out] result  the result will be written to
+    ///
+    /// \returns false if execution was aborted by runtime error, true otherwise
+    ///
+    /// Executes a compiled uniform function returning float2.
+    virtual bool run(Int2_struct &result) = 0;
+
     /// Run this compiled lambda functions as a uniform function returning unsigned on the CPU.
     ///
     /// \param[out] result  the result will be written to

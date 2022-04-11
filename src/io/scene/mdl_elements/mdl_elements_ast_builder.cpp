@@ -1311,9 +1311,6 @@ static std::string get_texture_resource_name_gamma_selector(
         // frame/uvtile.
         if( !s3.empty() && !image->is_uvtile() && !image->is_animated())
             return s3;
-        const char* name = trans->tag_to_name( image_tag);
-        LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-            "Failed to construct MDL file path for image resource \"%s\".", name ? name : "");
         return std::string();
     }
     return std::string();
@@ -1342,9 +1339,6 @@ static std::string get_light_profile_resource_name(
         s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
     if( !s3.empty())
         return s3;
-    const char* name = trans->tag_to_name( tag);
-    LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-        "Failed to construct MDL file path for light profile resource \"%s\".", name ? name : "");
     return std::string();
 }
 
@@ -1371,10 +1365,6 @@ static std::string get_bsdf_measurement_resource_name(
         s2, mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_USE_FIRST);
     if( !s3.empty())
         return s3;
-    const char* name = trans->tag_to_name( tag);
-    LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-        "Failed to construct MDL file path for BSDF measurement resource \"%s\".",
-        name ? name : "");
     return std::string();
 }
 

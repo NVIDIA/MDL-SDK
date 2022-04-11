@@ -4,8 +4,6 @@
 <title>Material Definition Language - Module&#160;base.mdl</title>
 <meta charset='utf-8' />
 <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-<link rel="stylesheet" href="kt_css/normalize.css">
-<script>'use strict';</script>
 
 <link rel="stylesheet" href="kt_css/sks.css">
 <link rel="stylesheet" href="kt_css/arc.css">
@@ -19,7 +17,6 @@
 <div id="blackheader">
 <span id="blackheader_title">Material Definition Language &#8211; Module base.mdl</span>
 <a id="logos" href="http://www.nvidia.com"><img id="nvidia-logo-transpbg" src="img/nvidia_logo_transpbg.gif" width="152" height="28" class="s-inline"></img>
-
 </a><span id="blackheader_uplink">
 <a href="../index.html">Up</a>
 </span>
@@ -37,7 +34,8 @@
    <span id="foldersearch">
       <span id="search_clear">Clear</span>
       <span id="search_label">Search</span>
-      <input type="text" name="q" id="search_input" autocomplete="off" required>
+      <span id="search_back_label">Return to text</span>
+      <span id="search_box"><input type="text" name="q" id="search_input" class="srch" autocomplete="off" required><span id="search_clear_input" class="srch">&#9421;</span></span>
       <span id="help">Help</span>
    </span>
 
@@ -155,7 +153,7 @@ When the page loads, click the check box &#8220;Allow blocked content.&#8221;</p
 
 </div><div id="blackfooter">
 <span class="footeritem">
-18&#160;March&#160;2022,&#160;20:50,&#160;rev.349500.8264
+5&#160;April&#160;2022,&#160;20:38,&#160;rev.349500.8766
 </span>
 <span class="footeritem">
 <a href="https://www.nvidia.com/en-us/about-nvidia/legal-info/" target="_blank" shape="rect">&copy; 2022 NVIDIA&nbsp;Corporation.</a> All rights reserved.
@@ -163,7 +161,18 @@ When the page loads, click the check box &#8220;Allow blocked content.&#8221;</p
 </div>
 
 <script src="ext/jquery/jquery-3.2.1.min.js"></script>
-<script src="ext/jquery/jquery-ui-1.12.1/jquery-ui.js"></script>
+<script src="ext/jquery/jquery-ui-1.12.1.custom/jquery-ui.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.2/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    tex2jax: {
+        inlineMath: [["[[","]]"]],
+        displayMath: [["[[[", "]]]"]],
+        preview: ["[math]"] },
+    messageStyle: "none"
+  });
+</script>
 <script src="kt_js/frame.js"></script>
 <script src="kt_js/imagecode.js"></script>
 <script src="kt_js/s_image.js"></script>

@@ -1,5 +1,5 @@
 /***************************************************************************************************
-* Copyright 2021 NVIDIA Corporation. All rights reserved.
+* Copyright 2022 NVIDIA Corporation. All rights reserved.
 **************************************************************************************************/
 
 #include "mdl_arnold.h"
@@ -41,7 +41,10 @@ namespace
     namespace CONST_STRINGS
     {
         const AtString empty("");
+        const AtString name("name");
         const AtString qualified_name("qualified_name");
+        const AtString mdl_module_name("mdl_module_name");
+        const AtString mdl_function_name("mdl_function_name");
     }
 }
 
@@ -50,9 +53,10 @@ namespace
 struct MdlLocalNodeData
 {
     MdlLocalNodeData()
-        : current_qualified_name(CONST_STRINGS::empty)
+        : current_mdl_module_name(CONST_STRINGS::empty)
+        , current_mdl_function_name(CONST_STRINGS::empty)
+        , current_deprecated_qualified_name(CONST_STRINGS::empty)
         , material_db_name("")
-        , material_simple_name("")
         , current_user_param_values()
         , user_parameters_changed(true)
         , material_hash{0, 0, 0, 0}
@@ -62,12 +66,16 @@ struct MdlLocalNodeData
     {
     }
 
+    // name used for debug output
+    std::string name;
+
     // keep the current parameter name to detect changes
-    AtString current_qualified_name;
+    AtString current_mdl_module_name;
+    AtString current_mdl_function_name;
+    AtString current_deprecated_qualified_name;
 
     // store the db name
     std::string material_db_name;
-    std::string material_simple_name;
 
     // handle changes of materials in interactive sessions
     std::unordered_map<size_t, AtParamValue> current_user_param_values;
@@ -278,31 +286,59 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     mdl_sdk.set_search_paths();
 
     // set default material name
+    if (data->current_mdl_module_name.empty())
+        data->current_mdl_module_name = mdl_sdk.get_default_mdl_module_name();
+    if (data->current_mdl_function_name.empty())
+        data->current_mdl_function_name = mdl_sdk.get_default_mdl_function_name();
+
     if (data->material_db_name.empty())
         data->material_db_name = mdl_sdk.get_default_material_db_name();
-    if (data->material_simple_name.empty())
-        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
 
     // determine MDL module and material name from "qualified_name" node parameter
-    std::string mdl_name(AiNodeGetStr(node, CONST_STRINGS::qualified_name).c_str());
+    AtString deprecated_qualified_name = AiNodeGetStr(node, CONST_STRINGS::qualified_name);
+    AtString mdl_module_name = AiNodeGetStr(node, CONST_STRINGS::mdl_module_name);
+    AtString mdl_function_name = AiNodeGetStr(node, CONST_STRINGS::mdl_function_name);
 
-    std::string module_name, material_name;
-    if (!mi::examples::mdl::parse_cmd_argument_material_name(mdl_name, module_name, material_name, false))
+    if (!deprecated_qualified_name.empty())
     {
-        AiMsgWarning("[mdl] module name to load '%s' is invalid", module_name.c_str());
-        return false;
+        AiMsgWarning("[mdl] node parameter `qualified_name` (value: `%s`) on material '%s' "
+            "is deprecated, use `mdl_module_name` and `mdl_fuction_name instead.", 
+            deprecated_qualified_name.c_str(), data->name.c_str());
+
+        // store the selected material to detect changes later
+        data->current_deprecated_qualified_name = deprecated_qualified_name;
+
+        // fall back to old behavior
+        if (mdl_module_name == mdl_sdk.get_default_mdl_module_name() && 
+            mdl_function_name == mdl_sdk.get_default_mdl_function_name())
+        {
+            std::string module_name;
+            std::string function_name;
+            if (!mi::examples::mdl::parse_cmd_argument_material_name(
+                deprecated_qualified_name.c_str(), module_name, function_name, false))
+            {
+                AiMsgWarning("[mdl] failed to parse (deprecated) field "
+                    "'qualified_name' (value: '%s') on material '%s'",
+                    deprecated_qualified_name.c_str(), data->name.c_str());
+                return false;
+            }
+            // parsing successful
+            mdl_module_name = AtString(module_name.c_str());
+            mdl_function_name = AtString(function_name.c_str());
+        }
     }
 
     // try to get the database name of the required module
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> mdl_context(mdl_sdk.create_context());
 
     mi::base::Handle<const mi::IString> module_db_name(
-        mdl_sdk.get_factory().get_db_module_name(module_name.c_str()));
+        mdl_sdk.get_factory().get_db_module_name(mdl_module_name.c_str()));
 
     // parameter is no a valid qualified module name
     if (!module_db_name)
     {
-        AiMsgWarning("[mdl] module name to load '%s' is invalid", module_name.c_str());
+        AiMsgWarning("[mdl] module name to load '%s' is invalid on material '%s'", 
+            mdl_module_name.c_str(), data->name.c_str());
         return false;
     }
 
@@ -315,12 +351,12 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     if (!module)
     {
         mi::Sint32 load_res_code = mdl_sdk.get_impexp_api().load_module(
-            &mdl_sdk.get_transaction(), module_name.c_str(), mdl_context.get());
+            &mdl_sdk.get_transaction(), mdl_module_name.c_str(), mdl_context.get());
 
         if (!mdl_sdk.log_messages(mdl_context.get()))
         {
-            AiMsgWarning("[mdl] failed to load module '%s' (Code: %d)",
-                       module_name.c_str(), load_res_code);
+            AiMsgWarning("[mdl] failed to load module '%s' for material '%s' (Code: %d)",
+                mdl_module_name.c_str(), data->name.c_str(), load_res_code);
 
             std::string current_search_paths = "";
             size_t count = mdl_sdk.get_config().get_mdl_paths_length();
@@ -328,41 +364,52 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
                 current_search_paths += std::string("\n - ") +
                 std::string(mdl_sdk.get_config().get_mdl_path(i)->get_c_str());
 
-            AiMsgWarning("[mdl] using error material as '%s' can not be resolved or loaded.\n"
-                       "current search paths:%s", mdl_name.c_str(), current_search_paths.c_str());
+            AiMsgWarning("[mdl] using error material for '%s' as '%s' can not be resolved or loaded.\n"
+                "current search paths:%s", 
+                data->name.c_str(), mdl_module_name.c_str(), current_search_paths.c_str());
             return false;
         }
-        
+
+        AiMsgInfo("[mdl] loaded module '%s' for material '%s'", 
+            mdl_module_name.c_str(), data->name.c_str());
         module = mdl_sdk.get_transaction().access<mi::neuraylib::IModule>(module_db_name->get_c_str());
     }
 
     // get correct material signature
-    std::string material_db_name = module_db_name->get_c_str();
-    material_db_name += "::" + material_name;
-    mi::base::Handle<const mi::IArray> result(
-        module->get_function_overloads(material_db_name.c_str()));
-    if (!result || result->get_length() != 1) {
-        AiMsgWarning("[mdl] failed to find signature for material '%s'",
-                   material_name.c_str());
-        return false;
-    }
-    mi::base::Handle<const mi::IString> overload(result->get_element<mi::IString>(0));
-    material_db_name = overload->get_c_str();
-                    
-    // get material by the material db name and ensure it exists
-    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
-        mdl_sdk.get_transaction().access<mi::neuraylib::IFunction_definition>(
-        material_db_name.c_str()));
+    std::string function_db_name = module_db_name->get_c_str();
+    function_db_name += "::" + std::string(mdl_function_name.c_str());
 
-    if (!material_definition)
+    // in case the signature was provided, we don't need to run an overload resolution
+    // do an overload resolution in case no parameter list was provided
+    if (mdl_function_name[mdl_function_name.length() - 1] != ')')
     {
-        AiMsgWarning("[mdl] material '%s' not found in module '%s'",
-                   material_name.c_str(), module_name.c_str());
+        mi::base::Handle<const mi::IArray> result(
+            module->get_function_overloads(function_db_name.c_str()));
+        if (!result || result->get_length() != 1) {
+            AiMsgWarning("[mdl] failed to find signature for '%s::%s' on material '%s'",
+                mdl_module_name.c_str(), mdl_function_name.c_str(), data->name.c_str());
+            return false;
+        }
+        mi::base::Handle<const mi::IString> overload(result->get_element<mi::IString>(0));
+        function_db_name = overload->get_c_str();
+    }
+
+    // get material by the material db name and ensure it exists
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> definition(
+        mdl_sdk.get_transaction().access<mi::neuraylib::IFunction_definition>(
+            function_db_name.c_str()));
+
+    if (!definition)
+    {
+        AiMsgWarning("[mdl] function '%s::%s' not found for material '%s'",
+            mdl_function_name.c_str(), mdl_module_name.c_str(), data->name.c_str());
         return false;
     }
 
-    data->material_db_name = material_db_name;
-    data->material_simple_name = material_definition->get_mdl_simple_name();
+    // store the selected material to detect changes later
+    data->current_mdl_module_name = mdl_module_name;
+    data->current_mdl_function_name = mdl_function_name;
+    data->material_db_name = function_db_name;
     return true;
 }
 
@@ -403,8 +450,10 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
         {
             if (helper_params.find(name) == helper_params.end() &&
                 strcmp(name, "nodeName") != 0) // special name in 3Ds max
-                    AiMsgWarning("[mdl] parameter '%s' not found in material '%s'. Ignoring ...",
-                                 name, material_definition->get_mdl_simple_name());
+            {
+                AiMsgWarning("[mdl] parameter '%s' of material '%s' not found in MDL '%s::%s'. Ignoring ...",
+                    name, data->name.c_str(), data->current_mdl_module_name.c_str(), data->current_mdl_function_name.c_str());
+            }
             continue;
         }
 
@@ -417,7 +466,8 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
         {
             if (param_type->get_kind() != mi::neuraylib::IType::TK_BOOL)
             {
-                AiMsgWarning("[mdl] parameter '%s' is not of type bool. Ignoring ...", name);
+                AiMsgWarning("[mdl] parameter '%s' of material '%s' is not of type bool. Ignoring ...", 
+                    name, data->name.c_str());
                 continue;
             }
             add_argument(
@@ -429,7 +479,8 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
         {
             if (param_type->get_kind() != mi::neuraylib::IType::TK_FLOAT)
             {
-                AiMsgWarning("[mdl] parameter '%s' is not of type float. Ignoring ...", name);
+                AiMsgWarning("[mdl] parameter '%s' of material '%s' is not of type float. Ignoring ...", 
+                    name, data->name.c_str());
                 continue;
             }
             add_argument(
@@ -441,7 +492,8 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
         {
             if (param_type->get_kind() != mi::neuraylib::IType::TK_INT)
             {
-                AiMsgWarning("[mdl] parameter '%s' is not of type int. Ignoring ...", name);
+                AiMsgWarning("[mdl] parameter '%s' of material '%s' is not of type int. Ignoring ...", 
+                    name, data->name.c_str());
                 continue;
             }
             add_argument(
@@ -453,7 +505,8 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
         {
             if (param_type->get_kind() != mi::neuraylib::IType::TK_COLOR)
             {
-                AiMsgWarning("[mdl] parameter '%s' is not of type color. Ignoring ...", name);
+                AiMsgWarning("[mdl] parameter '%s' of material '%s' is not of type color. Ignoring ...", 
+                    name, data->name.c_str());
                 continue;
             }
             add_argument(
@@ -465,7 +518,8 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
         {
             if (param_type->get_kind() != mi::neuraylib::IType::TK_VECTOR)
             {
-                AiMsgWarning("[mdl] parameter '%s' is not of type vector. Ignoring ...", name);
+                AiMsgWarning("[mdl] parameter '%s' of material '%s' is not of type vector. Ignoring ...", 
+                    name, data->name.c_str());
                 continue;
             }
             add_argument(
@@ -477,7 +531,8 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
         {
             if (param_type->get_kind() != mi::neuraylib::IType::TK_VECTOR)
             {
-                AiMsgWarning("[mdl] parameter '%s' is not of type vector. Ignoring ...", name);
+                AiMsgWarning("[mdl] parameter '%s' of material '%s' is not of type vector. Ignoring ...",
+                    name, data->name.c_str());
                 continue;
             }
             add_argument(
@@ -538,8 +593,8 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
 
                         if (image->reset_file(filename.c_str()) != 0)
                         {
-                            AiMsgWarning("[mdl] Texture file '%s' could not be found ...",
-                                         filename.c_str());
+                            AiMsgWarning("[mdl] Texture file '%s' for material '%s' could not be found ...",
+                                         filename.c_str(), data->name.c_str());
                             continue;
                         }
 
@@ -574,15 +629,16 @@ mi::base::Handle<mi::neuraylib::IExpression_list> create_material_argument_list(
                 }
                 else
                 {
-                    AiMsgWarning("[mdl] parameter '%s' is not of type string. Ignoring ...", name);
+                    AiMsgWarning("[mdl] parameter '%s' for material '%s' is not of type string. Ignoring ...",
+                        name, data->name.c_str());
                     continue;
                 }
             }
             break;
         }
         default:
-            AiMsgWarning("[mdl] parameter '%s' type %d is not supported, yet. Ignoring ...",
-                         name, type);
+            AiMsgWarning("[mdl] parameter '%s' of type `%d` for material '%s' is not supported, yet. Ignoring ...",
+                         name, type, data->name.c_str());
             break;
         }
     }
@@ -596,7 +652,13 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
 {
     MdlLocalNodeData* data = static_cast<MdlLocalNodeData*>(AiNodeGetLocalData(node));
     if (data->material_db_name.empty())
+    {
+        AiMsgWarning(
+            "[mdl] MDL definition '%s::%s' not found for material '%s'\n",
+            data->current_mdl_module_name.c_str(), data->current_mdl_function_name.c_str(), 
+            data->name.c_str());
         return false;
+    }
 
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> mdl_context(mdl_sdk.create_context());
 
@@ -605,7 +667,13 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
         mdl_sdk.get_transaction().access<mi::neuraylib::IFunction_definition>(
             data->material_db_name.c_str()));
     if (!material_definition)
+    {
+        AiMsgWarning(
+            "[mdl] MDL definition '%s' not found for material '%s'\n",
+            data->material_db_name.c_str(), data->name.c_str());
+
         return false;  // should not happen
+    }
 
     // create material arguments from node user data
     mi::base::Handle<mi::neuraylib::IExpression_list> arguments(
@@ -622,7 +690,8 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
             (arguments->get_size() == 0) ? nullptr : arguments.get(), &ret));
     if (ret != 0)
     {
-        AiMsgWarning("[mdl] instantiating material '%s' failed", data->material_db_name.c_str());
+        AiMsgWarning("[mdl] instantiating material '%s' failed for '%s' failed.\n",
+            data->material_db_name.c_str(), data->name.c_str());
         return false;
     }
 
@@ -817,7 +886,9 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
         ? descs[thin_walled_desc_index].function_index 
         : ~0;
 
-    AiMsgInfo("[mdl] compiled material '%s'", data->material_simple_name.c_str());
+    AiMsgInfo("[mdl] compiled MDL '%s::%s' for material '%s'.\n",
+        data->current_mdl_module_name.c_str(), data->current_mdl_function_name.c_str(), 
+        data->name.c_str());
 
     data->material_hash = currentHash;      // store the hash to identify changes
     data->user_parameters_changed = false;  // parameter changes have been applied
@@ -829,13 +900,28 @@ bool compile_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
 node_parameters
 {
     // define default values
-    AiParameterStr(CONST_STRINGS::qualified_name, "::ai_mdl::not_available");
+    AiParameterStr(CONST_STRINGS::qualified_name, ""); // deprecated
+    AiParameterStr(CONST_STRINGS::mdl_module_name, "::ai_mdl");
+    AiParameterStr(CONST_STRINGS::mdl_function_name, "not_available()");
 
+    AiMetaDataSetBool(nentry, CONST_STRINGS::qualified_name,    "deprecated", true);
     AiMetaDataSetStr(nentry, CONST_STRINGS::qualified_name,     "description", "Fully qualified MDL material name of the form: ::package::sub_package::module::material_name");
     AiMetaDataSetBool(nentry, CONST_STRINGS::qualified_name,    "linkable", false);
     AiMetaDataSetStr(nentry, CONST_STRINGS::qualified_name,     "maya.name", "qualified_name");
     AiMetaDataSetStr(nentry, CONST_STRINGS::qualified_name,     "maya.shortname", "qname");
     AiMetaDataSetStr(nentry, CONST_STRINGS::qualified_name,     "max.label", "Qualified Name");
+
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_module_name, "description", "Fully qualified MDL module name of the form: ::package::sub_package::module");
+    AiMetaDataSetBool(nentry, CONST_STRINGS::mdl_module_name, "linkable", false);
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_module_name, "maya.name", "mdl_module_name");
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_module_name, "maya.shortname", "mdl_module_name");
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_module_name, "max.label", "MDL Module Name");
+
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_function_name, "description", "Material or function name as defined in the selected MDL module");
+    AiMetaDataSetBool(nentry, CONST_STRINGS::mdl_function_name, "linkable", false);
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_function_name, "maya.name", "mdl_function_name");
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_function_name, "maya.shortname", "mdl_function_name");
+    AiMetaDataSetStr(nentry, CONST_STRINGS::mdl_function_name, "max.label", "MDL Function Name");
 
     AiMetaDataSetStr(nentry, NULL, "description",           "Arnold MDL Material Shader");
     AiMetaDataSetInt(nentry, NULL, "maya.id",               0x0010E63F); // temporary test id!
@@ -850,29 +936,24 @@ node_initialize
 {
     // allocate node data
     MdlLocalNodeData* data = new MdlLocalNodeData();
-    data->current_qualified_name = CONST_STRINGS::empty;
+    data->current_mdl_module_name = CONST_STRINGS::empty;
+    data->current_mdl_function_name = CONST_STRINGS::empty;
     AiNodeSetLocalData(node, data);
+    data->name = AiNodeGetStr(node, CONST_STRINGS::name);
 
     // get the sdk
     Mdl_sdk_interface& mdl_sdk = *static_cast<Mdl_sdk_interface*>(AiNodeGetPluginData(node));
 
-    // get the selected material
-    auto selected_material = AiNodeGetStr(node, CONST_STRINGS::qualified_name);
-
     // load the specified material and compile it
     if (!load_material(node, mdl_sdk) || !compile_material(node, mdl_sdk))
     {
-        AiMsgWarning("[mdl] compiling the shader for material '%s' failed.\n",
-                   selected_material.c_str());
-
+        // fall back to error material
         data->material_db_name = mdl_sdk.get_default_material_db_name();
-        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
+        data->current_mdl_module_name = mdl_sdk.get_default_mdl_module_name();
+        data->current_mdl_function_name = mdl_sdk.get_default_mdl_function_name();
         compile_material(node, mdl_sdk);
         return;
     }
-
-    // store the selected material to detect changes later
-    data->current_qualified_name = selected_material;
 }
 
 node_update
@@ -881,16 +962,38 @@ node_update
     Mdl_sdk_interface& mdl_sdk = *static_cast<Mdl_sdk_interface*>(AiNodeGetPluginData(node));
 
     // check if the selected material changed
-    auto selected_material = AiNodeGetStr(node, CONST_STRINGS::qualified_name);
+    auto deprecated_qualified_name = AiNodeGetStr(node, CONST_STRINGS::qualified_name);
+    auto mdl_module_name = AiNodeGetStr(node, CONST_STRINGS::mdl_module_name);
+    auto mdl_function_name = AiNodeGetStr(node, CONST_STRINGS::mdl_function_name);
 
-    // load the specified material of not loaded already
-    if (data->current_qualified_name != selected_material && !load_material(node, mdl_sdk))
+    bool selected_material_changed = false;
+
+    // fall back to old behavior
+    if (!deprecated_qualified_name.empty() &&
+        mdl_module_name == mdl_sdk.get_default_mdl_module_name() &&
+        mdl_function_name == mdl_sdk.get_default_mdl_function_name())
     {
-        AiMsgWarning("[mdl] loading or compiling the shader for material '%s' failed.\n",
-                   selected_material.c_str());
+        selected_material_changed =
+            data->current_deprecated_qualified_name != deprecated_qualified_name;
+    }
+    else
+    {
+        selected_material_changed = 
+            data->current_mdl_module_name != mdl_module_name || 
+            data->current_mdl_function_name != mdl_function_name;
+    }
 
+    // load the specified material if not loaded already
+    if (selected_material_changed && !load_material(node, mdl_sdk))
+    {
+        AiMsgWarning(
+            "[mdl] loading or compiling MDL '%s::%s' for material '%s' failed.\n",
+            mdl_module_name.c_str(), mdl_function_name.c_str(), data->name.c_str());
+
+        // fall back to error material
         data->material_db_name = mdl_sdk.get_default_material_db_name();
-        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
+        data->current_mdl_module_name = mdl_sdk.get_default_mdl_module_name();
+        data->current_mdl_function_name = mdl_sdk.get_default_mdl_function_name();
         compile_material(node, mdl_sdk);
         return;
     }
@@ -898,17 +1001,16 @@ node_update
     // handle parameter updates
     if (!compile_material(node, mdl_sdk))
     {
-        AiMsgWarning("[mdl] compiling the shader for material '%s' failed.\n",
-                   selected_material.c_str());
+        AiMsgWarning("[mdl] compiling MDL '%s::%s' for material '%s' failed.\n",
+            mdl_module_name.c_str(), mdl_function_name.c_str(), data->name.c_str());
 
+        // fall back to error material
         data->material_db_name = mdl_sdk.get_default_material_db_name();
-        data->material_simple_name = mdl_sdk.get_default_material_simple_name();
+        data->current_mdl_module_name = mdl_sdk.get_default_mdl_module_name();
+        data->current_mdl_function_name = mdl_sdk.get_default_mdl_function_name();
         compile_material(node, mdl_sdk);
         return;
     }
-
-    // store the selected material to detect changes later
-    data->current_qualified_name = selected_material;
 }
 
 node_finish

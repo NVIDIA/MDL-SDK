@@ -1,5 +1,22 @@
 Change Log
 ==========
+MDL SDK 2021.1.2 (349500.8766): 05 Apr 2022
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2021.1.2 (349500.8766) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Fixed Bugs**
+
+- General
+
+    - Remove wrong error message about failures to construct MDL file paths when using the module
+      builder.
+      
+- MDL Compiler and Backends      
+
+    - Remove invalid optimization in DAG hashing.
+
 MDL SDK 2021.1.1 (349500.8264): 18 Mar 2022
 -----------------------------------------------
 

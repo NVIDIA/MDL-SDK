@@ -1,5 +1,5 @@
 /******************************************************************************
-* Copyright 2021 NVIDIA Corporation. All rights reserved.
+* Copyright 2022 NVIDIA Corporation. All rights reserved.
 *****************************************************************************/
 
 // a lot of things we need can be found here:
@@ -13,7 +13,7 @@
 //-------------------------------------------------------------------------------------------------
 
 // enable texture derivatives
-#define ENABLE_DERIVATIVES
+// #define ENABLE_DERIVATIVES
 
 // number of 8byte cache blocks filled when calling 'init' and used for 'evaluate' and 'sample'
 #define NUM_TEXTURE_RESULTS 16

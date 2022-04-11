@@ -14,7 +14,9 @@ class AEaiMDLTemplate(ShaderAETemplate):
         self.addCustom('message', 'AEshaderTypeNew', 'AEshaderTypeReplace')
  
         self.beginLayout("Material Selection", collapse=False)
-        self.addControl("qualified_name", label="Qualified Name")
+        self.addControl("mdl_module_name", label="MDL Module Name")
+        self.addControl("mdl_function_name", label="MDL Function Name")
+        self.addControl("qualified_name", label="Qualified Name (deprecated)")
         self.endLayout()
  
         # include/call base class/node attributes

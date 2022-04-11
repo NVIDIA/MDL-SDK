@@ -1,5 +1,5 @@
 /***************************************************************************************************
-* Copyright 2021 NVIDIA Corporation. All rights reserved.
+* Copyright 2022 NVIDIA Corporation. All rights reserved.
 **************************************************************************************************/
 
 #include "mdl_arnold_interface.h"
@@ -231,11 +231,17 @@ void Mdl_sdk_interface::set_search_paths()
     // add the search paths if they are existing
     // assuming that the Arnold will warn about non existing texture or procedural search paths
     for (const auto& p : mdl_search_paths)
+    {
         if (mi::examples::io::directory_exists(p))
         {
             AiMsgInfo("[mdl] Adding MDL Search Path: %s", p.c_str());
             m_mdl_config->add_mdl_path(p.c_str());
         }
+        else
+        {
+            AiMsgInfo("[mdl] Adding MDL Search Path failed. The path does not exist: %s", p.c_str());
+        }
+    }
 }
 
 Mdl_sdk_interface::Mdl_sdk_interface()
@@ -306,7 +312,8 @@ Mdl_sdk_interface::Mdl_sdk_interface()
     m_mdl_impexp_api = m_mdl_sdk->get_api_component<mi::neuraylib::IMdl_impexp_api>();
 
     // load default module
-    const char* default_module_name = "::ai_mdl";
+    m_default_mdl_module_name = AtString("::ai_mdl");
+    m_default_mdl_function_name = AtString("not_available()");
     const char* default_module_src =
         "mdl 1.2;\n"
         "import df::*;\n"
@@ -320,25 +327,22 @@ Mdl_sdk_interface::Mdl_sdk_interface()
 
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(create_context());
     if (m_mdl_impexp_api->load_module_from_string(
-        m_transaction.get(), default_module_name, default_module_src, context.get()) < 0)
+        m_transaction.get(), m_default_mdl_module_name.c_str(), default_module_src, context.get()) < 0)
     {
         m_state = EMdl_sdk_state::error_default_module_invalid;
         return;
     }
 
-
+    // compute the modules DB name using the factory API
     mi::base::Handle<const mi::IString> default_module_db_name(m_factory->get_db_module_name(
-        default_module_name));
-
+        m_default_mdl_module_name.c_str()));
     if (!default_module_db_name)
     {
         m_state = EMdl_sdk_state::error_default_module_invalid;
         return;
     }
-
     m_default_material_db_name = default_module_db_name->get_c_str();
-    m_default_material_simple_name = "not_available";
-    m_default_material_db_name += "::" + m_default_material_simple_name;
+    m_default_material_db_name += "::" + std::string(m_default_mdl_function_name.c_str());
     m_state = EMdl_sdk_state::loaded;
 }
 

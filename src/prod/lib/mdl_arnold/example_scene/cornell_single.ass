@@ -80,13 +80,15 @@ standard_surface
 mdl
 {
   name mdl_glossy_mat
-  qualified_name "::simple::glossy"
+  mdl_module_name "::simple"
+  mdl_function_name "glossy"
 }
 
 mdl
 {
   name mdl_glass_mat
-  qualified_name "::simple::rough_glass"
+  mdl_module_name "::simple"
+  mdl_function_name "rough_glass"
   declare roughness constant FLOAT
   roughness 0.05
 }
@@ -94,7 +96,8 @@ mdl
 mdl
 {
   name mdl_glow_mat
-  qualified_name "::simple::glow"
+  mdl_module_name "::simple"
+  mdl_function_name "glow"
 }
 
 polymesh

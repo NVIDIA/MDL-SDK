@@ -159,6 +159,9 @@ $(window).on("load", function() {
     
 
     $('.navlink').on('click', function(event) {
+        if ($('#search_content').is(':visible')) {
+            $("#search_back_label").trigger("click");
+        }
 	event.preventDefault();
 	update_page_title($(this));
 

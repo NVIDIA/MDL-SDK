@@ -39,6 +39,11 @@
 namespace mi {
 namespace mdl {
 
+/// A simple int2 type.
+struct Int2_struct {
+    int x, y;
+};
+
 /// A simple float2 type.
 struct Float2_struct {
     float x, y;

@@ -1506,6 +1506,23 @@ bool Generated_code_lambda_function::run(int &result)
 }
 
 // Run the function on the current transaction.
+bool Generated_code_lambda_function::run(Int2_struct &result)
+{
+    if (!m_aborted && m_jitted_funcs.size() > 0) {
+        Exc_state     exc(m_exc_handler, m_aborted);
+        Res_data_pair pair(m_res_data, NULL);
+
+        if (setjmp(exc.env) == 0) {
+            Lambda_func_int2 *int2_func =
+                reinterpret_cast<Lambda_func_int2 *>(m_jitted_funcs[0]);
+            int2_func(result, pair, exc, NULL);
+            return true;
+        }
+    }
+    return false;
+}
+
+// Run the function on the current transaction.
 bool Generated_code_lambda_function::run(unsigned &result)
 {
     if (!m_aborted && m_jitted_funcs.size() > 0) {

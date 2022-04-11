@@ -596,11 +596,12 @@ void Dag_hasher::hash_call(DAG_call const *call)
     if (sema != IDefinition::DS_UNKNOWN && sema != IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
         // semantic is enough
         m_hasher.update(sema);
-    } else {
+        hash(call->get_type());
+    }
+    else {
         // name is needed
         m_hasher.update(call->get_name());
     }
-    m_hasher.update(call->get_argument_count());
 
     // assume at this point that argument order is "safe", i.e.
     // all calls are ordered "by position"
@@ -611,6 +612,7 @@ void Dag_hasher::hash_parameter(DAG_parameter const *param)
 {
     m_hasher.update('P');
     m_hasher.update(param->get_index());
+    hash(param->get_type());
 }
 
 // Hash a node visited a second time.

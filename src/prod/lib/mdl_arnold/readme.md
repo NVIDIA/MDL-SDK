@@ -5,8 +5,8 @@ is based on the NVIDIA MDL SDK 2020.0 and the Arnold SDK 6.0.0.0. It provides a 
 called `mdl`.
 
 In Maya the MDL material node appears in the Arnold/Shader section and is called aiMDL.
-The material has only one parameter called `Qualified Name` which expects the fully qualified
-material name of an MDL material that is present in a local MDL search path.
+The material has only two parameters called `MDL Module Name` and `MDL Function Name` to select
+an MDL module present in an MDL search path and a material/function name exported by that module.
 
 MDL search paths can be defined using the Arnold options `texture_searchpath` and `procedural_searchpath`
 or by setting the environment variable `%MDL_PATHS%`. The default admin-space `%MDL_SYSTEM_PATH%` and user-space `%MDL_USER_PATH%` search paths are 
@@ -70,14 +70,15 @@ options
 or pass it on the command line via `-t`.
 Add an MDL material Node just like you would add a standard_surface node. The node type is `mdl`.
 The name, here `my_mdl_material_instance`, is for referencing the material from the geometry
-using its `shader` attribute. The `qualified_name` specifies the MDL material to use, including all
-package names, the module name and the name of the material exported by the module.
-
+using its `shader` attribute. The `mdl_module_name` specifies the MDL module that contains the material
+to use including all leading package names. The `mdl_function_name` specifies the material name as 
+exported by the module.
 ```
 mdl
 {
   name my_mdl_material_instance
-  qualified_name "::my_package::my_module::my_mdl_material"
+  mdl_module_name "::my_package::my_module"
+  mdl_function_name "my_mdl_material"
   declare tint constant RGB
   tint 0.75 0.25 0.25
 }
