@@ -229,3 +229,8 @@ source_group("base" FILES ${PROJECT_HEADERS_BASE})
 source_group("math" FILES ${PROJECT_HEADERS_MATH})
 source_group("mdl" FILES ${PROJECT_HEADERS_MDL})
 source_group("neuraylib" FILES ${PROJECT_HEADERS_NEURAYLIB})
+
+install(
+    DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/mi"
+    TYPE      INCLUDE
+)

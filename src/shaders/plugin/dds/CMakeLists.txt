@@ -60,11 +60,11 @@ create_from_base_preset(
     TYPE SHARED
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "dds.rc"
+    OUTPUT_NAME "dds"
 )
 
 # customize name
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "dds")
 
 if(MACOSX)
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so") # corresponding to the binary release
@@ -85,5 +85,4 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 # -------------------------------------------------------------------------------------------------
 add_target_install(
     TARGET ${PROJECT_NAME}
-    DESTINATION "lib"
     )

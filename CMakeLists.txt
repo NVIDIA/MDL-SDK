@@ -53,6 +53,9 @@ option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after 
 set(MDL_ADDITIONAL_COMPILER_DEFINES "MDL_SOURCE_RELEASE" CACHE STRING "Additional compile defines that are passed to each of the projects")
 set(MDL_ADDITIONAL_COMPILER_OPTIONS "" CACHE STRING "Additional compile options that are passed to each of the projects")
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 # set the default installation path
 if(NOT DEFINED CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install CACHE PATH "..." FORCE)
@@ -245,3 +248,35 @@ foreach(_TEST_POST ${MDL_TEST_LIST_POST})
     add_subdirectory(${_TEST_POST})
 endforeach()
 
+# Config
+#--------------------------------------------------------------------------------------------------
+
+set(PATH_EXPORT_TARGETS "${CMAKE_INSTALL_DATADIR}/mdl/mdl-targets.cmake")
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/mdl-config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/mdl-config.cmake"
+    PATH_VARS
+        PATH_EXPORT_TARGETS
+    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/mdl
+)
+
+write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake"
+    VERSION     2021.0.1
+  COMPATIBILITY SameMajorVersion
+)
+
+# Install
+#--------------------------------------------------------------------------------------------------
+
+install(
+    EXPORT       mdl-targets
+    NAMESPACE    "mdl::"
+    DESTINATION  "${CMAKE_INSTALL_DATADIR}/mdl"
+)
+
+install(
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/mdl-config.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake
+    DESTINATION  "${CMAKE_INSTALL_DATADIR}/mdl"
+)

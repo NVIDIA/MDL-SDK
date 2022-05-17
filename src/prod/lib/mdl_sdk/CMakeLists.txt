@@ -42,11 +42,16 @@ create_from_base_preset(
     TYPE SHARED
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "mdl_sdk.rc"
+    OUTPUT_NAME "mdl_sdk"
     )
+
+target_include_directories(${PROJECT_NAME}
+    PUBLIC
+        $<INSTALL_INTERFACE:include>
+)
 
 # customize name
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "lib")
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "mdl_sdk")
 
 if(MACOSX)
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so") # corresponding to the binary release
@@ -109,7 +114,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 # -------------------------------------------------------------------------------------------------
 add_target_install(
     TARGET ${PROJECT_NAME}
-    DESTINATION "lib"
     )
 
 # -------------------------------------------------------------------------------------------------
