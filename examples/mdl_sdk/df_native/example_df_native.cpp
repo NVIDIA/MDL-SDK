@@ -324,8 +324,17 @@ inline float dot(const mi::Float32_3 &a, const mi::Float32_3 &b)
 
 inline mi::Float32_3 normalize(const mi::Float32_3 &d)
 {
-    const float inv_len = 1.0f / length(d);
-    return mi::Float32_3(d.x * inv_len, d.y * inv_len, d.z * inv_len);
+    const float dotprod = dot(d, d);
+
+    if (dotprod > 0.f)
+    {
+        const float inv_len = 1.0f / sqrtf(dotprod);
+        return mi::Float32_3(d.x * inv_len, d.y * inv_len, d.z * inv_len);
+    }
+    else
+    {
+        return d;
+    }
 }
 
 inline mi::Float32_3 operator+(const mi::Float32_3& a, const mi::Float32_3& b)
@@ -444,11 +453,13 @@ struct VP_buffers
     mi::Float32_3 *accum_buffer;
     mi::Float32_3 *albedo_buffer;
     mi::Float32_3 *normal_buffer;
+    mi::Uint32    *aux_count;
 
     VP_buffers()
         : accum_buffer(nullptr)
         , albedo_buffer(nullptr)
         , normal_buffer(nullptr)
+        , aux_count(nullptr)
     {}
 
     ~VP_buffers()
@@ -459,6 +470,8 @@ struct VP_buffers
             delete[] albedo_buffer;
         if (normal_buffer)
             delete[] normal_buffer;
+        if (aux_count)
+            delete[] aux_count;
     }
 };
 
@@ -479,6 +492,7 @@ struct Render_context
     // render options
     int max_ray_length;
     bool render_auxiliary;
+    bool use_derivatives;
 
     // scene data
     // environment color
@@ -551,12 +565,14 @@ struct Render_context
         int level;
         float last_pdf;
         bool is_inside;
+        bool is_inside_cutout;
 
         Ray()
             : weight(1.f)
             , level(0)
             , last_pdf(-1.f)
             , is_inside(false)
+            , is_inside_cutout(false)
         {};
 
         //-------------------------------------------------------------------------------------------------
@@ -586,8 +602,10 @@ struct Render_context
 
     // MDL Backend execution
     mi::neuraylib::Shading_state_material shading_state;
+    mi::neuraylib::Shading_state_material_with_derivs shading_state_derivs;
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code;
     Texture_handler *tex_handler;
+    Texture_handler_deriv *tex_handler_deriv;
     uint64_t surface_bsdf_function_index;
     uint64_t surface_edf_function_index;
     uint64_t surface_emission_intensity_function_index;
@@ -597,9 +615,11 @@ struct Render_context
     uint64_t cutout_opacity_function_index;
     uint64_t thin_walled_function_index;
 
-    Render_context()
-        : target_code(nullptr)
+    Render_context(bool use_derivatives)
+        : use_derivatives(use_derivatives)
+        , target_code(nullptr)
         , tex_handler(nullptr)
+        , tex_handler_deriv(nullptr)
     {
         max_ray_length = 6;
         render_auxiliary = false;
@@ -623,6 +643,7 @@ struct Render_context
 
         // init constant parameters of material shader state
         shading_state.animation_time = 0.f;
+        shading_state.text_coords = nullptr;
         shading_state.tangent_u = Constants.tangent_u;
         shading_state.tangent_v = Constants.tangent_v;
         shading_state.text_results = nullptr;
@@ -631,6 +652,17 @@ struct Render_context
         shading_state.object_to_world = &Constants.identity[0];
         shading_state.object_id = 0;
         shading_state.meters_per_scene_unit = 1.f;
+
+        shading_state_derivs.animation_time = 0.f;
+        shading_state_derivs.text_coords = nullptr;
+        shading_state_derivs.tangent_u = Constants.tangent_u;
+        shading_state_derivs.tangent_v = Constants.tangent_v;
+        shading_state_derivs.text_results = nullptr;
+        shading_state_derivs.ro_data_segment = nullptr;
+        shading_state_derivs.world_to_object = &Constants.identity[0];
+        shading_state_derivs.object_to_world = &Constants.identity[0];
+        shading_state_derivs.object_id = 0;
+        shading_state_derivs.meters_per_scene_unit = 1.f;
     }
 
     // Free resources owned by the render context.
@@ -1289,12 +1321,52 @@ bool prepare_textures(
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Trace shadow ray
+///////////////////////////////////////////////////////////////////////////////
+bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned &seed)
+{
+    Isect_info isect_info;
+
+    // ray hits sphere?
+    if (rc.isect(shadow_ray, rc.sphere, isect_info))
+    {
+        mi::neuraylib::Shading_state_material shading_state;
+        shading_state.position = isect_info.pos;
+        shading_state.normal = shadow_ray.is_inside ? -isect_info.normal : isect_info.normal;
+        shading_state.geom_normal = rc.shading_state.normal;
+        shading_state.text_coords = &isect_info.uvw;
+        shading_state.tangent_u = &isect_info.tan_u;
+        shading_state.tangent_v = &isect_info.tan_v;
+
+        // evaluate material cutout opacity
+        float cutout_opacity = rc.cutout.constant_opacity;
+        if (!rc.cutout.is_constant)
+        {
+            rc.target_code->execute(
+                rc.cutout_opacity_function_index,
+                shading_state,
+                rc.tex_handler,
+                /*arg_block_data=*/ nullptr,
+                &cutout_opacity);
+        }
+
+        // it's the surface cutted out?.
+        return (cutout_opacity >= rnd(seed));
+
+    }
+    else
+    {
+        return false;
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////
 // Recursive raytracing
 ///////////////////////////////////////////////////////////////////////////////
-void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render_context::Ray &ray, unsigned seed)
+bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render_context::Ray &ray, unsigned &seed)
 {
     if (ray.level >= rc.max_ray_length)
-        return;
+        return false;
 
     ray.level++;
 
@@ -1303,13 +1375,54 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
     // ray hits sphere?
     if (rc.isect(ray, rc.sphere, isect_info))
     {
+        void *shading_state = nullptr;
+        void *tex_handler   = nullptr;
+
         // update material shader state
-        rc.shading_state.position = isect_info.pos;
-        rc.shading_state.normal = ray.is_inside ? -isect_info.normal : isect_info.normal;
-        rc.shading_state.geom_normal = rc.shading_state.normal;
-        rc.shading_state.text_coords = &isect_info.uvw;
-        rc.shading_state.tangent_u = &isect_info.tan_u;
-        rc.shading_state.tangent_v = &isect_info.tan_v;
+        if (rc.use_derivatives) {
+            // FIXME: compute dx, dy
+            mi::neuraylib::tct_deriv_float3 position = {
+                isect_info.pos,     // value component
+                { 0.0f, 0.0f, 0.0f },   // dx component
+                { 0.0f, 0.0f, 0.0f }    // dy component
+            };
+
+            // FIXME: compute dx, dy
+            mi::neuraylib::tct_deriv_float3 texture_coords[1] = {
+                {
+                    isect_info.uvw,     // value component
+                    { 0.0f, 0.0f, 0.0f },   // dx component
+                    { 0.0f, 0.0f, 0.0f }    // dy component
+                }
+            };
+
+            rc.shading_state_derivs.position = position;
+            rc.shading_state_derivs.normal = ray.is_inside ? -isect_info.normal : isect_info.normal;
+            rc.shading_state_derivs.geom_normal = rc.shading_state_derivs.normal;
+            rc.shading_state_derivs.text_coords = texture_coords;
+            rc.shading_state_derivs.tangent_u = &isect_info.tan_u;
+            rc.shading_state_derivs.tangent_v = &isect_info.tan_v;
+
+            shading_state = &rc.shading_state_derivs;
+            tex_handler   = rc.tex_handler_deriv;
+
+        } else {
+            rc.shading_state.position = isect_info.pos;
+            rc.shading_state.normal = ray.is_inside ? -isect_info.normal : isect_info.normal;
+            rc.shading_state.geom_normal = rc.shading_state.normal;
+            rc.shading_state.text_coords = &isect_info.uvw;
+            rc.shading_state.tangent_u = &isect_info.tan_u;
+            rc.shading_state.tangent_v = &isect_info.tan_v;
+
+            shading_state = &rc.shading_state;
+            tex_handler   = rc.tex_handler;
+        }
+
+        // Beware: the layout of the structs *is different*
+        mi::neuraylib::tct_float3 &normal =
+            rc.use_derivatives ? rc.shading_state_derivs.normal : rc.shading_state.normal;
+        mi::neuraylib::tct_float3 &geom_normal =
+            rc.use_derivatives ? rc.shading_state_derivs.geom_normal : rc.shading_state.geom_normal;
 
         // evaluate material cutout opacity
         float cutout_opacity = rc.cutout.constant_opacity;
@@ -1317,8 +1430,8 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
         {
             rc.target_code->execute(
                 rc.cutout_opacity_function_index,
-                reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-                rc.tex_handler,
+                *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                 /*arg_block_data=*/ nullptr,
                 &cutout_opacity);
         }
@@ -1327,10 +1440,11 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
         if (cutout_opacity < rnd(seed))
         {
             ray.p0 = isect_info.pos;
-            ray.offset_ray(ray.is_inside ? isect_info.normal : -isect_info.normal);
+            ray.offset_ray(ray.is_inside_cutout ? isect_info.normal : -isect_info.normal);
             ray.is_inside = !ray.is_inside;
+            ray.is_inside_cutout = !ray.is_inside_cutout;
             ray.level--;
-            trace_ray(vp_sample, rc, ray, seed);
+            return trace_ray(vp_sample, rc, ray, seed);
         }
         else
         {
@@ -1340,8 +1454,8 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             {
                 rc.target_code->execute(
                     rc.thin_walled_function_index,
-                    reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-                    rc.tex_handler,
+                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     /*arg_block_data=*/ nullptr,
                     &is_thin_walled);
             }
@@ -1349,15 +1463,17 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             // evaluate material surface emission contribution
             {
                 // restore material shader state normal
-                rc.shading_state.normal = ray.is_inside ?
+                normal = ray.is_inside ?
                     -isect_info.normal : isect_info.normal;
 
-                uint64_t edf_function_index = ray.is_inside ? rc.backface_edf_function_index : rc.surface_edf_function_index;
+                uint64_t edf_function_index = (is_thin_walled && ray.is_inside) ? 
+                    rc.backface_edf_function_index : rc.surface_edf_function_index;
+
                 // shader initialization for the current hit point
                 rc.target_code->execute_bsdf_init(
                     edf_function_index,
-                    rc.shading_state,
-                    rc.tex_handler,
+                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     nullptr);
 
                 mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
@@ -1368,8 +1484,8 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     edf_function_index + 2, // edf_function_index corresponds to 'init'
                                                        // edf_function_index+2 to 'evaluate'
                     &eval_data,
-                    rc.shading_state,
-                    rc.tex_handler,
+                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     /*arg_block_data=*/ nullptr);
 
                 // emission contribution is only valid for positive pdf
@@ -1377,9 +1493,10 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 {
                     mi::Float32_3 intensity(1.f);
                     rc.target_code->execute(
-                        rc.surface_emission_intensity_function_index,
-                        reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-                        rc.tex_handler,
+                        (is_thin_walled && ray.is_inside) ? 
+                            rc.backface_emission_intensity_function_index : rc.surface_emission_intensity_function_index,
+                        *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                        static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                         /*arg_block_data=*/ nullptr,
                         &intensity);
 
@@ -1388,17 +1505,17 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             }
 
             // restore material shader state normal
-            rc.shading_state.normal = ray.is_inside ?
+            normal = ray.is_inside ?
                 -isect_info.normal : isect_info.normal;
 
             uint64_t surface_bsdf_function_index =
-                ray.is_inside ? rc.backface_bsdf_function_index : rc.surface_bsdf_function_index;
+                (is_thin_walled && ray.is_inside) ? rc.backface_bsdf_function_index : rc.surface_bsdf_function_index;
 
             // shader initialization for the current hit point
             rc.target_code->execute_bsdf_init(
                 surface_bsdf_function_index,
-                rc.shading_state,
-                rc.tex_handler,
+                *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                 nullptr);
 
             // get auxiliarity data
@@ -1421,8 +1538,8 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     surface_bsdf_function_index + 4,    // bsdf_function_index corresponds to 'init'
                                                         // bsdf_function_index+4 to 'auxiliary'
                     &aux_data,
-                    rc.shading_state,
-                    rc.tex_handler,
+                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     nullptr);
 
                 vp_sample[VPCH_ALBEDO] = aux_data.albedo;
@@ -1430,44 +1547,61 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             }
 
             // evaluate scene lights contribution
-            mi::Float32_3 light_dir;
-            float light_pdf = 0.f;
-            mi::Float32_3 radiance_over_pdf = rc.sample_lights(isect_info.pos, light_dir, light_pdf, seed);
-
-            if (ray.level < rc.max_ray_length && light_pdf != 0.0f && ((dot(rc.shading_state.normal, light_dir) > 0.f) != ray.is_inside))
             {
-                mi::neuraylib::Bsdf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
-                if (ray.is_inside && !is_thin_walled)
+                mi::Float32_3 light_dir;
+                float light_pdf = 0.f;
+                mi::Float32_3 radiance_over_pdf = rc.sample_lights(isect_info.pos, light_dir, light_pdf, seed);
+
+                bool light_culled = !(
+                    (ray.level < rc.max_ray_length) && 
+                    (light_pdf != 0.0f) && 
+                    ((dot(normal, light_dir) > 0.f) != (ray.is_inside && !ray.is_inside_cutout)) );
+
+                // check if light is visble from inside a cutout by checking if a shadow ray can leave the object.
+                if (!light_culled && ray.is_inside_cutout)
                 {
-                    eval_data.ior1 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
-                    eval_data.ior2 = mi::Float32_3(1.0f);
+                    Render_context::Ray shadow_ray = ray;
+                    shadow_ray.p0 = isect_info.pos;
+                    shadow_ray.offset_ray(-isect_info.normal);
+                    shadow_ray.dir = normalize(light_dir);
+                    light_culled = trace_shadow(rc, shadow_ray, seed);
                 }
-                else
+
+                if (!light_culled)
                 {
-                    eval_data.ior1 = mi::Float32_3(1.0f);
-                    eval_data.ior2 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
-                }
+                    mi::neuraylib::Bsdf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
+                    if (ray.is_inside && !is_thin_walled)
+                    {
+                        eval_data.ior1 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                        eval_data.ior2 = mi::Float32_3(1.0f);
+                    }
+                    else
+                    {
+                        eval_data.ior1 = mi::Float32_3(1.0f);
+                        eval_data.ior2 = mi::Float32_3(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
+                    }
 
-                eval_data.k1 = -ray.dir;
-                eval_data.k2 = light_dir;
-                eval_data.bsdf_diffuse = mi::Float32_3(0.f);
-                eval_data.bsdf_glossy = mi::Float32_3(0.f);
+                    eval_data.k1 = -ray.dir;
+                    eval_data.k2 = light_dir;
+                    eval_data.bsdf_diffuse = mi::Float32_3(0.f);
+                    eval_data.bsdf_glossy = mi::Float32_3(0.f);
 
-                // evaluate material surface bsdf
-                rc.target_code->execute_bsdf_evaluate(
-                    surface_bsdf_function_index + 2,    // bsdf_function_index corresponds to 'init'
-                                                        // bsdf_function_index+2 to 'evaluate'
-                    &eval_data,
-                    rc.shading_state,
-                    rc.tex_handler,
-                    /*arg_block_data=*/ nullptr);
+                    // evaluate material surface bsdf
+                    rc.target_code->execute_bsdf_evaluate(
+                        surface_bsdf_function_index + 2,    // bsdf_function_index corresponds to 'init'
+                                                            // bsdf_function_index+2 to 'evaluate'
+                        &eval_data,
+                        *static_cast<mi::neuraylib::Shading_state_material*>(shading_state),
+                        static_cast<mi::neuraylib::Texture_handler_base*>(tex_handler),
+                        /*arg_block_data=*/ nullptr);
+                    
+                    if (eval_data.pdf > 1.e-6f)
+                    {
+                        const float mis_weight = (light_pdf == Constants.DIRAC)
+                            ? 1.0f : light_pdf / (light_pdf + eval_data.pdf);
 
-                if (eval_data.pdf > 1.e-6f)
-                {
-                    const float mis_weight = (light_pdf == Constants.DIRAC)
-                        ? 1.0f : light_pdf / (light_pdf + eval_data.pdf);
-
-                    vp_sample[VPCH_ILLUM] += (eval_data.bsdf_diffuse + eval_data.bsdf_glossy)*(radiance_over_pdf*ray.weight)*mis_weight;
+                        vp_sample[VPCH_ILLUM] += (eval_data.bsdf_diffuse + eval_data.bsdf_glossy)*(radiance_over_pdf * ray.weight)* mis_weight;
+                    }
                 }
             }
 
@@ -1494,8 +1628,8 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     surface_bsdf_function_index + 1,         // bsdf_function_index corresponds to 'init'
                                                              // bsdf_function_index+1 to 'sample'
                     &sample_data,   // input/output
-                    rc.shading_state,
-                    rc.tex_handler,
+                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
+                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     /*arg_block_data=*/ nullptr);
 
                 if (sample_data.event_type != mi::neuraylib::BSDF_EVENT_ABSORB)
@@ -1513,12 +1647,12 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     // medium change?
                     if (sample_data.event_type&mi::neuraylib::BSDF_EVENT_TRANSMISSION)
                     {
-                        ray.offset_ray(-mi::Float32_3(rc.shading_state.geom_normal));
+                        ray.offset_ray(-mi::Float32_3(geom_normal));
                         ray.is_inside = !ray.is_inside;
                     }
                     else
                     {
-                        ray.offset_ray(rc.shading_state.geom_normal);
+                        ray.offset_ray(geom_normal);
                     }
 
                     std::vector<mi::Float32_3> scat_color = {mi::Float32_3(0.f)};
@@ -1526,12 +1660,14 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     vp_sample[VPCH_ILLUM] += scat_color[VPCH_ILLUM];
                 }
             }
+            return true;
         }
+
     }
     // ray hits environment
     else
     {
-        float pdf;
+        float pdf = 1.f;
         vp_sample[VPCH_ILLUM] = rc.evaluate_environment(pdf, ray.dir)*ray.weight;
 
         // account multi importance sampling for environment
@@ -1543,6 +1679,8 @@ void trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
 
             vp_sample[VPCH_ILLUM] *= ray.last_pdf / (ray.last_pdf + pdf);
         }
+
+        return false;
     }
 }
 
@@ -1593,11 +1731,12 @@ void render_scene(
                 rc.cam.right * r + rc.cam.up * (rc.cam.aspect * u));
             ray.weight = 1.f;
             ray.is_inside = false;
+            ray.is_inside_cutout = false;
             ray.level = 0;
             ray.last_pdf = -1.f;
 
             //trace camera ray
-            trace_ray(vp_sample, rc, ray, seed);
+            bool ray_hit = trace_ray(vp_sample, rc, ray, seed);
 
             // update progressive rendering viewport buffer
             if (frame_nb == 1)
@@ -1606,8 +1745,19 @@ void render_scene(
 
                 if(rc.render_auxiliary)
                 {
-                    vp_buffers->albedo_buffer[vp_idx] = vp_sample[VPCH_ALBEDO];
-                    vp_buffers->normal_buffer[vp_idx] = vp_sample[VPCH_NORMAL];
+                    vp_buffers->aux_count[vp_idx] = 0;
+
+                    if (ray_hit)
+                    {
+                        vp_buffers->aux_count[vp_idx]++;
+                        vp_buffers->albedo_buffer[vp_idx] = vp_sample[VPCH_ALBEDO];
+                        vp_buffers->normal_buffer[vp_idx] = vp_sample[VPCH_NORMAL];
+                    }
+                    else
+                    {
+                        vp_buffers->albedo_buffer[vp_idx] = mi::Float32_3(0.f);
+                        vp_buffers->normal_buffer[vp_idx] = mi::Float32_3(0.f);
+                    }
                 }
             }
             else
@@ -1616,15 +1766,16 @@ void render_scene(
                     (vp_buffers->accum_buffer[vp_idx] * static_cast<float>(frame_nb - 1) + vp_sample[VPCH_ILLUM]) * (1.f / frame_nb);
                 vp_sample[VPCH_ILLUM] = vp_buffers->accum_buffer[vp_idx];
 
-                if (rc.render_auxiliary)
+                if (ray_hit && rc.render_auxiliary)
                 {
+                    vp_buffers->aux_count[vp_idx]++;
                     vp_buffers->albedo_buffer[vp_idx] =
-                        (vp_buffers->albedo_buffer[vp_idx] * static_cast<float>(frame_nb - 1) + vp_sample[VPCH_ALBEDO]) * (1.f / frame_nb);
+                        (vp_buffers->albedo_buffer[vp_idx] * static_cast<float>(vp_buffers->aux_count[vp_idx] - 1) + vp_sample[VPCH_ALBEDO]) * (1.f / vp_buffers->aux_count[vp_idx]);
                     vp_sample[VPCH_ALBEDO] = vp_buffers->albedo_buffer[vp_idx];
 
                     vp_buffers->normal_buffer[vp_idx] =
-                        (vp_buffers->normal_buffer[vp_idx] * static_cast<float>(frame_nb - 1) + vp_sample[VPCH_NORMAL]) * (1.f / frame_nb);
-                    vp_sample[VPCH_NORMAL] = vp_buffers->normal_buffer[vp_idx];
+                        (vp_buffers->normal_buffer[vp_idx] * static_cast<float>(vp_buffers->aux_count[vp_idx] - 1) + vp_sample[VPCH_NORMAL]) * (1.f / vp_buffers->aux_count[vp_idx]);
+                    vp_sample[VPCH_NORMAL] = normalize(vp_buffers->normal_buffer[vp_idx]);
                 }
             }
 
@@ -1681,6 +1832,7 @@ void usage(char const *prog_name)
         << "  --cc                   use class compilation\n"
         << "  --cr                   use custom texture runtime\n"
         << "  --an                   use adapt normal function\n"
+        << "  -d                     enable use of derivatives\n"
         << "  --nogui                don't open interactive display\n"
         << "  --spp                  samples per pixel (default: 100) for output image when nogui\n"
         << "  -o <outputfile>        image file to write result to\n"
@@ -1701,7 +1853,6 @@ void usage(char const *prog_name)
 int MAIN_UTF8(int argc, char *argv[])
 {
     // Parse command line options
-    Render_context rc;
     Options options;
     mi::examples::mdl::Configure_options configure_options;
     configure_options.add_example_search_path = false;
@@ -1777,6 +1928,10 @@ int MAIN_UTF8(int argc, char *argv[])
             {
                 options.use_adapt_normal = true;
             }
+            else if (strcmp(opt, "-d") == 0)
+            {
+                options.enable_derivatives = true;
+            }
             else if ((strcmp(opt, "--mdl_path") == 0 || strcmp(opt, "-p") == 0) &&
                 i < argc - 1)
             {
@@ -1798,6 +1953,9 @@ int MAIN_UTF8(int argc, char *argv[])
             options.material_name = opt;
         }
     }
+
+    // Create render context
+    Render_context rc(options.enable_derivatives);
 
     // Use default material, if none was provided via command line
     configure_options.add_example_search_path = true;
@@ -1899,30 +2057,53 @@ int MAIN_UTF8(int argc, char *argv[])
         }
 
         // Setup custom texture handler, if requested
-        std::vector<Texture>                  textures;
-        Texture_handler                       tex_handler = { 0 };
-        mi::neuraylib::Texture_handler_vtable tex_only_adapt_normal_vtable = { 0 };
+        std::vector<Texture>                            textures;
+        Texture_handler                                 tex_handler = { 0, 0, 0 };
+        Texture_handler_deriv                           tex_handler_deriv = { 0, 0, 0 };
+        mi::neuraylib::Texture_handler_vtable           tex_only_adapt_normal_vtable = { 0 };
+        mi::neuraylib::Texture_handler_deriv_vtable     tex_only_adapt_normal_vtable_deriv = { 0 };
 
-        if (options.use_custom_tex_runtime)
+        if (options.enable_derivatives)
         {
-            check_success(prepare_textures(
-                textures, transaction.get(), image_api.get(), rc.target_code.get()));
+            if (options.use_custom_tex_runtime)
+            {
+                check_success(prepare_textures(
+                    textures, transaction.get(), image_api.get(), rc.target_code.get()));
 
-            tex_handler.vtable = &tex_vtable;
-            tex_handler.num_textures = rc.target_code->get_texture_count() - 1;
-            tex_handler.textures = textures.data();
+                tex_handler_deriv.vtable = &tex_deriv_vtable;
+                tex_handler_deriv.num_textures = rc.target_code->get_texture_count() - 1;
+                tex_handler_deriv.textures = textures.data();
 
-            rc.tex_handler = &tex_handler;
+                rc.tex_handler_deriv = &tex_handler_deriv;
+            }
+            else if (options.use_adapt_normal)
+            {
+                // only set the m_adapt_normal entry in the vtable of the texture handler object
+                tex_only_adapt_normal_vtable_deriv.m_adapt_normal = adapt_normal;
+                tex_handler_deriv.vtable = &tex_only_adapt_normal_vtable_deriv;
+                rc.tex_handler_deriv = &tex_handler_deriv;
+            }
         }
-        else if (options.use_adapt_normal)
+        else
         {
-            // only set the m_adapt_normal entry in the vtable of the texture handler object
+            if (options.use_custom_tex_runtime)
+            {
+                check_success(prepare_textures(
+                    textures, transaction.get(), image_api.get(), rc.target_code.get()));
 
-            tex_only_adapt_normal_vtable.m_adapt_normal = adapt_normal;
+                tex_handler.vtable = &tex_vtable;
+                tex_handler.num_textures = rc.target_code->get_texture_count() - 1;
+                tex_handler.textures = textures.data();
 
-            tex_handler.vtable = &tex_only_adapt_normal_vtable;
-
-            rc.tex_handler = &tex_handler;
+                rc.tex_handler = &tex_handler;
+            }
+            else if (options.use_adapt_normal)
+            {
+                // only set the m_adapt_normal entry in the vtable of the texture handler object
+                tex_only_adapt_normal_vtable.m_adapt_normal = adapt_normal;
+                tex_handler.vtable = &tex_only_adapt_normal_vtable;
+                rc.tex_handler = &tex_handler;
+            }
         }
 
         // create window context
@@ -2033,9 +2214,12 @@ int MAIN_UTF8(int argc, char *argv[])
                     delete[] vp_buffers.albedo_buffer;
                 if (vp_buffers.normal_buffer)
                     delete[] vp_buffers.normal_buffer;
+                if (vp_buffers.aux_count)
+                    delete[] vp_buffers.aux_count;
 
                 vp_buffers.albedo_buffer = new mi::Float32_3[window_width*window_height];
                 vp_buffers.normal_buffer = new mi::Float32_3[window_width*window_height];
+                vp_buffers.aux_count = new mi::Uint32[window_width * window_height];
             }
 
             // update camera parameters
@@ -2151,9 +2335,12 @@ int MAIN_UTF8(int argc, char *argv[])
                             delete[] vp_buffers.albedo_buffer;
                         if (vp_buffers.normal_buffer)
                             delete[] vp_buffers.normal_buffer;
+                        if (vp_buffers.aux_count)
+                            delete[] vp_buffers.aux_count;
 
                         vp_buffers.albedo_buffer = new mi::Float32_3[window_width*window_height];
                         vp_buffers.normal_buffer = new mi::Float32_3[window_width*window_height];
+                        vp_buffers.aux_count = new mi::Uint32[window_width * window_height];
                     }
 
                     // update camera parameters

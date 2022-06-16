@@ -211,6 +211,39 @@ public:
     }
 
 private:
+    /// Move a Load instruction that uses a Phi node as address over the phi by creating a Load
+    /// in every predecessor and replace the original Load by a new Phi (of all those created
+    /// loads).
+    /// For undef pointers provide an Undef to the new Phi instead of a Load.
+    llvm::PHINode *move_load_over_phi(
+        llvm::LoadInst *load,
+        llvm::PHINode  *phi);
+
+    /// Move a GEP instruction that uses a Phi node as base address over the Phi by creating a GEP
+    /// in every predecessor and replace the original GEP by a new Phi (of all those created
+    /// GEPs).
+    /// For undef pointers provide an Undef to the new Phi instead of a GEP.
+    llvm::PHINode *move_gep_over_phi(
+        llvm::GetElementPtrInst *gep,
+        llvm::PHINode           *phi);
+
+    /// Move a Cast instruction that uses a Phi node as argument over the Phi by creating a Cast
+    /// in every predecessor and replace the original Cast by a new Phi (of all those created
+    /// casts).
+    /// For undef pointers provide an undef to the new Phi instead of a cast.
+    llvm::PHINode *move_cast_over_phi(
+        llvm::CastInst *castinst,
+        llvm::PHINode  *phi);
+
+    /// Move a Call argument that uses a Phi node over the Phi by creating a Load
+    /// in every predecessor, store(new_temp, new_phi) an the begin of the Call's BB and replace the
+    /// original argument by new_temp.
+    /// For undef pointers provide an undef to the Phi instead of a load.
+    llvm::PHINode *move_call_argument_over_phi(
+        llvm::Function &function,
+        llvm::PHINode *phi,
+        llvm::CallInst *call);
+
     /// Skip all bitcasts.
     static llvm::Value *skip_bitcasts(llvm::Value *op) {
         while (llvm::BitCastInst *cast = llvm::dyn_cast<llvm::BitCastInst>(op)) {
@@ -431,6 +464,153 @@ llvm::Value *RemovePointerPHIs::create_phi_replacement(
     }
 }
 
+// Move a Load instruction that uses a Phi node as address over the phi by creating a Load
+// in every predecessor and replace the original Load by a new Phi (of all those created
+// loads).
+// For undef pointers provide an Undef to the new Phi instead of a Load.
+llvm::PHINode *RemovePointerPHIs::move_load_over_phi(
+    llvm::LoadInst *load,
+    llvm::PHINode  *phi)
+{
+    // create a load in each predecessor block, a PHI in the current block
+    // and replace all users of the load by the new PHI.
+    llvm::PHINode *new_phi = llvm::PHINode::Create(
+        load->getType(), phi->getNumIncomingValues(), "rmemload_phi",
+        &phi->getParent()->front());
+    for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
+        llvm::Value *cur_ptr = phi->getIncomingValue(i);
+        llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
+        llvm::Value *cur_val;
+        if (llvm::isa<llvm::UndefValue>(cur_ptr)) {
+            cur_val = llvm::UndefValue::get(load->getType());
+        } else {
+            cur_val = new llvm::LoadInst(
+                cur_ptr,
+                "rmemload",
+                cur_block->getTerminator());
+        }
+        new_phi->addIncoming(cur_val, cur_block);
+    }
+    return new_phi;
+}
+
+// Move a GEP instruction that uses a Phi node as base address over the Phi by creating a GEP
+// in every predecessor and replace the original GEP by a new phi (of all those created
+// GEPs).
+// For undef pointers provide an Undef to the new PHI instead of a GEP.
+llvm::PHINode *RemovePointerPHIs::move_gep_over_phi(
+    llvm::GetElementPtrInst *gep,
+    llvm::PHINode           *phi)
+{
+    llvm::PHINode *new_phi = llvm::PHINode::Create(
+        gep->getType(), phi->getNumIncomingValues(), "rmemgep_phi",
+        &phi->getParent()->front());
+    for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
+        llvm::Value *cur_ptr = phi->getIncomingValue(i);
+        llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
+        llvm::Value *cur_val;
+        if (llvm::isa<llvm::UndefValue>(cur_ptr)) {
+            cur_val = llvm::UndefValue::get(gep->getType());
+        } else {
+            // clone the GEP and replace the ptrval operand by cur_ptr
+            llvm::GetElementPtrInst *new_gep =
+                llvm::cast<llvm::GetElementPtrInst>(gep->clone());
+            new_gep->setOperand(0, cur_ptr);
+            cur_block->getInstList().insert(
+                cur_block->getTerminator()->getIterator(), new_gep);
+            cur_val = new_gep;
+        }
+        new_phi->addIncoming(cur_val, cur_block);
+    }
+    return new_phi;
+}
+
+// Move a Cast instruction that uses a Phi node as base address over the Phi by creating a Cast
+// in every predecessor and replace the original cast by a new phi (of all those created Casts).
+// For undef pointers provide an undef to the new Phi instead of a Cast.
+llvm::PHINode *RemovePointerPHIs::move_cast_over_phi(
+    llvm::CastInst *castinst,
+    llvm::PHINode  *phi)
+{
+    // create a cast in each predecessor block, and a PHI in the current block
+    // and replace all users of the cast by the new PHI
+    // for undef pointers provide an undef to the PHI instead of a cast
+    llvm::PHINode *new_phi = llvm::PHINode::Create(
+        castinst->getType(), phi->getNumIncomingValues(), "rmemcast_phi",
+        &phi->getParent()->front());
+    for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
+        llvm::Value *cur_ptr = phi->getIncomingValue(i);
+        llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
+        llvm::Value *cur_val;
+        if (llvm::isa<llvm::UndefValue>(cur_ptr)) {
+            cur_val = llvm::UndefValue::get(castinst->getType());
+        } else {
+            cur_val = llvm::CastInst::Create(
+                castinst->getOpcode(),
+                cur_ptr,
+                castinst->getType(),
+                "rmemcast",
+                cur_block->getTerminator());
+        }
+        new_phi->addIncoming(cur_val, cur_block);
+    }                        return new_phi;
+}
+
+// Move a Call argument that uses a Phi node over the Phi by creating a Load
+// in every predecessor, store(new_temp, new_phi) an the begin of the Call's BB and replace the
+// original argument by new_temp.
+// For undef pointers provide an undef to the Phi instead of a load.
+llvm::PHINode *RemovePointerPHIs::move_call_argument_over_phi(
+    llvm::Function &function,
+    llvm::PHINode  *phi,
+    llvm::CallInst *call)
+{
+    // create a load in each predecessor block, a PHI in the current block
+    // and store the PHI into a new local and use this local in the call.
+    llvm::PHINode *new_phi = llvm::PHINode::Create(
+        phi->getType()->getPointerElementType(),
+        phi->getNumIncomingValues(), "rmemload_phi",
+        &phi->getParent()->front());
+
+    // handle all arguments of the call
+    for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
+        llvm::Value      *cur_ptr = phi->getIncomingValue(i);
+        llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
+        llvm::Value *cur_val;
+        if (llvm::isa<llvm::UndefValue>(cur_ptr)) {
+            cur_val = llvm::UndefValue::get(new_phi->getType());
+        } else {
+            cur_val = new llvm::LoadInst(
+                cur_ptr,
+                "rmemload",
+                cur_block->getTerminator());
+        }
+        new_phi->addIncoming(cur_val, cur_block);
+    }
+
+    // create a new temporary
+    llvm::AllocaInst *rmem_local = new llvm::AllocaInst(
+        new_phi->getType(),
+        function.getParent()->getDataLayout().getAllocaAddrSpace(),
+        "rmemlocal",
+        &*function.getEntryBlock().begin());
+
+    // find the insert point for the new store after ALL Phis
+    llvm::BasicBlock::iterator insert_point = call->getParent()->begin();
+    while (llvm::isa<llvm::PHINode>(insert_point)) {
+        ++insert_point;
+    }
+    // ... and insert the store here
+    new llvm::StoreInst(new_phi, rmem_local, &*insert_point);
+
+    // replace all occurrences of the original Phi by the new local in the call arguments
+    for (unsigned i = 0, n_args = call->getNumArgOperands(); i < n_args; ++i) {
+        if (call->getArgOperand(i) == phi) {
+            call->setArgOperand(i, rmem_local);
+        }
+    }
+    return new_phi;
+}
 bool RemovePointerPHIs::runOnFunction(llvm::Function &function)
 {
     bool changed = false;
@@ -502,114 +682,23 @@ bool RemovePointerPHIs::runOnFunction(llvm::Function &function)
                 for (auto phi_user : phi->users()) {
                     llvm::PHINode *new_phi;
                     if (llvm::LoadInst *load = llvm::dyn_cast<llvm::LoadInst>(phi_user)) {
-                        // create a load in each predecessor block, a PHI in the current block
-                        // and replace all users of the load by the new PHI.
-                        // for undef pointers provide an undef to the PHI instead of a load
-                        new_phi = llvm::PHINode::Create(
-                            load->getType(), phi->getNumIncomingValues(), "rmemload_phi",
-                            &phi->getParent()->front());
-                        for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
-                            llvm::Value *cur_ptr = phi->getIncomingValue(i);
-                            llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
-                            llvm::Value *cur_val;
-                            if (llvm::isa<llvm::UndefValue>(cur_ptr))
-                                cur_val = llvm::UndefValue::get(load->getType());
-                            else
-                                cur_val = new llvm::LoadInst(
-                                    cur_ptr, "rmemload", cur_block->getTerminator());
-                            new_phi->addIncoming(cur_val, cur_block);
-                        }
+                        new_phi = move_load_over_phi(load, phi);
                     } else if (llvm::GetElementPtrInst *gep =
                             llvm::dyn_cast<llvm::GetElementPtrInst>(phi_user))
                     {
-                        // create a GEP in each predecessor block, and a PHI in the current block
-                        // and replace all users of the GEP by the new PHI
-                        // for undef pointers provide an undef to the PHI instead of a GEP
-                        new_phi = llvm::PHINode::Create(
-                            gep->getType(), phi->getNumIncomingValues(), "rmemgep_phi",
-                            &phi->getParent()->front());
-                        for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
-                            llvm::Value *cur_ptr = phi->getIncomingValue(i);
-                            llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
-                            llvm::Value *cur_val;
-                            if (llvm::isa<llvm::UndefValue>(cur_ptr))
-                                cur_val = llvm::UndefValue::get(load->getType());
-                            else {
-                                // clone the GEP and replace the ptrval operand by cur_ptr
-                                llvm::GetElementPtrInst *new_gep =
-                                    llvm::cast<llvm::GetElementPtrInst>(gep->clone());
-                                new_gep->setOperand(0, cur_ptr);
-                                cur_block->getInstList().insert(
-                                    cur_block->getTerminator()->getIterator(), new_gep);
-                                cur_val = new_gep;
-                            }
-                            new_phi->addIncoming(cur_val, cur_block);
-                        }
+                        new_phi = move_gep_over_phi(gep, phi);
                     } else if (llvm::CastInst *castinst =
                             llvm::dyn_cast<llvm::CastInst>(phi_user))
                     {
-                        // create a cast in each predecessor block, and a PHI in the current block
-                        // and replace all users of the cast by the new PHI
-                        // for undef pointers provide an undef to the PHI instead of a cast
-                        new_phi = llvm::PHINode::Create(
-                            castinst->getType(), phi->getNumIncomingValues(), "rmemcast_phi",
-                            &phi->getParent()->front());
-                        for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
-                            llvm::Value *cur_ptr = phi->getIncomingValue(i);
-                            llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
-                            llvm::Value *cur_val;
-                            if (llvm::isa<llvm::UndefValue>(cur_ptr))
-                                cur_val = llvm::UndefValue::get(load->getType());
-                            else {
-                                cur_val = llvm::CastInst::Create(
-                                    castinst->getOpcode(),
-                                    cur_ptr,
-                                    castinst->getType(),
-                                    "rmemcast",
-                                    cur_block->getTerminator());
-                            }
-                            new_phi->addIncoming(cur_val, cur_block);
-                        }
+                        new_phi = move_cast_over_phi(castinst, phi);
                     } else if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(phi_user)) {
-                        // create a load in each predecessor block, a PHI in the current block
-                        // and store the PHI into a new local and use this local in the call.
-                        // for undef pointers provide an undef to the PHI instead of a load
-                        new_phi = llvm::PHINode::Create(
-                            phi->getType()->getPointerElementType(),
-                            phi->getNumIncomingValues(), "rmemload_phi",
-                            &phi->getParent()->front());
-                        for (unsigned i = 0, n = phi->getNumIncomingValues(); i < n; ++i) {
-                            llvm::Value *cur_ptr = phi->getIncomingValue(i);
-                            llvm::BasicBlock *cur_block = phi->getIncomingBlock(i);
-                            llvm::Value *cur_val;
-                            if (llvm::isa<llvm::UndefValue>(cur_ptr))
-                                cur_val = llvm::UndefValue::get(load->getType());
-                            else
-                                cur_val = new llvm::LoadInst(
-                                    cur_ptr, "rmemload", cur_block->getTerminator());
-                            new_phi->addIncoming(cur_val, cur_block);
-                        }
+                        new_phi = move_call_argument_over_phi(function, phi, call);
 
-                        llvm::AllocaInst* rmem_local = new llvm::AllocaInst(
-                            new_phi->getType(),
-                            function.getParent()->getDataLayout().getAllocaAddrSpace(),
-                            "rmemlocal",
-                            &*function.getEntryBlock().begin());
-
-                        llvm::BasicBlock::iterator insert_point = call->getParent()->begin();
-                        while (llvm::isa<llvm::PHINode>(insert_point))
-                            ++insert_point;
-                        new llvm::StoreInst(new_phi, rmem_local, &*insert_point);
-
-                        // replace all occurrences of the phi by the new local in the call arguments
-                        for (unsigned i = 0, n_args = call->getNumArgOperands(); i < n_args; ++i) {
-                            if (call->getArgOperand(i) == phi) {
-                                call->setArgOperand(i, rmem_local);
-                            }
-                        }
+                        // the original phi is not used anymore by the call, but not replaced!
                         continue;
-                    } else
+                    } else {
                         continue;
+                    }
 
                     phi_user->replaceAllUsesWith(new_phi);
                     to_remove.push_back(llvm::cast<llvm::Instruction>(phi_user));
@@ -633,9 +722,9 @@ bool RemovePointerPHIs::runOnFunction(llvm::Function &function)
             for (llvm::Instruction *inst : to_remove) {
                 if (llvm::PHINode *phi = llvm::dyn_cast<llvm::PHINode>(inst)) {
                     ptr_phis.remove(phi);
-                    try_again = true;
                 }
                 inst->eraseFromParent();
+                try_again = true;
             }
             changed = true;
         }

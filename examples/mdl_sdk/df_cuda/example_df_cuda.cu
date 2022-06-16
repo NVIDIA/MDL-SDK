@@ -259,6 +259,10 @@ __device__ inline Edf_auxiliary_func* as_edf_auxiliary(const Mdl_function_index&
 
 
 // 3d vector math utilities
+__device__ inline float3 operator-(const float3& a)
+{
+    return make_float3(-a.x, -a.y, -a.z);
+}
 __device__ inline float3 operator+(const float3& a, const float3& b)
 {
     return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
@@ -820,8 +824,75 @@ __device__ inline void accumulate_next_event_contribution(
         ray_state.contribution += contrib;
 }
 
-//-------------------------------------------------------------------------------------------------
+// evaluate if certain shading point (pos) is visible to a light direction by casting a shadow ray.
+__device__ inline bool trace_shadow(
+    const float3& pos,
+    const float3& to_light,
+    Rand_state& rand_state,
+    Ray_state& ray_state,
+    const Kernel_params& params)
+{
+    Ray_state ray_shadow = ray_state;
+    ray_shadow.pos = pos;
+    ray_shadow.dir = normalize(to_light);
 
+    Ray_hit_info shadow_hit;
+    bool in_shadow = intersect_geometry(ray_shadow, params, shadow_hit);
+    if (in_shadow)
+    {
+        float4 texture_results[16];
+
+        // material of the current object
+        Df_cuda_material material = params.material_buffer[params.current_material];
+
+        Mdl_function_index func_idx;
+        func_idx = get_mdl_function_index(material.init);
+        if (!is_valid(func_idx))
+            return false;
+
+        // create state
+        Mdl_state state = {
+            shadow_hit.normal,
+            shadow_hit.normal,
+            shadow_hit.position,
+            0.0f,
+            shadow_hit.texture_coords,
+            &shadow_hit.tangent_u,
+            &shadow_hit.tangent_v,
+            texture_results,
+            params.tc_data[func_idx.x].ro_data_segment,
+            identity,
+            identity,
+            0,
+            1.0f
+        };
+
+        // access textures and other resource data
+        // expect that the target code index is the same for all functions of a material
+        Mdl_resource_handler mdl_resources;
+        mdl_resources.set_target_code_index(params, func_idx);    // init resource handler
+
+        const char* arg_block = get_arg_block(params, func_idx);  // get material parameters
+
+        // initialize the state
+        as_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
+
+        // handle cutouts be treating the opacity as chance to hit the surface
+        // if we don't hit it, the ray will continue with the same direction
+        func_idx = get_mdl_function_index(material.cutout_opacity);
+        const float x_anyhit = curand_uniform(&rand_state);
+        if (is_valid(func_idx))
+        {
+            float opacity = 1.f;
+            as_expression(func_idx)(&opacity, &state, &mdl_resources.data, NULL, arg_block);
+            in_shadow = (x_anyhit <= opacity);
+        }
+    }
+
+    return in_shadow;
+}
+
+//-------------------------------------------------------------------------------------------------
 
 __device__ inline bool trace_scene(
     Rand_state &rand_state,
@@ -892,16 +963,10 @@ __device__ inline bool trace_scene(
     const float x_anyhit = curand_uniform(&rand_state);
     if (is_valid(func_idx))
     {
-        float opacity;
+        float opacity = 1.f;
         as_expression(func_idx)(&opacity, &state, &mdl_resources.data, NULL, arg_block);
         if (x_anyhit > opacity)
         {
-            // this example does not fully support cutouts
-            // a ray that is reflected on the inside is not doing a next event estimation
-            // therefore the back-face looks black if seen through a cutout
-            // using a second flag `inside_cutout` avoids this, but there is still no
-            // shadow test for the next event estimation
-
             // decrease to see the environment though front and back face cutouts
             ray_state.intersection--;
 
@@ -909,11 +974,10 @@ __device__ inline bool trace_scene(
             ray_state.inside_cutout = !ray_state.inside_cutout;
 
             // avoid self-intersections
-            ray_state.pos += hit.normal * (ray_state.inside_cutout ? -1.0f : 1.0f) * 0.001f;
+            ray_state.pos += hit.normal * (ray_state.inside_cutout ? -0.001f : 0.001f);
             return true;
         }
     }
-
 
     // for evaluating parts of the BSDF individually, e.g. for implementing LPEs
     // the MDL SDK provides several options to pass out the BSDF, EDF, and auxiliary data
@@ -936,7 +1000,6 @@ __device__ inline bool trace_scene(
         const unsigned df_eval_slots = DF_HANDLE_SLOTS;
     #endif
 
-
     // apply volume attenuation after first bounce
     // (assuming uniform absorption coefficient and ignoring scattering coefficient)
     if (ray_state.intersection > 0)
@@ -953,13 +1016,21 @@ __device__ inline bool trace_scene(
         }
     }
 
+    // for thin_walled materials there is no 'inside'
+    bool thin_walled = false;
+    Mdl_function_index thin_walled_func_idx = get_mdl_function_index(material.thin_walled);
+    if (is_valid(thin_walled_func_idx))
+        as_expression(thin_walled_func_idx)(
+            &thin_walled, &state, &mdl_resources.data, NULL, arg_block);
+
     // add emission
-    func_idx = get_mdl_function_index(material.edf);
+    func_idx = get_mdl_function_index((thin_walled && ray_state.inside_cutout) ? material.backface_edf : material.edf);
     if (is_valid(func_idx))
     {
         // evaluate intensity expression
         float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
-        Mdl_function_index intensity_func_idx = get_mdl_function_index(material.emission_intensity);
+        Mdl_function_index intensity_func_idx = get_mdl_function_index(
+            (thin_walled && ray_state.inside_cutout) ? material.backface_emission_intensity : material.emission_intensity);
         if (is_valid(intensity_func_idx))
         {
             as_expression(intensity_func_idx)(
@@ -977,8 +1048,13 @@ __device__ inline bool trace_scene(
 
         // outer loop in case the are more material tags than slots in the evaluate struct
         unsigned offset = 0;
+        unsigned edf_mtag_to_gtag_map_size = (thin_walled && ray_state.inside_cutout) ?
+            material.backface_edf_mtag_to_gtag_map_size : material.edf_mtag_to_gtag_map_size;
+        unsigned* edf_mtag_to_gtag_map = (thin_walled && ray_state.inside_cutout) ?
+            &material.backface_edf_mtag_to_gtag_map[0] : &material.edf_mtag_to_gtag_map[0];
+
         #if DF_HANDLE_SLOTS != DF_HSM_NONE
-        for (; offset < material.edf_mtag_to_gtag_map_size; offset += df_eval_slots)
+        for (; offset < edf_mtag_to_gtag_map_size; offset += df_eval_slots)
         {
             eval_data.handle_offset = offset;
         #endif
@@ -988,11 +1064,11 @@ __device__ inline bool trace_scene(
 
             // iterate over all lobes (tags that appear in the df)
             for (unsigned lobe = 0; (lobe < df_eval_slots) &&
-                ((offset + lobe) < material.edf_mtag_to_gtag_map_size); ++lobe)
+                ((offset + lobe) < edf_mtag_to_gtag_map_size); ++lobe)
             {
                 // add emission contribution
                 accumulate_contribution(
-                    TRANSITION_EMISSION, material.edf_mtag_to_gtag_map[offset + lobe],
+                    TRANSITION_EMISSION, edf_mtag_to_gtag_map[offset + lobe],
                     #if DF_HANDLE_SLOTS == DF_HSM_NONE
                         eval_data.edf * emission_intensity,
                     #else
@@ -1006,8 +1082,14 @@ __device__ inline bool trace_scene(
         #endif
     }
 
+    func_idx = get_mdl_function_index(
+        (thin_walled && ray_state.inside_cutout) ? material.backface_bsdf : material.bsdf);
 
-    func_idx = get_mdl_function_index(material.bsdf);
+    unsigned bsdf_mtag_to_gtag_map_size = (thin_walled && ray_state.inside_cutout) ?
+        material.backface_bsdf_mtag_to_gtag_map_size : material.bsdf_mtag_to_gtag_map_size;
+    unsigned* bsdf_mtag_to_gtag_map = (thin_walled && ray_state.inside_cutout) ?
+        &material.backface_bsdf_mtag_to_gtag_map[0] : &material.bsdf_mtag_to_gtag_map[0];
+
     if (is_valid(func_idx))
     {
         // reuse memory for function data
@@ -1018,13 +1100,6 @@ __device__ inline bool trace_scene(
             Bsdf_pdf_data                                               pdf_data;
             Bsdf_auxiliary_data<(Df_handle_slot_mode)DF_HANDLE_SLOTS>   aux_data;
         };
-
-        // for thin_walled materials there is no 'inside'
-        bool thin_walled = false;
-        Mdl_function_index thin_walled_func_idx = get_mdl_function_index(material.thin_walled);
-        if (is_valid(thin_walled_func_idx))
-            as_expression(thin_walled_func_idx)(
-                &thin_walled, &state, &mdl_resources.data, NULL, arg_block);
 
         // initialize shared fields
         if (ray_state.inside && !thin_walled)
@@ -1051,7 +1126,7 @@ __device__ inline bool trace_scene(
             // outer loop in case the are more material tags than slots in the evaluate struct
             unsigned offset = 0;
             #if DF_HANDLE_SLOTS != DF_HSM_NONE
-            for (; offset < material.bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
+            for (; offset < bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
             {
                 aux_data.handle_offset = offset;
             #endif
@@ -1061,7 +1136,7 @@ __device__ inline bool trace_scene(
 
                 // iterate over all lobes (tags that appear in the df)
                 for (unsigned lobe = 0; (lobe < df_eval_slots) &&
-                    ((offset + lobe) < material.bsdf_mtag_to_gtag_map_size); ++lobe)
+                    ((offset + lobe) < bsdf_mtag_to_gtag_map_size); ++lobe)
                 {
                     // to keep it simpler, the individual albedo and normals are averaged
                     // however, the parts can also be used separately, e.g. for LPEs
@@ -1085,7 +1160,16 @@ __device__ inline bool trace_scene(
         if (params.light_intensity > 0.0f)
         {
             float3 to_light = params.light_pos - ray_state.pos;
-            if(!cull_point_light(params, params.light_pos, to_light, hit.normal))
+            bool culled_light = cull_point_light(params, params.light_pos, to_light, ray_state.inside_cutout ? -hit.normal : hit.normal);
+
+            // cast a shadow ray when inside a cutout
+            if (ray_state.inside_cutout && !culled_light)
+            {
+                const float3 pos = ray_state.pos - hit.normal * 0.001f;
+                culled_light = trace_shadow(pos, to_light, rand_state, ray_state, params);
+            }
+
+            if(!culled_light)
             {
                 const float inv_squared_dist = 1.0f / squared_length(to_light);
                 const float3 f = params.light_color * params.light_intensity *
@@ -1101,7 +1185,7 @@ __device__ inline bool trace_scene(
                 // outer loop in case the are more material tags than slots in the evaluate struct
                 unsigned offset = 0;
                 #if DF_HANDLE_SLOTS != DF_HSM_NONE
-                for (; offset < material.bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
+                for (; offset < bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
                 {
                     eval_data.handle_offset = offset;
                 #endif
@@ -1111,7 +1195,7 @@ __device__ inline bool trace_scene(
                         &eval_data, &state, &mdl_resources.data, NULL, arg_block);
 
                     // we know if we reflect or transmit
-                    if (dot(to_light, hit.normal) > 0.0f) {
+                    if (dot(to_light, ray_state.inside_cutout ? -hit.normal : hit.normal) > 0.0f) {
                         transition_glossy = TRANSITION_SCATTER_GR;
                         transition_diffuse = TRANSITION_SCATTER_DR;
                     } else {
@@ -1124,10 +1208,10 @@ __device__ inline bool trace_scene(
 
                     // iterate over all lobes (tags that appear in the df)
                     for (unsigned lobe = 0; (lobe < df_eval_slots) &&
-                         ((offset + lobe) < material.bsdf_mtag_to_gtag_map_size); ++lobe)
+                         ((offset + lobe) < bsdf_mtag_to_gtag_map_size); ++lobe)
                     {
                         // get the `global tag` of the lobe
-                        unsigned material_lobe_gtag = material.bsdf_mtag_to_gtag_map[offset + lobe];
+                        unsigned material_lobe_gtag = bsdf_mtag_to_gtag_map[offset + lobe];
 
                         // add diffuse contribution
                         accumulate_next_event_contribution(
@@ -1168,8 +1252,16 @@ __device__ inline bool trace_scene(
             float3 light_dir;
             float pdf;
             const float3 f = environment_sample(light_dir, pdf, make_float3(xi0, xi1, xi2), params);
+            bool culled_env_light = pdf < 0.0f || cull_env_light(params, light_dir, ray_state.inside_cutout ? -hit.normal : hit.normal);
 
-            if (!cull_env_light(params, light_dir, hit.normal) && pdf > 0.0f)
+            // cast a shadow ray when inside a cutout
+            if(ray_state.inside_cutout && !culled_env_light)
+            {
+                const float3 pos = ray_state.pos - hit.normal * 0.001f;
+                culled_env_light = trace_shadow(pos, light_dir, rand_state, ray_state, params);
+            }
+
+            if (!culled_env_light)
             {
                 eval_data.k2 = light_dir;
 
@@ -1182,7 +1274,7 @@ __device__ inline bool trace_scene(
                 // outer loop in case the are more material tags than slots in the evaluate struct
                 unsigned offset = 0;
                 #if DF_HANDLE_SLOTS != DF_HSM_NONE
-                for (; offset < material.bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
+                for (; offset < bsdf_mtag_to_gtag_map_size; offset += df_eval_slots)
                 {
                     eval_data.handle_offset = offset;
                 #endif
@@ -1195,7 +1287,7 @@ __device__ inline bool trace_scene(
                         (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
 
                     // we know if we reflect or transmit
-                    if (dot(light_dir, hit.normal) > 0.0f) {
+                    if (dot(light_dir, ray_state.inside_cutout ? -hit.normal : hit.normal) > 0.0f) {
                         transition_glossy = TRANSITION_SCATTER_GR;
                         transition_diffuse = TRANSITION_SCATTER_DR;
                     } else {
@@ -1208,10 +1300,10 @@ __device__ inline bool trace_scene(
 
                     // iterate over all lobes (tags that appear in the df)
                     for (unsigned lobe = 0; (lobe < df_eval_slots) &&
-                        ((offset + lobe) < material.bsdf_mtag_to_gtag_map_size); ++lobe)
+                        ((offset + lobe) < bsdf_mtag_to_gtag_map_size); ++lobe)
                     {
                         // get the `global tag` of the lobe
-                        unsigned material_lobe_gtag = material.bsdf_mtag_to_gtag_map[offset + lobe];
+                        unsigned material_lobe_gtag = bsdf_mtag_to_gtag_map[offset + lobe];
 
                         // add diffuse contribution
                         accumulate_next_event_contribution(
@@ -1282,14 +1374,14 @@ __device__ inline bool trace_scene(
                     // -> the resulting image of LPEs with tags is undefined in this case
                     params.default_gtag,
                 #else
-                    material.bsdf_mtag_to_gtag_map[sample_data.handle], // sampled lobe
+                    bsdf_mtag_to_gtag_map[sample_data.handle], // sampled lobe
                 #endif
                 params);
 
             // depending on the geometry, the ray might be displaced before continuing
             continue_ray(ray_state, hit, sample_data.event_type, params);
 
-            if (ray_state.inside)
+            if (ray_state.inside || ray_state.inside_cutout)
             {
                 // avoid self-intersections
                 ray_state.pos -= hit.normal * 0.001f;

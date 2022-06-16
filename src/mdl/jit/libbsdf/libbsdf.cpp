@@ -241,7 +241,7 @@ BSDF_INLINE void diffuse_evaluate(
     const float pdf = nk2 * pdf_proj;
 
     float3 bsdf_diffuse = make_float3(0.0f, 0.0f, 0.0f);
-    if (nk2 > 0.0) {
+    if (nk2 > 0.0f) {
         if (roughness < 0.0f)
             bsdf_diffuse = lambert_sphere_brdf(data->k1, data->k2, math::max(math::dot(data->k1, shading_normal),0.0f), nk2, tint) * 2.0f / (1.0f + cos_alpha) * nk2;
         else {
@@ -3263,122 +3263,6 @@ BSDF_API void tint_edf_auxiliary(
     base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
 }
 
-//!! TODO: remove thin film, no longer standalone implementation!
-
-/////////////////////////////////////////////////////////////////////
-// bsdf thin_film(
-//     float  thickness,
-//     color  ior,
-//     bsdf   base
-// )
-/////////////////////////////////////////////////////////////////////
-
-BSDF_API void thin_film_sample(
-    BSDF_sample_data *data,
-    State *state,
-    const float3 &inherited_normal,
-    const float thickness,
-    const float3 &ior,
-    const BSDF &base)
-{
-    base.sample(data, state, inherited_normal);
-
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    if ((data->event_type & BSDF_EVENT_TRANSMISSION) != 0)
-        return;
-    
-    const float2 mat_ior = process_ior(data, state);
-
-    data->bsdf_over_pdf *= thin_film_factor(
-        ior, thickness, mat_ior, data->k1, data->k2, shading_normal);
-}
-
-// we need an extra function, as clang doesn't allow to inline and export the same function
-BSDF_INLINE float3 thin_film_get_factor_impl(
-    BSDF_evaluate_data *data,
-    State *state,
-    const float3 &inherited_normal,
-    const float thickness,
-    const float3 &ior)
-{
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    if (math::dot(data->k2, geometry_normal) < 0.0f)
-        return make_float3(1.0f, 1.0f, 1.0f);
-    
-    const float2 mat_ior = process_ior(data, state);
-
-    return thin_film_factor(ior, thickness, mat_ior, data->k1, data->k2, shading_normal);
-}
-
-BSDF_API float3 thin_film_get_factor(
-    BSDF_evaluate_data *data,
-    State *state,
-    const float3 &inherited_normal,
-    const float thickness,
-    const float3 &ior)
-{
-    return thin_film_get_factor_impl(
-        data, state, inherited_normal, thickness, ior);
-}
-
-BSDF_API void thin_film_evaluate(
-    BSDF_evaluate_data *data,
-    State *state,
-    const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float thickness,
-    const float3 &ior,
-    const BSDF &base)
-{
-    const float3 factor = thin_film_get_factor_impl(
-        data, state, inherited_normal, thickness, ior);
-
-    base.evaluate(data, state, inherited_normal, factor * inherited_weight); 
-}
-
-BSDF_API void thin_film_pdf(
-    BSDF_pdf_data *data,
-    State *state,
-    const float3 &inherited_normal,
-    const float thickness,
-    const float3 &ior,
-    const BSDF &base)
-{
-    base.pdf(data, state, inherited_normal);
-}
-
-BSDF_API void thin_film_auxiliary(
-    BSDF_auxiliary_data *data,
-    State *state,
-    const float3 &inherited_normal,
-    const float3 &inherited_weight,
-    const float thickness,
-    const float3 &ior,
-    const BSDF &base)
-{
-    float3 shading_normal, geometry_normal;
-    get_oriented_normals(
-        shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
-
-    const float2 mat_ior = process_ior(data, state);
-
-    // assuming perfect reflection of k1, so the half-vector equals the normal
-    const float kh = math::abs(math::dot(data->k1, shading_normal));
-
-    const float3 base_ior = make<float3>(mat_ior.y);
-    const float3 base_k = make<float3>(0.0f);
-    const float3 incoming_ior = make<float3>(mat_ior.x);
-    const float3 factor = thin_film_factor(thickness, ior, base_ior, base_k, incoming_ior, kh);
-
-    base.auxiliary(data, state, inherited_normal, factor * inherited_weight);
-}
-
 
 /////////////////////////////////////////////////////////////////////
 // bsdf directional_factor(
@@ -4065,8 +3949,8 @@ BSDF_INLINE float3 measured_factor(
     const float alpha = math::abs(math::dot(k2, h));
     const float beta = math::abs(math::dot(shading_normal, h));
     const float2 coord = make<float2>(
-        math::acos(alpha) * (float)(2.0 / M_PI),
-        math::acos(beta) * (float)(2.0 / M_PI));
+        math::acos(math::min(alpha, 1.0f)) * (float)(2.0 / M_PI),
+        math::acos(math::min(beta, 1.0f)) * (float)(2.0 / M_PI));
     const float2 clamp = make<float2>(0.0f, 1.0f);
 
     const float3 f =
@@ -4154,11 +4038,13 @@ BSDF_API void measured_factor_pdf(
 BSDF_API void measured_factor_auxiliary(
     BSDF_auxiliary_data *data,
     State *state,
-    const float3 &inherited_normal,
+    const float3 &inherited_normal0,
     const float3 &inherited_weight,
     const unsigned value_texture_index,
     const BSDF &base)
 {
+    float3 inherited_normal = state->geometry_normal();
+    
     float3 shading_normal, geometry_normal;
     get_oriented_normals(
         shading_normal, geometry_normal, inherited_normal, state->geometry_normal(), data->k1);

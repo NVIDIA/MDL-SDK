@@ -53,7 +53,7 @@ Image_file_reader_impl::Image_file_reader_impl(
     m_resolution_x( 1),
     m_resolution_y( 1),
     m_format( format),
-    m_bitmap( 0),
+    m_bitmap( nullptr),
     m_bitmap_pixel_type( 0)
 {
     FreeImageIO io = construct_io_for_reading();

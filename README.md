@@ -157,9 +157,8 @@ libraries. These additional libraries are:
 -   **Arnold SDK** *(6.0.0.0)*
     Please follow the instructions on the [Arnold Website](https://www.arnoldrenderer.com/arnold/download/) to download the Arnold SDK.
 
--   **MaterialX** *(github repository, tag: v1.38.1)*  
-    Please checkout the repository from [github](https://github.com/materialx/MaterialX)
-    and build the libraries using CMake for Debug, Release and RelWithDebInfo.  
+-   **MaterialX** *(github repository, tag: v1.38.4)*  
+    Please download a release from [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases).
 
 <a name="doc-build-tools"></a>
 Required tools to build the documentation:
@@ -241,10 +240,8 @@ Required tools to build the documentation:
     -   **ARNOLD_SDK_DIR** in Ungrouped Entries,
         for example: *C:/projects/thirdparty/Arnold-6.0.3.0-windows*
 
-    -   **MATERIALX_REPOSITORY** and **MATERIALX_BUILD**,
+    -   **MATERIALX_DIR**,  
         for example: *C:/projects/thirdparty/git/MaterialX*
-        and *C:/projects/thirdparty/git/MaterialX/build* respectively.
-        Here, *MATERIALX_BUILD*  has to point to the build directory selected while building the MaterialX libraries using CMake.
         For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
 
     -   **DXC_DIR** in Ungrouped Entries,  

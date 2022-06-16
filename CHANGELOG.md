@@ -1,5 +1,45 @@
 Change Log
 ==========
+MDL SDK 2021.1.4 (349500.10153): 24 May 2022
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2021.1.4 (349500.10153) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+
+**Added and Changed Features**
+
+- MDL Compiler and Backends
+    - libbsdf: Implemented clarified `df::thin_film` specification - it now propagates the thin
+      film coating parameters to its base and, in case the base is `df::fresnel_layer` or
+      `df::fresnel_factor`, the correct coating effect on the Fresnel term is computed there.
+
+- MDL SDK examples
+
+    - Example DF CUDA
+        - Added support for cutouts and backface bsdf/edf.
+      
+    - Example DF Native
+        - Added support for derivatives.
+        - Added support shadow rays inside cutouts.
+
+**Fixed Bugs**
+
+- General
+    - Fixed mipmapping of 2D texture access in the native texture runtime
+      (used with native code generation).
+
+- MDL Compiler and Backends
+    - libbsdf: Fixed numerical corner case in `df::measured_factor` causing broken auxiliary
+      buffer on the native backend.
+    - Removed `double` precision computations in libbsdf implementation, causing `double` type used in
+      HLSL/native/PTX.
+
+- MDL SDK examples
+
+    - Example DF Native
+        - Fixed wrong auxiliary outputs.
+
 MDL SDK 2021.1.2 (349500.8766): 05 Apr 2022
 -----------------------------------------------
 

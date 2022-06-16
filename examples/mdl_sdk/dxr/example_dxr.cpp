@@ -169,7 +169,7 @@ bool Example_dxr::initialize(Base_options* options)
     // this will probably change with a more sophisticated build integration
     // assuming relevant files have been copied manually into the build folder
     options->mdl_paths.push_back(mi::examples::io::get_executable_folder() +
-        "/autodesk_materialx/source/MaterialXGenMdl/mdl");
+        "/autodesk_materialx/mdl");
 #endif
 
     return true;

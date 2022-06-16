@@ -368,6 +368,18 @@ Mdl_sdk_interface::~Mdl_sdk_interface()
         AiMsgWarning("[mdl] Unloading the plugin failed.\n");
 }
 
+void Mdl_sdk_interface::set_be_option(
+    mi::neuraylib::IMdl_backend *backend,
+    const char *name,
+    const char *value)
+{
+    mi::Sint32 res = backend->set_option(name, value);
+    if (res != 0) {
+        AiMsgError(
+            "[mdl] Setting backend option '%s' = '%s' failed with %d\n", name, value, int(res));
+    }
+}
+
 mi::neuraylib::IMdl_backend* Mdl_sdk_interface::create_native_backend()
 {
     // create backend for native code generation.
@@ -378,14 +390,14 @@ mi::neuraylib::IMdl_backend* Mdl_sdk_interface::create_native_backend()
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_NATIVE);
 
     #ifdef ENABLE_DERIVATIVES
-        backend->set_option("texture_runtime_with_derivs", "on");
+        set_be_option(backend, "texture_runtime_with_derivs", "on");
     #else
-        backend->set_option("texture_runtime_with_derivs", "off");
+        set_be_option(backend, "texture_runtime_with_derivs", "off");
     #endif
-    backend->set_option("num_texture_results", std::to_string(NUM_TEXTURE_RESULTS).c_str());
-    backend->set_option("num_texture_spaces", "1");
-    backend->set_option("use_builtin_resource_handler", "on");
-    backend->set_option("enable_auxiliary", "on");
+    set_be_option(backend, "num_texture_results", std::to_string(NUM_TEXTURE_RESULTS).c_str());
+    set_be_option(backend, "num_texture_spaces", "1");
+    set_be_option(backend, "use_builtin_resource_handler", "on");
+    set_be_option(backend, "enable_auxiliary", "on");
 
     return backend;
 }

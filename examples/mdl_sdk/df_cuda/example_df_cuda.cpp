@@ -1859,6 +1859,7 @@ bool starts_with(std::string const &str, std::string const &prefix)
 
 // Create application material representation for use in our CUDA kernel
 Df_cuda_material create_cuda_material(
+    const mi::neuraylib::ICompiled_material* compiled_material,
     size_t target_code_index,
     size_t compiled_material_index,
     std::vector<mi::neuraylib::Target_function_description> const& descs,
@@ -1883,6 +1884,77 @@ Df_cuda_material create_cuda_material(
         // and the function_index inside this target_code.
         // same for the EDF and the intensity expression.
 
+        // has material a constant cutout opacity?
+        float constant_opacity = 1.f;
+        const bool has_constant_opacity =
+            compiled_material->get_cutout_opacity(&constant_opacity);
+
+        // has material a constant thin_walled property?
+        mi::base::Handle<mi::neuraylib::IExpression const> thin_walled(
+            compiled_material->lookup_sub_expression("thin_walled"));
+
+        bool has_constant_thin_walled = false;
+        bool is_thin_walled = false;
+        if (thin_walled->get_kind() == mi::neuraylib::IExpression::EK_CONSTANT)
+        {
+            mi::base::Handle<mi::neuraylib::IExpression_constant const> thin_walled_const(
+                thin_walled->get_interface<mi::neuraylib::IExpression_constant const>());
+            mi::base::Handle<mi::neuraylib::IValue_bool const> thin_walled_bool(
+                thin_walled_const->get_value<mi::neuraylib::IValue_bool>());
+
+            has_constant_thin_walled = true;
+            is_thin_walled = thin_walled_bool->get_value();
+        }
+
+        // back faces could be different for thin walled materials
+        bool need_backface_bsdf = false;
+        bool need_backface_edf = false;
+        bool need_backface_emission_intensity = false;
+
+        if (!has_constant_thin_walled || is_thin_walled)
+        {
+            // first, backfaces dfs are only considered for thin_walled materials
+
+            // second, we only need to generate new code if surface and backface are different
+            need_backface_bsdf =
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_SCATTERING) !=
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_SCATTERING);
+            need_backface_edf =
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_EMISSION_EDF_EMISSION) !=
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_EMISSION_EDF_EMISSION);
+            need_backface_emission_intensity =
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_EMISSION_INTENSITY) !=
+                compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_EMISSION_INTENSITY);
+
+            // third, either the bsdf or the edf need to be non-default (black)
+            mi::base::Handle<mi::neuraylib::IExpression const> scattering_expr(
+                compiled_material->lookup_sub_expression("backface.scattering"));
+            mi::base::Handle<mi::neuraylib::IExpression const> emission_expr(
+                compiled_material->lookup_sub_expression("backface.emission.emission"));
+
+            if (scattering_expr->get_kind() == mi::neuraylib::IExpression::EK_CONSTANT &&
+                emission_expr->get_kind() == mi::neuraylib::IExpression::EK_CONSTANT)
+            {
+                mi::base::Handle<mi::neuraylib::IExpression_constant const> scattering_expr_constant(
+                    scattering_expr->get_interface<mi::neuraylib::IExpression_constant>());
+                mi::base::Handle<mi::neuraylib::IValue const> scattering_value(
+                    scattering_expr_constant->get_value());
+
+                mi::base::Handle<mi::neuraylib::IExpression_constant const> emission_expr_constant(
+                    emission_expr->get_interface<mi::neuraylib::IExpression_constant>());
+                mi::base::Handle<mi::neuraylib::IValue const> emission_value(
+                    emission_expr_constant->get_value());
+
+                if (scattering_value->get_kind() == mi::neuraylib::IValue::VK_INVALID_DF &&
+                    emission_value->get_kind() == mi::neuraylib::IValue::VK_INVALID_DF)
+                {
+                    need_backface_bsdf = false;
+                    need_backface_edf = false;
+                    need_backface_emission_intensity = false;
+                }
+            }
+        }
+
         mat.bsdf.x = static_cast<unsigned int>(target_code_index);
         mat.bsdf.y = static_cast<unsigned int>(descs[1].function_index);
 
@@ -1891,6 +1963,18 @@ Df_cuda_material create_cuda_material(
 
         mat.emission_intensity.x = static_cast<unsigned int>(target_code_index);
         mat.emission_intensity.y = static_cast<unsigned int>(descs[3].function_index);
+
+        mat.backface_bsdf.x = static_cast<unsigned int>(target_code_index);
+        mat.backface_bsdf.y = static_cast<unsigned int>(
+            need_backface_bsdf ? descs[8].function_index : descs[1].function_index);
+
+        mat.backface_edf.x = static_cast<unsigned int>(target_code_index);
+        mat.backface_edf.y = static_cast<unsigned int>(
+            need_backface_edf ? descs[9].function_index : descs[2].function_index);
+
+        mat.backface_emission_intensity.x = static_cast<unsigned int>(target_code_index);
+        mat.backface_emission_intensity.y = static_cast<unsigned int>(
+            need_backface_emission_intensity ? descs[10].function_index : descs[3].function_index);
 
         mat.volume_absorption.x = static_cast<unsigned int>(target_code_index);
         mat.volume_absorption.y = static_cast<unsigned int>(descs[4].function_index);
@@ -1911,6 +1995,8 @@ Df_cuda_material create_cuda_material(
     // init tag maps with zeros (optional)
     memset(mat.bsdf_mtag_to_gtag_map, 0, MAX_DF_HANDLES * sizeof(unsigned int));
     memset(mat.edf_mtag_to_gtag_map, 0, MAX_DF_HANDLES * sizeof(unsigned int));
+    memset(mat.backface_bsdf_mtag_to_gtag_map, 0, MAX_DF_HANDLES * sizeof(unsigned int));
+    memset(mat.backface_edf_mtag_to_gtag_map, 0, MAX_DF_HANDLES * sizeof(unsigned int));
     return mat;
 }
 
@@ -1935,6 +2021,18 @@ void create_cuda_material_handles(
     for (mi::Size i = 0; i < mat.edf_mtag_to_gtag_map_size; ++i)
         mat.edf_mtag_to_gtag_map[i] = lpe_state_machine.handle_to_global_tag(
             target_code->get_callable_function_df_handle(mat.edf.y, i));
+
+    mat.backface_bsdf_mtag_to_gtag_map_size = static_cast<unsigned int>(
+        target_code->get_callable_function_df_handle_count(mat.backface_bsdf.y));
+    for (mi::Size i = 0; i < mat.backface_bsdf_mtag_to_gtag_map_size; ++i)
+        mat.backface_bsdf_mtag_to_gtag_map[i] = lpe_state_machine.handle_to_global_tag(
+            target_code->get_callable_function_df_handle(mat.backface_bsdf.y, i));
+
+    mat.backface_edf_mtag_to_gtag_map_size = static_cast<unsigned int>(
+        target_code->get_callable_function_df_handle_count(mat.backface_edf.y));
+    for (mi::Size i = 0; i < mat.backface_edf_mtag_to_gtag_map_size; ++i)
+        mat.backface_edf_mtag_to_gtag_map[i] = lpe_state_machine.handle_to_global_tag(
+            target_code->get_callable_function_df_handle(mat.backface_edf.y, i));
 }
 
 // checks if a compiled material contains none-invalid hair BSDF
@@ -2225,6 +2323,12 @@ int MAIN_UTF8(int argc, char* argv[])
                 mi::neuraylib::Target_function_description("geometry.cutout_opacity"));
             descs.push_back(
                 mi::neuraylib::Target_function_description("hair"));
+            descs.push_back(
+                mi::neuraylib::Target_function_description("backface.scattering"));
+            descs.push_back(
+                mi::neuraylib::Target_function_description("backface.emission.emission"));
+            descs.push_back(
+                mi::neuraylib::Target_function_description("backface.emission.intensity"));
 
             // Generate code for all materials
             std::vector<std::string> used_material_names;
@@ -2281,6 +2385,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
                         // Create application material representation
                         material_bundle.push_back(create_cuda_material(
+                            compiled_material.get(),
                             0, material_bundle.size(), descs,
                             contains_hair_bsdf(compiled_material.get())));
                         used_material_names.push_back(material_qualified_name);
@@ -2315,6 +2420,7 @@ int MAIN_UTF8(int argc, char* argv[])
 
                     // Create application material representation
                     material_bundle.push_back(create_cuda_material(
+                        compiled_material.get(),
                         0, material_bundle.size(), descs,
                         contains_hair_bsdf(compiled_material.get())));
                     used_material_names.push_back(material_db_name);

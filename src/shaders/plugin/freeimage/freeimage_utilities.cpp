@@ -235,8 +235,8 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
         if (bytes_per_pixel == 4)
         {
             for (mi::Uint32 y = 0; y < y_end; ++y) {
-                mi::Uint32* const __restrict dest = static_cast<mi::Uint32*>(tile->get_data()) + y*tile_width;
-                const mi::Uint32* const __restrict src = reinterpret_cast<const mi::Uint32*>(src_start + y*pitch);
+                mi::Uint32* const __restrict dest = static_cast<mi::Uint32*>(tile->get_data()) + y*(size_t)tile_width;
+                const mi::Uint32* const __restrict src = reinterpret_cast<const mi::Uint32*>(src_start + y*(size_t)pitch);
                 mi::Uint32 x = 0;
                 const mi::Uint32 xe = x_end;
 #if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
@@ -258,7 +258,7 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
         {
             char* __restrict dest = static_cast<char*>(tile->get_data());
             for (mi::Uint32 y = 0; y < y_end; ++y) {
-                const char* __restrict src = src_start + y*pitch;
+                const char* __restrict src = src_start + y*(size_t)pitch;
                 mi::Uint32 x = 0;
                 const mi::Uint32 xe = x_end;
 #if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
@@ -325,7 +325,7 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
             = static_cast<char*>( static_cast<void*>( FreeImage_GetBits( bitmap)));
         const size_t pitch = FreeImage_GetPitch( bitmap);
         if( tile_width * bytes_per_pixel == pitch)
-            memcpy( dest, src_start, y_end * bytes_per_scanline);
+            memcpy( dest, src_start, y_end * (size_t)bytes_per_scanline);
         else {
             for( mi::Uint32 y = 0; y < y_end; ++y) {
                 const char* const __restrict src = src_start + y*pitch;
@@ -389,7 +389,7 @@ bool copy_from_tile_to_bitmap( const mi::neuraylib::ITile* tile, FIBITMAP* bitma
         const size_t pitch = FreeImage_GetPitch( bitmap);
 
         if( tile_width * bytes_per_pixel == pitch)
-            memcpy( dest_start, src, y_end * bytes_per_scanline);
+            memcpy( dest_start, src, y_end * (size_t)bytes_per_scanline);
         else {
             for( mi::Uint32 y = 0; y < y_end; ++y) {
                 char* const __restrict dest = dest_start + y*pitch;

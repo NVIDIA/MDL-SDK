@@ -89,6 +89,12 @@ public:
     std::mutex& get_loading_mutex() { return m_loading_mutex; }
 
 private:
+    void set_be_option(
+        mi::neuraylib::IMdl_backend* backend,
+        const char* name,
+        const char* value);
+
+private:
     void* m_so_handle;
     EMdl_sdk_state m_state;
     AtString m_default_mdl_module_name;

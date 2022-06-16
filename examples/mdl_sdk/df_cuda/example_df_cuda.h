@@ -78,6 +78,9 @@ struct Df_cuda_material
         , bsdf(make_invalid())
         , edf(make_invalid())
         , emission_intensity(make_invalid())
+        , backface_bsdf(make_invalid())
+        , backface_edf(make_invalid())
+        , backface_emission_intensity(make_invalid())
         , volume_absorption(make_invalid())
         , thin_walled(make_invalid())
         , cutout_opacity(make_invalid())
@@ -103,6 +106,15 @@ struct Df_cuda_material
     // pair of target_code_index and function_index for intensity
     uint2 emission_intensity;
 
+    // pair of target_code_index and function_index to identify the bsdf
+    uint2 backface_bsdf;
+
+    // pair of target_code_index and function_index to identify the edf
+    uint2 backface_edf;
+
+    // pair of target_code_index and function_index for intensity
+    uint2 backface_emission_intensity;
+
     // pair of target_code_index and function_index for volume absorption
     uint2 volume_absorption;
 
@@ -119,6 +131,14 @@ struct Df_cuda_material
     // maps 'material tags' to 'global tags' for the emission distribution function
     unsigned int edf_mtag_to_gtag_map[MAX_DF_HANDLES];
     unsigned int edf_mtag_to_gtag_map_size;
+
+    // maps 'material tags' to 'global tags' for the backface scattering distribution function
+    unsigned int backface_bsdf_mtag_to_gtag_map[MAX_DF_HANDLES];
+    unsigned int backface_bsdf_mtag_to_gtag_map_size;
+
+    // maps 'material tags' to 'global tags' for the backface emission distribution function
+    unsigned int backface_edf_mtag_to_gtag_map[MAX_DF_HANDLES];
+    unsigned int backface_edf_mtag_to_gtag_map_size;
 
     unsigned int contains_hair_bsdf;
 };

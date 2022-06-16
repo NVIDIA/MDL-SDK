@@ -2411,8 +2411,12 @@ private:
 
     /// Get the BSDF function for the given DAG call and the current distribution function state
     /// from the BSDF library.
+    ///
+    /// \param dag_call  the DAG_call
+    /// \param prefix    if non-NULL, a prefix for the name of the BSDF_function to lookup
     llvm::Function *get_libbsdf_function(
-        DAG_call const *dag_call);
+        DAG_call const *dag_call,
+        char const      *prefix);
 
     /// Generate a call to an expression lambda function.
     ///
@@ -3774,7 +3778,11 @@ private:
     /// Current main function index.
     size_t m_cur_main_func_index;
 
+    /// Helper struct used as key for cached instantiated df functions.
     struct Instantiated_df {
+        /// Constructor
+        /// \param node             the instantiated df call
+        /// \param skip_bsdf_calls  the mode
         Instantiated_df(DAG_node const *node, bool skip_bsdf_calls)
             : node(node), skip_bsdf_calls(skip_bsdf_calls)
         {}
@@ -3783,6 +3791,7 @@ private:
         bool skip_bsdf_calls;
     };
 
+    /// Hash operator for Instantiated_df keys.
     struct Instantiated_df_hash {
         size_t operator()(Instantiated_df const &id) const {
             Hash_ptr<DAG_node const> hasher;
@@ -3790,6 +3799,7 @@ private:
         }
     };
 
+    /// Equal operator for Instantiated_df keys.
     struct Instantiated_df_equal {
         inline unsigned operator()(Instantiated_df const &a, Instantiated_df const &b) const {
             return a.node == b.node && a.skip_bsdf_calls == b.skip_bsdf_calls;

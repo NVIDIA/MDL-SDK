@@ -1548,12 +1548,18 @@ LLVM_code_generator::get_dist_func_state_from_call(llvm::CallInst *call)
 
 // Get the BSDF function for the given semantics and the current distribution function state
 // from the BSDF library.
-llvm::Function *LLVM_code_generator::get_libbsdf_function(DAG_call const *dag_call)
+llvm::Function *LLVM_code_generator::get_libbsdf_function(
+    DAG_call const *dag_call,
+    char const     *prefix)
 {
     IDefinition::Semantics sema = dag_call->get_semantic();
     IType::Kind kind = dag_call->get_type()->get_kind();
 
-    string func_name(get_allocator());
+    if (prefix == NULL) {
+        prefix = "";
+    }
+
+    string func_name(prefix, get_allocator());
     string suffix(get_allocator());
 
     // check for tint(color, color, bsdf) overload
@@ -1569,7 +1575,7 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(DAG_call const *dag_ca
     }
 
 
-    #define SEMA_CASE(val, name)  case IDefinition::val: func_name = name; break;
+    #define SEMA_CASE(val, name)  case IDefinition::val: func_name += name; break;
 
     switch (sema) {
     SEMA_CASE(DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
@@ -1667,7 +1673,8 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(DAG_call const *dag_ca
 }
 
 // Determines the semantics for a libbsdf df function name.
-IDefinition::Semantics LLVM_code_generator::get_libbsdf_function_semantics(llvm::StringRef name)
+IDefinition::Semantics LLVM_code_generator::get_libbsdf_function_semantics(
+    llvm::StringRef name)
 {
     llvm::StringRef basename;
     if (name.endswith("_sample")) {
@@ -1731,7 +1738,12 @@ IDefinition::Semantics LLVM_code_generator::get_libbsdf_function_semantics(llvm:
     string builtin_name("::df::", get_allocator());
     builtin_name.append(basename.data(), basename.size());
 
-    return m_compiler->get_builtin_semantic(builtin_name.c_str());
+    IDefinition::Semantics sema = m_compiler->get_builtin_semantic(builtin_name.c_str());
+    if (sema == IDefinition::DS_UNKNOWN && name.startswith("thin_film_")) {
+        // check if this is a modifier prefix
+        return get_libbsdf_function_semantics(name.drop_front(10));
+    }
+    return sema;
 }
 
 // Check whether the given parameter of the given df function is an array parameter.
@@ -3520,7 +3532,10 @@ DAG_node const *LLVM_code_generator::get_factor_base_bsdf(DAG_node const *node)
 
     // return the base BSDF for factor BSDFs
     switch (call->get_semantic()) {
+
     case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
+        // FIXME: we cannot factor out new then_film handling yet
+        return NULL;
     case IDefinition::DS_INTRINSIC_DF_TINT:
     case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
@@ -3924,10 +3939,34 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     DAG_node const *node,
     bool skip_bsdf_call)
 {
+    // handle ugly thin_film semantic
+    DAG_call const *thin_film_node = NULL;
+    DAG_call const *inner          = as<DAG_call>(node);
+    DAG_node const *arg            = NULL;
+    llvm::Function *df_lib_func    = NULL;
+
+    while (inner != NULL && inner->get_semantic() == IDefinition::DS_INTRINSIC_DF_THIN_FILM) {
+        thin_film_node = inner;
+        arg            = thin_film_node->get_argument(2);
+        inner          = cast<DAG_call>(arg);
+    }
+
+    if (thin_film_node != NULL) {
+        // we found the inner thin_film() call (and skip all outer ones)
+        if (is<DAG_call>(arg)) {
+            // check if we have a combined implementation of thin_film and its argument
+            df_lib_func = get_libbsdf_function(cast<DAG_call>(arg), "thin_film_");
+        }
+
+        if (df_lib_func == NULL) {
+            // there is NO combined mode for this combination, skip thin_film() calls at all
+            node           = arg;
+            thin_film_node = NULL;
+        }
+    }
+
     // get DF function according to semantics and current state
     // and clone it into the current module.
-
-    llvm::Function *df_lib_func;
 
     if (DAG_constant const *c = as<DAG_constant>(node)) {
         IValue const *value = c->get_value();
@@ -3981,17 +4020,23 @@ llvm::Function *LLVM_code_generator::instantiate_df(
         return NULL;
     }
 
-    DAG_call const *dag_call = cast<DAG_call>(node);
+    DAG_call const *dag_call =
+        cast<DAG_call>(thin_film_node != NULL ? thin_film_node->get_argument(2) : node);
 
-    Instantiated_df instantiated_df(dag_call, skip_bsdf_call);
+    // check if we always created code for this node and state
+    Instantiated_df instantiated_df(
+        thin_film_node != NULL ? cast<DAG_call>(thin_film_node) : dag_call,
+        skip_bsdf_call);
+
     Instantiated_dfs::const_iterator it =
         m_instantiated_dfs[m_dist_func_state].find(instantiated_df);
     if (it != m_instantiated_dfs[m_dist_func_state].end()) {
         return it->second;
     }
-    
+
     IDefinition::Semantics sema = dag_call->get_semantic();
     if (sema == operator_to_semantic(IExpression::OK_TERNARY)) {
+        // handle ternary operators
         llvm::Function *res_func = instantiate_ternary_df(dag_call);
         m_instantiated_dfs[m_dist_func_state][instantiated_df] = res_func;
         return res_func;
@@ -4000,7 +4045,11 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     bool is_elemental = is_elemental_df_semantics(sema);
     IType::Kind kind = dag_call->get_type()->get_kind();
 
-    df_lib_func = get_libbsdf_function(dag_call);
+    if (df_lib_func == NULL) {
+        // get the implementation if we do not have it already
+        df_lib_func = get_libbsdf_function(dag_call, /*prefix=*/NULL);
+    }
+
     if (df_lib_func == NULL) {
         char const *suffix;
         switch (dag_call->get_type()->get_kind()) {
@@ -4041,6 +4090,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     llvm::SmallVector<llvm::Instruction *, 16> delete_list;
 
     // process all calls to BSDF parameter accessors
+    size_t n_args = dag_call->get_argument_count();
     for (llvm::Function::iterator BI = bsdf_func->begin(), BE = bsdf_func->end(); BI != BE; ++BI) {
         for (llvm::BasicBlock::iterator II = BI->begin(); II != BI->end(); ++II) {
             if (llvm::AllocaInst *inst = llvm::dyn_cast<llvm::AllocaInst>(II)) {
@@ -4056,7 +4106,16 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                 // check for lambda call BSDF parameters
                 int param_idx = get_metadata_df_param_id(inst, kind);
                 if (param_idx < 0) continue;
-                DAG_node const *arg = dag_call->get_argument(param_idx);
+
+                DAG_node const *arg = NULL;
+                if (param_idx < n_args) {
+                    // get the parameter from the BSDF call
+                    arg = dag_call->get_argument(param_idx);
+                } else {
+                    // get extra parameter from the modifier
+                    MDL_ASSERT(thin_film_node != NULL);
+                    arg = thin_film_node->get_argument(param_idx - n_args);
+                }
 
                 // special handling for array parameters
                 if (is_libbsdf_array_parameter(sema, param_idx)) {

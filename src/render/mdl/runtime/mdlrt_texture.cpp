@@ -495,7 +495,9 @@ Texture_2d::Texture_2d(
                 const auto& level = mipmaps[k-1];
                 uvtile.m_canvas[k] = IMAGE::Access_canvas(level.get(), true);
                 uvtile.m_resolution[k] = mi::Uint32_3(
-                  canvas->get_resolution_x(), canvas->get_resolution_y(), 0);
+                    level->get_resolution_x(),
+                    level->get_resolution_y(),
+                    0);
             }
         }
 
@@ -687,8 +689,8 @@ mi::Float32_4 Texture_2d::lookup_deriv_float4(
         coords, false, 1.0f);
 
     mi::Float32_4 rgba_1 = interpolate_biquintic(
-        uvtile.m_canvas[level_uint],
-        uvtile.m_resolution[level_uint],
+        uvtile.m_canvas[level_uint + 1],
+        uvtile.m_resolution[level_uint + 1],
         wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
         crop_uv, crop_w,
         coords, false, 1.0f);

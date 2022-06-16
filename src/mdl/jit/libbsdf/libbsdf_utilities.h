@@ -353,14 +353,14 @@ BSDF_INLINE float H0(const float u, const float c)
 {
     const float C = math::sqrt( 1.0f - c );
     const float a = (8.216443463470172f + 1.501116252342486f * math::pow(C, 6.054351911707695f)) / (4.175932557866179f - 1.2122216865199813f * C);
-    const float d = (7.773097842804312 - 0.5658108102188075f * math::pow(C, 0.9615460393324836f)) / (8.659120811349371f - 0.15997430541238322f * C * (1.0f - c) * (1.0f - c) * (1.0f - c));
+    const float d = (7.773097842804312f - 0.5658108102188075f * math::pow(C, 0.9615460393324836f)) / (8.659120811349371f - 0.15997430541238322f * C * (1.0f - c) * (1.0f - c) * (1.0f - c));
     return (1.0f + a * math::pow(u, d)) / (1.0f + a * math::sqrt(1.0f - 2.0f * ((89.0f * c) / 288.0f + (59.0f * c * c) / 288.0f - c * c * c / 72.0f)) * math::pow(u, d));
 }
 
 BSDF_INLINE float H1(const float u, const float c)
 {
     return math::exp(
-        (-0.14483935877260054f * c + 0.024285125615255733 * c * c) * math::pow(u, 0.45944184025347456f - 1.0787917226917565f * u + 1.8572804924335546f * u * u - 1.1283119660147671f * u * u * u));
+        (-0.14483935877260054f * c + 0.024285125615255733f * c * c) * math::pow(u, 0.45944184025347456f - 1.0787917226917565f * u + 1.8572804924335546f * u * u - 1.1283119660147671f * u * u * u));
 }
 
 BSDF_INLINE float f0(const float ui, const float uo, const float c)
@@ -371,14 +371,14 @@ BSDF_INLINE float f0(const float ui, const float uo, const float c)
     const float A = (69.0f * c) / 128.f;
     const float B =
         (-0.08446297239646791f + 0.5153566145541554f * tmp2 - 0.77757371002123f * tmp1 + 0.34668869623791543f * tmp3) /
-        (0.9648932738041012 - 0.6655015709030936f * tmp2 + 0.1826019462608555f * tmp1);
+        (0.9648932738041012f - 0.6655015709030936f * tmp2 + 0.1826019462608555f * tmp1);
     const float C =
         (682.8479477533338f - 2567.7368047535556f * tmp2 + 7487.987105705168f * tmp1 - 5602.448801045478f * tmp3) /
         (5850.602606063662f - 4008.3309624647227f * tmp2 + 1480.250743805733f * tmp1);
     const float D =
         (0.2855294320307508f + 160.39651500649123f * tmp2 - 327.42799697993706f * tmp1 + 166.88327184107732f * tmp3) /
-        (674.1908010450103f - 412.9837444306491 * tmp2 + 596.4232294419696 * tmp1);
-    const float E = (15.0f * tmp1 * c * (3.0f + (4.0f * c) / 3.0)) / 128.0;
+        (674.1908010450103f - 412.9837444306491f * tmp2 + 596.4232294419696f * tmp1);
+    const float E = (15.0f * tmp1 * c * (3.0f + (4.0f * c) / 3.0f)) / 128.0f;
     const float F =
         (-1.9208967199948512f - 242.16001167844007f * tmp2 - 21.914139454773085f * tmp1 + 266.06342182761813f * tmp3) /
         (1499.904420175135f + 457.4200839912641f * tmp2 + 215.77342164754094f * tmp1);
@@ -391,7 +391,7 @@ BSDF_INLINE float f0(const float ui, const float uo, const float c)
 
 BSDF_INLINE float f1m(const float ui, const float uo, const float c)
 {
-    const float l = -0.05890107167021953f * c - 0.004740543453386809 * c * c;
+    const float l = -0.05890107167021953f * c - 0.004740543453386809f * c * c;
 
     return (float)(2.0 / M_PI) *
         (-(((c*(64.0f + 45.0f * ui * uo)) / 48.0f - (15.0f * (1.0f + 0.44f * c) * c * ui * uo * H1(ui, c) *H1(uo, c)) / 16.0f - (4.0f * c * (1.0f + l * ui) * (1.0f + l * uo) * H1(ui, c) *H1(uo, c)) /3.0f)) / (8.0f * (ui + uo)));
@@ -414,7 +414,7 @@ BSDF_INLINE float3 lambert_sphere_brdf(
 
     const float f_single = lambert_sphere_phase_function(-k1k2) / (nk1 + nk2);
     const float F0_single = (float)(1.0 / M_PI) *
-        (207.0f + 256.0f * nk1 * nk2 - 45.0f * nk1 * nk1 + 45.0f * nk2 * nk2 * (-1.0f + 3.0f * nk1 * nk1)) / (768.0 * (nk1 + nk2));
+        (207.0f + 256.0f * nk1 * nk2 - 45.0f * nk1 * nk1 + 45.0f * nk2 * nk2 * (-1.0f + 3.0f * nk1 * nk1)) / (768.0f * (nk1 + nk2));
     
     float3 brdf = c * (f_single - F0_single);
     brdf += make_float3( // F0

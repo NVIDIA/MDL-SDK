@@ -167,7 +167,7 @@ if(MDL_ENABLE_MATERIALX)
         )
 
     target_add_content(TARGET ${PROJECT_NAME}
-        FILE_BASE "${MATERIALX_REPOSITORY}/"
+        FILE_BASE "${MATERIALX_DIR}/"
         TARGET_BASE "autodesk_materialx/"
         DEP_NAME "content_mtlx"
         FILES
@@ -184,14 +184,21 @@ if(MDL_ENABLE_MATERIALX)
             "libraries/stdlib/stdlib_defs.mtlx"
             "libraries/stdlib/stdlib_ng.mtlx"
             "libraries/targets/genmdl.mtlx"
-            "source/MaterialXGenMdl/mdl/materialx/cm.mdl"
-            "source/MaterialXGenMdl/mdl/materialx/core.mdl"
-            "source/MaterialXGenMdl/mdl/materialx/hsv.mdl"
-            "source/MaterialXGenMdl/mdl/materialx/noise.mdl"
-            "source/MaterialXGenMdl/mdl/materialx/pbrlib.mdl"
-            "source/MaterialXGenMdl/mdl/materialx/sampling.mdl"
-            "source/MaterialXGenMdl/mdl/materialx/stdlib.mdl"
-            "source/MaterialXGenMdl/mdl/materialx/swizzle.mdl"
+        )
+
+    target_add_content(TARGET ${PROJECT_NAME}
+        FILE_BASE "${MATERIALX_DIR}/libraries/"
+        TARGET_BASE "autodesk_materialx/"
+        DEP_NAME "content_mdl"
+        FILES
+            "mdl/materialx/cm.mdl"
+            "mdl/materialx/core.mdl"
+            "mdl/materialx/hsv.mdl"
+            "mdl/materialx/noise.mdl"
+            "mdl/materialx/pbrlib.mdl"
+            "mdl/materialx/sampling.mdl"
+            "mdl/materialx/stdlib.mdl"
+            "mdl/materialx/swizzle.mdl"
         )
 
 endif()
