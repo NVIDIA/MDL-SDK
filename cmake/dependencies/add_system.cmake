@@ -52,7 +52,7 @@ endif()
 # threads
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
-find_package(Threads REQUIRED QUITE)
+find_package(Threads REQUIRED QUIET)
 if(CMAKE_THREAD_LIBS_INIT)
     if(MDL_LOG_DEPENDENCIES)
         message(STATUS "- depends on:     * ${CMAKE_THREAD_LIBS_INIT}")
